@@ -2,13 +2,12 @@
 
 > **Produkt-Repo des A-TownChain-Ökosystems** · [Monorepo](https://github.com/A-TownChain-Okosystems/a-townchain-os) · [Docs-Hub](https://github.com/A-TownChain-Okosystems/a-townchain-os-docs) · Mainnet: **15.09.2026**
 
-Betriebssystem des Ökosystems auf Basis des ShivaCore-Kernels (AD-012/AD-013 verbindlich): Kernel nur Primitive (Scheduler, Memory, IPC, Capability Security, HAL, Syscall ABI); Filesystem, Network, GPU, AI, Blockchain, ATCLang im Service Space. Boot Chain: UEFI→Limine→ShivaCore→globus-init→Globus OS.
+Betriebssystem des Ökosystems — Userspace auf Basis des **ShivaCore-Kernels** ([eigenes Repo](https://github.com/A-TownChain-Okosystems/atc-shivacore)) (AD-012/AD-013 verbindlich): Kernel nur Primitive (Scheduler, Memory, IPC, Capability Security, HAL, Syscall ABI); Filesystem, Network, GPU, AI, Blockchain, ATCLang im Service Space. Boot Chain: UEFI→Limine→ShivaCore→globus-init→Globus OS.
 
 ## Module (aus Monorepo `src/modules/` überführt)
 
 | Modul | Dateien | Zeilen |
 |---|---|---|
-| `atc-shivacore` | 74 | 53,392 |
 | `atc-kernel` | 85 | 20,127 |
 | `atc-globus-shell` | 21 | 6,575 |
 | `atc-globus-desktop` | 15 | 543 |
@@ -21,7 +20,6 @@ Betriebssystem des Ökosystems auf Basis des ShivaCore-Kernels (AD-012/AD-013 ve
 | `atc-linux-edition` | 16 | 542 |
 | `atc-windows-edition` | 16 | 536 |
 | `atc-mobile` | 19 | 1,188 |
-| `atc-shivacore-tools` | 15 | 640 |
 | **Total** | **378** | **90,966** |
 
 ## Richtlinien
