@@ -1,10 +1,13 @@
-# globus-os — REBUILD
+# globus-os [L4]
 
-Globus OS — Neuaufbau gem. AD-013 (Bootchain UEFI-Limine-ShivaCore-globus-init, Services im Userspace).
+Globus OS — Userspace-OS auf ShivaCore (AD-013 Bootchain: UEFI -> Limine -> ShivaCore -> globus-init).
 
-**Gesamtinhalt vor dem Abbau** (byte-identisch verifiziert am 06.09.2026):
-im Wiki-Vault unter
-[a-townchain-os-docs/docs/archive/monorepo-full/](https://github.com/A-TownChain-Okosystems/a-townchain-os-docs/tree/main/docs/archive/monorepo-full)
+**Vault-Restauration (07.09.2026, AD-020/026/027):** Inhalt aus dem Wiki-Vault
+(docs/archive/monorepo-full/) restauriert — vor der Repo-Leerung byte-identisch gesichert. Keine — Vault-Stand konsistent.
 
-Die Git-Historie dieses Repos enthält jede Datei weiterhin (Reversibilität).
-Rebuild-Stand: atclang abgeschlossen (AD-019, Phase 1). Siehe DECISIONS_REGISTER AD-018/AD-020.
+**Module:** atc-globus-os, atc-globus-desktop, atc-globus-fs, atc-globus-net, atc-globus-registry, atc-globus-shell, atc-drivers, atc-bootloader, atc-linux-edition, atc-windows-edition
+
+**Meile (AD-027):** M5 — OS laeuft: globus-init bootet Userspace-Services auf ShivaCore mit Initial-Caps
+
+**Hinweis:** Basis fuer den Rebuild; Gate-Kriterien laut LAUFFAEHIGKEITS_ROADMAP
+(a-townchain-os-docs/docs/roadmap/).
