@@ -8,7 +8,7 @@ use eframe::egui;
 struct Sprint0App;
 
 impl eframe::App for Sprint0App {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn ui(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ATC Linux Edition -- Sprint 0 Platzhalter");
             ui.label("Naechste View folgt: Wallet / Explorer / Dashboard (siehe README.md).");
