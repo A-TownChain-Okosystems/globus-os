@@ -35,7 +35,7 @@
 **Datei:** `drivers/display_driver.atc`
 **Zeilen:** 324
 **Typ:** .atc
-**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
+**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. Apache-2.0 lizenziert — siehe LICENSE
 **Funktionen/Structs:** struct DisplayConfig, struct DisplayBuffer, struct Display, create_display, set_mode, disable_display, put_pixel, fill_rect (+10 weitere)
 
 **Status:** 🟢 IMPLEMENTIERT
@@ -47,7 +47,7 @@
 **Datei:** `drivers/driver_framework.atc`
 **Zeilen:** 812
 **Typ:** .atc
-**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
+**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. Apache-2.0 lizenziert — siehe LICENSE
 **Funktionen/Structs:** struct DeviceInfo, struct DriverInfo, struct IRQRoute, struct DMATransfer, struct OpenHandle, register_driver, init_driver, activate_driver (+30 weitere)
 
 **Status:** 🟢 IMPLEMENTIERT
@@ -59,7 +59,7 @@
 **Datei:** `drivers/input_driver.atc`
 **Zeilen:** 493
 **Typ:** .atc
-**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
+**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. Apache-2.0 lizenziert — siehe LICENSE
 **Funktionen/Structs:** struct InputEvent, struct InputDevice, struct InputEventQueue, create_device, disable_device, process_scancode, scancode_to_keycode, get_modifier_state (+12 weitere)
 
 **Status:** 🟢 IMPLEMENTIERT
@@ -71,7 +71,7 @@
 **Datei:** `drivers/network_driver.atc`
 **Zeilen:** 416
 **Typ:** .atc
-**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
+**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. Apache-2.0 lizenziert — siehe LICENSE
 **Funktionen/Structs:** struct NicInfo, struct Packet, struct RxRingBuffer, struct TxRingBuffer, create_nic, assign_ip, set_link_state, set_promiscuous (+13 weitere)
 
 **Status:** 🟢 IMPLEMENTIERT
@@ -83,7 +83,7 @@
 **Datei:** `drivers/storage_driver.atc`
 **Zeilen:** 378
 **Typ:** .atc
-**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
+**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. Apache-2.0 lizenziert — siehe LICENSE
 **Funktionen/Structs:** struct StorageInfo, struct Partition, struct TransferRequest, create_device, disable_device, set_read_only, set_write_cache, create_partition (+12 weitere)
 
 **Status:** 🟢 IMPLEMENTIERT
