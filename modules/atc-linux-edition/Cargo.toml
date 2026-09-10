@@ -9,5 +9,5 @@ name = "atc-linux-edition"
 path = "src/main.rs"
 
 [dependencies]
-eframe = "0.27"
+eframe = "0.36"
 egui = "0.27"
