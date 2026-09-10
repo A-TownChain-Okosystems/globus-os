@@ -10,7 +10,7 @@
     "test": "jest"
   },
   "dependencies": {
-    "typescript": "^5"
+    "typescript": "^7"
   },
   "devDependencies": {
     "@types/node": "^20",
