@@ -1,16 +1,26 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ATC Linux Edition -- Sprint 0 Platzhalter
-// Rust mit std, GUI via eframe/egui. Ziel: x86_64-unknown-linux-gnu.
-// Code ist weitgehend identisch zu atc-windows-edition (egui ist cross-platform).
+// Rust mit std, GUI via eframe/egui. eframe 0.36-API (run_native, SCR-0078).
 
 use eframe::egui;
 
-fn main() -> eframe::Result<()> {
-    let options = eframe::NativeOptions::default();
-    eframe::run_simple_native("ATC Linux Edition", options, move |ctx, _frame| {
+#[derive(Default)]
+struct Sprint0App;
+
+impl eframe::App for Sprint0App {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("ATC Linux Edition -- Sprint 0 Platzhalter");
             ui.label("Naechste View folgt: Wallet / Explorer / Dashboard (siehe README.md).");
         });
-    })
+    }
+}
+
+fn main() -> eframe::Result<()> {
+    let options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "ATC Linux Edition",
+        options,
+        Box::new(|_cc| Ok(Box::new(Sprint0App::default()))),
+    )
 }
