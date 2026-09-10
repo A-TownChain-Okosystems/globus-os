@@ -2,6 +2,6 @@
 name = "atc-globus-shell"
 version = "1.0.0"
 edition = "2021"
-license = "All Rights Reserved"
+license = "Apache-2.0"
 
 [dependencies]
