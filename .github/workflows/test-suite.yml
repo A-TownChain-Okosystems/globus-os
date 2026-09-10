@@ -43,7 +43,7 @@ jobs:
             (cd "$d" && npm run build --if-present --silent) || { echo "npm build FAILED in $d"; FAIL=1; }
           done < <(find . -name package.json -not -path "*/archive/*" -not -path "*/node_modules/*" -not -path "*/.*/*")
           exit $FAIL
-      - name: Evidence-Bindung (SCR-0086: test_run BEI JEDEM LAUF aktualisieren + hartes Push-Gate)
+      - name: Evidence-Bindung (SCR-0086 idempotentes test_run-Update je Lauf + hartes Push-Gate)
         if: success()
         run: |
           python3 - <<'PY'
