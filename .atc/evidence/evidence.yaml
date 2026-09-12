@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-09-10"
 generated_by: "SCR-0080 Enforcement-Welle (Aurora, Owner-P0-Definition 10.09. 12:21)"
-bound_commit: 78c2d4b947604bb97f37963f4162706686e01aa8
+bound_commit: 9930ce51046e1e593576cfa66e35fcfd5118c508
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -29,8 +29,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
   canonical: true
 test_run:
   workflow: ATC Test Suite
-  run_id: 34617422789
-  commit: 78c2d4b947604bb97f37963f4162706686e01aa8
-  timestamp: 2026-09-11T15:47:50.612817+00:00
+  run_id: 34724465579
+  commit: 9930ce51046e1e593576cfa66e35fcfd5118c508
+  timestamp: 2026-09-12T23:05:16.149174+00:00
   result: PASS
   runner: github-actions
