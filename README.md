@@ -1,32 +1,120 @@
-# globus-os [L4]
+# GlobusOS
 
-Globus OS — Userspace-OS auf ShivaCore (AD-013 Bootchain: UEFI -> Limine -> ShivaCore -> globus-init).
+> AI-native operating system and userspace platform built on the ShivaCore kernel.
 
-**Vault-Restauration (07.09.2026, AD-020/026/027):** Inhalt aus dem Wiki-Vault
-(docs/archive/monorepo-full/) restauriert — vor der Repo-Leerung byte-identisch gesichert. Keine — Vault-Stand konsistent.
+**Project:** `globus-os`  
+**Organization:** `A-TownChain-Okosystems`  
+**Status:** `development`  
+**License:** `Apache-2.0` (see repository license)
 
-**Module:** atc-globus-os, atc-globus-desktop, atc-globus-fs, atc-globus-net, atc-globus-registry, atc-globus-shell, atc-drivers, atc-bootloader, atc-linux-edition, atc-windows-edition
+## Overview
 
-**Meile (AD-027):** M5 CLAIMED — Evidence incomplete (Bootchain/globus-init reproduzierbar nachweisen, SCR-0073): globus-init bootet Userspace-Services auf ShivaCore mit Initial-Caps
+GlobusOS is the operating-system layer of the A-TownChain ecosystem. It provides userspace services, system integration, drivers, filesystem/networking components, desktop functionality and platform editions on top of **ShivaCore**.
 
-**Hinweis:** Basis fuer den Rebuild; Gate-Kriterien laut LAUFFAEHIGKEITS_ROADMAP
-(a-townchain-os-docs/docs/roadmap/).
+The security boundary is explicit:
 
----
+```text
+Hardware / Boot
+      │
+      ▼
+ShivaCore
+(kernel / TCB / capabilities)
+      │
+      ▼
+GlobusOS
+(userspace OS and services)
+      │
+      ├── Aurora AI integration
+      ├── system services
+      ├── drivers / filesystem / networking
+      └── desktop / shell
+```
 
-## ATC Compliance & Governance (ATC-STD-201 / 202 / 203)
+GlobusOS is not the kernel and does not replace ShivaCore. AI functionality is integrated through defined OS interfaces; AI components do not become part of the ShivaCore TCB merely by integration.
 
-**ATC COMPLIANCE: R3** — auditiert am 2026-09-07 (atc-repo-audit; R-Level aus `.atc/repository.yaml`).
-Architekturentscheidungen: zentral im [DECISIONS_REGISTER](https://github.com/A-TownChain-Okosystems/a-townchain-os-docs/blob/main/docs/DECISIONS_REGISTER.md) (AD-Nummern verbindlich; lokale Entscheidungen in `docs/decisions/`).
+## Status
 
-- **Purpose:** Globus OS — das Userspace-OS auf ShivaCore (L4).
-- **Scope:** Layer L4, Domain os — globus-os als OS in der 23-Repo-Landschaft (AD-024/026).
-- **Architecture:** Boot: UEFI→Limine→ShivaCore→globus-init→Globus OS; Service-Space statt Monolith (AD-012/028).
-- **Features:** 10 Module (globus-*: shell, fs, net, registry, desktop, bootloader, drivers, editions).
-- **Installation:** Modul-Build je Sprache (rust); Integration via Monorepo-Workspace (a-townchain-os, sync_modules.py).
-- **Development:** Conventional Commits; Governance-Regeln aus atc-standards; Naming gemaess ATC-STD-000 §7.
-- **Testing:** cargo-Tests je Modul; Boot-Chain M5.
-- **Security:** SECURITY.md; S-Klasse S4; ATC-STD-203 Release-Gates; Emergency-Prozess ATC-STD-000 §32.
-- **Roadmap:** Einordnung in die Lauffaehigkeits-Roadmap M1-M8 (AD-027) und Bauhierarchie L0-L7 (AD-026).
-- **Version:** CHANGELOG.md; SemVer; Releases als ATC-REL-X.Y.Z.
-- **License:** Apache-2.0 — Apache-2.0, Michael Wroblewski / ShivaCore / A-TownChain-Okosystems (ATC-LIC/ATS-LIC).
+`development` means active development and integration work. Historical milestone claims and audit results are not interpreted as current production readiness.
+
+No Mainnet, production, or release-readiness claim is made by this README. `APPROVED`, `IMPLEMENTED`, `AUDITED`, and `PRODUCTION_READY` are independent states.
+
+## Architecture
+
+The repository contains the GlobusOS userspace/platform components, including:
+
+- `atc-globus-os` — core userspace OS integration.
+- `atc-globus-desktop` — desktop environment components.
+- `atc-globus-fs` — filesystem services.
+- `atc-globus-net` — networking services.
+- `atc-globus-registry` — userspace registry services.
+- `atc-globus-shell` — shell and command interface.
+- `atc-drivers` — driver integration.
+- `atc-bootloader` — boot integration components.
+- `atc-linux-edition` — Linux-oriented platform edition.
+- `atc-windows-edition` — Windows-oriented platform edition.
+
+The canonical boot path where implemented is:
+
+```text
+UEFI → bootloader → ShivaCore → globus-init → GlobusOS userspace services
+```
+
+## Requirements
+
+Requirements are component-specific. Rust tooling is required for Rust components; the exact supported toolchain is defined by the repository workspace and module manifests.
+
+## Development
+
+Development follows `ATC-STD-000` and applicable repository standards. Changes crossing the ShivaCore/userspace security boundary require the appropriate architecture and security review.
+
+## Testing
+
+Run the test suites defined by the individual workspace components. A successful component test does not by itself establish system-wide audit or production readiness.
+
+## Security
+
+Security-sensitive issues must not be disclosed through public GitHub Issues. Follow `SECURITY.md` and the organization's approved security-disclosure process.
+
+## Governance
+
+The repository is governed by the A-TownChain standards system. Canonical standards use the family-scoped form:
+
+```text
+ATC-STD-F{family}-{sequence}
+```
+
+Legacy standard IDs remain historical identifiers during migration and must not be silently renumbered, reused, or reclassified.
+
+## Compliance terminology
+
+- **APPROVED** — governance approval exists.
+- **IMPLEMENTED** — the referenced implementation exists.
+- **AUDITED** — the relevant audit has been performed and recorded.
+- **PRODUCTION_READY** — all required release gates have passed.
+
+These states are not interchangeable.
+
+## Documentation
+
+See the repository documentation, architecture specification, status and roadmap files where present. Ecosystem-wide governance and standards are maintained in the corresponding organization repositories.
+
+## License
+
+Apache License 2.0. See `LICENSE`.
+
+## Repository Metadata
+
+<!-- atc metadata block -->
+<!--
+atc:
+  standard: ATC-STD-README-001
+repository:
+  name: globus-os
+  type: operating-system
+  status: development
+ownership:
+  organization: A-TownChain-Okosystems
+architecture:
+  kernel: atc-shivacore
+  role: userspace-os
+-->
