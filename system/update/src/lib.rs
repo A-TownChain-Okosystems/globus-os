@@ -1,8 +1,10 @@
 //! Atomic update state machine with rollback semantics.
 
+pub mod boot_state;
 pub mod health;
 pub mod transition;
 
+pub use boot_state::{BootState, BootStateError};
 pub use health::{BootHealth, HealthError};
 pub use transition::TransitionError;
 
