@@ -4,11 +4,13 @@ pub mod file;
 pub mod gpt;
 pub mod mounts;
 pub mod path;
+pub mod persistent;
 pub mod tree;
 
 pub use file::{FileError, FileHandle, FileMode, FileType, Inode, InodeId, OpenFlags};
 pub use mounts::MountTable;
 pub use path::{normalize, PathError};
+pub use persistent::{FsError as PersistentFsError, PersistentFs, Superblock};
 pub use tree::{DirectoryEntry, FsError, InodeTree};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
