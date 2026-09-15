@@ -23,7 +23,9 @@ impl AmdIommu {
 
     /// `base` must point at the kernel-mapped AMD IOMMU MMIO window.
     pub const unsafe fn new(base: usize, len: usize) -> Self {
-        Self { regs: MmioWindow::new(base, len) }
+        Self {
+            regs: MmioWindow::new(base, len),
+        }
     }
 
     pub fn version(&self) -> u32 {
@@ -53,12 +55,14 @@ impl AmdIommu {
     }
 
     pub fn invalidate_device(&self) {
-        self.regs.write32(Self::COMMAND, Self::COMMAND_INVALIDATE_DEVICE);
+        self.regs
+            .write32(Self::COMMAND, Self::COMMAND_INVALIDATE_DEVICE);
         self.regs.fence();
     }
 
     pub fn invalidate_iotlb(&self) {
-        self.regs.write32(Self::COMMAND, Self::COMMAND_INVALIDATE_IOTLB);
+        self.regs
+            .write32(Self::COMMAND, Self::COMMAND_INVALIDATE_IOTLB);
         self.regs.fence();
     }
 }
