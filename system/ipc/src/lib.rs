@@ -10,7 +10,15 @@ impl Message { pub fn new(endpoint:Endpoint,opcode:u32,payload:Vec<u8>)->Self{Se
 impl IdentityOpcode { pub const fn as_u32(self)->u32{self as u32} }
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct IdentityRegisterMessage { pub user_id:String, pub display_name:String, pub chain_id:u64, pub network:String, pub session_ttl_seconds:u64 }
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct IdentityRegisterResponse { pub user_id:String, pub wallet_address:String, pub chain_id:u64, pub network:String, pub recovery_confirmation_required:bool }
-#[derive(Debug, Clone, PartialEq, Eq)] pub struct IdentityLoginMessage { pub user_id:String }
+
+/// Opaque authentication handoff. The IPC layer never carries a password or recovery phrase.
+/// The identifier is meaningful only to the trusted local authentication broker.
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct AuthenticationHandle(pub u128);
+impl core::fmt::Debug for AuthenticationHandle {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result { f.write_str("AuthenticationHandle(REDACTED)") }
+}
+#[derive(Debug, Clone, PartialEq, Eq)] pub struct IdentityLoginMessage { pub user_id:String, pub authentication_handle:AuthenticationHandle }
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct IdentitySessionResponse { pub user_id:String, pub wallet_address:String, pub expires_at_unix:u64 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)] #[repr(u32)] pub enum WalletOpcode { GetPublicIdentity=0x1000, Provision=0x1001, Sign=0x1002, Lock=0x1003, Delete=0x1004 }
@@ -23,4 +31,4 @@ pub const MAX_IPC_PAYLOAD:usize=1024*1024;
 pub fn validate_payload(payload:&[u8])->bool{payload.len()<=MAX_IPC_PAYLOAD}
 
 #[cfg(test)]
-mod tests { use super::*; #[test] fn opcode_values_are_stable(){assert_eq!(IdentityOpcode::Register.as_u32(),0x0900);assert_eq!(WalletOpcode::Sign.as_u32(),0x1002)} #[test] fn registration_excludes_recovery_phrase(){let r=IdentityRegisterResponse{user_id:"user".into(),wallet_address:"ATC00000000000000000000000000000000000".into(),chain_id:1,network:"devnet".into(),recovery_confirmation_required:true};assert!(r.recovery_confirmation_required)} #[test] fn oversized_ipc_is_rejected(){assert!(!validate_payload(&vec![0;MAX_IPC_PAYLOAD+1]))} }
+mod tests { use super::*; #[test] fn opcode_values_are_stable(){assert_eq!(IdentityOpcode::Register.as_u32(),0x0900);assert_eq!(WalletOpcode::Sign.as_u32(),0x1002)} #[test] fn registration_excludes_recovery_phrase(){let r=IdentityRegisterResponse{user_id:"user".into(),wallet_address:"ATC00000000000000000000000000000000000".into(),chain_id:1,network:"devnet".into(),recovery_confirmation_required:true};assert!(r.recovery_confirmation_required)} #[test] fn oversized_ipc_is_rejected(){assert!(!validate_payload(&vec![0;MAX_IPC_PAYLOAD+1]))} #[test] fn authentication_handle_debug_is_redacted(){let debug=format!("{:?}",AuthenticationHandle(42));assert_eq!(debug,"AuthenticationHandle(REDACTED)")} }
