@@ -24,5 +24,8 @@ pub struct NvmeQueueConfig {
 }
 
 impl NvmeQueueConfig {
-    pub const DEFAULT: Self = Self { submission_depth: 64, completion_depth: 64 };
+    pub const DEFAULT: Self = Self {
+        submission_depth: 64,
+        completion_depth: 64,
+    };
 }
