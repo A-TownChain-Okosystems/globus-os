@@ -1,5 +1,6 @@
 //! Virtual filesystem namespace and mount policy.
 
+pub mod globus_state;
 pub mod persistence;
 
 #[derive(Debug, Clone, PartialEq, Eq)]

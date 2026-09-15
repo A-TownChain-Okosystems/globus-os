@@ -1,7 +1,16 @@
 //! Isolated device-service registry.
 
+pub mod acpi;
+pub mod amd_iommu;
+pub mod ethernet_dma;
+pub mod iommu;
+pub mod mmio;
 pub mod nvme;
+pub mod nvme_mmio;
+pub mod nvme_queue;
 pub mod pci;
+pub mod pci_ecam;
+pub mod pci_enum;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceId(pub u64);

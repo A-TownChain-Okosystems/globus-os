@@ -4,7 +4,13 @@
 pub struct Capability(pub u128);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Right { Read, Write, Execute, Map, Admin }
+pub enum Right {
+    Read,
+    Write,
+    Execute,
+    Map,
+    Admin,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Grant {
@@ -13,7 +19,10 @@ pub struct Grant {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Authorization { Allowed, Denied }
+pub enum Authorization {
+    Allowed,
+    Denied,
+}
 
 pub fn authorize(grant: Option<Grant>, requested: Right) -> Authorization {
     match grant {
