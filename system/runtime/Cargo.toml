@@ -17,3 +17,4 @@ globus-audio = { path = "../audio" }
 globus-package = { path = "../package" }
 globus-update = { path = "../update" }
 globus-identity = { path = "../identity" }
+globus-wallet-service = { path = "../wallet-service" }
