@@ -1,6 +1,8 @@
 //! Virtual filesystem namespace, mount policy, and persistent-disk discovery.
 
 pub mod bitmap;
+pub mod directory;
+pub mod extent;
 pub mod file;
 pub mod gpt;
 pub mod inode;
@@ -10,6 +12,8 @@ pub mod persistent;
 pub mod tree;
 
 pub use bitmap::{BitmapError, FreeSpaceBitmap};
+pub use directory::{DirectoryError, DirectoryRecord, DirectoryType};
+pub use extent::{Extent, ExtentError, ExtentMap};
 pub use file::{FileError, FileHandle, FileMode, FileType, Inode, InodeId, OpenFlags};
 pub use inode::{DiskInode, InodeAllocator, InodeDiskError, INODE_SIZE};
 pub use mounts::MountTable;
