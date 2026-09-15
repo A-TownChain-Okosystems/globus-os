@@ -1,6 +1,8 @@
 //! GlobusOS security primitives. Authority is explicit and deny-by-default.
 
+pub mod capability_registry;
 pub mod identity;
+pub use capability_registry::{CapabilityObject, CapabilityRegistry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Capability(pub u128);
