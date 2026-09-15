@@ -1,5 +1,9 @@
 //! Atomic update state machine with rollback semantics.
 
+pub mod transition;
+
+pub use transition::TransitionError;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Slot { A, B }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
