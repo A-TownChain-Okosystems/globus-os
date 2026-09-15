@@ -1,6 +1,7 @@
 //! GlobusOS identity and wallet boundary.
 
 mod file_store;
+mod ipc_key_provider;
 mod key_provider;
 mod keystore;
 mod persistence;
@@ -8,6 +9,7 @@ mod secure_store;
 mod service;
 
 pub use file_store::FileBlobStore;
+pub use ipc_key_provider::{IdentityKeyIpcTransport, IpcIdentityKeyService};
 pub use key_provider::{SecureKeyId, SecureKeyService, SecureKeyServiceError, ShivaCoreKeyProvider};
 pub use keystore::{KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature};
 pub use persistence::{CredentialRecord, IdentityRecord, IdentityStore, InMemoryIdentityStore, PersistenceError, IDENTITY_RECORD_VERSION};
