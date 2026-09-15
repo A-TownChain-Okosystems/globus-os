@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+argon2 = "0.5"
 bip39 = { version = "2.1", features = ["rand"] }
 hmac = "0.12"
 sha2 = "0.10"
