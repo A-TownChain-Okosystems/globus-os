@@ -70,8 +70,16 @@ pub fn map_contiguous(physical: u64, length: usize) -> Result<PrpMapping, PrpErr
     if pages > 2 {
         return Err(PrpError::TooManyPages);
     }
-    let prp2 = if pages == 2 { (physical & !0xfff) + 4096 } else { 0 };
-    Ok(PrpMapping { prp1: physical, prp2, pages })
+    let prp2 = if pages == 2 {
+        (physical & !0xfff) + 4096
+    } else {
+        0
+    };
+    Ok(PrpMapping {
+        prp1: physical,
+        prp2,
+        pages,
+    })
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -85,7 +93,12 @@ pub struct QueueState {
 impl QueueState {
     pub fn new(depth: u16) -> Self {
         assert!(depth >= 2);
-        Self { depth, submission_tail: 0, completion_head: 0, phase: true }
+        Self {
+            depth,
+            submission_tail: 0,
+            completion_head: 0,
+            phase: true,
+        }
     }
 
     pub fn advance_submission(&mut self) {
