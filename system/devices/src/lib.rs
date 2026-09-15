@@ -4,12 +4,14 @@ pub mod acpi;
 pub mod block;
 pub mod boot;
 pub mod ethernet;
+pub mod interrupt;
 pub mod iommu;
 pub mod msi;
 pub mod nvme;
 pub mod nvme_controller;
 pub mod pci;
 pub mod registry;
+pub mod timer;
 
 pub use registry::DeviceRegistry;
 
