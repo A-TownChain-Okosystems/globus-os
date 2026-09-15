@@ -2,10 +2,12 @@
 
 mod keystore;
 mod persistence;
+mod secure_store;
 mod service;
 
 pub use keystore::{KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature};
-pub use persistence::{CredentialRecord, IdentityRecord, IdentityStore, PersistenceError, IDENTITY_RECORD_VERSION};
+pub use persistence::{CredentialRecord, IdentityRecord, IdentityStore, InMemoryIdentityStore, PersistenceError, IDENTITY_RECORD_VERSION};
+pub use secure_store::{BlobStore, EncryptedBlobStore, IdentityKeyProvider, InMemoryBlobStore, SecureStoreError};
 pub use service::{IdentityService, IdentityServiceError, LoginResult, RegistrationResult};
 use bip39::{Language, Mnemonic};
 use hmac::{Hmac, Mac};
@@ -29,8 +31,7 @@ pub struct RecoveryMaterial { seed:Zeroizing<Vec<u8>> }
 impl RecoveryMaterial { pub fn from_seed(seed:Vec<u8>)->Result<Self,IdentityError>{if seed.len()<32{return Err(IdentityError::WeakSeed)}Ok(Self{seed:Zeroizing::new(seed)})} pub fn seed_len(&self)->usize{self.seed.len()} }
 impl Drop for RecoveryMaterial {fn drop(&mut self){self.seed.zeroize();}}
 pub struct RecoveryPhrase(Zeroizing<String>);
-impl RecoveryPhrase {pub fn expose(&self)->&str{&self.0} pub fn word_count(&self)->usize{self.0.split_whitespace().count()}}
-impl Drop for RecoveryPhrase {fn drop(&mut self){self.0.zeroize();}}
+impl RecoveryPhrase {pub fn expose(&self)->&str{self.0.expose_secret()} pub fn word_count(&self)->usize{self.0.split_whitespace().count()}}
 pub struct WalletCreation { pub recovery_phrase:RecoveryPhrase, pub wallet_address:WalletAddress, pub binding:IdentityBinding }
 impl WalletCreation {pub fn recovery_phrase(&self)->&str{self.recovery_phrase.expose()}}
 #[derive(Debug, Clone, PartialEq, Eq)] pub enum IdentityError { InvalidUserId,InvalidDisplayName,BindingMismatch,WeakSeed,InvalidWalletAddress,EmptyNetwork,InvalidMnemonic,WalletDerivationFailed }
