@@ -12,6 +12,8 @@
 
 GlobusOS is the complete operating-system userspace/platform layer above **ShivaCore**. ShivaCore remains the reusable kernel/TCB; GlobusOS provides the system services, device integration, storage, networking, graphics, audio, package lifecycle, identity, wallet integration and recovery required to turn the kernel into an operating system.
 
+The complete standard OS component coverage and implementation priorities are defined in [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md). That document is a coverage baseline, not a claim that every listed component is already production-ready.
+
 ```text
 Applications
     ↓
@@ -63,6 +65,27 @@ The repository now contains a Rust workspace under `system/` with explicit subsy
 
 These are the canonical foundations. Hardware-specific implementations and production cryptography remain separate, evidence-driven milestones.
 
+## Standard OS component coverage
+
+GlobusOS tracks the standard operating-system domains as an explicit implementation matrix:
+
+- Boot, UEFI, Secure Boot and TPM
+- CPU/SMP, interrupts, timers and memory management
+- PCI/PCIe, MMIO, DMA and IOMMU
+- NVMe/storage, VFS and filesystems
+- Ethernet/network stack
+- capabilities, authorization, audit and key management
+- identity, authentication and sessions
+- init/service management and power management
+- graphics, GPU and audio
+- packages, updates and recovery
+- shell/userland and developer SDK
+- observability and diagnostics
+- Aurora AI integration outside the kernel TCB
+- A-TownChain/ATC-VM/ATCLang integration outside the kernel TCB
+
+See [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md) for ownership, priority, trust boundaries, hardware dependency chains and readiness criteria.
+
 ## Boot path
 
 ```text
@@ -90,7 +113,7 @@ CI runs the same validation gates on pushes and pull requests.
 
 ## Architecture and governance
 
-See [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) for the normative system decomposition and trust boundaries. Development follows `ATC-STD-000` and the applicable organization standards. `APPROVED`, `IMPLEMENTED`, `AUDITED` and `PRODUCTION_READY` remain independent states.
+See [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) for the normative system decomposition and trust boundaries and [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md) for complete OS component coverage. Development follows `ATC-STD-000` and the applicable organization standards. `APPROVED`, `IMPLEMENTED`, `AUDITED` and `PRODUCTION_READY` remain independent states.
 
 ## Ecosystem boundaries
 
