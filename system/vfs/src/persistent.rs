@@ -1,9 +1,9 @@
 //! Minimal persistent filesystem metadata layer over a generic block device.
 
-use globus_devices::block::{BlockDevice, BlockError, BlockRequest};
+use globus_devices::block::{BlockDevice, BlockRequest};
 
 const MAGIC: &[u8; 8] = b"GLOBFS01";
-const HEADER_SIZE: usize = 32;
+const HEADER_SIZE: usize = 40;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Superblock {
@@ -36,19 +36,28 @@ impl Superblock {
         out[8..12].copy_from_slice(&self.block_size.to_le_bytes());
         out[12..20].copy_from_slice(&self.total_blocks.to_le_bytes());
         out[20..28].copy_from_slice(&self.metadata_start.to_le_bytes());
-        out[28..32].copy_from_slice(&checksum(&out[..28]).to_le_bytes());
+        out[28..36].copy_from_slice(&self.metadata_blocks.to_le_bytes());
+        out[36..40].copy_from_slice(&checksum(&out[..36]).to_le_bytes());
         Ok(())
     }
 
     pub fn decode(input: &[u8]) -> Result<Self, FsError> {
         if input.len() < HEADER_SIZE || &input[..8] != MAGIC { return Err(FsError::InvalidSuperblock); }
-        let expected = u32::from_le_bytes(input[28..32].try_into().map_err(|_| FsError::Buffer)?);
-        if checksum(&input[..28]) != expected { return Err(FsError::InvalidSuperblock); }
+        let expected = u32::from_le_bytes(input[36..40].try_into().map_err(|_| FsError::Buffer)?);
+        if checksum(&input[..36]) != expected { return Err(FsError::InvalidSuperblock); }
         let block_size = u32::from_le_bytes(input[8..12].try_into().map_err(|_| FsError::Buffer)?);
         let total_blocks = u64::from_le_bytes(input[12..20].try_into().map_err(|_| FsError::Buffer)?);
         let metadata_start = u64::from_le_bytes(input[20..28].try_into().map_err(|_| FsError::Buffer)?);
-        if !block_size.is_power_of_two() || !(512..=65536).contains(&block_size) || total_blocks == 0 || metadata_start >= total_blocks { return Err(FsError::InvalidSuperblock); }
-        Ok(Self { block_size, total_blocks, metadata_start, metadata_blocks: 1 })
+        let metadata_blocks = u64::from_le_bytes(input[28..36].try_into().map_err(|_| FsError::Buffer)?);
+        let metadata_end = metadata_start.checked_add(metadata_blocks).ok_or(FsError::Overflow)?;
+        if !block_size.is_power_of_two()
+            || !(512..=65536).contains(&block_size)
+            || total_blocks == 0
+            || metadata_start == 0
+            || metadata_blocks == 0
+            || metadata_end > total_blocks
+        { return Err(FsError::InvalidSuperblock); }
+        Ok(Self { block_size, total_blocks, metadata_start, metadata_blocks })
     }
 }
 
@@ -67,6 +76,7 @@ impl<D: BlockDevice> PersistentFs<D> {
 
     pub fn mount(mut device: D) -> Result<Self, FsError> {
         let geometry = device.geometry();
+        if !geometry.valid() { return Err(FsError::InvalidGeometry); }
         let mut block = vec![0u8; geometry.block_size as usize];
         device.read(BlockRequest { lba: 0, blocks: 1, write: false }, &mut block).map_err(|_| FsError::Io)?;
         let superblock = Superblock::decode(&block)?;
@@ -90,5 +100,22 @@ mod tests {
         let device = fs.device;
         let mounted = PersistentFs::mount(device).unwrap();
         assert_eq!(mounted.superblock().metadata_blocks, 4);
+    }
+
+    #[test]
+    fn rejects_checksum_corruption() {
+        let sb = Superblock { block_size: 512, total_blocks: 32, metadata_start: 1, metadata_blocks: 4 };
+        let mut bytes = [0u8; 512];
+        sb.encode(&mut bytes).unwrap();
+        bytes[28] ^= 1;
+        assert_eq!(Superblock::decode(&bytes), Err(FsError::InvalidSuperblock));
+    }
+
+    #[test]
+    fn rejects_metadata_overflow() {
+        let sb = Superblock { block_size: 512, total_blocks: 32, metadata_start: 31, metadata_blocks: 2 };
+        let mut bytes = [0u8; 512];
+        sb.encode(&mut bytes).unwrap();
+        assert_eq!(Superblock::decode(&bytes), Err(FsError::InvalidSuperblock));
     }
 }
