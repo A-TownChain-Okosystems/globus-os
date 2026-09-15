@@ -1,9 +1,11 @@
 //! Virtual filesystem namespace, mount policy, and persistent-disk discovery.
 
+pub mod file;
 pub mod gpt;
 pub mod mounts;
 pub mod path;
 
+pub use file::{FileError, FileHandle, FileMode, FileType, Inode, InodeId, OpenFlags};
 pub use mounts::MountTable;
 pub use path::{normalize, PathError};
 
