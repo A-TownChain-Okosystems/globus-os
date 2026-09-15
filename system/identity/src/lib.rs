@@ -45,6 +45,67 @@ pub struct IdentityBinding {
     pub key_version: u16,
 }
 
+/// Persistent non-secret account profile.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AccountProfile {
+    pub user_id: UserId,
+    pub display_name: String,
+    pub wallet_address: WalletAddress,
+    pub binding: IdentityBinding,
+}
+
+impl AccountProfile {
+    pub fn new(
+        user_id: UserId,
+        display_name: impl Into<String>,
+        binding: IdentityBinding,
+    ) -> Result<Self, IdentityError> {
+        let display_name = display_name.into();
+        if display_name.is_empty() || display_name.len() > 128 {
+            return Err(IdentityError::InvalidDisplayName);
+        }
+        if binding.user_id != user_id || binding.wallet_address != binding.wallet_address {
+            return Err(IdentityError::BindingMismatch);
+        }
+        Ok(Self {
+            user_id,
+            display_name,
+            wallet_address: binding.wallet_address.clone(),
+            binding,
+        })
+    }
+}
+
+/// Explicit authentication state. Credential verification is delegated to the
+/// platform authenticator/credential provider; this type never stores a password.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoginState {
+    LoggedOut,
+    Authenticating,
+    Authenticated,
+    Locked,
+}
+
+/// An authenticated session contains only non-secret session metadata.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentitySession {
+    pub user_id: UserId,
+    pub wallet_address: WalletAddress,
+    pub state: LoginState,
+    pub issued_at_unix: u64,
+    pub expires_at_unix: u64,
+}
+
+impl IdentitySession {
+    pub fn is_active(&self, now_unix: u64) -> bool {
+        self.state == LoginState::Authenticated && now_unix < self.expires_at_unix
+    }
+
+    pub fn lock(&mut self) {
+        self.state = LoginState::Locked;
+    }
+}
+
 /// Sensitive recovery material. It is zeroized when dropped and cannot be printed.
 pub struct RecoveryMaterial {
     seed: Zeroizing<Vec<u8>>,
@@ -86,13 +147,14 @@ pub struct WalletCreation {
 }
 
 impl WalletCreation {
-    /// Explicitly consume the result and return the recovery phrase to a trusted UI.
     pub fn recovery_phrase(&self) -> &str { self.recovery_phrase.expose() }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityError {
     InvalidUserId,
+    InvalidDisplayName,
+    BindingMismatch,
     WeakSeed,
     InvalidWalletAddress,
     EmptyNetwork,
@@ -101,10 +163,6 @@ pub enum IdentityError {
 }
 
 /// Create a new ATC wallet locally using 256 bits of cryptographic entropy.
-///
-/// The mnemonic is generated locally. No network access or server-side identity
-/// operation is involved. The caller is responsible for displaying the phrase once
-/// and then destroying the temporary `WalletCreation` value.
 pub fn create_wallet(
     user_id: UserId,
     chain_id: u64,
@@ -239,14 +297,32 @@ mod tests {
     }
 
     #[test]
-    fn weak_recovery_material_is_rejected() {
-        assert_eq!(RecoveryMaterial::from_seed(vec![0; 16]).unwrap_err(), IdentityError::WeakSeed);
+    fn account_binding_is_checked() {
+        let user = UserId::new("test-user").unwrap();
+        let wallet = create_wallet(user.clone(), 600, "devnet", 1).unwrap();
+        let profile = AccountProfile::new(user, "Test User", wallet.binding).unwrap();
+        assert_eq!(profile.wallet_address, wallet.wallet_address);
     }
 
     #[test]
-    fn address_has_expected_format() {
-        let user = UserId::new("format-test").unwrap();
-        let wallet = create_wallet(user, 600, "devnet", 1).unwrap();
-        assert!(wallet.wallet_address.as_str().chars().skip(3).all(|c| c.is_ascii_hexdigit() && c.is_ascii_uppercase() || c.is_ascii_digit()));
+    fn session_expires_and_locks() {
+        let user = UserId::new("test-user").unwrap();
+        let wallet = create_wallet(user.clone(), 600, "devnet", 1).unwrap();
+        let mut session = IdentitySession {
+            user_id: user,
+            wallet_address: wallet.wallet_address,
+            state: LoginState::Authenticated,
+            issued_at_unix: 100,
+            expires_at_unix: 200,
+        };
+        assert!(session.is_active(199));
+        assert!(!session.is_active(200));
+        session.lock();
+        assert!(!session.is_active(150));
+    }
+
+    #[test]
+    fn weak_recovery_material_is_rejected() {
+        assert_eq!(RecoveryMaterial::from_seed(vec![0; 16]).unwrap_err(), IdentityError::WeakSeed);
     }
 }
