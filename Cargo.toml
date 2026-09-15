@@ -1,0 +1,31 @@
+[workspace]
+resolver = "2"
+members = [
+  "system/core",
+  "system/ipc",
+  "system/security",
+  "system/process",
+  "system/memory",
+  "system/vfs",
+  "system/net",
+  "system/devices",
+  "system/services",
+  "system/graphics",
+  "system/audio",
+  "system/package",
+  "system/update",
+  "system/runtime",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/A-TownChain-Okosystems/globus-os"
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
