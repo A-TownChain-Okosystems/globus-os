@@ -4,7 +4,7 @@
 //! only the PHC password hash in memory; plaintext credentials are never retained.
 //! Recovery phrases remain outside the persistent profile/session model.
 
-use super::{create_wallet, restore_wallet, AccountProfile, IdentityBinding, IdentityError, IdentitySession, LoginState, UserId, WalletCreation, WalletAddress};
+use super::{create_wallet, restore_wallet, AccountProfile, CredentialRecord, IdentityBinding, IdentityError, IdentityRecord, IdentitySession, LoginState, PersistenceError, UserId, WalletCreation, WalletAddress, IDENTITY_RECORD_VERSION};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
@@ -12,6 +12,7 @@ use argon2::password_hash::rand_core::OsRng;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum IdentityServiceError {
     Identity(IdentityError),
+    Persistence(PersistenceError),
     AlreadyRegistered,
     NotRegistered,
     InvalidCredentials,
@@ -45,6 +46,7 @@ impl IdentityService {
         let result = RegistrationResult { wallet_address: profile.wallet_address.clone(), profile: profile.clone() };
         self.credential_hash = Some(credential_hash);
         self.profile = Some(profile);
+        self.session = None;
         Ok((result, wallet))
     }
 
@@ -58,6 +60,25 @@ impl IdentityService {
         self.profile = Some(profile);
         self.session = None;
         Ok(result)
+    }
+
+    /// Export only durable identity state. Active sessions are intentionally excluded.
+    pub fn snapshot(&self) -> Result<IdentityRecord, IdentityServiceError> {
+        let profile = self.profile.clone().ok_or(IdentityServiceError::NotRegistered)?;
+        let hash = self.credential_hash.clone().ok_or(IdentityServiceError::InvalidCredentials)?;
+        Ok(IdentityRecord::new(profile, CredentialRecord::argon2id(hash)))
+    }
+
+    /// Load a validated durable record. Existing sessions are always invalidated.
+    pub fn load_record(&mut self, record: IdentityRecord) -> Result<(), IdentityServiceError> {
+        record.validate().map_err(IdentityServiceError::Persistence)?;
+        if record.version != IDENTITY_RECORD_VERSION {
+            return Err(IdentityServiceError::Persistence(PersistenceError::UnsupportedVersion(record.version)));
+        }
+        self.profile = Some(record.profile);
+        self.credential_hash = Some(record.credential.phc_hash);
+        self.session = None;
+        Ok(())
     }
 
     pub fn login(&mut self, credential: &[u8], now_unix: u64, ttl_seconds: u64) -> Result<LoginResult, IdentityServiceError> {
@@ -130,5 +151,27 @@ mod tests {
         let phrase = wallet.recovery_phrase().to_owned(); let mut restored = IdentityService::new();
         let result = restored.restore(user, "Alice", &phrase, b"credential", 600, "devnet", 1).unwrap();
         assert_eq!(result.wallet_address, wallet.wallet_address);
+    }
+
+    #[test]
+    fn snapshot_round_trip_invalidates_session() {
+        let user = UserId::new("alice").unwrap(); let mut source = IdentityService::new();
+        source.register(user, "Alice", b"credential", 600, "devnet", 1).unwrap();
+        source.login(b"credential", 100, 300).unwrap();
+        let record = source.snapshot().unwrap();
+        let mut restored = IdentityService::new();
+        restored.load_record(record).unwrap();
+        assert!(restored.session(150).is_none());
+        assert!(restored.login(b"credential", 200, 300).is_ok());
+    }
+
+    #[test]
+    fn malformed_record_is_rejected() {
+        let user = UserId::new("alice").unwrap(); let mut source = IdentityService::new();
+        source.register(user, "Alice", b"credential", 600, "devnet", 1).unwrap();
+        let mut record = source.snapshot().unwrap();
+        record.credential.scheme = "sha256";
+        let mut restored = IdentityService::new();
+        assert_eq!(restored.load_record(record).unwrap_err(), IdentityServiceError::Persistence(PersistenceError::UnsupportedCredentialScheme));
     }
 }
