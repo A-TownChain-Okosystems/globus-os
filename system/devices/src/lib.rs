@@ -7,6 +7,7 @@ pub mod ethernet;
 pub mod iommu;
 pub mod msi;
 pub mod nvme;
+pub mod nvme_controller;
 pub mod pci;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
