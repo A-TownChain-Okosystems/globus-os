@@ -3,6 +3,7 @@
 pub mod acpi;
 pub mod apic;
 pub mod block;
+pub mod block_manager;
 pub mod boot;
 pub mod ethernet;
 pub mod interrupt;
@@ -15,6 +16,7 @@ pub mod registry;
 pub mod smp;
 pub mod timer;
 
+pub use block_manager::{BlockDeviceId, BlockDeviceRegistry};
 pub use registry::DeviceRegistry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
