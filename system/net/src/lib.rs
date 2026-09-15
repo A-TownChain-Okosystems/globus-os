@@ -1,5 +1,9 @@
 //! Network policy boundary. Protocol implementations remain behind explicit services.
 
+pub mod socket;
+
+pub use socket::{Socket, SocketState, SocketTable};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Protocol { Ipv4, Ipv6, Tcp, Udp, Dns, Dhcp, Tls }
 
