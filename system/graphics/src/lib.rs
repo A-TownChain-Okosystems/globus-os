@@ -1,8 +1,9 @@
-//! Display, compositor, desktop and GPU policy boundary.
+//! Display, compositor, desktop shell and GPU policy boundary.
 
 pub mod compositor;
 pub mod desktop;
 pub mod input;
+pub mod shell;
 pub mod wm;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
