@@ -3,6 +3,7 @@
 pub mod allocator;
 pub mod bitmap;
 pub mod directory;
+pub mod dir_store;
 pub mod extent;
 pub mod file;
 pub mod gpt;
@@ -19,6 +20,7 @@ pub mod tree;
 pub use allocator::{AllocationError, BlockAllocator};
 pub use bitmap::{BitmapError, FreeSpaceBitmap};
 pub use directory::{DirectoryError, DirectoryRecord, DirectoryType};
+pub use dir_store::{DirStoreError, DirectoryStore};
 pub use extent::{Extent, ExtentError, ExtentMap};
 pub use file::{FileError, FileHandle, FileMode, FileType, Inode, InodeId, OpenFlags};
 pub use inode::{DiskInode, InodeAllocator, InodeDiskError, INODE_SIZE};
