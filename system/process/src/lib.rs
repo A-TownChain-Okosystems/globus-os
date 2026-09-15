@@ -1,6 +1,9 @@
 //! Process and thread identity for GlobusOS user space.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub mod scheduler;
+pub use scheduler::Scheduler;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct ProcessId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ThreadId(pub u64);
