@@ -1,5 +1,8 @@
 //! Isolated device-service registry.
 
+pub mod nvme;
+pub mod pci;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
