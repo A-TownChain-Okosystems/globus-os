@@ -64,7 +64,7 @@ impl AccountProfile {
         if display_name.is_empty() || display_name.len() > 128 {
             return Err(IdentityError::InvalidDisplayName);
         }
-        if binding.user_id != user_id || binding.wallet_address != binding.wallet_address {
+        if binding.user_id != user_id {
             return Err(IdentityError::BindingMismatch);
         }
         Ok(Self {
