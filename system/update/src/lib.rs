@@ -1,7 +1,9 @@
 //! Atomic update state machine with rollback semantics.
 
+pub mod health;
 pub mod transition;
 
+pub use health::{BootHealth, HealthError};
 pub use transition::TransitionError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
