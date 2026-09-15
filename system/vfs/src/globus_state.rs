@@ -75,7 +75,10 @@ impl<D: BlockIo> GlobusStateFs<D> {
         write_struct(&mut block, &sb);
         device.write_block(0, &block)?;
         device.flush()?;
-        Ok(Self { device, superblock: sb })
+        Ok(Self {
+            device,
+            superblock: sb,
+        })
     }
 
     pub fn mount(mut device: D) -> Result<Self, FsError> {
@@ -91,7 +94,10 @@ impl<D: BlockIo> GlobusStateFs<D> {
         {
             return Err(FsError::InvalidSuperblock);
         }
-        Ok(Self { device, superblock: sb })
+        Ok(Self {
+            device,
+            superblock: sb,
+        })
     }
 
     pub fn append(&mut self, kind: u16, key: u64, payload: &[u8]) -> Result<u64, FsError> {
@@ -116,9 +122,11 @@ impl<D: BlockIo> GlobusStateFs<D> {
         block[core::mem::size_of::<RecordHeader>()
             ..core::mem::size_of::<RecordHeader>() + payload.len()]
             .copy_from_slice(payload);
-        header.checksum = checksum(&block[..core::mem::size_of::<RecordHeader>() - 4 + payload.len()]);
+        header.checksum =
+            checksum(&block[..core::mem::size_of::<RecordHeader>() - 4 + payload.len()]);
         write_struct(&mut block, &header);
-        self.device.write_block(self.superblock.journal_start + tail, &block)?;
+        self.device
+            .write_block(self.superblock.journal_start + tail, &block)?;
         self.device.flush()?;
 
         self.superblock.journal_tail += 1;
@@ -131,15 +139,19 @@ impl<D: BlockIo> GlobusStateFs<D> {
         let header_size = core::mem::size_of::<RecordHeader>();
         let mut block = [0u8; BLOCK_SIZE];
         for index in 0..self.superblock.journal_tail {
-            self.device.read_block(self.superblock.journal_start + index, &mut block)?;
+            self.device
+                .read_block(self.superblock.journal_start + index, &mut block)?;
             let header: RecordHeader = read_struct(&block)?;
-            let end = header_size.checked_add(header.payload_len as usize).ok_or(FsError::CorruptRecord)?;
+            let end = header_size
+                .checked_add(header.payload_len as usize)
+                .ok_or(FsError::CorruptRecord)?;
             if header.magic != RECORD_MAGIC || end > BLOCK_SIZE {
                 return Err(FsError::CorruptRecord);
             }
             let mut check = block;
             check[header_size - 4..header_size].fill(0);
-            if checksum(&check[..header_size - 4 + header.payload_len as usize]) != header.checksum {
+            if checksum(&check[..header_size - 4 + header.payload_len as usize]) != header.checksum
+            {
                 return Err(FsError::CorruptRecord);
             }
             apply(header.kind, header.key, &block[header_size..end]);

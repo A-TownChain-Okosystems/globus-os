@@ -59,7 +59,9 @@ impl E1000Dma {
     pub const TX_STATUS_DD: u8 = 1 << 0;
 
     pub const unsafe fn new(base: usize, len: usize) -> Self {
-        Self { regs: MmioWindow::new(base, len) }
+        Self {
+            regs: MmioWindow::new(base, len),
+        }
     }
 
     pub fn reset(&self) {
@@ -82,7 +84,8 @@ impl E1000Dma {
         self.regs.write32(Self::RDLEN, ring_bytes);
         self.regs.write32(Self::RDH, 0);
         self.regs.write32(Self::RDT, u32::from(count - 1));
-        self.regs.write32(Self::RCTL, Self::RCTL_EN | Self::RCTL_BAM);
+        self.regs
+            .write32(Self::RCTL, Self::RCTL_EN | Self::RCTL_BAM);
         self.regs.fence();
     }
 
@@ -92,7 +95,8 @@ impl E1000Dma {
         self.regs.write32(Self::TDLEN, ring_bytes);
         self.regs.write32(Self::TDH, 0);
         self.regs.write32(Self::TDT, 0);
-        self.regs.write32(Self::TCTL, Self::TCTL_EN | Self::TCTL_PSP);
+        self.regs
+            .write32(Self::TCTL, Self::TCTL_EN | Self::TCTL_PSP);
         self.regs.fence();
     }
 

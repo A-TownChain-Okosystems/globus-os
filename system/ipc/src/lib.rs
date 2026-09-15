@@ -19,7 +19,11 @@ pub struct Message {
 impl Message {
     pub fn new(endpoint: Endpoint, opcode: u32, payload: Vec<u8>) -> Self {
         Self {
-            header: MessageHeader { endpoint, opcode, payload_len: payload.len() as u32 },
+            header: MessageHeader {
+                endpoint,
+                opcode,
+                payload_len: payload.len() as u32,
+            },
             payload,
         }
     }

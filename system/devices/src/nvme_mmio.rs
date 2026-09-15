@@ -23,7 +23,9 @@ impl NvmeMmio {
     pub const CSTS_SHST_COMPLETE: u32 = 0b10 << 2;
 
     pub const unsafe fn new(base: usize, len: usize) -> Self {
-        Self { regs: MmioWindow::new(base, len) }
+        Self {
+            regs: MmioWindow::new(base, len),
+        }
     }
 
     pub fn version(&self) -> u32 {
