@@ -2,21 +2,25 @@
 //!
 //! This module deliberately does not implement a filesystem or hardware key store. The key
 //! provider is an explicit dependency so production wiring can bind it to ShivaCore/TPM/TEE.
+//! Backends must provide atomic replacement and monotonic generation tracking to reject rollback.
 
 use chacha20poly1305::{aead::{Aead, OsRng}, AeadCore, KeyInit, XChaCha20Poly1305};
 use zeroize::Zeroizing;
 
 const MAGIC: &[u8; 4] = b"GID1";
-const FORMAT_VERSION: u8 = 1;
+const FORMAT_VERSION: u8 = 2;
 const NONCE_LEN: usize = 24;
+const HEADER_LEN: usize = 4 + 1 + 8 + NONCE_LEN;
 
 pub trait IdentityKeyProvider {
     fn load_key(&self) -> Result<Zeroizing<[u8; 32]>, SecureStoreError>;
 }
 
+/// Opaque blob storage with atomic replacement and durable monotonic generations.
 pub trait BlobStore {
     fn load(&self) -> Result<Option<Vec<u8>>, SecureStoreError>;
-    fn replace(&mut self, blob: &[u8]) -> Result<(), SecureStoreError>;
+    fn replace(&mut self, blob: &[u8], generation: u64) -> Result<(), SecureStoreError>;
+    fn generation(&self) -> Result<u64, SecureStoreError>;
     fn delete(&mut self) -> Result<(), SecureStoreError>;
 }
 
@@ -28,13 +32,15 @@ pub enum SecureStoreError {
     InvalidEnvelope,
     IntegrityFailure,
     Conflict,
+    RollbackDetected { stored: u64, incoming: u64 },
+    GenerationOverflow,
     BackendUnavailable,
 }
 
 /// Encrypts an opaque identity record using XChaCha20-Poly1305.
 ///
-/// The encrypted blob contains only a format marker, version, random nonce and ciphertext.
-/// Key material is never serialized into the blob.
+/// The envelope contains a format marker, monotonic generation, random nonce and ciphertext.
+/// The generation and envelope header are authenticated as associated data.
 pub struct EncryptedBlobStore<B, K> {
     backend: B,
     keys: K,
@@ -48,49 +54,73 @@ impl<B, K> EncryptedBlobStore<B, K> {
 impl<B: BlobStore, K: IdentityKeyProvider> EncryptedBlobStore<B, K> {
     pub fn load_plaintext(&self) -> Result<Option<Zeroizing<Vec<u8>>>, SecureStoreError> {
         let Some(blob) = self.backend.load()? else { return Ok(None); };
-        decrypt(&blob, &self.keys)
+        let current = self.backend.generation()?;
+        decrypt(&blob, &self.keys, current)
     }
 
-    pub fn replace_plaintext(&mut self, plaintext: &[u8]) -> Result<(), SecureStoreError> {
-        let blob = encrypt(plaintext, &self.keys)?;
-        self.backend.replace(&blob)
+    pub fn replace_plaintext(&mut self, plaintext: &[u8]) -> Result<u64, SecureStoreError> {
+        let current = self.backend.generation()?;
+        let generation = current.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
+        let blob = encrypt(plaintext, &self.keys, generation)?;
+        self.backend.replace(&blob, generation)?;
+        Ok(generation)
     }
 
     pub fn delete(&mut self) -> Result<(), SecureStoreError> { self.backend.delete() }
 }
 
-fn encrypt<K: IdentityKeyProvider>(plaintext: &[u8], keys: &K) -> Result<Vec<u8>, SecureStoreError> {
+fn encrypt<K: IdentityKeyProvider>(plaintext: &[u8], keys: &K, generation: u64) -> Result<Vec<u8>, SecureStoreError> {
     let key = keys.load_key()?;
     let cipher = XChaCha20Poly1305::new_from_slice(&*key).map_err(|_| SecureStoreError::KeyUnavailable)?;
     let nonce = XChaCha20Poly1305::generate_nonce(&mut OsRng);
-    let ciphertext = cipher.encrypt(&nonce, plaintext).map_err(|_| SecureStoreError::EncryptionFailed)?;
-    let mut envelope = Vec::with_capacity(MAGIC.len() + 1 + NONCE_LEN + ciphertext.len());
-    envelope.extend_from_slice(MAGIC);
-    envelope.push(FORMAT_VERSION);
-    envelope.extend_from_slice(&nonce);
-    envelope.extend_from_slice(&ciphertext);
-    Ok(envelope)
+    let mut header = Vec::with_capacity(HEADER_LEN);
+    header.extend_from_slice(MAGIC);
+    header.push(FORMAT_VERSION);
+    header.extend_from_slice(&generation.to_le_bytes());
+    header.extend_from_slice(&nonce);
+    let ciphertext = cipher.encrypt((&nonce).into(), chacha20poly1305::aead::Payload { msg: plaintext, aad: &header })
+        .map_err(|_| SecureStoreError::EncryptionFailed)?;
+    header.extend_from_slice(&ciphertext);
+    Ok(header)
 }
 
-fn decrypt<K: IdentityKeyProvider>(blob: &[u8], keys: &K) -> Result<Option<Zeroizing<Vec<u8>>>, SecureStoreError> {
-    if blob.len() < MAGIC.len() + 1 + NONCE_LEN + 16 { return Err(SecureStoreError::InvalidEnvelope); }
+fn decrypt<K: IdentityKeyProvider>(blob: &[u8], keys: &K, expected_generation: u64) -> Result<Option<Zeroizing<Vec<u8>>>, SecureStoreError> {
+    if blob.len() < HEADER_LEN + 16 { return Err(SecureStoreError::InvalidEnvelope); }
     if &blob[..4] != MAGIC || blob[4] != FORMAT_VERSION { return Err(SecureStoreError::InvalidEnvelope); }
-    let nonce = &blob[5..5 + NONCE_LEN];
-    let ciphertext = &blob[5 + NONCE_LEN..];
+    let generation = u64::from_le_bytes(blob[5..13].try_into().map_err(|_| SecureStoreError::InvalidEnvelope)?);
+    if generation != expected_generation {
+        return Err(SecureStoreError::RollbackDetected { stored: expected_generation, incoming: generation });
+    }
+    let nonce: [u8; NONCE_LEN] = blob[13..37].try_into().map_err(|_| SecureStoreError::InvalidEnvelope)?;
+    let header = &blob[..HEADER_LEN];
+    let ciphertext = &blob[HEADER_LEN..];
     let key = keys.load_key()?;
     let cipher = XChaCha20Poly1305::new_from_slice(&*key).map_err(|_| SecureStoreError::KeyUnavailable)?;
-    let plaintext = cipher.decrypt(nonce.into(), ciphertext).map_err(|_| SecureStoreError::DecryptionFailed)?;
+    let plaintext = cipher.decrypt((&nonce).into(), chacha20poly1305::aead::Payload { msg: ciphertext, aad: header })
+        .map_err(|_| SecureStoreError::DecryptionFailed)?;
     Ok(Some(Zeroizing::new(plaintext)))
 }
 
 #[derive(Debug, Default)]
-pub struct InMemoryBlobStore { blob: Option<Vec<u8>> }
+pub struct InMemoryBlobStore { blob: Option<Vec<u8>>, generation: u64 }
 
 impl BlobStore for InMemoryBlobStore {
     fn load(&self) -> Result<Option<Vec<u8>>, SecureStoreError> { Ok(self.blob.clone()) }
-    fn replace(&mut self, blob: &[u8]) -> Result<(), SecureStoreError> { self.blob = Some(blob.to_vec()); Ok(()) }
+
+    fn replace(&mut self, blob: &[u8], generation: u64) -> Result<(), SecureStoreError> {
+        if generation <= self.generation && self.blob.is_some() {
+            return Err(SecureStoreError::RollbackDetected { stored: self.generation, incoming: generation });
+        }
+        self.blob = Some(blob.to_vec());
+        self.generation = generation;
+        Ok(())
+    }
+
+    fn generation(&self) -> Result<u64, SecureStoreError> { Ok(self.generation) }
+
     fn delete(&mut self) -> Result<(), SecureStoreError> {
         if let Some(mut blob) = self.blob.take() { zeroize_bytes(&mut blob); }
+        self.generation = self.generation.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
         Ok(())
     }
 }
@@ -107,9 +137,11 @@ mod tests {
     fn store() -> EncryptedBlobStore<InMemoryBlobStore, TestKey> {
         EncryptedBlobStore::new(InMemoryBlobStore::default(), TestKey(Zeroizing::new([7u8; 32])))
     }
-    #[test] fn round_trip_decrypts() {
-        let mut store = store(); store.replace_plaintext(b"identity-record").unwrap();
+    #[test] fn round_trip_decrypts_and_increments_generation() {
+        let mut store = store();
+        assert_eq!(store.replace_plaintext(b"identity-record").unwrap(), 1);
         assert_eq!(&*store.load_plaintext().unwrap().unwrap(), b"identity-record");
+        assert_eq!(store.replace_plaintext(b"identity-record-2").unwrap(), 2);
     }
     #[test] fn random_nonce_produces_distinct_ciphertexts() {
         let mut first = store(); let mut second = store();
@@ -120,7 +152,10 @@ mod tests {
     #[test] fn tampering_is_rejected() {
         let mut store = store(); store.replace_plaintext(b"identity-record").unwrap();
         let (mut backend, keys) = store.into_parts(); let mut blob = backend.load().unwrap().unwrap();
-        *blob.last_mut().unwrap() ^= 1; backend.replace(&blob).unwrap();
+        *blob.last_mut().unwrap() ^= 1;
+        let generation = backend.generation().unwrap();
+        backend.blob = Some(blob);
+        backend.generation = generation;
         let store = EncryptedBlobStore::new(backend, keys);
         assert_eq!(store.load_plaintext().unwrap_err(), SecureStoreError::DecryptionFailed);
     }
@@ -130,8 +165,15 @@ mod tests {
         let store = EncryptedBlobStore::new(backend, wrong);
         assert_eq!(store.load_plaintext().unwrap_err(), SecureStoreError::DecryptionFailed);
     }
-    #[test] fn delete_removes_blob() {
-        let mut store = store(); store.replace_plaintext(b"identity-record").unwrap(); store.delete().unwrap();
+    #[test] fn rollback_generation_is_rejected() {
+        let mut backend = InMemoryBlobStore::default();
+        backend.replace(b"one", 2).unwrap();
+        assert_eq!(backend.replace(b"old", 1).unwrap_err(), SecureStoreError::RollbackDetected { stored: 2, incoming: 1 });
+    }
+    #[test] fn delete_removes_blob_and_advances_generation() {
+        let mut store = store(); store.replace_plaintext(b"identity-record").unwrap();
+        store.delete().unwrap();
         assert_eq!(store.load_plaintext().unwrap(), None);
+        assert_eq!(store.backend.generation().unwrap(), 2);
     }
 }
