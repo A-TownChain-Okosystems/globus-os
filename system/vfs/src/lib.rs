@@ -1,6 +1,11 @@
 //! Virtual filesystem namespace, mount policy, and persistent-disk discovery.
 
 pub mod gpt;
+pub mod mounts;
+pub mod path;
+
+pub use mounts::MountTable;
+pub use path::{normalize, PathError};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount { pub mountpoint: String, pub filesystem: String, pub readonly: bool }
