@@ -4,10 +4,12 @@ pub mod file;
 pub mod gpt;
 pub mod mounts;
 pub mod path;
+pub mod tree;
 
 pub use file::{FileError, FileHandle, FileMode, FileType, Inode, InodeId, OpenFlags};
 pub use mounts::MountTable;
 pub use path::{normalize, PathError};
+pub use tree::{DirectoryEntry, FsError, InodeTree};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount { pub mountpoint: String, pub filesystem: String, pub readonly: bool }
