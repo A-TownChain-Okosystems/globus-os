@@ -11,14 +11,34 @@ pub struct PciEcam {
 impl PciEcam {
     /// Creates an ECAM accessor for a firmware-described ECAM MMIO window.
     pub const unsafe fn new(window: MmioWindow, segment: u16, bus_start: u8) -> Self {
-        Self { window, segment, bus_start }
+        Self {
+            window,
+            segment,
+            bus_start,
+        }
     }
 
     fn offset(&self, address: PciAddress, register: u16) -> usize {
         assert_eq!(address.segment, self.segment);
         assert!(register < 0x1000 && register & 3 == 0);
-        let bus = address.bus.checked_sub(self.bus_start).expect("PCI bus outside ECAM range") as usize;
-        (bus << 20) | ((address.device as usize) << 15) | ((address.function as usize) << 12) | register as usize
+        let bus = address
+            .bus
+            .checked_sub(self.bus_start)
+            .expect("PCI bus outside ECAM range") as usize;
+        (bus << 20)
+            | ((address.device as usize) << 15)
+            | ((address.function as usize) << 12)
+            | register as usize
+    }
+
+    pub fn read16(&self, address: PciAddress, register: u16) -> u16 {
+        assert_eq!(register & 1, 0);
+        self.window.read16(self.offset(address, register))
+    }
+
+    pub fn write16(&self, address: PciAddress, register: u16, value: u16) {
+        assert_eq!(register & 1, 0);
+        self.window.write16(self.offset(address, register), value);
     }
 
     pub fn read32(&self, address: PciAddress, register: u16) -> u32 {
@@ -30,8 +50,8 @@ impl PciEcam {
     }
 
     pub fn enable_bus_master(&self, address: PciAddress) {
-        let command = self.read32(address, 0x04);
-        self.write32(address, 0x04, command | (1 << 2));
+        let command = self.read16(address, 0x04);
+        self.write16(address, 0x04, command | (1 << 2));
         self.window.fence();
     }
 
