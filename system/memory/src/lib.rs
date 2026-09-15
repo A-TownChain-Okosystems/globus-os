@@ -1,8 +1,11 @@
 //! Virtual-memory abstractions above the ShivaCore address-space primitives.
 
+pub mod allocator;
+pub use allocator::{PageAllocator, PageRange};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AddressSpace(pub u64);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct VirtualAddress(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PageFlags { pub read: bool, pub write: bool, pub execute: bool, pub user: bool }
