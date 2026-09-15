@@ -1,9 +1,11 @@
 //! GlobusOS identity and wallet boundary.
 
 mod keystore;
+mod persistence;
 mod service;
 
 pub use keystore::{KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature};
+pub use persistence::{CredentialRecord, IdentityRecord, IdentityStore, PersistenceError, IDENTITY_RECORD_VERSION};
 pub use service::{IdentityService, IdentityServiceError, LoginResult, RegistrationResult};
 use bip39::{Language, Mnemonic};
 use hmac::{Hmac, Mac};
