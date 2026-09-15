@@ -23,6 +23,14 @@ impl MmioWindow {
         (self.base + offset) as *mut u8
     }
 
+    pub fn read16(&self, offset: usize) -> u16 {
+        unsafe { ptr::read_volatile(self.addr(offset, 2).cast()) }
+    }
+
+    pub fn write16(&self, offset: usize, value: u16) {
+        unsafe { ptr::write_volatile(self.addr(offset, 2).cast(), value) }
+    }
+
     pub fn read32(&self, offset: usize) -> u32 {
         unsafe { ptr::read_volatile(self.addr(offset, 4).cast()) }
     }
@@ -52,6 +60,9 @@ pub struct MmioRegister<T> {
 
 impl<T> MmioRegister<T> {
     pub const fn new(offset: usize) -> Self {
-        Self { offset, _marker: PhantomData }
+        Self {
+            offset,
+            _marker: PhantomData,
+        }
     }
 }
