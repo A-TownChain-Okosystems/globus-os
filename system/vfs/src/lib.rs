@@ -3,6 +3,7 @@
 pub mod bitmap;
 pub mod file;
 pub mod gpt;
+pub mod inode;
 pub mod mounts;
 pub mod path;
 pub mod persistent;
@@ -10,6 +11,7 @@ pub mod tree;
 
 pub use bitmap::{BitmapError, FreeSpaceBitmap};
 pub use file::{FileError, FileHandle, FileMode, FileType, Inode, InodeId, OpenFlags};
+pub use inode::{DiskInode, InodeAllocator, InodeDiskError, INODE_SIZE};
 pub use mounts::MountTable;
 pub use path::{normalize, PathError};
 pub use persistent::{FsError as PersistentFsError, PersistentFs, Superblock};
