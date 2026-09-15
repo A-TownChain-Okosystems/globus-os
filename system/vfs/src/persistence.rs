@@ -25,5 +25,7 @@ pub struct PersistentMount {
 }
 
 impl PersistentMount {
-    pub fn is_writable(&self) -> bool { !self.readonly }
+    pub fn is_writable(&self) -> bool {
+        !self.readonly
+    }
 }
