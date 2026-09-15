@@ -1,0 +1,18 @@
+[package]
+name = "globus-runtime"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+[lints]
+workspace = true
+
+[dependencies]
+globus-system-core = { path = "../core" }
+globus-services = { path = "../services" }
+globus-vfs = { path = "../vfs" }
+globus-net = { path = "../net" }
+globus-devices = { path = "../devices" }
+globus-graphics = { path = "../graphics" }
+globus-audio = { path = "../audio" }
+globus-package = { path = "../package" }
+globus-update = { path = "../update" }

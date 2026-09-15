@@ -5,116 +5,92 @@
 **Project:** `globus-os`  
 **Organization:** `A-TownChain-Okosystems`  
 **Status:** `development`  
-**License:** `Apache-2.0` (see repository license)
+**Version:** `0.1.0`  
+**License:** `Apache-2.0`
 
-## Overview
+## System role
 
-GlobusOS is the operating-system layer of the A-TownChain ecosystem. It provides userspace services, system integration, drivers, filesystem/networking components, desktop functionality and platform editions on top of **ShivaCore**.
-
-The security boundary is explicit:
-
-```text
-Hardware / Boot
-      │
-      ▼
-ShivaCore
-(kernel / TCB / capabilities)
-      │
-      ▼
-GlobusOS
-(userspace OS and services)
-      │
-      ├── Aurora AI integration
-      ├── system services
-      ├── drivers / filesystem / networking
-      └── desktop / shell
-```
-
-GlobusOS is not the kernel and does not replace ShivaCore. AI functionality is integrated through defined OS interfaces; AI components do not become part of the ShivaCore TCB merely by integration.
-
-## Status
-
-`development` means active development and integration work. Historical milestone claims and audit results are not interpreted as current production readiness.
-
-No Mainnet, production, or release-readiness claim is made by this README. `APPROVED`, `IMPLEMENTED`, `AUDITED`, and `PRODUCTION_READY` are independent states.
-
-## Architecture
-
-The repository contains the GlobusOS userspace/platform components, including:
-
-- `atc-globus-os` — core userspace OS integration.
-- `atc-globus-desktop` — desktop environment components.
-- `atc-globus-fs` — filesystem services.
-- `atc-globus-net` — networking services.
-- `atc-globus-registry` — userspace registry services.
-- `atc-globus-shell` — shell and command interface.
-- `atc-drivers` — driver integration.
-- `atc-bootloader` — boot integration components.
-- `atc-linux-edition` — Linux-oriented platform edition.
-- `atc-windows-edition` — Windows-oriented platform edition.
-
-The canonical boot path where implemented is:
+GlobusOS is the complete operating-system userspace/platform layer above **ShivaCore**. ShivaCore remains the reusable kernel/TCB; GlobusOS provides the system services, device integration, storage, networking, graphics, audio, package lifecycle and recovery required to turn the kernel into an operating system.
 
 ```text
-UEFI → bootloader → ShivaCore → globus-init → GlobusOS userspace services
+Applications
+    ↓
+Aurora AI / Desktop / Shell
+    ↓
+GlobusOS system services
+    ↓
+IPC + capabilities
+    ↓
+ShivaCore kernel / TCB
+    ↓
+HAL / firmware / hardware
 ```
 
-## Requirements
+AI and blockchain components are not promoted into the ShivaCore TCB by integration.
 
-Requirements are component-specific. Rust tooling is required for Rust components; the exact supported toolchain is defined by the repository workspace and module manifests.
+## Implemented system foundation
+
+The repository now contains a Rust workspace under `system/` with explicit subsystem boundaries:
+
+- `globus-system-core` — lifecycle and kernel-facing identity.
+- `globus-ipc` — endpoints and IPC messages.
+- `globus-security` — deny-by-default capability authorization.
+- `globus-process` — process/thread lifecycle.
+- `globus-memory` — address-space and page policy.
+- `globus-vfs` — filesystem namespace and mount contract.
+- `globus-net` — network policy/socket boundary.
+- `globus-devices` — isolated device/driver registry.
+- `globus-services` — service lifecycle and dependency ordering.
+- `globus-graphics` — display/compositor/GPU boundary.
+- `globus-audio` — audio service boundary.
+- `globus-package` — signed package metadata verification.
+- `globus-update` — atomic A/B update and rollback state machine.
+- `globus-runtime` — integrated userspace runtime.
+
+These are the canonical foundations. Hardware-specific implementations and production cryptography remain separate, evidence-driven milestones.
+
+## Boot path
+
+```text
+UEFI / firmware
+ → bootloader
+ → ShivaCore
+ → capability + IPC initialization
+ → GlobusOS init/service manager
+ → security / devices / storage / network
+ → runtime / graphics / audio
+ → Aurora / desktop / applications
+```
 
 ## Development
 
-Development follows `ATC-STD-000` and applicable repository standards. Changes crossing the ShivaCore/userspace security boundary require the appropriate architecture and security review.
+```bash
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+```
 
-## Testing
+CI runs the same validation gates on pushes and pull requests.
 
-Run the test suites defined by the individual workspace components. A successful component test does not by itself establish system-wide audit or production readiness.
+## Architecture and governance
+
+See [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) for the normative system decomposition and trust boundaries. Development follows `ATC-STD-000` and the applicable organization standards. `APPROVED`, `IMPLEMENTED`, `AUDITED` and `PRODUCTION_READY` remain independent states.
+
+## Ecosystem boundaries
+
+```text
+ATCLang → ATC-VM → A-TownChain
+
+Aurora → GlobusOS IPC/API → ShivaCore
+```
+
+The VM remains the boundary between chain execution and the Rust system/network track. GlobusOS does not embed chain semantics into the kernel.
 
 ## Security
 
-Security-sensitive issues must not be disclosed through public GitHub Issues. Follow `SECURITY.md` and the organization's approved security-disclosure process.
-
-## Governance
-
-The repository is governed by the A-TownChain standards system. Canonical standards use the family-scoped form:
-
-```text
-ATC-STD-F{family}-{sequence}
-```
-
-Legacy standard IDs remain historical identifiers during migration and must not be silently renumbered, reused, or reclassified.
-
-## Compliance terminology
-
-- **APPROVED** — governance approval exists.
-- **IMPLEMENTED** — the referenced implementation exists.
-- **AUDITED** — the relevant audit has been performed and recorded.
-- **PRODUCTION_READY** — all required release gates have passed.
-
-These states are not interchangeable.
-
-## Documentation
-
-See the repository documentation, architecture specification, status and roadmap files where present. Ecosystem-wide governance and standards are maintained in the corresponding organization repositories.
+Security-sensitive issues must not be disclosed through public GitHub Issues. Follow `SECURITY.md` and the organization disclosure process.
 
 ## License
 
-Apache License 2.0. See `LICENSE`.
-
-## Repository Metadata
-
-<!-- atc metadata block -->
-<!--
-atc:
-  standard: ATC-STD-README-001
-repository:
-  name: globus-os
-  type: operating-system
-  status: development
-ownership:
-  organization: A-TownChain-Okosystems
-architecture:
-  kernel: atc-shivacore
-  role: userspace-os
--->
+Apache License 2.0. See [`LICENSE`](LICENSE).
