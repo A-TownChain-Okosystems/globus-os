@@ -15,6 +15,7 @@ members = [
   "system/package",
   "system/update",
   "system/runtime",
+  "system/init",
 ]
 
 [workspace.package]
