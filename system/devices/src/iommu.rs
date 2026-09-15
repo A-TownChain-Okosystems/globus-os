@@ -24,7 +24,9 @@ impl IntelVtd {
     /// `base` must be the virtual address of the VT-d register page mapped as
     /// device memory by the kernel.
     pub const unsafe fn new(base: usize, len: usize) -> Self {
-        Self { regs: MmioWindow::new(base, len) }
+        Self {
+            regs: MmioWindow::new(base, len),
+        }
     }
 
     pub fn version(&self) -> u32 {
@@ -46,13 +48,15 @@ impl IntelVtd {
 
     /// Enables DMA translation after root/context tables are installed.
     pub fn enable_translation(&self) {
-        self.regs.write32(Self::GCMD, Self::GCMD_TE);
+        let command = self.regs.read32(Self::GCMD) | Self::GCMD_TE;
+        self.regs.write32(Self::GCMD, command);
         self.wait_for(Self::GSTS, Self::GSTS_TE, true);
     }
 
     /// Disables DMA translation before tearing down tables.
     pub fn disable_translation(&self) {
-        self.regs.write32(Self::GCMD, Self::GCMD_TE);
+        let command = self.regs.read32(Self::GCMD) & !Self::GCMD_TE;
+        self.regs.write32(Self::GCMD, command);
         self.wait_for(Self::GSTS, Self::GSTS_TE, false);
     }
 
