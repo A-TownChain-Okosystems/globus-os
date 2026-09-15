@@ -16,6 +16,7 @@ members = [
   "system/update",
   "system/runtime",
   "system/identity",
+  "system/wallet-service",
 ]
 
 [workspace.package]
