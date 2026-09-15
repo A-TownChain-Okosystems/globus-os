@@ -1,6 +1,7 @@
 //! Isolated device-service registry.
 
 pub mod acpi;
+pub mod amd_iommu;
 pub mod ethernet_dma;
 pub mod iommu;
 pub mod mmio;
