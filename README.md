@@ -10,7 +10,7 @@
 
 ## System role
 
-GlobusOS is the complete operating-system userspace/platform layer above **ShivaCore**. ShivaCore remains the reusable kernel/TCB; GlobusOS provides the system services, device integration, storage, networking, graphics, audio, package lifecycle and recovery required to turn the kernel into an operating system.
+GlobusOS is the complete operating-system userspace/platform layer above **ShivaCore**. ShivaCore remains the reusable kernel/TCB; GlobusOS provides the system services, device integration, storage, networking, graphics, audio, package lifecycle, identity, wallet integration and recovery required to turn the kernel into an operating system.
 
 ```text
 Applications
@@ -18,6 +18,11 @@ Applications
 Aurora AI / Desktop / Shell
     ↓
 GlobusOS system services
+    ├─ Identity / Authentication
+    ├─ Wallet Service boundary
+    ├─ Storage / VFS
+    ├─ Network / Devices
+    └─ Package / Update / Recovery
     ↓
 IPC + capabilities
     ↓
@@ -27,6 +32,14 @@ HAL / firmware / hardware
 ```
 
 AI and blockchain components are not promoted into the ShivaCore TCB by integration.
+
+## Identity & wallet
+
+GlobusOS uses a native **Boot → Login/Register → Identity → Wallet → Desktop** flow. Creating a new user profile provisions an A-TownChain-compatible wallet identity through the dedicated wallet integration. The public wallet address is bound to the GlobusOS User ID through a cryptographically verifiable identity binding.
+
+The wallet's 24-word recovery phrase is **recovery material, not the daily login credential**. Private keys and recovery material remain behind protected local boundaries and are never exposed to ordinary applications, Aurora AI, telemetry, logs, GitHub, or remote services.
+
+See [`docs/IDENTITY_WALLET_ARCHITECTURE.md`](docs/IDENTITY_WALLET_ARCHITECTURE.md) and [`docs/IDENTITY_WALLET_FLOW.md`](docs/IDENTITY_WALLET_FLOW.md).
 
 ## Implemented system foundation
 
@@ -46,6 +59,7 @@ The repository now contains a Rust workspace under `system/` with explicit subsy
 - `globus-package` — signed package metadata verification.
 - `globus-update` — atomic A/B update and rollback state machine.
 - `globus-runtime` — integrated userspace runtime.
+- `system/identity/` — identity, authentication, wallet-binding and recovery integration contract.
 
 These are the canonical foundations. Hardware-specific implementations and production cryptography remain separate, evidence-driven milestones.
 
@@ -57,7 +71,8 @@ UEFI / firmware
  → ShivaCore
  → capability + IPC initialization
  → GlobusOS init/service manager
- → security / devices / storage / network
+ → identity / security / devices / storage / network
+ → wallet integration boundary
  → runtime / graphics / audio
  → Aurora / desktop / applications
 ```
@@ -83,6 +98,8 @@ See [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) for the normati
 ATCLang → ATC-VM → A-TownChain
 
 Aurora → GlobusOS IPC/API → ShivaCore
+
+GlobusOS Identity → atc-wallet integration → A-TownChain identity
 ```
 
 The VM remains the boundary between chain execution and the Rust system/network track. GlobusOS does not embed chain semantics into the kernel.
