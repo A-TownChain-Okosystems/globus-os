@@ -1,4 +1,6 @@
-//! Virtual filesystem namespace and mount policy.
+//! Virtual filesystem namespace, mount policy, and persistent-disk discovery.
+
+pub mod gpt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount { pub mountpoint: String, pub filesystem: String, pub readonly: bool }
