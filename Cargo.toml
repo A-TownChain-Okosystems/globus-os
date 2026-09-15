@@ -15,6 +15,9 @@ members = [
   "system/package",
   "system/update",
   "system/runtime",
+  "system/identity",
+  "system/wallet-service",
+  "system/settings",
   "system/init",
 ]
 
