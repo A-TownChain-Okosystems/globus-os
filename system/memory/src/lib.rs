@@ -2,9 +2,11 @@
 
 pub mod allocator;
 pub mod fault;
+pub mod frames;
 pub mod paging;
 pub use allocator::{PageAllocator, PageRange};
 pub use fault::{authorize_fault, classify, FaultAccess, FaultAction, PageFault};
+pub use frames::{FrameAllocator, FrameError, FrameRange};
 pub use paging::{MapError, Mapping, PageTable, PhysicalAddress};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
