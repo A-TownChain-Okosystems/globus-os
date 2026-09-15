@@ -25,7 +25,56 @@ impl Message {
     }
 }
 
-/// Stable IPC operation numbers for the userspace wallet service.
+/// Stable IPC operation numbers for the GlobusOS identity service.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u32)]
+pub enum IdentityOpcode {
+    Register = 0x0900,
+    Login = 0x0901,
+    Logout = 0x0902,
+    Lock = 0x0903,
+    Recover = 0x0904,
+}
+
+impl IdentityOpcode {
+    pub const fn as_u32(self) -> u32 { self as u32 }
+}
+
+/// Registration request. Wallet creation is performed inside the trusted identity boundary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityRegisterMessage {
+    pub user_id: String,
+    pub display_name: String,
+    pub chain_id: u64,
+    pub network: String,
+    pub session_ttl_seconds: u64,
+}
+
+/// Registration result deliberately contains only public identity data.
+/// The recovery phrase is delivered once through the trusted identity UI boundary and is
+/// never represented by the generic IPC protocol.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityRegisterResponse {
+    pub user_id: String,
+    pub wallet_address: String,
+    pub chain_id: u64,
+    pub network: String,
+    pub recovery_confirmation_required: bool,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentityLoginMessage {
+    pub user_id: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct IdentitySessionResponse {
+    pub user_id: String,
+    pub wallet_address: String,
+    pub expires_at_unix: u64,
+}
+
+/// Wallet service operation numbers.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
 pub enum WalletOpcode {
@@ -40,7 +89,6 @@ impl WalletOpcode {
     pub const fn as_u32(self) -> u32 { self as u32 }
 }
 
-/// Public wallet identity carried over generic IPC. No secret material is permitted.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletIdentityMessage {
     pub user_id: String,
@@ -49,8 +97,7 @@ pub struct WalletIdentityMessage {
     pub network: String,
 }
 
-/// Signing request envelope. The generic IPC layer carries only a message to be signed;
-/// private keys and recovery phrases are never valid IPC payloads.
+/// Signing request envelope. Private keys and recovery phrases are never valid IPC payloads.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletSignMessage {
     pub user_id: String,
@@ -59,7 +106,6 @@ pub struct WalletSignMessage {
     pub message: Vec<u8>,
 }
 
-/// Result envelope returned by the wallet service.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletSignResponse {
     pub algorithm: String,
@@ -72,12 +118,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn wallet_sign_opcode_is_stable() {
+    fn opcode_values_are_stable() {
+        assert_eq!(IdentityOpcode::Register.as_u32(), 0x0900);
+        assert_eq!(IdentityOpcode::Login.as_u32(), 0x0901);
         assert_eq!(WalletOpcode::Sign.as_u32(), 0x1002);
     }
 
     #[test]
-    fn wallet_ipc_does_not_model_private_keys() {
+    fn registration_does_not_carry_recovery_material() {
+        let response = IdentityRegisterResponse {
+            user_id: "user".into(),
+            wallet_address: "ATC00000000000000000000000000000000000".into(),
+            chain_id: 1,
+            network: "devnet".into(),
+            recovery_confirmation_required: true,
+        };
+        assert!(response.recovery_confirmation_required);
+    }
+
+    #[test]
+    fn wallet_ipc_carries_public_signing_input_only() {
         let request = WalletSignMessage {
             user_id: "user".into(),
             key_id: "wallet-primary".into(),
