@@ -73,7 +73,7 @@ impl<K: KeyStore> WalletService<K> {
         if request.domain.is_empty() || request.domain.len() > 128 || request.message.len() > 1024 * 1024 {
             return Err(WalletServiceError::InvalidRequest);
         }
-        if authorize(grant, Right::Execute) != Authorization::Allowed {
+        if authorize(grant, Right::Sign) != Authorization::Allowed {
             return Err(WalletServiceError::Unauthorized);
         }
 
@@ -120,14 +120,16 @@ mod tests {
     }
 
     #[test]
-    fn signing_requires_capability() {
+    fn signing_requires_dedicated_capability() {
         let session = session();
         let key_id = KeyId::new("wallet-primary").unwrap();
         let request = SignRequest { key_id, domain: "ATC-TX-V1".into(), message: b"payload".to_vec() };
         let service = WalletService::new(TestStore);
         assert_eq!(service.sign(&session, 10, None, request.clone()).unwrap_err(), WalletServiceError::Unauthorized);
-        let grant = Grant { capability: globus_security::Capability(1), right: Right::Execute };
-        let (signature, evidence) = service.sign(&session, 10, Some(grant), request).unwrap();
+        let execute_grant = Grant { capability: globus_security::Capability(1), right: Right::Execute };
+        assert_eq!(service.sign(&session, 10, Some(execute_grant), request.clone()).unwrap_err(), WalletServiceError::Unauthorized);
+        let sign_grant = Grant { capability: globus_security::Capability(2), right: Right::Sign };
+        let (signature, evidence) = service.sign(&session, 10, Some(sign_grant), request).unwrap();
         assert_eq!(signature.bytes, b"payload");
         assert!(evidence.authorized);
     }
@@ -136,7 +138,7 @@ mod tests {
     fn ipc_rejects_cross_identity_requests() {
         let service = WalletService::new(TestStore);
         let request = WalletSignMessage { user_id: "other-user".into(), key_id: "wallet-primary".into(), domain: "ATC-TX-V1".into(), message: b"payload".to_vec() };
-        let grant = Grant { capability: globus_security::Capability(1), right: Right::Execute };
+        let grant = Grant { capability: globus_security::Capability(1), right: Right::Sign };
         assert_eq!(service.sign_ipc(&session(), 10, Some(grant), request).unwrap_err(), WalletServiceError::IdentityMismatch);
     }
 }
