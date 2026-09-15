@@ -5,6 +5,8 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+bip39 = { version = "2.1", features = ["rand"] }
+hmac = "0.12"
 sha2 = "0.10"
 zeroize = { version = "1", features = ["zeroize_derive"] }
 
