@@ -1,5 +1,7 @@
 //! Virtual filesystem namespace and mount policy.
 
+pub mod persistence;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount { pub mountpoint: String, pub filesystem: String, pub readonly: bool }
 
