@@ -9,6 +9,9 @@ pub mod msi;
 pub mod nvme;
 pub mod nvme_controller;
 pub mod pci;
+pub mod registry;
+
+pub use registry::DeviceRegistry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct DeviceId(pub u64);
