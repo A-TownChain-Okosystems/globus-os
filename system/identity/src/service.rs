@@ -4,7 +4,7 @@
 //! only the PHC password hash in memory; plaintext credentials are never retained.
 //! Recovery phrases remain outside the persistent profile/session model.
 
-use super::{create_wallet, restore_wallet, AccountProfile, CredentialRecord, IdentityBinding, IdentityError, IdentityRecord, IdentitySession, LoginState, PersistenceError, UserId, WalletCreation, WalletAddress, IDENTITY_RECORD_VERSION};
+use super::{create_wallet, restore_wallet, AccountProfile, CredentialRecord, IdentityBinding, IdentityError, IdentityRecord, IdentitySession, IdentityStore, LoginState, PersistenceError, UserId, WalletCreation, WalletAddress, IDENTITY_RECORD_VERSION};
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
@@ -69,7 +69,19 @@ impl IdentityService {
         Ok(IdentityRecord::new(profile, CredentialRecord::argon2id(hash)))
     }
 
-    /// Load a validated durable record. Existing sessions are always invalidated.
+    /// Persist the current identity. The store validates before committing.
+    pub fn persist<S: IdentityStore>(&self, store: &mut S) -> Result<(), IdentityServiceError> {
+        store.save(&self.snapshot()?).map_err(IdentityServiceError::Persistence)
+    }
+
+    /// Load the durable identity and invalidate any pre-existing session.
+    pub fn load_from_store<S: IdentityStore>(&mut self, store: &S) -> Result<(), IdentityServiceError> {
+        let record = store.load().map_err(IdentityServiceError::Persistence)?
+            .ok_or(IdentityServiceError::Persistence(PersistenceError::NotFound))?;
+        self.load_record(record)
+    }
+
+    /// Export and validate durable identity state without persisting a session.
     pub fn load_record(&mut self, record: IdentityRecord) -> Result<(), IdentityServiceError> {
         record.validate().map_err(IdentityServiceError::Persistence)?;
         if record.version != IDENTITY_RECORD_VERSION {
@@ -100,17 +112,14 @@ impl IdentityService {
 fn hash_credential(credential: &[u8]) -> Result<String, IdentityServiceError> {
     if credential.is_empty() { return Err(IdentityServiceError::InvalidCredentials); }
     let salt = SaltString::generate(&mut OsRng);
-    Argon2::default()
-        .hash_password(credential, &salt)
-        .map(|hash| hash.to_string())
-        .map_err(|_| IdentityServiceError::CredentialHashFailed)
+    Argon2::default().hash_password(credential, &salt)
+        .map(|hash| hash.to_string()).map_err(|_| IdentityServiceError::CredentialHashFailed)
 }
 
 fn verify_credential(stored: &str, credential: &[u8]) -> Result<(), IdentityServiceError> {
     if credential.is_empty() { return Err(IdentityServiceError::InvalidCredentials); }
     let parsed = PasswordHash::new(stored).map_err(|_| IdentityServiceError::InvalidCredentials)?;
-    Argon2::default()
-        .verify_password(credential, &parsed)
+    Argon2::default().verify_password(credential, &parsed)
         .map_err(|_| IdentityServiceError::InvalidCredentials)
 }
 
@@ -119,6 +128,7 @@ impl Default for IdentityService { fn default() -> Self { Self::new() } }
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::InMemoryIdentityStore;
 
     #[test]
     fn register_login_lock_logout_flow() {
@@ -139,8 +149,7 @@ mod tests {
 
     #[test]
     fn credential_hash_uses_unique_salts() {
-        let first = hash_credential(b"same-secret").unwrap();
-        let second = hash_credential(b"same-secret").unwrap();
+        let first = hash_credential(b"same-secret").unwrap(); let second = hash_credential(b"same-secret").unwrap();
         assert_ne!(first, second);
     }
 
@@ -154,13 +163,14 @@ mod tests {
     }
 
     #[test]
-    fn snapshot_round_trip_invalidates_session() {
+    fn persistence_round_trip_invalidates_session() {
         let user = UserId::new("alice").unwrap(); let mut source = IdentityService::new();
         source.register(user, "Alice", b"credential", 600, "devnet", 1).unwrap();
         source.login(b"credential", 100, 300).unwrap();
-        let record = source.snapshot().unwrap();
+        let mut store = InMemoryIdentityStore::new();
+        source.persist(&mut store).unwrap();
         let mut restored = IdentityService::new();
-        restored.load_record(record).unwrap();
+        restored.load_from_store(&store).unwrap();
         assert!(restored.session(150).is_none());
         assert!(restored.login(b"credential", 200, 300).is_ok());
     }
@@ -169,8 +179,7 @@ mod tests {
     fn malformed_record_is_rejected() {
         let user = UserId::new("alice").unwrap(); let mut source = IdentityService::new();
         source.register(user, "Alice", b"credential", 600, "devnet", 1).unwrap();
-        let mut record = source.snapshot().unwrap();
-        record.credential.scheme = "sha256";
+        let mut record = source.snapshot().unwrap(); record.credential.scheme = "sha256";
         let mut restored = IdentityService::new();
         assert_eq!(restored.load_record(record).unwrap_err(), IdentityServiceError::Persistence(PersistenceError::UnsupportedCredentialScheme));
     }
