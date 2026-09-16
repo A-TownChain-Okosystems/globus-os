@@ -2,16 +2,24 @@
 
 pub mod av_sync;
 pub mod desktop;
+pub mod demux;
 pub mod gpu;
+pub mod library;
 pub mod photo;
+pub mod queue;
+pub mod surface;
 pub mod thumbnail;
 pub mod thumbnail_cache;
 pub mod video;
 
 pub use av_sync::{AvSyncPolicy, SyncAction};
+pub use demux::{ContainerFormat, DemuxPacket, Demuxer, Timestamp, TrackKind};
 pub use desktop::{MediaInput, MediaWindow, MediaWindowMode};
 pub use gpu::{BufferFormat, FrameTiming, MediaBuffer, MediaGpuBackend};
+pub use library::{MediaCatalog, MediaMetadata, MimeType, SortOrder, mime_from_extension};
 pub use photo::{ColorSpace, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport};
+pub use queue::FrameQueue;
+pub use surface::{MediaSurface, PresentationState, SurfaceKind};
 pub use thumbnail::{Thumbnail, ThumbnailCache};
 pub use thumbnail_cache::{ThumbnailCache as BoundedThumbnailCache, ThumbnailKey, ThumbnailSize};
 pub use video::{ClockMaster, SyncClock, VideoDecoder, VideoPacket, VideoPipeline};
@@ -23,9 +31,9 @@ pub enum MediaKind { Audio, Video, Photo }
 pub enum MediaFormat { Mp3, Flac, Opus, Aac, Mp4, Webm, Mkv, Mov, Jpeg, Png, Webp, Avif, Unknown }
 
 impl MediaFormat {
-    pub fn from_extension(extension: &str) -> Self { match extension.trim_start_matches('.').to_ascii_lowercase().as_str() {
+    pub fn from_extension(extension: &str) -> Self { match extension.rsplit('.').next().unwrap_or(extension).trim_start_matches('.').to_ascii_lowercase().as_str() {
         "mp3"=>Self::Mp3,"flac"=>Self::Flac,"opus"=>Self::Opus,"aac"=>Self::Aac,"mp4"=>Self::Mp4,"webm"=>Self::Webm,"mkv"=>Self::Mkv,"mov"=>Self::Mov,"jpg"|"jpeg"=>Self::Jpeg,"png"=>Self::Png,"webp"=>Self::Webp,"avif"=>Self::Avif,_=>Self::Unknown } }
-    pub fn kind(self) -> MediaKind { match self { Self::Mp3|Self::Flac|Self::Opus|Self::Aac=>MediaKind::Audio, Self::Mp4|Self::Webm|Self::Mkv|Self::Mov=>MediaKind::Video, _=>MediaKind::Photo } }
+    pub fn kind(self) -> Option<MediaKind> { match self { Self::Mp3|Self::Flac|Self::Opus|Self::Aac=>Some(MediaKind::Audio), Self::Mp4|Self::Webm|Self::Mkv|Self::Mov=>Some(MediaKind::Video), Self::Jpeg|Self::Png|Self::Webp|Self::Avif=>Some(MediaKind::Photo), Self::Unknown=>None } }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
