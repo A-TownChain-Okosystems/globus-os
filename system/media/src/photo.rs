@@ -1,4 +1,4 @@
-//! Photo decoding and viewer state. Codec implementations plug in through `PhotoDecoder`.
+//! Photo decoding, metadata and viewer state. Codec implementations plug in through `PhotoDecoder`.
 
 use crate::{MediaError, PixelFormat, PhotoTransform};
 
@@ -6,7 +6,32 @@ use crate::{MediaError, PixelFormat, PhotoTransform};
 pub enum ColorSpace { Srgb, DisplayP3, Rec2020, Unknown }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PhotoInfo { pub width: u32, pub height: u32, pub color_space: ColorSpace, pub transform: PhotoTransform }
+pub enum PhotoCodec { Jpeg, Png, Webp, Avif, Unknown }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExifOrientation { Normal, FlipHorizontal, Rotate180, FlipVertical, Transpose, Rotate90, Transverse, Rotate270 }
+
+impl ExifOrientation {
+    pub const fn transform(self) -> PhotoTransform {
+        match self {
+            Self::Normal => PhotoTransform::None,
+            Self::Rotate90 => PhotoTransform::Rotate90,
+            Self::Rotate180 => PhotoTransform::Rotate180,
+            Self::Rotate270 => PhotoTransform::Rotate270,
+            Self::FlipHorizontal | Self::FlipVertical | Self::Transpose | Self::Transverse => PhotoTransform::None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PhotoInfo {
+    pub width: u32,
+    pub height: u32,
+    pub color_space: ColorSpace,
+    pub transform: PhotoTransform,
+    pub codec: PhotoCodec,
+    pub orientation: ExifOrientation,
+}
 
 impl PhotoInfo {
     pub fn validate(self) -> Result<(), MediaError> { if self.width == 0 || self.height == 0 { Err(MediaError::InvalidPhotoSpec) } else { Ok(()) } }
@@ -15,7 +40,15 @@ impl PhotoInfo {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PhotoFrame { pub info: PhotoInfo, pub format: PixelFormat, pub data: Vec<u8> }
 
-pub trait PhotoDecoder { fn info(&self) -> PhotoInfo; fn decode(&mut self) -> Result<PhotoFrame, MediaError>; }
+pub trait PhotoDecoder {
+    fn info(&self) -> PhotoInfo;
+    fn decode(&mut self) -> Result<PhotoFrame, MediaError>;
+}
+
+pub trait ProgressivePhotoDecoder: PhotoDecoder {
+    fn decode_next(&mut self) -> Result<Option<PhotoFrame>, MediaError>;
+    fn is_complete(&self) -> bool;
+}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct PhotoViewport { pub zoom: f32, pub pan_x: f32, pub pan_y: f32, pub rotation: u16 }
@@ -37,7 +70,12 @@ impl PhotoViewer {
 }
 
 #[cfg(test)]
-mod tests { use super::*;
-    struct D; impl PhotoDecoder for D { fn info(&self) -> PhotoInfo { PhotoInfo { width: 2, height: 2, color_space: ColorSpace::Srgb, transform: PhotoTransform::None } } fn decode(&mut self) -> Result<PhotoFrame, MediaError> { Ok(PhotoFrame { info: self.info(), format: PixelFormat::Rgba8, data: vec![0; 16] }) } }
+mod tests {
+    use super::*;
+    struct D;
+    impl PhotoDecoder for D {
+        fn info(&self) -> PhotoInfo { PhotoInfo { width: 2, height: 2, color_space: ColorSpace::Srgb, transform: PhotoTransform::None, codec: PhotoCodec::Png, orientation: ExifOrientation::Normal } }
+        fn decode(&mut self) -> Result<PhotoFrame, MediaError> { Ok(PhotoFrame { info: self.info(), format: PixelFormat::Rgba8, data: vec![0; 16] }) }
+    }
     #[test] fn viewer_controls_are_bounded() { let mut v = PhotoViewer::new(); let mut d = D; v.load(&mut d).unwrap(); assert!(v.set_zoom(16.1).is_err()); v.rotate_quarter_turn(true); assert_eq!(v.viewport().rotation, 90); }
 }
