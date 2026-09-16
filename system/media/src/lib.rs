@@ -1,27 +1,33 @@
 //! Unified media model for audio, video, and photos.
 
 pub mod av_sync;
+pub mod codec;
 pub mod desktop;
 pub mod demux;
 pub mod gpu;
 pub mod library;
 pub mod photo;
 pub mod queue;
+pub mod scanner;
 pub mod surface;
 pub mod thumbnail;
 pub mod thumbnail_cache;
+pub mod thumbnail_store;
 pub mod video;
 
 pub use av_sync::{AvSyncPolicy, SyncAction, SyncDecision};
+pub use codec::{DecoderCapabilities, DecoderKind, PhotoCodec, PhotoCodecDecoder, TimedVideoFrame, VideoCodec, VideoCodecDecoder, VideoScaling};
 pub use demux::{ContainerFormat, DemuxPacket, Demuxer, Timestamp, TrackKind};
 pub use desktop::{MediaInput, MediaWindow, MediaWindowMode, PlaybackState};
 pub use gpu::{BufferFormat, ColorConversion, FrameTiming, MediaBuffer, MediaGpuBackend, SharedBufferHandle};
 pub use library::{MediaCatalog, MediaMetadata, MimeType, SortOrder, mime_from_extension};
-pub use photo::{ColorSpace, ExifOrientation, PhotoCodec, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
+pub use photo::{ColorSpace, ExifOrientation, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
 pub use queue::FrameQueue;
+pub use scanner::{FileRecord, MediaFileSource, MediaScanner, MediaWatchSource, ScanChange, ScanEvent};
 pub use surface::{MediaSurface, PresentationState, SurfaceKind};
 pub use thumbnail::{Thumbnail, ThumbnailCache};
 pub use thumbnail_cache::{ThumbnailCache as BoundedThumbnailCache, ThumbnailKey, ThumbnailSize};
+pub use thumbnail_store::{MemoryThumbnailStore, StoredThumbnail, ThumbnailDimensions, ThumbnailStore};
 pub use video::{ClockMaster, SyncClock, VideoDecoder, VideoPacket, VideoPipeline};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
