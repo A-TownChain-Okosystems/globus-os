@@ -11,7 +11,6 @@ permissions:
 
 jobs:
   migrate:
-    if: ${{ !hashFiles('modules/atc-shivacore/kernel/Cargo.toml') }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout GlobusOS
@@ -19,10 +18,21 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Skip if migration already exists
+        id: guard
+        run: |
+          if [ -f modules/atc-shivacore/kernel/Cargo.toml ]; then
+            echo 'already_migrated=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'already_migrated=false' >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Clone ShivaCore source
+        if: steps.guard.outputs.already_migrated == 'false'
         run: git clone --depth 1 --branch main https://github.com/A-TownChain-Okosystems/atc-shivacore.git /tmp/atc-shivacore
 
       - name: Copy ShivaCore module
+        if: steps.guard.outputs.already_migrated == 'false'
         run: |
           test -d /tmp/atc-shivacore/modules/atc-shivacore
           test ! -e modules/atc-shivacore
@@ -32,9 +42,11 @@ jobs:
           test -f modules/atc-shivacore/kernel/src/lib.rs
 
       - name: Remove migration workflow
+        if: steps.guard.outputs.already_migrated == 'false'
         run: rm .github/workflows/migrate-shivacore.yml
 
       - name: Commit migration
+        if: steps.guard.outputs.already_migrated == 'false'
         run: |
           git config user.name 'Aurora-Bot'
           git config user.email 'aurora@base44.ai'
