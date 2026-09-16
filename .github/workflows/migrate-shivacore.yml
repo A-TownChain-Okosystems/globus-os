@@ -1,0 +1,44 @@
+name: Migrate ShivaCore into GlobusOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/migrate-shivacore.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !hashFiles('modules/atc-shivacore/kernel/Cargo.toml') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout GlobusOS
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Clone ShivaCore source
+        run: git clone --depth 1 --branch main https://github.com/A-TownChain-Okosystems/atc-shivacore.git /tmp/atc-shivacore
+
+      - name: Copy ShivaCore module
+        run: |
+          test -d /tmp/atc-shivacore/modules/atc-shivacore
+          test ! -e modules/atc-shivacore
+          mkdir -p modules
+          cp -a /tmp/atc-shivacore/modules/atc-shivacore modules/atc-shivacore
+          test -f modules/atc-shivacore/kernel/Cargo.toml
+          test -f modules/atc-shivacore/kernel/src/lib.rs
+
+      - name: Remove migration workflow
+        run: rm .github/workflows/migrate-shivacore.yml
+
+      - name: Commit migration
+        run: |
+          git config user.name 'Aurora-Bot'
+          git config user.email 'aurora@base44.ai'
+          git add modules/atc-shivacore
+          git add -u .github/workflows/migrate-shivacore.yml
+          git commit -m 'feat(kernel): move ShivaCore into GlobusOS'
+          git push origin HEAD:main
