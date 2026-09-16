@@ -12,12 +12,12 @@ pub mod thumbnail;
 pub mod thumbnail_cache;
 pub mod video;
 
-pub use av_sync::{AvSyncPolicy, SyncAction};
+pub use av_sync::{AvSyncPolicy, SyncAction, SyncDecision};
 pub use demux::{ContainerFormat, DemuxPacket, Demuxer, Timestamp, TrackKind};
-pub use desktop::{MediaInput, MediaWindow, MediaWindowMode};
-pub use gpu::{BufferFormat, FrameTiming, MediaBuffer, MediaGpuBackend};
+pub use desktop::{MediaInput, MediaWindow, MediaWindowMode, PlaybackState};
+pub use gpu::{BufferFormat, ColorConversion, FrameTiming, MediaBuffer, MediaGpuBackend, SharedBufferHandle};
 pub use library::{MediaCatalog, MediaMetadata, MimeType, SortOrder, mime_from_extension};
-pub use photo::{ColorSpace, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport};
+pub use photo::{ColorSpace, ExifOrientation, PhotoCodec, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
 pub use queue::FrameQueue;
 pub use surface::{MediaSurface, PresentationState, SurfaceKind};
 pub use thumbnail::{Thumbnail, ThumbnailCache};
