@@ -1,0 +1,1 @@
+Temporary audit integrity marker: the LKM source edit at commit 66822789920f71cdc7482b91b3a601ebcf7d95db was broader than the intended minimal fix. The canonical original blob is 811a0b25a19b72697083d74a9edb821387b2d187. This marker is retained until the exact source restoration commit is completed.
