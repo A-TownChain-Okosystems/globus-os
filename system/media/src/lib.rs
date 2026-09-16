@@ -17,9 +17,9 @@ pub mod video;
 
 pub use av_sync::{AvSyncPolicy, SyncAction, SyncDecision};
 pub use codec::{DecoderCapabilities, DecoderKind, PhotoCodec, PhotoCodecDecoder, TimedVideoFrame, VideoCodec, VideoCodecDecoder, VideoScaling};
-pub use demux::{ContainerFormat, DemuxPacket, Demuxer, Timestamp, TrackKind};
+pub use demux::{ContainerFormat, DemuxPacket, Demuxer, PacketDemuxer, Timestamp, TrackKind};
 pub use desktop::{MediaInput, MediaWindow, MediaWindowMode, PlaybackState};
-pub use gpu::{BufferFormat, ColorConversion, FrameTiming, MediaBuffer, MediaGpuBackend, SharedBufferHandle};
+pub use gpu::{BufferFormat, ColorConversion, DisplayMode, DisplayOutput, DmaBufDescriptor, FramePacer, FrameTiming, HardwareOverlay, MediaBuffer, MediaGpuBackend, SharedBufferHandle};
 pub use library::{MediaCatalog, MediaMetadata, MimeType, SortOrder, mime_from_extension};
 pub use photo::{ColorSpace, ExifOrientation, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
 pub use queue::FrameQueue;
