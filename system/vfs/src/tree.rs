@@ -65,7 +65,8 @@ impl InodeTree {
         self.next_inode = self.next_inode.checked_add(1).ok_or(FsError::Overflow)?;
         let inode = Inode { id, file_type, mode, size: 0 };
         self.nodes.insert(id, Node { inode, data: Vec::new(), children: BTreeMap::new() });
-        self.nodes.get_mut(&parent).unwrap().children.insert(name, id);
+        let parent_node = self.nodes.get_mut(&parent).ok_or(FsError::NotFound)?;
+        parent_node.children.insert(name, id);
         Ok(id)
     }
 
