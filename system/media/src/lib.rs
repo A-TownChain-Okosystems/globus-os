@@ -1,11 +1,19 @@
 //! Unified media model for audio, video, and photos.
 
+pub mod av_sync;
+pub mod desktop;
+pub mod gpu;
 pub mod photo;
 pub mod thumbnail;
+pub mod thumbnail_cache;
 pub mod video;
 
+pub use av_sync::{AvSyncPolicy, SyncAction};
+pub use desktop::{MediaInput, MediaWindow, MediaWindowMode};
+pub use gpu::{BufferFormat, FrameTiming, MediaBuffer, MediaGpuBackend};
 pub use photo::{ColorSpace, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport};
 pub use thumbnail::{Thumbnail, ThumbnailCache};
+pub use thumbnail_cache::{ThumbnailCache as BoundedThumbnailCache, ThumbnailKey, ThumbnailSize};
 pub use video::{ClockMaster, SyncClock, VideoDecoder, VideoPacket, VideoPipeline};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
