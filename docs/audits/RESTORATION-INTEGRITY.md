@@ -1,0 +1,1 @@
+LKM restoration is being applied from canonical blob 811a0b25a19b72697083d74a9edb821387b2d187. This document is temporary and will be removed after the restoration commit.
