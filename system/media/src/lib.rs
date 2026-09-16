@@ -16,12 +16,12 @@ pub mod thumbnail_store;
 pub mod video;
 
 pub use av_sync::{AvSyncPolicy, SyncAction, SyncDecision};
-pub use codec::{DecoderCapabilities, DecoderKind, PhotoCodec, PhotoCodecDecoder, TimedVideoFrame, VideoCodec, VideoCodecDecoder, VideoScaling};
+pub use codec::{DecoderCapabilities, DecoderKind, PhotoCodecDecoder, TimedVideoFrame, VideoCodec, VideoCodecDecoder, VideoScaling};
 pub use demux::{ContainerFormat, DemuxPacket, Demuxer, PacketDemuxer, Timestamp, TrackKind};
 pub use desktop::{AudioControl, MediaInput, MediaWindow, MediaWindowMode, PlaybackState, WindowLifecycle};
 pub use gpu::{BufferFormat, ColorConversion, DisplayMode, DisplayOutput, DmaBufDescriptor, FramePacer, FrameTiming, HardwareOverlay, MediaBuffer, MediaGpuBackend, SharedBufferHandle};
 pub use library::{MediaCatalog, MediaMetadata, MimeType, SortOrder, mime_from_extension};
-pub use photo::{ColorSpace, ExifOrientation, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
+pub use photo::{ColorSpace, ExifOrientation, PhotoCodec, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
 pub use queue::FrameQueue;
 pub use scanner::{FileRecord, MediaFileSource, MediaScanner, MediaWatchSource, ScanChange, ScanEvent};
 pub use surface::{MediaSurface, PresentationState, SurfaceKind};
