@@ -24,3 +24,13 @@ jobs:
         run: cargo test --workspace --all-targets
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: ShivaCore kernel library tests
+        working-directory: modules/atc-shivacore/kernel
+        env:
+          RUSTFLAGS: '--cfg curve25519_dalek_backend="serial"'
+        run: cargo test --lib
+      - name: ShivaCore kernel clippy
+        working-directory: modules/atc-shivacore/kernel
+        env:
+          RUSTFLAGS: '--cfg curve25519_dalek_backend="serial"'
+        run: cargo clippy --lib -- -D warnings
