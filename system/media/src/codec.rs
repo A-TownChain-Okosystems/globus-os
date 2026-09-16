@@ -1,7 +1,6 @@
 //! Codec backend contracts for real software or hardware decoder implementations.
 
 use crate::{MediaError, PixelFormat, VideoFrame, VideoFrameSpec};
-use crate::photo::PhotoCodec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoCodec { H264, Hevc, Av1, Vp9 }
@@ -25,7 +24,7 @@ pub trait VideoCodecDecoder {
 pub struct TimedVideoFrame { pub frame: VideoFrame, pub pts_us: u64, pub dts_us: u64, pub keyframe: bool }
 
 pub trait PhotoCodecDecoder {
-    fn codec(&self) -> PhotoCodec;
+    fn codec(&self) -> crate::photo::PhotoCodec;
     fn decode_incremental(&mut self, input: &[u8], final_chunk: bool) -> Result<Option<crate::PhotoFrame>, MediaError>;
 }
 
