@@ -1,23 +1,16 @@
 //! Codec backend contracts for real software or hardware decoder implementations.
 
 use crate::{MediaError, PixelFormat, VideoFrame, VideoFrameSpec};
+use crate::photo::PhotoCodec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum VideoCodec { H264, Hevc, Av1, Vp9 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PhotoCodec { Jpeg, Png, Webp, Avif }
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecoderKind { Software, VaApi, Amd, GenericGpu }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DecoderCapabilities {
-    pub codec: VideoCodec,
-    pub kind: DecoderKind,
-    pub output: PixelFormat,
-    pub zero_copy: bool,
-}
+pub struct DecoderCapabilities { pub codec: VideoCodec, pub kind: DecoderKind, pub output: PixelFormat, pub zero_copy: bool }
 
 pub trait VideoCodecDecoder {
     fn codec(&self) -> VideoCodec;
@@ -29,12 +22,7 @@ pub trait VideoCodecDecoder {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct TimedVideoFrame {
-    pub frame: VideoFrame,
-    pub pts_us: u64,
-    pub dts_us: u64,
-    pub keyframe: bool,
-}
+pub struct TimedVideoFrame { pub frame: VideoFrame, pub pts_us: u64, pub dts_us: u64, pub keyframe: bool }
 
 pub trait PhotoCodecDecoder {
     fn codec(&self) -> PhotoCodec;
@@ -46,8 +34,6 @@ pub struct VideoScaling { pub source_width: u32, pub source_height: u32, pub tar
 
 impl VideoScaling {
     pub fn validate(self) -> Result<(), MediaError> {
-        if self.source_width == 0 || self.source_height == 0 || self.target_width == 0 || self.target_height == 0 {
-            Err(MediaError::InvalidVideoSpec)
-        } else { Ok(()) }
+        if self.source_width == 0 || self.source_height == 0 || self.target_width == 0 || self.target_height == 0 { Err(MediaError::InvalidVideoSpec) } else { Ok(()) }
     }
 }
