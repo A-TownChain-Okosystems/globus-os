@@ -7,6 +7,7 @@ pub mod demux;
 pub mod gpu;
 pub mod library;
 pub mod photo;
+pub mod playback;
 pub mod queue;
 pub mod scanner;
 pub mod surface;
@@ -22,6 +23,7 @@ pub use desktop::{AudioControl, MediaInput, MediaWindow, MediaWindowMode, Playba
 pub use gpu::{BufferFormat, ColorConversion, DisplayMode, DisplayOutput, DmaBufDescriptor, FramePacer, FrameTiming, HardwareOverlay, MediaBuffer, MediaGpuBackend, SharedBufferHandle};
 pub use library::{MediaCatalog, MediaMetadata, MimeType, SortOrder, mime_from_extension};
 pub use photo::{ColorSpace, ExifOrientation, PhotoCodec, PhotoDecoder, PhotoFrame, PhotoInfo, PhotoViewer, PhotoViewport, ProgressivePhotoDecoder};
+pub use playback::{CodecVideoSession, PlaybackStats};
 pub use queue::FrameQueue;
 pub use scanner::{FileRecord, MediaFileSource, MediaScanner, MediaWatchSource, ScanChange, ScanEvent};
 pub use surface::{MediaSurface, PresentationState, SurfaceKind};
