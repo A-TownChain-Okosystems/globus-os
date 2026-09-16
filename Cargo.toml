@@ -12,6 +12,7 @@ members = [
   "system/services",
   "system/graphics",
   "system/audio",
+  "system/media",
   "system/package",
   "system/update",
   "system/runtime",
