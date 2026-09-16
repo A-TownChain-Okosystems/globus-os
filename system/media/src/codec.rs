@@ -1,9 +1,24 @@
-//! Codec backend contracts for real software or hardware decoder implementations.
+//! Codec backend contracts and GlobusOS free-media policy.
+//!
+//! The mandatory GlobusOS media core deliberately exposes only codecs that
+//! are intended for royalty-free/open deployment. H.264/AVC and HEVC/H.265
+//! are not part of the default codec API because their patent/licensing
+//! situation must not become a mandatory cost or legal dependency.
 
 use crate::{MediaError, PixelFormat, VideoFrame, VideoFrameSpec};
 
+/// Video codecs allowed in the mandatory, no-fee GlobusOS media core.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum VideoCodec { H264, Hevc, Av1, Vp9 }
+pub enum VideoCodec {
+    /// AOMedia AV1, subject to the AOMedia Patent License 1.0 conditions.
+    Av1,
+    /// VP9, for which GlobusOS may use a free/open implementation.
+    Vp9,
+}
+
+impl VideoCodec {
+    pub const fn is_core_free(self) -> bool { true }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DecoderKind { Software, VaApi, Amd, GenericGpu }
