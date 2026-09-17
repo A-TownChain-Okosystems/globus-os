@@ -19,6 +19,7 @@ members = [
   "system/identity",
   "system/wallet-service",
   "system/settings",
+  "system/aurora-core",
   "modules/atc-shivacore/kernel",
 ]
 
