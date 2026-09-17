@@ -1,5 +1,6 @@
-//! Integrated GlobusOS userspace runtime.
+//! Integrated GlobusOS userspace runtime with the Aurora AI control plane.
 
+use aurora_core::{AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine};
 use globus_identity::{IdentitySession, LoginState, UserId, WalletAddress};
 use globus_services::ServiceState;
 use globus_system_core::SystemState;
@@ -21,6 +22,30 @@ impl LoginContext {
     pub fn lock(&mut self) { self.session.lock(); }
 }
 
+/// Aurora entry point for GlobusOS userspace.
+///
+/// This first integration validates the request lifecycle only. Infrastructure
+/// execution remains outside `aurora-core` and will be attached through Runtime
+/// implementations in later phases.
+pub fn aurora_request_lifecycle(request: &AuroraRequest) -> Result<AuroraResponse, AuroraError> {
+    if request.principal.trim().is_empty() || request.intent.trim().is_empty() {
+        return Err(AuroraError::InvalidRequest);
+    }
+
+    let mut state = StateMachine::new();
+    state.transition(RequestStatus::Queued)?;
+    state.transition(RequestStatus::Running)?;
+    state.transition(RequestStatus::Verifying)?;
+    state.transition(RequestStatus::Completed)?;
+
+    Ok(AuroraResponse {
+        request_id: request.request_id.clone(),
+        status: state.status(),
+        result: Some("Aurora request accepted by GlobusOS runtime".to_owned()),
+        audit_reference: None,
+    })
+}
+
 pub fn initial_status() -> RuntimeStatus {
     RuntimeStatus { system: SystemState::Booting, services: ServiceState::Defined }
 }
@@ -28,6 +53,7 @@ pub fn initial_status() -> RuntimeStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aurora_core::{RequestId, SessionId};
     use globus_identity::{create_wallet, UserId};
 
     #[test]
@@ -39,5 +65,18 @@ mod tests {
         assert!(!context.active(1_300));
         context.lock();
         assert!(!context.active(1_100));
+    }
+
+    #[test]
+    fn aurora_request_completes_control_plane_lifecycle() {
+        let request = AuroraRequest {
+            request_id: RequestId::new("req-1").unwrap(),
+            session_id: SessionId::new("session-1").unwrap(),
+            principal: "user:runtime-test".into(),
+            intent: "open settings".into(),
+        };
+        let response = aurora_request_lifecycle(&request).unwrap();
+        assert_eq!(response.status, RequestStatus::Completed);
+        assert_eq!(response.request_id, request.request_id);
     }
 }
