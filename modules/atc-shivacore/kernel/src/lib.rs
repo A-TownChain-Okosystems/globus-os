@@ -58,7 +58,7 @@ pub mod cross_subsystem;
 // [K29-Build] ausgeschlossen: pub mod container;
 // [K29-Build] ausgeschlossen: pub mod signals;
 // [K29-Build] ausgeschlossen: pub mod smp;
-// [K29-Build] ausgeschlossen: pub mod vmm;
+pub mod vmm; // [M1.2] hardened VMM validation core
 // [K29-Build] ausgeschlossen: pub mod cow;
 // [K29-Build] ausgeschlossen: pub mod tracing;
 // [K29-Build] ausgeschlossen: pub mod container_net;
