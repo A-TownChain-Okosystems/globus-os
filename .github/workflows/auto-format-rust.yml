@@ -32,7 +32,7 @@ jobs:
         run: |
           git config user.name "A-TownChain-Rustfmt-Bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add '**/*.rs' '**/Cargo.toml'
+          git add -A
           if git diff --cached --quiet; then
             echo "Rust formatting already current."
             exit 0
