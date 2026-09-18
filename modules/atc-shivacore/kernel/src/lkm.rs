@@ -3130,12 +3130,9 @@ mod tests {
         assert_eq!(module.exports.len(), 1);
         assert!(module.imports.is_empty());
 
-        let module = ModuleDescriptor::new("exporter", "1.0.0").with_export_symbol(ExportedSymbol::new(
-            "owned_symbol",
-            1,
-            "exporter",
-            SymbolType::Function,
-        ));
+        let module = ModuleDescriptor::new("exporter", "1.0.0").with_export_symbol(
+            ExportedSymbol::new("owned_symbol", 1, "exporter", SymbolType::Function),
+        );
         assert_eq!(module.exports.len(), 1);
         assert!(module.imports.is_empty());
     }
