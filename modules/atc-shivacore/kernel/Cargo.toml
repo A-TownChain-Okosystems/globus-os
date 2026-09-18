@@ -18,8 +18,6 @@ bench = false
 crate-type = ["lib"]
 
 [features]
-# x86-boot: echtes Boot-Binary (main.rs, physisches Paging, UART) — benoetigt NIGHTLY.
-# Ohne dieses Feature kompiliert die Kernel-Lib Stable-kompatibel (Tests, Validator-Logik).
 default = []
 x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:pc-keyboard", "dep:volatile", "dep:noto-sans-mono-bitmap"]
 
@@ -37,6 +35,7 @@ noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = 
 rand = { version = "0.10", default-features = false }
 ed25519-dalek = { version = "3.0", default-features = false, features = ["alloc"] }
 libm = "0.2"
+globus-diagnostics = { path = "../../../system/diagnostics" }
 
 [profile.dev]
 panic = "abort"
