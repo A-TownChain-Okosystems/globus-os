@@ -47,7 +47,8 @@ impl DiskInode {
         out[24..32].copy_from_slice(&self.generation.to_le_bytes());
         out[32..40].copy_from_slice(&self.data_start.to_le_bytes());
         out[40..48].copy_from_slice(&self.data_blocks.to_le_bytes());
-        out[48..52].copy_from_slice(&checksum(&out[..48]).to_le_bytes());
+        let digest = checksum(&out[..48]);
+        out[48..52].copy_from_slice(&digest.to_le_bytes());
         Ok(())
     }
 
