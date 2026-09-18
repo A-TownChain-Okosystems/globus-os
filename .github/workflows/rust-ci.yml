@@ -15,7 +15,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
         with:
-          components: rustfmt, clippy
+          components: rustfmt, clippy, rust-src
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Build workspace
