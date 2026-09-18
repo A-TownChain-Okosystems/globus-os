@@ -13,6 +13,7 @@ extern crate std;
 
 extern crate alloc;
 
+#[cfg(test)]
 pub mod allocator;
 pub mod ats1000;
 pub mod hal;
@@ -45,24 +46,12 @@ pub mod p2p_secure; // [K14-Upgrade] ATC-PROTO-P2P-001 v1.0.0 (SCR-0028)
 pub mod security;
 pub mod tcpip;
 pub mod vm;
-// [K29-Build] ausgeschlossen: pub mod userspace;
-// [K29-Build] ausgeschlossen: pub mod elf_loader;
-// [K29-Build] ausgeschlossen: pub mod page_fault;
-// [K29-Build] ausgeschlossen: pub mod user_sched;
-// [K29-Build] ausgeschlossen: pub mod user_io;
-// [K29-Build] ausgeschlossen: pub mod hw_drivers;
-// [K29-Build] ausgeschlossen: pub mod system;
-// [K29-Build] ausgeschlossen: pub mod sockets;
-// [K29-Build] ausgeschlossen: pub mod devfs;
-// [K29-Build] ausgeschlossen: pub mod threads;
-// [K29-Build] ausgeschlossen: pub mod power;
-// [K29-Build] ausgeschlossen: pub mod container;
-// [K29-Build] ausgeschlossen: pub mod signals;
-// [K29-Build] ausgeschlossen: pub mod smp;
-pub mod vmm; // [M1.2] hardened VMM validation core
+// [K29-Build] ausgeschlossen: pub mod vmm; // [M1.2] hardened VMM validation core
              // [K29-Build] ausgeschlossen: pub mod cow;
              // [K29-Build] ausgeschlossen: pub mod tracing;
              // [K29-Build] ausgeschlossen: pub mod container_net;
-             // LKM is std-backed module-management logic; compile it in host-side kernel tests.\n#[cfg(test)]\npub mod lkm;
+             // LKM is std-backed module-management logic; compile it in host-side kernel tests.
+#[cfg(test)]
+pub mod lkm;
              // [K29-Build] ausgeschlossen: pub mod module_security;
              // [K29-Build] ausgeschlossen: pub mod fs_journal;
