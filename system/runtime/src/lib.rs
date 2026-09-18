@@ -1,6 +1,8 @@
 //! Integrated GlobusOS userspace runtime.
 
+mod core_api;
 mod error_reporting;
+pub use core_api::{ProcessHandle, RuntimeCore, RuntimeError};
 pub use error_reporting::{SystemErrorView, latest_error, present};
 
 use aurora_core::{AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine};
@@ -25,12 +27,7 @@ pub struct LoginContext {
 }
 
 impl LoginContext {
-    pub fn new(
-        user_id: UserId,
-        wallet_address: WalletAddress,
-        now_unix: u64,
-        ttl_seconds: u64,
-    ) -> Self {
+    pub fn new(user_id: UserId, wallet_address: WalletAddress, now_unix: u64, ttl_seconds: u64) -> Self {
         Self {
             session: IdentitySession {
                 user_id,
@@ -41,12 +38,9 @@ impl LoginContext {
             },
         }
     }
-    pub fn active(&self, now_unix: u64) -> bool {
-        self.session.is_active(now_unix)
-    }
-    pub fn lock(&mut self) {
-        self.session.lock();
-    }
+
+    pub fn active(&self, now_unix: u64) -> bool { self.session.is_active(now_unix) }
+    pub fn lock(&mut self) { self.session.lock(); }
 }
 
 pub struct BootedRuntime {
@@ -55,6 +49,7 @@ pub struct BootedRuntime {
     pub aurora: StateMachine,
     pub blockchain: GenesisBridge,
     pub diagnostics: EventLog,
+    pub core: RuntimeCore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,24 +66,15 @@ pub fn devnet_genesis_config() -> GenesisConfig {
         pubkey[1] = i;
         let did = format!("did:atc:devnet-validator-{i}");
         let address = format!("ATCDEVNET{i:02}");
-        config
-            .add_validator(GenesisValidator {
-                did,
-                pubkey,
-                stake: 10_000,
-                address,
-                commission: 0,
-            })
+        config.add_validator(GenesisValidator { did, pubkey, stake: 10_000, address, commission: 0 })
             .expect("deterministic devnet validator must be valid");
     }
-    config
-        .add_allocation(GenesisAllocation {
-            address: "ATCDEVNET00".to_owned(),
-            amount: 1_000_000_000,
-            lock_type: LockType::None,
-            lock_duration: 0,
-        })
-        .expect("deterministic devnet allocation must be valid");
+    config.add_allocation(GenesisAllocation {
+        address: "ATCDEVNET00".to_owned(),
+        amount: 1_000_000_000,
+        lock_type: LockType::None,
+        lock_duration: 0,
+    }).expect("deterministic devnet allocation must be valid");
     config.memo = "GlobusOS userspace integration devnet".to_owned();
     config
 }
@@ -98,17 +84,15 @@ pub fn boot_userspace() -> Result<BootedRuntime, RuntimeBootError> {
         return Err(RuntimeBootError::InvalidBootPlan);
     }
     let config = devnet_genesis_config();
-    let blockchain =
-        GenesisBridge::init_from_config(&config).map_err(|_| RuntimeBootError::InvalidBootPlan)?;
+    let blockchain = GenesisBridge::init_from_config(&config)
+        .map_err(|_| RuntimeBootError::InvalidBootPlan)?;
     Ok(BootedRuntime {
-        status: RuntimeStatus {
-            system: SystemState::MultiUser,
-            services: ServiceState::Ready,
-        },
+        status: RuntimeStatus { system: SystemState::MultiUser, services: ServiceState::Ready },
         boot_plan: BOOT_PLAN,
         aurora: StateMachine::new(),
         blockchain,
         diagnostics: EventLog::new(),
+        core: RuntimeCore::new(),
     })
 }
 
@@ -130,16 +114,12 @@ pub fn aurora_request_lifecycle(request: &AuroraRequest) -> Result<AuroraRespons
 }
 
 pub fn initial_status() -> RuntimeStatus {
-    RuntimeStatus {
-        system: SystemState::Booting,
-        services: ServiceState::Defined,
-    }
+    RuntimeStatus { system: SystemState::Booting, services: ServiceState::Defined }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use aurora_core::{RequestId, SessionId};
     use globus_identity::{UserId, create_wallet};
 
     #[test]
@@ -161,6 +141,7 @@ mod tests {
         assert_eq!(runtime.blockchain.chain.chain_id(), GENESIS_CHAIN_ID);
         assert_eq!(runtime.blockchain.chain.block_count(), 1);
         assert_eq!(runtime.blockchain.validators.active_count(), 4);
+        assert_eq!(runtime.core.abi_version(), libshivacore::ABI_VERSION);
         assert!(runtime.diagnostics.latest().is_none());
     }
 }
