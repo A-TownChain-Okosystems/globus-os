@@ -4,10 +4,10 @@
 
 use lazy_static::lazy_static;
 use spin::Mutex;
-use uart_16550::{Config, Uart16550Tty};
+use uart_16550::{backend::PioBackend, Config, Uart16550Tty};
 
 lazy_static! {
-    pub static ref SERIAL1: Mutex<Uart16550Tty> = {
+    pub static ref SERIAL1: Mutex<Uart16550Tty<PioBackend>> = {
         // SAFETY: COM1 (0x3F8) is the standard x86 PC serial port and is exclusively
         // owned by the kernel while this device instance is alive.
         let serial_port = unsafe {
