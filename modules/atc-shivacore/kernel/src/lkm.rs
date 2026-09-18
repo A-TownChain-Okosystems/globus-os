@@ -2787,8 +2787,8 @@ mod tests {
         graph.add_node("app");
         graph.add_node("lib-z");
         graph.add_node("lib-a");
-        graph.add_dependency("app", "lib-z").unwrap();
-        graph.add_dependency("app", "lib-a").unwrap();
+        graph.add_edge("app", "lib-z");
+        graph.add_edge("app", "lib-a");
 
         assert_eq!(graph.dependencies("app"), vec!["lib-a", "lib-z"]);
         assert!(graph.dependencies("missing").is_empty());
@@ -2800,10 +2800,10 @@ mod tests {
         for node in ["app", "lib-b", "lib-a", "base"] {
             graph.add_node(node);
         }
-        graph.add_dependency("app", "lib-b").unwrap();
-        graph.add_dependency("app", "lib-a").unwrap();
-        graph.add_dependency("lib-b", "base").unwrap();
-        graph.add_dependency("lib-a", "base").unwrap();
+        graph.add_edge("app", "lib-b");
+        graph.add_edge("app", "lib-a");
+        graph.add_edge("lib-b", "base");
+        graph.add_edge("lib-a", "base");
 
         assert_eq!(
             graph.topological_sort().unwrap(),
