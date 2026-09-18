@@ -42,6 +42,8 @@ jobs:
           components: llvm-tools-preview, rust-src
 
       - name: Build kernel ELF
+        env:
+          RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
         run: |
           cargo build -p shivacore --release \
             --target x86_64-unknown-none \
