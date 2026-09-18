@@ -1,3 +1,5 @@
+![ATC COMPLIANCE](https://img.shields.io/badge/ATC%20COMPLIANCE-R3%20%C2%B7%20ATC--STD--201%2F202%2F203-brightgreen)
+
 # GlobusOS
 
 > AI-native operating system and userspace platform built on the ShivaCore kernel.
