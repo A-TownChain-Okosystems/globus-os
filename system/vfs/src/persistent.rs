@@ -208,7 +208,7 @@ impl<D: BlockDevice> PersistentFs<D> {
         if sb.block_size != g.block_size || sb.total_blocks != g.block_count {
             return Err(FsError::InvalidSuperblock);
         }
-        let layout = Self::layout(sb)?;
+        let layout = Self::calculate_layout(sb)?;
         let bitmap_block =
             Self::read_block(&mut device, layout.bitmap_start, g.block_size as usize)?;
         let bitmap =
