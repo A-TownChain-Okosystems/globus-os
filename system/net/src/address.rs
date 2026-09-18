@@ -9,7 +9,7 @@ impl Ipv4Address {
     pub const fn new(octets: [u8; 4]) -> Self {
         Self(octets)
     }
-    pub const fn is_unspecified(self) -> bool {
+    pub fn is_unspecified(self) -> bool {
         self == Self::UNSPECIFIED
     }
     pub const fn is_loopback(self) -> bool {
