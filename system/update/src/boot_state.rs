@@ -43,7 +43,8 @@ impl BootState {
         out[9] = u8::from(self.confirmed);
         out[12..16].copy_from_slice(&self.attempts.to_le_bytes());
         out[16..24].copy_from_slice(&self.generation.to_le_bytes());
-        out[24..28].copy_from_slice(&checksum(&out[..24]).to_le_bytes());
+        let digest = checksum(&out[..24]);
+        out[24..28].copy_from_slice(&digest.to_le_bytes());
         Ok(())
     }
 
