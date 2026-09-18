@@ -28,7 +28,7 @@ jobs:
       matrix:
         include:
           - cpu: intel-skylake
-            qemu_cpu: Skylake-Client
+            qemu_cpu: Skylake-Client-v1
             expected_vendor: Intel
           - cpu: amd-epyc
             qemu_cpu: EPYC
