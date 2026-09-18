@@ -33,6 +33,7 @@ impl AccountProfile { pub fn new(user_id:UserId, display_name:impl Into<String>,
 #[derive(Debug, Clone, Copy, PartialEq, Eq)] pub enum LoginState { LoggedOut, Authenticating, Authenticated, Locked }
 #[derive(Debug, Clone, PartialEq, Eq)] pub struct IdentitySession { pub user_id:UserId, pub wallet_address:WalletAddress, pub state:LoginState, pub issued_at_unix:u64, pub expires_at_unix:u64 }
 impl IdentitySession { pub fn is_active(&self,now_unix:u64)->bool{self.state==LoginState::Authenticated&&now_unix<self.expires_at_unix} pub fn lock(&mut self){self.state=LoginState::Locked;} }
+#[derive(Debug)]
 pub struct RecoveryMaterial { seed:Zeroizing<Vec<u8>> }
 impl RecoveryMaterial { pub fn from_seed(seed:Vec<u8>)->Result<Self,IdentityError>{if seed.len()<32{return Err(IdentityError::WeakSeed)}Ok(Self{seed:Zeroizing::new(seed)})} pub fn seed_len(&self)->usize{self.seed.len()} }
 impl Drop for RecoveryMaterial {fn drop(&mut self){self.seed.zeroize();}}
