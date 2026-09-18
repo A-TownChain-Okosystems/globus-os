@@ -32,6 +32,10 @@ impl FreeSpaceBitmap {
         })
     }
 
+    pub fn len(&self) -> u64 {
+        self.total_blocks
+    }
+
     pub fn total_blocks(&self) -> u64 {
         self.total_blocks
     }
@@ -44,7 +48,7 @@ impl FreeSpaceBitmap {
         Ok((index, 1u8 << (block % 8)))
     }
 
-    fn set_free(&mut self, block: u64, free: bool) -> Result<(), BitmapError> {
+    pub(crate) fn set_free(&mut self, block: u64, free: bool) -> Result<(), BitmapError> {
         let (index, mask) = self.check(block)?;
         let allocated = self.bits[index] & mask != 0;
         if free {
@@ -128,10 +132,12 @@ impl FreeSpaceBitmap {
         if input.len() < bitmap.bits.len() {
             return Err(BitmapError::Buffer);
         }
-        bitmap.bits.copy_from_slice(&input[..bitmap.bits.len()]);
+        let len = bitmap.bits.len();
+        bitmap.bits.copy_from_slice(&input[..len]);
         if total_blocks % 8 != 0 {
             let valid = (total_blocks % 8) as u8;
-            bitmap.bits[bitmap.bits.len() - 1] &= (1u8 << valid) - 1;
+            let last = bitmap.bits.len() - 1;
+            bitmap.bits[last] &= (1u8 << valid) - 1;
         }
         Ok(bitmap)
     }
