@@ -18,6 +18,7 @@ mod allocator;
 mod ats1000;
 mod framebuffer;
 mod gdt;
+mod hal;
 mod interrupts;
 mod memory;
 mod serial;
@@ -41,6 +42,17 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: Kernel-Einstiegspunkt erreicht.");
+
+    let cpu = hal::CpuInfo::detect();
+    serial_println!(
+        "ShivaCore: CPU vendor={} family={} model={} stepping={} apic={} x2apic={} nx={} invariant_tsc={}",
+        cpu.vendor_name(), cpu.family, cpu.model, cpu.stepping,
+        cpu.features.apic, cpu.features.x2apic, cpu.features.nx, cpu.features.invariant_tsc
+    );
+    if !cpu.boot_compatible() {
+        panic!("ShivaCore: CPU lacks required x86-64 boot features (SSE2/NX/APIC)");
+    }
+    serial_println!("ShivaCore: CPU HAL compatibility check OK.");
 
     if let Some(fb) = boot_info.framebuffer.as_mut() {
         framebuffer::init(fb);
