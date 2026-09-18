@@ -53,6 +53,6 @@ impl<D: AudioDecoder, O: AudioOutput> MediaPipeline<D, O> {
 
     pub fn stop(&mut self) -> Result<(), PipelineError> {
         self.output.stop()?;
-        self.player.stop().map_err(|_| PipelineError::NoTrack)
+        self.player.stop(); Ok(())
     }
 }
