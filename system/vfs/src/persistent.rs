@@ -41,7 +41,8 @@ impl Superblock {
         out[12..20].copy_from_slice(&self.total_blocks.to_le_bytes());
         out[20..28].copy_from_slice(&self.metadata_start.to_le_bytes());
         out[28..36].copy_from_slice(&self.metadata_blocks.to_le_bytes());
-        out[36..40].copy_from_slice(&checksum(&out[..36]).to_le_bytes());
+        let digest = checksum(&out[..36]);
+        out[36..40].copy_from_slice(&digest.to_le_bytes());
         Ok(())
     }
     pub fn decode(input: &[u8]) -> Result<Self, FsError> {
@@ -87,7 +88,7 @@ pub struct PersistentFs<D> {
     bitmap: FreeSpaceBitmap,
 }
 impl<D: BlockDevice> PersistentFs<D> {
-    fn layout(sb: Superblock) -> Result<MetadataLayout, FsError> {
+    fn calculate_layout(sb: Superblock) -> Result<MetadataLayout, FsError> {
         let inode_count = u64::from(sb.block_size) / INODE_SIZE as u64;
         MetadataLayout::calculate(
             sb.total_blocks,
@@ -176,7 +177,7 @@ impl<D: BlockDevice> PersistentFs<D> {
             metadata_start: 1,
             metadata_blocks,
         };
-        let layout = Self::layout(sb)?;
+        let layout = Self::calculate_layout(sb)?;
         let mut bitmap = FreeSpaceBitmap::new(g.block_count).map_err(|_| FsError::Bitmap)?;
         bitmap
             .reserve(0, layout.data_start)
