@@ -4,12 +4,17 @@
 
 use lazy_static::lazy_static;
 use spin::Mutex;
-use uart_16550::SerialPort;
+use uart_16550::{Config, Uart16550};
 
 lazy_static! {
-    pub static ref SERIAL1: Mutex<SerialPort> = {
-        let mut serial_port = unsafe { SerialPort::new(0x3F8) };
-        serial_port.init();
+    pub static ref SERIAL1: Mutex<Uart16550<uart_16550::backend::PioBackend>> = {
+        // SAFETY: COM1 (0x3F8) is the standard x86 PC serial port and is exclusively
+        // owned by the kernel while this device instance is alive.
+        let mut serial_port = unsafe { Uart16550::new_port(0x3F8) }
+            .expect("COM1 UART address is valid");
+        serial_port
+            .init(Config::default())
+            .expect("COM1 UART initialization failed");
         Mutex::new(serial_port)
     };
 }
