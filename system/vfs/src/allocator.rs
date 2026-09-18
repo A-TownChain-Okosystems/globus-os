@@ -1,4 +1,5 @@
 //! Persistent block allocation policy for the filesystem.
+//! Rustfmt is enforced by the repository auto-format gate.
 
 use crate::bitmap::{BitmapError, FreeSpaceBitmap};
 
