@@ -3373,3 +3373,5 @@ mod tests {
         assert_eq!(reg.active_count(), 5);
     }
 }
+
+// Formatting is enforced by the repository Rustfmt gate.
