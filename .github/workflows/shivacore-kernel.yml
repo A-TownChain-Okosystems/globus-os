@@ -39,7 +39,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: x86_64-unknown-none
-          components: llvm-tools-preview
+          components: llvm-tools-preview, rust-src
 
       - name: Build kernel ELF
         run: |
