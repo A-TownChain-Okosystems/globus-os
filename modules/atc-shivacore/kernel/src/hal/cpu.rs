@@ -34,14 +34,14 @@ pub struct CpuInfo {
 
 impl CpuInfo {
     pub fn detect() -> Self {
-        let basic = unsafe { __cpuid(0) };
+        let basic = __cpuid(0);
         let max_basic_leaf = basic.eax;
         let vendor = vendor_from_regs(basic.ebx, basic.ecx, basic.edx);
-        let ext = unsafe { __cpuid(0x8000_0000) };
+        let ext = __cpuid(0x8000_0000);
         let max_extended_leaf = ext.eax;
 
         let leaf1 = if max_basic_leaf >= 1 {
-            unsafe { __cpuid(1) }
+            __cpuid(1)
         } else {
             zero_cpuid()
         };
@@ -62,12 +62,12 @@ impl CpuInfo {
         };
 
         let ext1 = if max_extended_leaf >= 0x8000_0001 {
-            unsafe { __cpuid(0x8000_0001) }
+            __cpuid(0x8000_0001)
         } else {
             zero_cpuid()
         };
         let ext7 = if max_extended_leaf >= 0x8000_0007 {
-            unsafe { __cpuid(0x8000_0007) }
+            __cpuid(0x8000_0007)
         } else {
             zero_cpuid()
         };
