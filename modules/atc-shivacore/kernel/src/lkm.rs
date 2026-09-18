@@ -1083,35 +1083,25 @@ impl ModuleRegistry {
     // ── Loading ──
 
     pub fn load(&mut self, name: &str) -> Result<u64, String> {
-        let module = self
-            .modules
-            .get(name)
-            .ok_or_else(|| format!("Module '{}' not found", name))?;
+        let (module_id, module_name) = {
+            let module = self
+                .modules
+                .get(name)
+                .ok_or_else(|| format!("Module '{}' not found", name))?;
+            if module.state.is_active() {
+                return Err(format!("Module '{}' is already active", name));
+            }
+            if module.state.is_loading() {
+                return Err(format!("Module '{}' is already loading", name));
+            }
+            (module.id, module.name.clone())
+        };
 
-        if module.state.is_active() {
-            return Err(format!("Module '{}' is already active", name));
-        }
-        if module.state.is_loading() {
-            return Err(format!("Module '{}' is already loading", name));
-        }
-
-        // Check that all required deps are active
-        let deps_to_check: Vec<String> = module.dependencies.clone();
-        let module_name = name.to_string();
-        let module_id = module.id;
-
-        // Get load order (deps first)
         let load_order = self.dep_graph.load_order(&module_name).map_err(|e| {
-            self.log_event(
-                ModuleEventType::DependencyMissing,
-                &module_name,
-                module_id,
-                &e,
-            );
+            self.log_event(ModuleEventType::DependencyMissing, &module_name, module_id, &e);
             e
         })?;
 
-        // Load all required deps first
         for dep_name in &load_order {
             if dep_name == &module_name {
                 continue;
@@ -1132,104 +1122,109 @@ impl ModuleRegistry {
             }
         }
 
-        // Now load the module itself
-        let module = self.modules.get_mut(name).unwrap();
-        module.state = ModuleState::Loading;
+        self.modules.get_mut(name).unwrap().state = ModuleState::Loading;
         self.log_event(
             ModuleEventType::LoadStarted,
-            name,
-            module.id,
+            &module_name,
+            module_id,
             "Init function called",
         );
 
-        // Check for unresolved symbol imports
-        let imports = module.imports.clone();
+        let imports = self.modules.get(name).unwrap().imports.clone();
         let unresolved = self.symbol_table.unresolved_imports(&imports);
         if !unresolved.is_empty() {
-            // Imports are required by default. The current module model has no
-            // separate optional-import declaration, so unresolved symbols always
-            // fail closed at the kernel/module boundary.
             let message = format!("Unresolved symbols: {}", unresolved.join(", "));
             let module = self.modules.get_mut(name).unwrap();
             module.state = ModuleState::Failed;
             module.stats.error_count += 1;
             module.stats.last_error = Some(message.clone());
-            self.log_event(ModuleEventType::SymbolUnresolved, name, module.id, &message);
+            drop(module);
+            self.log_event(
+                ModuleEventType::SymbolUnresolved,
+                &module_name,
+                module_id,
+                &message,
+            );
             return Err(format!(
                 "Module '{}' has unresolved symbols: {}",
                 name, message
             ));
         }
 
-        // Register exported symbols
-        let exports = module.exports.clone();
-        let mid = module.id;
-        let mname = module.name.clone();
+        let exports = self.modules.get(name).unwrap().exports.clone();
         for export in exports {
-            self.symbol_table.register(export).map_err(|e| {
+            if let Err(e) = self.symbol_table.register(export) {
                 let module = self.modules.get_mut(name).unwrap();
                 module.state = ModuleState::Failed;
                 module.stats.error_count += 1;
                 module.stats.last_error = Some(e.clone());
-                e
-            })?;
+                return Err(e);
+            }
         }
 
-        // Resolve imports
         for import in &imports {
             if self.symbol_table.contains(import) {
-                self.symbol_table.resolve(import).map_err(|e| {
+                if let Err(e) = self.symbol_table.resolve(import) {
                     let module = self.modules.get_mut(name).unwrap();
                     module.state = ModuleState::Failed;
                     module.stats.error_count += 1;
                     module.stats.last_error = Some(e.clone());
-                    e
-                })?;
-                self.log_event(ModuleEventType::SymbolResolved, name, mid, import);
+                    return Err(e);
+                }
+                self.log_event(
+                    ModuleEventType::SymbolResolved,
+                    &module_name,
+                    module_id,
+                    import,
+                );
             }
         }
 
-        // Taint kernel if proprietary
-        let license = module.license;
-        if license.taints_kernel() {
+        if self.modules.get(name).unwrap().license.taints_kernel() {
             self.kernel_tainted = true;
         }
 
-        // Finalize
-        let module = self.modules.get_mut(name).unwrap();
-        module.state = ModuleState::Active;
-        module.stats.load_count += 1;
-        module.load_order = self.load_counter;
-        self.load_counter += 1;
-        module.stats.symbols_exported = module.exports.len();
-        module.stats.symbols_imported = module.imports.len();
+        {
+            let load_order_value = self.load_counter;
+            self.load_counter += 1;
+            let module = self.modules.get_mut(name).unwrap();
+            module.state = ModuleState::Active;
+            module.stats.load_count += 1;
+            module.load_order = load_order_value;
+            module.stats.symbols_exported = module.exports.len();
+            module.stats.symbols_imported = module.imports.len();
+        }
 
         self.log_event(
             ModuleEventType::LoadSucceeded,
-            name,
-            module.id,
+            &module_name,
+            module_id,
             "Module loaded successfully",
         );
-
-        Ok(module.id)
+        Ok(module_id)
     }
 
     pub fn unload(&mut self, name: &str) -> Result<(), String> {
-        let module = self
-            .modules
-            .get(name)
-            .ok_or_else(|| format!("Module '{}' not found", name))?;
-
-        if !module.state.is_active() {
+        let (module_id, ref_count) = {
+            let module = self
+                .modules
+                .get(name)
+                .ok_or_else(|| format!("Module '{}' not found", name))?;
+            if !module.state.is_active() {
+                return Err(format!(
+                    "Module '{}' is not active (state: {})",
+                    name, module.state
+                ));
+            }
+            (module.id, module.ref_count)
+        };
+        if ref_count > 0 {
             return Err(format!(
-                "Module '{}' is not active (state: {})",
-                name, module.state
+                "Cannot unload '{}': {} references still held",
+                name, ref_count
             ));
         }
 
-        let module_id = module.id;
-
-        // Check if other modules depend on this one
         let dependents = self.dep_graph.get_dependents(name);
         let active_dependents: Vec<String> = dependents
             .iter()
@@ -1241,7 +1236,6 @@ impl ModuleRegistry {
             })
             .cloned()
             .collect();
-
         if !active_dependents.is_empty() {
             return Err(format!(
                 "Cannot unload '{}': active dependents: {}",
@@ -1250,17 +1244,11 @@ impl ModuleRegistry {
             ));
         }
 
-        // Check reference count
-        if module.ref_count > 0 {
-            return Err(format!(
-                "Cannot unload '{}': {} references still held",
-                name, module.ref_count
-            ));
-        }
-
-        // Set state to unloading
-        let module = self.modules.get_mut(name).unwrap();
-        module.state = ModuleState::Unloading;
+        let imports = {
+            let module = self.modules.get_mut(name).unwrap();
+            module.state = ModuleState::Unloading;
+            module.imports.clone()
+        };
         self.log_event(
             ModuleEventType::UnloadStarted,
             name,
@@ -1268,26 +1256,22 @@ impl ModuleRegistry {
             "Exit function called",
         );
 
-        // Unregister exported symbols
-        let removed_symbols = self.symbol_table.unregister_module(module_id);
-
-        // Release imported symbols
-        let imports = module.imports.clone();
+        let _removed_symbols = self.symbol_table.unregister_module(module_id);
         for import in &imports {
             if self.symbol_table.contains(import) {
                 let _ = self.symbol_table.release(import);
             }
         }
 
-        // Finalize
-        let module = self.modules.get_mut(name).unwrap();
-        module.state = ModuleState::Unloaded;
-        module.stats.unload_count += 1;
-        module.stats.symbols_exported = 0;
-        module.stats.symbols_imported = 0;
-        // Reset params to defaults
-        for p in &mut module.params {
-            p.reset();
+        {
+            let module = self.modules.get_mut(name).unwrap();
+            module.state = ModuleState::Unloaded;
+            module.stats.unload_count += 1;
+            module.stats.symbols_exported = 0;
+            module.stats.symbols_imported = 0;
+            for p in &mut module.params {
+                p.reset();
+            }
         }
 
         self.log_event(
@@ -1296,7 +1280,6 @@ impl ModuleRegistry {
             module_id,
             "Module unloaded successfully",
         );
-
         Ok(())
     }
 
@@ -1338,42 +1321,46 @@ impl ModuleRegistry {
     // ── Reference management ──
 
     pub fn acquire_ref(&mut self, name: &str) -> Result<u64, String> {
-        let module = self
-            .modules
-            .get_mut(name)
-            .ok_or_else(|| format!("Module '{}' not found", name))?;
-
-        if !module.state.is_active() {
-            return Err(format!("Module '{}' is not active", name));
-        }
-
-        let new_count = module.add_ref();
+        let (module_id, new_count) = {
+            let module = self
+                .modules
+                .get_mut(name)
+                .ok_or_else(|| format!("Module '{}' not found", name))?;
+            if !module.state.is_active() {
+                return Err(format!("Module '{}' is not active", name));
+            }
+            (module.id, module.add_ref())
+        };
         self.log_event(
             ModuleEventType::RefAcquired,
             name,
-            module.id,
+            module_id,
             &format!("Ref acquired (count={})", new_count),
         );
         Ok(new_count)
     }
 
     pub fn release_ref(&mut self, name: &str) -> Result<u64, String> {
-        let module = self
-            .modules
-            .get_mut(name)
-            .ok_or_else(|| format!("Module '{}' not found", name))?;
-
-        let new_count = module.release_ref().map_err(|e| {
-            let module = self.modules.get_mut(name).unwrap();
-            module.stats.error_count += 1;
-            module.stats.last_error = Some(e.clone());
-            e
-        })?;
-
+        let (module_id, result) = {
+            let module = self
+                .modules
+                .get_mut(name)
+                .ok_or_else(|| format!("Module '{}' not found", name))?;
+            (module.id, module.release_ref())
+        };
+        let new_count = match result {
+            Ok(count) => count,
+            Err(e) => {
+                let module = self.modules.get_mut(name).unwrap();
+                module.stats.error_count += 1;
+                module.stats.last_error = Some(e.clone());
+                return Err(e);
+            }
+        };
         self.log_event(
             ModuleEventType::RefReleased,
             name,
-            module.id,
+            module_id,
             &format!("Ref released (count={})", new_count),
         );
         Ok(new_count)
@@ -1462,20 +1449,21 @@ impl ModuleRegistry {
     }
 
     pub fn set_param(&mut self, module: &str, param: &str, value: &str) -> Result<(), String> {
-        let mod_desc = self
-            .modules
-            .get_mut(module)
-            .ok_or_else(|| format!("Module '{}' not found", module))?;
-
-        if !mod_desc.state.is_active() {
-            return Err(format!("Module '{}' is not active", module));
-        }
-
-        mod_desc.set_param(param, value)?;
+        let module_id = {
+            let mod_desc = self
+                .modules
+                .get_mut(module)
+                .ok_or_else(|| format!("Module '{}' not found", module))?;
+            if !mod_desc.state.is_active() {
+                return Err(format!("Module '{}' is not active", module));
+            }
+            mod_desc.set_param(param, value)?;
+            mod_desc.id
+        };
         self.log_event(
             ModuleEventType::ParamChanged,
             module,
-            mod_desc.id,
+            module_id,
             &format!("Parameter '{}' set to '{}'", param, value),
         );
         Ok(())
