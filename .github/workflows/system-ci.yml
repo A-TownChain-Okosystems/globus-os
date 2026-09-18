@@ -15,7 +15,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           toolchain: nightly
-          components: rustfmt, clippy
+          components: rustfmt, clippy, rust-src
       - name: Format
         run: cargo fmt --all -- --check
       - name: Check
