@@ -18,6 +18,8 @@ jobs:
           components: rustfmt, clippy, rust-src
       - name: Format check
         run: cargo fmt --all -- --check
+      - name: Verify formatting drift
+        run: cargo fmt --all -- --check
       - name: Build workspace
         run: cargo check --workspace --all-targets
       - name: Test workspace
