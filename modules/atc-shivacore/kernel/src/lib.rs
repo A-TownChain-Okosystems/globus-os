@@ -53,5 +53,5 @@ pub mod vmm; // [M1.2] hardened VMM validation core
              // LKM is std-backed module-management logic; compile it in host-side kernel tests.
 #[cfg(test)]
 pub mod lkm;
-             // [K29-Build] ausgeschlossen: pub mod module_security;
-             // [K29-Build] ausgeschlossen: pub mod fs_journal;
+// [K29-Build] ausgeschlossen: pub mod module_security;
+// [K29-Build] ausgeschlossen: pub mod fs_journal;

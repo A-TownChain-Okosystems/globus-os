@@ -15,7 +15,9 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static MODULE_SEQ: AtomicU64 = AtomicU64::new(0);
 
-fn next_module_id() -> u64 { MODULE_SEQ.fetch_add(1, Ordering::SeqCst) }
+fn next_module_id() -> u64 {
+    MODULE_SEQ.fetch_add(1, Ordering::SeqCst)
+}
 
 // ══════════════════════════════════════════════════════════════════════════════
 // MODULE STATE MACHINE
@@ -23,12 +25,12 @@ fn next_module_id() -> u64 { MODULE_SEQ.fetch_add(1, Ordering::SeqCst) }
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum ModuleState {
-    Registered,  // Discovered but not loaded
-    Loading,      // init() in progress
-    Active,       // init() succeeded, module running
-    Unloading,    // exit() in progress
-    Failed,        // init() returned error
-    Unloaded,      // Successfully unloaded
+    Registered, // Discovered but not loaded
+    Loading,    // init() in progress
+    Active,     // init() succeeded, module running
+    Unloading,  // exit() in progress
+    Failed,     // init() returned error
+    Unloaded,   // Successfully unloaded
 }
 
 impl ModuleState {
@@ -43,10 +45,18 @@ impl ModuleState {
         }
     }
 
-    pub fn is_active(&self) -> bool { matches!(self, ModuleState::Active) }
-    pub fn is_loading(&self) -> bool { matches!(self, ModuleState::Loading) }
-    pub fn is_unloading(&self) -> bool { matches!(self, ModuleState::Unloading) }
-    pub fn is_terminal(&self) -> bool { matches!(self, ModuleState::Unloaded) }
+    pub fn is_active(&self) -> bool {
+        matches!(self, ModuleState::Active)
+    }
+    pub fn is_loading(&self) -> bool {
+        matches!(self, ModuleState::Loading)
+    }
+    pub fn is_unloading(&self) -> bool {
+        matches!(self, ModuleState::Unloading)
+    }
+    pub fn is_terminal(&self) -> bool {
+        matches!(self, ModuleState::Unloaded)
+    }
 }
 
 impl std::fmt::Display for ModuleState {
@@ -62,12 +72,12 @@ impl std::fmt::Display for ModuleState {
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ModulePriority {
     Core = 0,       // Core kernel subsystems (must load first)
-    Driver = 1,      // Hardware drivers
-    FileSystem = 2,  // File system modules
-    Network = 3,     // Network protocol modules
-    Security = 4,     // Security modules (SELinux-like)
-    Utility = 5,       // Utility/helper modules
-    Custom = 9,        // User-defined modules
+    Driver = 1,     // Hardware drivers
+    FileSystem = 2, // File system modules
+    Network = 3,    // Network protocol modules
+    Security = 4,   // Security modules (SELinux-like)
+    Utility = 5,    // Utility/helper modules
+    Custom = 9,     // User-defined modules
 }
 
 impl ModulePriority {
@@ -91,10 +101,10 @@ impl ModulePriority {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ModuleLicense {
     Gpl,         // GPL-compatible
-    Mit,          // MIT
-    Bsd,          // BSD
-    Apache,       // Apache 2.0
-    Proprietary,  // Proprietary (taints kernel)
+    Mit,         // MIT
+    Bsd,         // BSD
+    Apache,      // Apache 2.0
+    Proprietary, // Proprietary (taints kernel)
 }
 
 impl ModuleLicense {
@@ -108,8 +118,12 @@ impl ModuleLicense {
         }
     }
 
-    pub fn is_open_source(&self) -> bool { !matches!(self, ModuleLicense::Proprietary) }
-    pub fn taints_kernel(&self) -> bool { matches!(self, ModuleLicense::Proprietary) }
+    pub fn is_open_source(&self) -> bool {
+        !matches!(self, ModuleLicense::Proprietary)
+    }
+    pub fn taints_kernel(&self) -> bool {
+        matches!(self, ModuleLicense::Proprietary)
+    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -187,7 +201,9 @@ impl ModuleParam {
         if !self.param_type.validate(value) {
             return Err(format!(
                 "Invalid value '{}' for type {} ({})",
-                value, self.param_type.name(), self.name
+                value,
+                self.param_type.name(),
+                self.name
             ));
         }
         self.current_value = value.to_string();
@@ -425,7 +441,8 @@ impl ModuleDescriptor {
     }
 
     pub fn set_param(&mut self, name: &str, value: &str) -> Result<(), String> {
-        let param = self.get_param_mut(name)
+        let param = self
+            .get_param_mut(name)
             .ok_or_else(|| format!("Parameter '{}' not found in module '{}'", name, self.name))?;
         param.set(value)
     }
@@ -448,10 +465,16 @@ impl ModuleDescriptor {
         r.push_str(&format!("  Load order: {}\n", self.load_order));
 
         if !self.dependencies.is_empty() {
-            r.push_str(&format!("  Dependencies: {}\n", self.dependencies.join(", ")));
+            r.push_str(&format!(
+                "  Dependencies: {}\n",
+                self.dependencies.join(", ")
+            ));
         }
         if !self.optional_deps.is_empty() {
-            r.push_str(&format!("  Optional deps: {}\n", self.optional_deps.join(", ")));
+            r.push_str(&format!(
+                "  Optional deps: {}\n",
+                self.optional_deps.join(", ")
+            ));
         }
         if !self.conflicts.is_empty() {
             r.push_str(&format!("  Conflicts: {}\n", self.conflicts.join(", ")));
@@ -464,7 +487,13 @@ impl ModuleDescriptor {
             r.push_str("  Parameters:\n");
             for p in &self.params {
                 let ro = if p.read_only { " (ro)" } else { "" };
-                r.push_str(&format!("    {} = {} [{}]{}\n", p.name, p.current_value, p.param_type.name(), ro));
+                r.push_str(&format!(
+                    "    {} = {} [{}]{}\n",
+                    p.name,
+                    p.current_value,
+                    p.param_type.name(),
+                    ro
+                ));
             }
         }
 
@@ -472,8 +501,10 @@ impl ModuleDescriptor {
             r.push_str(&format!("  Exports: {} symbols\n", self.exports.len()));
         }
 
-        r.push_str(&format!("  Stats: loaded={}x, unloaded={}x, errors={}x\n",
-            self.stats.load_count, self.stats.unload_count, self.stats.error_count));
+        r.push_str(&format!(
+            "  Stats: loaded={}x, unloaded={}x, errors={}x\n",
+            self.stats.load_count, self.stats.unload_count, self.stats.error_count
+        ));
 
         r
     }
@@ -558,7 +589,9 @@ impl Default for DependencyGraph {
 }
 
 impl DependencyGraph {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn add_node(&mut self, name: &str) {
         self.nodes.insert(name.to_string());
@@ -569,9 +602,15 @@ impl DependencyGraph {
     pub fn add_edge(&mut self, from: &str, to: &str) {
         self.nodes.insert(from.to_string());
         self.nodes.insert(to.to_string());
-        self.edges.entry(from.to_string()).or_default().insert(to.to_string());
+        self.edges
+            .entry(from.to_string())
+            .or_default()
+            .insert(to.to_string());
         self.edges.entry(to.to_string()).or_default();
-        self.reverse_edges.entry(to.to_string()).or_default().insert(from.to_string());
+        self.reverse_edges
+            .entry(to.to_string())
+            .or_default()
+            .insert(from.to_string());
         self.reverse_edges.entry(from.to_string()).or_default();
     }
 
@@ -603,13 +642,15 @@ impl DependencyGraph {
     }
 
     pub fn get_dependencies(&self, name: &str) -> Vec<String> {
-        self.edges.get(name)
+        self.edges
+            .get(name)
             .map(|s| s.iter().cloned().collect())
             .unwrap_or_default()
     }
 
     pub fn get_dependents(&self, name: &str) -> Vec<String> {
-        self.reverse_edges.get(name)
+        self.reverse_edges
+            .get(name)
             .map(|s| s.iter().cloned().collect())
             .unwrap_or_default()
     }
@@ -667,10 +708,7 @@ impl DependencyGraph {
         // contains the dependents that become ready after a dependency.
         let mut in_degree: BTreeMap<String, usize> = BTreeMap::new();
         for node in &self.nodes {
-            in_degree.insert(
-                node.clone(),
-                self.edges.get(node).map_or(0, BTreeSet::len),
-            );
+            in_degree.insert(node.clone(), self.edges.get(node).map_or(0, BTreeSet::len));
         }
 
         // BTreeSet keeps the ready queue globally deterministic.
@@ -701,7 +739,8 @@ impl DependencyGraph {
         if result.len() == self.nodes.len() {
             Ok(result)
         } else {
-            let remaining: Vec<String> = self.nodes
+            let remaining: Vec<String> = self
+                .nodes
                 .iter()
                 .filter(|n| !result.contains(n))
                 .cloned()
@@ -740,7 +779,10 @@ impl DependencyGraph {
             sorted_deps.sort();
             for dep in &sorted_deps {
                 if !self.nodes.contains(dep) {
-                    return Err(format!("Dependency '{}' not found (required by '{}')", dep, node));
+                    return Err(format!(
+                        "Dependency '{}' not found (required by '{}')",
+                        dep, node
+                    ));
                 }
                 self.dfs_load_order(dep, visited, order)?;
             }
@@ -750,7 +792,9 @@ impl DependencyGraph {
         Ok(())
     }
 
-    pub fn node_count(&self) -> usize { self.nodes.len() }
+    pub fn node_count(&self) -> usize {
+        self.nodes.len()
+    }
     pub fn edge_count(&self) -> usize {
         self.edges.values().map(|s| s.len()).sum()
     }
@@ -776,7 +820,9 @@ impl Default for SymbolTable {
 }
 
 impl SymbolTable {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn register(&mut self, symbol: ExportedSymbol) -> Result<(), String> {
         if self.symbols.contains_key(&symbol.name) {
@@ -814,14 +860,18 @@ impl SymbolTable {
     }
 
     pub fn resolve(&mut self, name: &str) -> Result<&ExportedSymbol, String> {
-        let symbol = self.symbols.get_mut(name)
+        let symbol = self
+            .symbols
+            .get_mut(name)
             .ok_or_else(|| format!("Symbol '{}' not found in symbol table", name))?;
         symbol.ref_count += 1;
         Ok(self.symbols.get(name).unwrap())
     }
 
     pub fn release(&mut self, name: &str) -> Result<u64, String> {
-        let symbol = self.symbols.get_mut(name)
+        let symbol = self
+            .symbols
+            .get_mut(name)
             .ok_or_else(|| format!("Symbol '{}' not found", name))?;
         if symbol.ref_count == 0 {
             return Err(format!("Symbol '{}' has no references", name));
@@ -834,14 +884,17 @@ impl SymbolTable {
         self.by_module.get(&module_id).cloned().unwrap_or_default()
     }
 
-    pub fn symbol_count(&self) -> usize { self.symbols.len() }
+    pub fn symbol_count(&self) -> usize {
+        self.symbols.len()
+    }
 
     pub fn all_symbols(&self) -> Vec<&ExportedSymbol> {
         self.symbols.values().collect()
     }
 
     pub fn unresolved_imports(&self, imports: &[String]) -> Vec<String> {
-        imports.iter()
+        imports
+            .iter()
             .filter(|name| !self.symbols.contains_key(*name))
             .cloned()
             .collect()
@@ -882,7 +935,9 @@ impl Default for ModuleRegistry {
 }
 
 impl ModuleRegistry {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn with_max_events(mut self, max: usize) -> Self {
         self.max_events = max;
@@ -891,7 +946,13 @@ impl ModuleRegistry {
 
     // ── Event helpers ──
 
-    fn log_event(&mut self, event_type: ModuleEventType, module_name: &str, module_id: u64, message: &str) {
+    fn log_event(
+        &mut self,
+        event_type: ModuleEventType,
+        module_name: &str,
+        module_id: u64,
+        message: &str,
+    ) {
         let event = ModuleEvent {
             event_id: self.next_event_id,
             timestamp: 0, // Would be real timestamp in kernel
@@ -907,11 +968,18 @@ impl ModuleRegistry {
         }
     }
 
-    pub fn events(&self) -> &VecDeque<ModuleEvent> { &self.events }
-    pub fn event_count(&self) -> usize { self.events.len() }
+    pub fn events(&self) -> &VecDeque<ModuleEvent> {
+        &self.events
+    }
+    pub fn event_count(&self) -> usize {
+        self.events.len()
+    }
 
     pub fn events_for_module(&self, name: &str) -> Vec<&ModuleEvent> {
-        self.events.iter().filter(|e| e.module_name == name).collect()
+        self.events
+            .iter()
+            .filter(|e| e.module_name == name)
+            .collect()
     }
 
     pub fn clear_events(&mut self) {
@@ -932,7 +1000,8 @@ impl ModuleRegistry {
                 if conflict_mod.state.is_active() {
                     self.log_event(
                         ModuleEventType::ConflictDetected,
-                        &module.name, module.id,
+                        &module.name,
+                        module.id,
                         &format!("Conflicts with active module '{}'", conflict),
                     );
                     return Err(format!(
@@ -960,10 +1029,14 @@ impl ModuleRegistry {
             }
             self.log_event(
                 ModuleEventType::CircularDependency,
-                &module.name, module.id,
+                &module.name,
+                module.id,
                 &format!("Circular dependency detected: {}", cycle.join(" -> ")),
             );
-            return Err(format!("Circular dependency detected: {}", cycle.join(" -> ")));
+            return Err(format!(
+                "Circular dependency detected: {}",
+                cycle.join(" -> ")
+            ));
         }
 
         let id = module.id;
@@ -973,7 +1046,11 @@ impl ModuleRegistry {
 
         self.log_event(
             ModuleEventType::Registered,
-            &self.modules.get(&self.by_id.get(&id).unwrap()).unwrap().name,
+            &self
+                .modules
+                .get(&self.by_id.get(&id).unwrap())
+                .unwrap()
+                .name,
             id,
             "Module registered",
         );
@@ -982,11 +1059,16 @@ impl ModuleRegistry {
     }
 
     pub fn unregister(&mut self, name: &str) -> Result<(), String> {
-        let module = self.modules.get(name)
+        let module = self
+            .modules
+            .get(name)
             .ok_or_else(|| format!("Module '{}' not found", name))?;
 
         if module.state.is_active() {
-            return Err(format!("Cannot unregister active module '{}'. Unload first.", name));
+            return Err(format!(
+                "Cannot unregister active module '{}'. Unload first.",
+                name
+            ));
         }
 
         let id = module.id;
@@ -1001,7 +1083,9 @@ impl ModuleRegistry {
     // ── Loading ──
 
     pub fn load(&mut self, name: &str) -> Result<u64, String> {
-        let module = self.modules.get(name)
+        let module = self
+            .modules
+            .get(name)
             .ok_or_else(|| format!("Module '{}' not found", name))?;
 
         if module.state.is_active() {
@@ -1017,11 +1101,15 @@ impl ModuleRegistry {
         let module_id = module.id;
 
         // Get load order (deps first)
-        let load_order = self.dep_graph.load_order(&module_name)
-            .map_err(|e| {
-                self.log_event(ModuleEventType::DependencyMissing, &module_name, module_id, &e);
-                e
-            })?;
+        let load_order = self.dep_graph.load_order(&module_name).map_err(|e| {
+            self.log_event(
+                ModuleEventType::DependencyMissing,
+                &module_name,
+                module_id,
+                &e,
+            );
+            e
+        })?;
 
         // Load all required deps first
         for dep_name in &load_order {
@@ -1034,7 +1122,12 @@ impl ModuleRegistry {
                 }
             } else {
                 let msg = format!("Required dependency '{}' not found", dep_name);
-                self.log_event(ModuleEventType::DependencyMissing, &module_name, module_id, &msg);
+                self.log_event(
+                    ModuleEventType::DependencyMissing,
+                    &module_name,
+                    module_id,
+                    &msg,
+                );
                 return Err(msg);
             }
         }
@@ -1042,7 +1135,12 @@ impl ModuleRegistry {
         // Now load the module itself
         let module = self.modules.get_mut(name).unwrap();
         module.state = ModuleState::Loading;
-        self.log_event(ModuleEventType::LoadStarted, name, module.id, "Init function called");
+        self.log_event(
+            ModuleEventType::LoadStarted,
+            name,
+            module.id,
+            "Init function called",
+        );
 
         // Check for unresolved symbol imports
         let imports = module.imports.clone();
@@ -1057,7 +1155,10 @@ impl ModuleRegistry {
             module.stats.error_count += 1;
             module.stats.last_error = Some(message.clone());
             self.log_event(ModuleEventType::SymbolUnresolved, name, module.id, &message);
-            return Err(format!("Module '{}' has unresolved symbols: {}", name, message));
+            return Err(format!(
+                "Module '{}' has unresolved symbols: {}",
+                name, message
+            ));
         }
 
         // Register exported symbols
@@ -1065,27 +1166,25 @@ impl ModuleRegistry {
         let mid = module.id;
         let mname = module.name.clone();
         for export in exports {
-            self.symbol_table.register(export)
-                .map_err(|e| {
+            self.symbol_table.register(export).map_err(|e| {
+                let module = self.modules.get_mut(name).unwrap();
+                module.state = ModuleState::Failed;
+                module.stats.error_count += 1;
+                module.stats.last_error = Some(e.clone());
+                e
+            })?;
+        }
+
+        // Resolve imports
+        for import in &imports {
+            if self.symbol_table.contains(import) {
+                self.symbol_table.resolve(import).map_err(|e| {
                     let module = self.modules.get_mut(name).unwrap();
                     module.state = ModuleState::Failed;
                     module.stats.error_count += 1;
                     module.stats.last_error = Some(e.clone());
                     e
                 })?;
-        }
-
-        // Resolve imports
-        for import in &imports {
-            if self.symbol_table.contains(import) {
-                self.symbol_table.resolve(import)
-                    .map_err(|e| {
-                        let module = self.modules.get_mut(name).unwrap();
-                        module.state = ModuleState::Failed;
-                        module.stats.error_count += 1;
-                        module.stats.last_error = Some(e.clone());
-                        e
-                    })?;
                 self.log_event(ModuleEventType::SymbolResolved, name, mid, import);
             }
         }
@@ -1105,26 +1204,38 @@ impl ModuleRegistry {
         module.stats.symbols_exported = module.exports.len();
         module.stats.symbols_imported = module.imports.len();
 
-        self.log_event(ModuleEventType::LoadSucceeded, name, module.id, "Module loaded successfully");
+        self.log_event(
+            ModuleEventType::LoadSucceeded,
+            name,
+            module.id,
+            "Module loaded successfully",
+        );
 
         Ok(module.id)
     }
 
     pub fn unload(&mut self, name: &str) -> Result<(), String> {
-        let module = self.modules.get(name)
+        let module = self
+            .modules
+            .get(name)
             .ok_or_else(|| format!("Module '{}' not found", name))?;
 
         if !module.state.is_active() {
-            return Err(format!("Module '{}' is not active (state: {})", name, module.state));
+            return Err(format!(
+                "Module '{}' is not active (state: {})",
+                name, module.state
+            ));
         }
 
         let module_id = module.id;
 
         // Check if other modules depend on this one
         let dependents = self.dep_graph.get_dependents(name);
-        let active_dependents: Vec<String> = dependents.iter()
+        let active_dependents: Vec<String> = dependents
+            .iter()
             .filter(|dep| {
-                self.modules.get(*dep)
+                self.modules
+                    .get(*dep)
                     .map(|m| m.state.is_active())
                     .unwrap_or(false)
             })
@@ -1134,19 +1245,28 @@ impl ModuleRegistry {
         if !active_dependents.is_empty() {
             return Err(format!(
                 "Cannot unload '{}': active dependents: {}",
-                name, active_dependents.join(", ")
+                name,
+                active_dependents.join(", ")
             ));
         }
 
         // Check reference count
         if module.ref_count > 0 {
-            return Err(format!("Cannot unload '{}': {} references still held", name, module.ref_count));
+            return Err(format!(
+                "Cannot unload '{}': {} references still held",
+                name, module.ref_count
+            ));
         }
 
         // Set state to unloading
         let module = self.modules.get_mut(name).unwrap();
         module.state = ModuleState::Unloading;
-        self.log_event(ModuleEventType::UnloadStarted, name, module_id, "Exit function called");
+        self.log_event(
+            ModuleEventType::UnloadStarted,
+            name,
+            module_id,
+            "Exit function called",
+        );
 
         // Unregister exported symbols
         let removed_symbols = self.symbol_table.unregister_module(module_id);
@@ -1170,7 +1290,12 @@ impl ModuleRegistry {
             p.reset();
         }
 
-        self.log_event(ModuleEventType::UnloadSucceeded, name, module_id, "Module unloaded successfully");
+        self.log_event(
+            ModuleEventType::UnloadSucceeded,
+            name,
+            module_id,
+            "Module unloaded successfully",
+        );
 
         Ok(())
     }
@@ -1187,13 +1312,16 @@ impl ModuleRegistry {
     // ── Auto-load ──
 
     pub fn auto_load_all(&mut self) -> Vec<Result<u64, String>> {
-        let auto_modules: Vec<String> = self.modules.iter()
+        let auto_modules: Vec<String> = self
+            .modules
+            .iter()
             .filter(|(_, m)| m.auto_load && !m.state.is_active())
             .map(|(name, _)| name.clone())
             .collect();
 
         // Sort by priority
-        let mut sorted: Vec<(String, ModulePriority)> = auto_modules.into_iter()
+        let mut sorted: Vec<(String, ModulePriority)> = auto_modules
+            .into_iter()
             .map(|name| {
                 let priority = self.modules.get(&name).unwrap().priority;
                 (name, priority)
@@ -1201,7 +1329,8 @@ impl ModuleRegistry {
             .collect();
         sorted.sort_by_key(|(_, p)| *p);
 
-        sorted.into_iter()
+        sorted
+            .into_iter()
             .map(|(name, _)| self.load(&name))
             .collect()
     }
@@ -1209,7 +1338,9 @@ impl ModuleRegistry {
     // ── Reference management ──
 
     pub fn acquire_ref(&mut self, name: &str) -> Result<u64, String> {
-        let module = self.modules.get_mut(name)
+        let module = self
+            .modules
+            .get_mut(name)
             .ok_or_else(|| format!("Module '{}' not found", name))?;
 
         if !module.state.is_active() {
@@ -1217,25 +1348,34 @@ impl ModuleRegistry {
         }
 
         let new_count = module.add_ref();
-        self.log_event(ModuleEventType::RefAcquired, name, module.id,
-            &format!("Ref acquired (count={})", new_count));
+        self.log_event(
+            ModuleEventType::RefAcquired,
+            name,
+            module.id,
+            &format!("Ref acquired (count={})", new_count),
+        );
         Ok(new_count)
     }
 
     pub fn release_ref(&mut self, name: &str) -> Result<u64, String> {
-        let module = self.modules.get_mut(name)
+        let module = self
+            .modules
+            .get_mut(name)
             .ok_or_else(|| format!("Module '{}' not found", name))?;
 
-        let new_count = module.release_ref()
-            .map_err(|e| {
-                let module = self.modules.get_mut(name).unwrap();
-                module.stats.error_count += 1;
-                module.stats.last_error = Some(e.clone());
-                e
-            })?;
+        let new_count = module.release_ref().map_err(|e| {
+            let module = self.modules.get_mut(name).unwrap();
+            module.stats.error_count += 1;
+            module.stats.last_error = Some(e.clone());
+            e
+        })?;
 
-        self.log_event(ModuleEventType::RefReleased, name, module.id,
-            &format!("Ref released (count={})", new_count));
+        self.log_event(
+            ModuleEventType::RefReleased,
+            name,
+            module.id,
+            &format!("Ref released (count={})", new_count),
+        );
         Ok(new_count)
     }
 
@@ -1277,11 +1417,17 @@ impl ModuleRegistry {
     }
 
     pub fn active_count(&self) -> usize {
-        self.modules.values().filter(|m| m.state.is_active()).count()
+        self.modules
+            .values()
+            .filter(|m| m.state.is_active())
+            .count()
     }
 
     pub fn loaded_count(&self) -> usize {
-        self.modules.values().filter(|m| m.state.is_active() || m.state == ModuleState::Unloaded).count()
+        self.modules
+            .values()
+            .filter(|m| m.state.is_active() || m.state == ModuleState::Unloaded)
+            .count()
     }
 
     pub fn is_tainted(&self) -> bool {
@@ -1295,7 +1441,9 @@ impl ModuleRegistry {
     }
 
     pub fn list_active(&self) -> Vec<&ModuleDescriptor> {
-        let mut mods: Vec<&ModuleDescriptor> = self.modules.values()
+        let mut mods: Vec<&ModuleDescriptor> = self
+            .modules
+            .values()
             .filter(|m| m.state.is_active())
             .collect();
         mods.sort_by(|a, b| a.load_order.cmp(&b.load_order));
@@ -1303,19 +1451,20 @@ impl ModuleRegistry {
     }
 
     pub fn list_by_priority(&self, priority: ModulePriority) -> Vec<&ModuleDescriptor> {
-        self.modules.values()
+        self.modules
+            .values()
             .filter(|m| m.priority == priority)
             .collect()
     }
 
     pub fn list_by_state(&self, state: ModuleState) -> Vec<&ModuleDescriptor> {
-        self.modules.values()
-            .filter(|m| m.state == state)
-            .collect()
+        self.modules.values().filter(|m| m.state == state).collect()
     }
 
     pub fn set_param(&mut self, module: &str, param: &str, value: &str) -> Result<(), String> {
-        let mod_desc = self.modules.get_mut(module)
+        let mod_desc = self
+            .modules
+            .get_mut(module)
             .ok_or_else(|| format!("Module '{}' not found", module))?;
 
         if !mod_desc.state.is_active() {
@@ -1323,23 +1472,34 @@ impl ModuleRegistry {
         }
 
         mod_desc.set_param(param, value)?;
-        self.log_event(ModuleEventType::ParamChanged, module, mod_desc.id,
-            &format!("Parameter '{}' set to '{}'", param, value));
+        self.log_event(
+            ModuleEventType::ParamChanged,
+            module,
+            mod_desc.id,
+            &format!("Parameter '{}' set to '{}'", param, value),
+        );
         Ok(())
     }
 
     pub fn get_param(&self, module: &str, param: &str) -> Result<&str, String> {
-        let mod_desc = self.modules.get(module)
+        let mod_desc = self
+            .modules
+            .get(module)
             .ok_or_else(|| format!("Module '{}' not found", module))?;
 
-        let p = mod_desc.get_param(param)
+        let p = mod_desc
+            .get_param(param)
             .ok_or_else(|| format!("Parameter '{}' not found", param))?;
 
         Ok(&p.current_value)
     }
 
-    pub fn dependency_graph(&self) -> &DependencyGraph { &self.dep_graph }
-    pub fn symbol_table(&self) -> &SymbolTable { &self.symbol_table }
+    pub fn dependency_graph(&self) -> &DependencyGraph {
+        &self.dep_graph
+    }
+    pub fn symbol_table(&self) -> &SymbolTable {
+        &self.symbol_table
+    }
 
     // ── Reports ──
 
@@ -1349,14 +1509,21 @@ impl ModuleRegistry {
         r.push_str(&format!("Total modules: {}\n", self.module_count()));
         r.push_str(&format!("Active: {}\n", self.active_count()));
         r.push_str(&format!("Symbols: {}\n", self.symbol_count()));
-        r.push_str(&format!("Kernel tainted: {}\n", if self.is_tainted() { "yes" } else { "no" }));
+        r.push_str(&format!(
+            "Kernel tainted: {}\n",
+            if self.is_tainted() { "yes" } else { "no" }
+        ));
         r.push_str(&format!("Events: {}\n\n", self.event_count()));
 
         r.push_str("--- Active Modules (by load order) ---\n");
         for m in self.list_active() {
             r.push_str(&format!(
                 "  [{:>3}] {:20} v{:10} [{}] refs={}\n",
-                m.load_order, m.name, m.version, m.priority.name(), m.ref_count
+                m.load_order,
+                m.name,
+                m.version,
+                m.priority.name(),
+                m.ref_count
             ));
         }
 
@@ -1364,7 +1531,10 @@ impl ModuleRegistry {
         for m in self.list_modules() {
             r.push_str(&format!(
                 "  {:20} v{:10} {:10} exports={}\n",
-                m.name, m.version, m.state, m.exports.len()
+                m.name,
+                m.version,
+                m.state,
+                m.exports.len()
             ));
         }
 
@@ -1388,8 +1558,22 @@ impl ModuleRegistry {
             let deps = self.dep_graph.get_dependencies(name);
             let dependents = self.dep_graph.get_dependents(name);
             r.push_str(&format!("  {}:\n", name));
-            r.push_str(&format!("    deps:       {}\n", if deps.is_empty() { "(none)".to_string() } else { deps.join(", ") }));
-            r.push_str(&format!("    dependents: {}\n", if dependents.is_empty() { "(none)".to_string() } else { dependents.join(", ") }));
+            r.push_str(&format!(
+                "    deps:       {}\n",
+                if deps.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    deps.join(", ")
+                }
+            ));
+            r.push_str(&format!(
+                "    dependents: {}\n",
+                if dependents.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    dependents.join(", ")
+                }
+            ));
         }
 
         r
@@ -1408,7 +1592,10 @@ impl ModuleRegistry {
         for s in symbols {
             r.push_str(&format!(
                 "{:35} {:19} {:4} {}\n",
-                s.name, s.module_name, s.symbol_type.name(), s.ref_count
+                s.name,
+                s.module_name,
+                s.symbol_type.name(),
+                s.ref_count
             ));
         }
 
@@ -1423,7 +1610,10 @@ impl ModuleRegistry {
         for e in events.iter().rev() {
             r.push_str(&format!(
                 "[{:4}] {:20} {:20} {}\n",
-                e.event_id, e.module_name, e.event_type.name(), e.message
+                e.event_id,
+                e.module_name,
+                e.event_type.name(),
+                e.message
             ));
         }
 
@@ -1487,12 +1677,22 @@ impl ModuleBuilder {
     }
 
     pub fn param(mut self, name: &str, ptype: ParamType, default: &str, desc: &str) -> Self {
-        self.module.params.push(ModuleParam::new(name, ptype, default, desc));
+        self.module
+            .params
+            .push(ModuleParam::new(name, ptype, default, desc));
         self
     }
 
-    pub fn readonly_param(mut self, name: &str, ptype: ParamType, default: &str, desc: &str) -> Self {
-        self.module.params.push(ModuleParam::readonly(name, ptype, default, desc));
+    pub fn readonly_param(
+        mut self,
+        name: &str,
+        ptype: ParamType,
+        default: &str,
+        desc: &str,
+    ) -> Self {
+        self.module
+            .params
+            .push(ModuleParam::readonly(name, ptype, default, desc));
         self
     }
 
@@ -1534,10 +1734,20 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .provides(&["kmalloc", "kfree"])
             .export("kmalloc", SymbolType::Function)
             .export("kfree", SymbolType::Function)
-            .param("slab_size", ParamType::Uint, "4096", "Default slab size in bytes")
-            .param("debug", ParamType::Bool, "false", "Enable debug allocations")
+            .param(
+                "slab_size",
+                ParamType::Uint,
+                "4096",
+                "Default slab size in bytes",
+            )
+            .param(
+                "debug",
+                ParamType::Bool,
+                "false",
+                "Enable debug allocations",
+            )
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Core: Scheduler
@@ -1551,10 +1761,20 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .provides(&["schedule", "wake_up"])
             .export("schedule", SymbolType::Function)
             .export("wake_up", SymbolType::Function)
-            .param("timeslice_us", ParamType::Uint, "1000", "Scheduler timeslice in microseconds")
-            .param("min_granularity", ParamType::Uint, "100", "Minimum granularity")
+            .param(
+                "timeslice_us",
+                ParamType::Uint,
+                "1000",
+                "Scheduler timeslice in microseconds",
+            )
+            .param(
+                "min_granularity",
+                ParamType::Uint,
+                "100",
+                "Minimum granularity",
+            )
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Driver: Block Device
@@ -1568,10 +1788,20 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .provides(&["block_read", "block_write"])
             .export("block_read", SymbolType::Function)
             .export("block_write", SymbolType::Function)
-            .param("cache_size", ParamType::Uint, "256", "Block cache size in blocks")
-            .param("writeback", ParamType::Bool, "false", "Enable writeback caching")
+            .param(
+                "cache_size",
+                ParamType::Uint,
+                "256",
+                "Block cache size in blocks",
+            )
+            .param(
+                "writeback",
+                ParamType::Bool,
+                "false",
+                "Enable writeback caching",
+            )
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Driver: Network Device
@@ -1588,7 +1818,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .param("mtu", ParamType::Uint, "1500", "Maximum transmission unit")
             .param("rx_queue_len", ParamType::Uint, "1000", "RX queue length")
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Filesystem: ATCFS
@@ -1603,10 +1833,15 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .export("atcfs_mount", SymbolType::Function)
             .export("atcfs_open", SymbolType::Function)
             .export("atcfs_read", SymbolType::Function)
-            .param("block_size", ParamType::Uint, "4096", "Filesystem block size")
+            .param(
+                "block_size",
+                ParamType::Uint,
+                "4096",
+                "Filesystem block size",
+            )
             .param("journal", ParamType::Bool, "true", "Enable journaling")
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Network: TCP/IP Stack
@@ -1622,10 +1857,20 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .export("tcp_send", SymbolType::Function)
             .export("udp_send", SymbolType::Function)
             .param("tcp_window", ParamType::Uint, "65535", "TCP window size")
-            .param("tcp_keepalive", ParamType::Bool, "true", "Enable TCP keepalive")
-            .param("max_connections", ParamType::Uint, "10000", "Max concurrent connections")
+            .param(
+                "tcp_keepalive",
+                ParamType::Bool,
+                "true",
+                "Enable TCP keepalive",
+            )
+            .param(
+                "max_connections",
+                ParamType::Uint,
+                "10000",
+                "Max concurrent connections",
+            )
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Security: Capability System
@@ -1640,10 +1885,20 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .export("cap_check", SymbolType::Function)
             .export("cap_grant", SymbolType::Function)
             .export("cap_revoke", SymbolType::Function)
-            .param("strict_mode", ParamType::Bool, "true", "Enforce strict capability checks")
-            .param("audit", ParamType::Bool, "true", "Enable capability audit log")
+            .param(
+                "strict_mode",
+                ParamType::Bool,
+                "true",
+                "Enforce strict capability checks",
+            )
+            .param(
+                "audit",
+                ParamType::Bool,
+                "true",
+                "Enable capability audit log",
+            )
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Security: Audit Module
@@ -1658,10 +1913,15 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .provides(&["audit_log", "audit_query"])
             .export("audit_log", SymbolType::Function)
             .export("audit_query", SymbolType::Function)
-            .param("log_size", ParamType::Uint, "10000", "Max audit log entries")
+            .param(
+                "log_size",
+                ParamType::Uint,
+                "10000",
+                "Max audit log entries",
+            )
             .param("log_syscalls", ParamType::Bool, "true", "Log system calls")
             .auto_load()
-            .build()
+            .build(),
     );
 
     // Utility: Kernel Tracing
@@ -1675,9 +1935,14 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .provides(&["trace_enable", "trace_disable"])
             .export("trace_enable", SymbolType::Function)
             .export("trace_disable", SymbolType::Function)
-            .param("buffer_size", ParamType::Uint, "4096", "Trace buffer size in events")
+            .param(
+                "buffer_size",
+                ParamType::Uint,
+                "4096",
+                "Trace buffer size in events",
+            )
             .param("filter", ParamType::String, "*", "Trace filter pattern")
-            .build()
+            .build(),
     );
 
     // Utility: Container Runtime
@@ -1691,9 +1956,19 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .provides(&["container_create", "container_destroy"])
             .export("container_create", SymbolType::Function)
             .export("container_destroy", SymbolType::Function)
-            .param("max_containers", ParamType::Uint, "100", "Maximum containers")
-            .param("namespace_types", ParamType::List, "pid,mount,net,ipc,uts", "Namespace types to isolate")
-            .build()
+            .param(
+                "max_containers",
+                ParamType::Uint,
+                "100",
+                "Maximum containers",
+            )
+            .param(
+                "namespace_types",
+                ParamType::List,
+                "pid,mount,net,ipc,uts",
+                "Namespace types to isolate",
+            )
+            .build(),
     );
 
     modules
@@ -1963,8 +2238,18 @@ mod tests {
     #[test]
     fn test_descriptor_params() {
         let mut m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_param(ModuleParam::new("debug", ParamType::Bool, "false", "Debug mode"))
-            .with_param(ModuleParam::new("size", ParamType::Uint, "1024", "Buffer size"));
+            .with_param(ModuleParam::new(
+                "debug",
+                ParamType::Bool,
+                "false",
+                "Debug mode",
+            ))
+            .with_param(ModuleParam::new(
+                "size",
+                ParamType::Uint,
+                "1024",
+                "Buffer size",
+            ));
 
         assert!(m.set_param("debug", "true").is_ok());
         assert_eq!(m.get_param("debug").unwrap().current_value, "true");
@@ -1978,8 +2263,12 @@ mod tests {
 
     #[test]
     fn test_descriptor_reset_params() {
-        let mut m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_param(ModuleParam::new("size", ParamType::Uint, "1024", "Size"));
+        let mut m = ModuleDescriptor::new("testmod", "1.0.0").with_param(ModuleParam::new(
+            "size",
+            ParamType::Uint,
+            "1024",
+            "Size",
+        ));
 
         m.set_param("size", "8192").unwrap();
         assert!(!m.get_param("size").unwrap().is_default());
@@ -2185,9 +2474,12 @@ mod tests {
     #[test]
     fn test_symbol_table_unregister_module() {
         let mut st = SymbolTable::new();
-        st.register(ExportedSymbol::new("fn1", 1, "mod1", SymbolType::Function)).unwrap();
-        st.register(ExportedSymbol::new("fn2", 1, "mod1", SymbolType::Function)).unwrap();
-        st.register(ExportedSymbol::new("fn3", 2, "mod2", SymbolType::Function)).unwrap();
+        st.register(ExportedSymbol::new("fn1", 1, "mod1", SymbolType::Function))
+            .unwrap();
+        st.register(ExportedSymbol::new("fn2", 1, "mod1", SymbolType::Function))
+            .unwrap();
+        st.register(ExportedSymbol::new("fn3", 2, "mod2", SymbolType::Function))
+            .unwrap();
         assert_eq!(st.symbol_count(), 3);
 
         let removed = st.unregister_module(1);
@@ -2201,10 +2493,26 @@ mod tests {
     #[test]
     fn test_symbol_table_unresolved_imports() {
         let mut st = SymbolTable::new();
-        st.register(ExportedSymbol::new("kmalloc", 1, "kalloc", SymbolType::Function)).unwrap();
-        st.register(ExportedSymbol::new("kfree", 1, "kalloc", SymbolType::Function)).unwrap();
+        st.register(ExportedSymbol::new(
+            "kmalloc",
+            1,
+            "kalloc",
+            SymbolType::Function,
+        ))
+        .unwrap();
+        st.register(ExportedSymbol::new(
+            "kfree",
+            1,
+            "kalloc",
+            SymbolType::Function,
+        ))
+        .unwrap();
 
-        let imports = vec!["kmalloc".to_string(), "kfree".to_string(), "missing".to_string()];
+        let imports = vec![
+            "kmalloc".to_string(),
+            "kfree".to_string(),
+            "missing".to_string(),
+        ];
         let unresolved = st.unresolved_imports(&imports);
         assert_eq!(unresolved, vec!["missing"]);
     }
@@ -2212,9 +2520,12 @@ mod tests {
     #[test]
     fn test_symbol_table_module_symbols() {
         let mut st = SymbolTable::new();
-        st.register(ExportedSymbol::new("fn1", 1, "mod1", SymbolType::Function)).unwrap();
-        st.register(ExportedSymbol::new("fn2", 1, "mod1", SymbolType::Function)).unwrap();
-        st.register(ExportedSymbol::new("fn3", 2, "mod2", SymbolType::Function)).unwrap();
+        st.register(ExportedSymbol::new("fn1", 1, "mod1", SymbolType::Function))
+            .unwrap();
+        st.register(ExportedSymbol::new("fn2", 1, "mod1", SymbolType::Function))
+            .unwrap();
+        st.register(ExportedSymbol::new("fn3", 2, "mod2", SymbolType::Function))
+            .unwrap();
 
         let mod1_syms = st.module_symbols(1);
         assert_eq!(mod1_syms.len(), 2);
@@ -2227,8 +2538,7 @@ mod tests {
     #[test]
     fn test_registry_register() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_description("Test module");
+        let m = ModuleDescriptor::new("testmod", "1.0.0").with_description("Test module");
         let id = reg.register(m).unwrap();
         assert!(id > 0);
         assert_eq!(reg.module_count(), 1);
@@ -2308,8 +2618,7 @@ mod tests {
     fn test_registry_load_with_deps() {
         let mut reg = ModuleRegistry::new();
         let dep = ModuleDescriptor::new("dep_mod", "1.0.0");
-        let main = ModuleDescriptor::new("main_mod", "1.0.0")
-            .with_dependencies(&["dep_mod"]);
+        let main = ModuleDescriptor::new("main_mod", "1.0.0").with_dependencies(&["dep_mod"]);
         reg.register(dep).unwrap();
         reg.register(main).unwrap();
 
@@ -2322,8 +2631,7 @@ mod tests {
     #[test]
     fn test_registry_load_missing_dep() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_dependencies(&["nonexistent"]);
+        let m = ModuleDescriptor::new("testmod", "1.0.0").with_dependencies(&["nonexistent"]);
         reg.register(m).unwrap();
         assert!(reg.load("testmod").is_err());
     }
@@ -2454,8 +2762,8 @@ mod tests {
     #[test]
     fn test_registry_symbol_unregister_on_unload() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("kalloc", "1.0.0")
-            .with_export("kmalloc", SymbolType::Function);
+        let m =
+            ModuleDescriptor::new("kalloc", "1.0.0").with_export("kmalloc", SymbolType::Function);
         reg.register(m).unwrap();
         reg.load("kalloc").unwrap();
         assert_eq!(reg.symbol_count(), 1);
@@ -2468,10 +2776,10 @@ mod tests {
     #[test]
     fn test_registry_symbol_conflict() {
         let mut reg = ModuleRegistry::new();
-        let m1 = ModuleDescriptor::new("mod1", "1.0.0")
-            .with_export("shared_fn", SymbolType::Function);
-        let m2 = ModuleDescriptor::new("mod2", "1.0.0")
-            .with_export("shared_fn", SymbolType::Function);
+        let m1 =
+            ModuleDescriptor::new("mod1", "1.0.0").with_export("shared_fn", SymbolType::Function);
+        let m2 =
+            ModuleDescriptor::new("mod2", "1.0.0").with_export("shared_fn", SymbolType::Function);
         reg.register(m1).unwrap();
         reg.register(m2).unwrap();
         reg.load("mod1").unwrap();
@@ -2535,8 +2843,7 @@ mod tests {
     fn test_registry_conflict_detection() {
         let mut reg = ModuleRegistry::new();
         let m1 = ModuleDescriptor::new("mod1", "1.0.0");
-        let m2 = ModuleDescriptor::new("mod2", "1.0.0")
-            .with_conflicts(&["mod1"]);
+        let m2 = ModuleDescriptor::new("mod2", "1.0.0").with_conflicts(&["mod1"]);
         reg.register(m1).unwrap();
         reg.register(m2).unwrap();
 
@@ -2550,8 +2857,12 @@ mod tests {
     #[test]
     fn test_registry_set_param() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_param(ModuleParam::new("debug", ParamType::Bool, "false", "Debug"));
+        let m = ModuleDescriptor::new("testmod", "1.0.0").with_param(ModuleParam::new(
+            "debug",
+            ParamType::Bool,
+            "false",
+            "Debug",
+        ));
         reg.register(m).unwrap();
         reg.load("testmod").unwrap();
 
@@ -2562,8 +2873,12 @@ mod tests {
     #[test]
     fn test_registry_set_param_not_active() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_param(ModuleParam::new("debug", ParamType::Bool, "false", "Debug"));
+        let m = ModuleDescriptor::new("testmod", "1.0.0").with_param(ModuleParam::new(
+            "debug",
+            ParamType::Bool,
+            "false",
+            "Debug",
+        ));
         reg.register(m).unwrap();
         assert!(reg.set_param("testmod", "debug", "true").is_err());
     }
@@ -2573,8 +2888,7 @@ mod tests {
     #[test]
     fn test_registry_proprietary_taints() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("prop_mod", "1.0.0")
-            .with_license(ModuleLicense::Proprietary);
+        let m = ModuleDescriptor::new("prop_mod", "1.0.0").with_license(ModuleLicense::Proprietary);
         reg.register(m).unwrap();
         reg.load("prop_mod").unwrap();
         assert!(reg.is_tainted());
@@ -2583,8 +2897,7 @@ mod tests {
     #[test]
     fn test_registry_gpl_no_taint() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("gpl_mod", "1.0.0")
-            .with_license(ModuleLicense::Gpl);
+        let m = ModuleDescriptor::new("gpl_mod", "1.0.0").with_license(ModuleLicense::Gpl);
         reg.register(m).unwrap();
         reg.load("gpl_mod").unwrap();
         assert!(!reg.is_tainted());
@@ -2631,12 +2944,9 @@ mod tests {
     #[test]
     fn test_registry_list_by_priority() {
         let mut reg = ModuleRegistry::new();
-        let a = ModuleDescriptor::new("mod_a", "1.0.0")
-            .with_priority(ModulePriority::Core);
-        let b = ModuleDescriptor::new("mod_b", "1.0.0")
-            .with_priority(ModulePriority::Driver);
-        let c = ModuleDescriptor::new("mod_c", "1.0.0")
-            .with_priority(ModulePriority::Core);
+        let a = ModuleDescriptor::new("mod_a", "1.0.0").with_priority(ModulePriority::Core);
+        let b = ModuleDescriptor::new("mod_b", "1.0.0").with_priority(ModulePriority::Driver);
+        let c = ModuleDescriptor::new("mod_c", "1.0.0").with_priority(ModulePriority::Core);
         reg.register(a).unwrap();
         reg.register(b).unwrap();
         reg.register(c).unwrap();
@@ -2699,8 +3009,7 @@ mod tests {
     #[test]
     fn test_registry_report() {
         let mut reg = ModuleRegistry::new();
-        let m = ModuleDescriptor::new("testmod", "1.0.0")
-            .with_description("Test module");
+        let m = ModuleDescriptor::new("testmod", "1.0.0").with_description("Test module");
         reg.register(m).unwrap();
         reg.load("testmod").unwrap();
         let report = reg.report();
@@ -2820,13 +3129,12 @@ mod tests {
         assert_eq!(module.exports.len(), 1);
         assert!(module.imports.is_empty());
 
-        let module = ModuleDescriptor::new("exporter", "1.0.0")
-            .with_export(ExportedSymbol::new(
-                "owned_symbol",
-                1,
-                "exporter",
-                SymbolType::Function,
-            ));
+        let module = ModuleDescriptor::new("exporter", "1.0.0").with_export(ExportedSymbol::new(
+            "owned_symbol",
+            1,
+            "exporter",
+            SymbolType::Function,
+        ));
         assert_eq!(module.exports.len(), 1);
         assert!(module.imports.is_empty());
     }
@@ -2966,9 +3274,17 @@ mod tests {
         // Register
         let m = ModuleDescriptor::new("lifecycle_mod", "1.0.0")
             .with_export("init_fn", SymbolType::Function)
-            .with_param(ModuleParam::new("mode", ParamType::String, "normal", "Operation mode"));
+            .with_param(ModuleParam::new(
+                "mode",
+                ParamType::String,
+                "normal",
+                "Operation mode",
+            ));
         reg.register(m).unwrap();
-        assert_eq!(reg.get("lifecycle_mod").unwrap().state, ModuleState::Registered);
+        assert_eq!(
+            reg.get("lifecycle_mod").unwrap().state,
+            ModuleState::Registered
+        );
 
         // Load
         reg.load("lifecycle_mod").unwrap();
@@ -2987,7 +3303,10 @@ mod tests {
 
         // Unload
         reg.unload("lifecycle_mod").unwrap();
-        assert_eq!(reg.get("lifecycle_mod").unwrap().state, ModuleState::Unloaded);
+        assert_eq!(
+            reg.get("lifecycle_mod").unwrap().state,
+            ModuleState::Unloaded
+        );
 
         // Params should be reset
         assert_eq!(reg.get_param("lifecycle_mod", "mode").unwrap(), "normal");
@@ -3024,8 +3343,8 @@ mod tests {
     #[test]
     fn test_unload_order_validation() {
         let mut reg = ModuleRegistry::new();
-        let a = ModuleDescriptor::new("base_mod", "1.0.0")
-            .with_export("base_fn", SymbolType::Function);
+        let a =
+            ModuleDescriptor::new("base_mod", "1.0.0").with_export("base_fn", SymbolType::Function);
         let b = ModuleDescriptor::new("user_mod", "1.0.0")
             .with_dependencies(&["base_mod"])
             .import_symbol("base_fn");
