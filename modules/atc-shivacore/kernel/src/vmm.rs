@@ -85,19 +85,43 @@ pub struct MappingFlags {
 
 impl MappingFlags {
     pub const fn user_read_only() -> Self {
-        Self { writable: false, user_accessible: true, executable: false, global: false, cache_disable: false }
+        Self {
+            writable: false,
+            user_accessible: true,
+            executable: false,
+            global: false,
+            cache_disable: false,
+        }
     }
 
     pub const fn user_read_write() -> Self {
-        Self { writable: true, user_accessible: true, executable: false, global: false, cache_disable: false }
+        Self {
+            writable: true,
+            user_accessible: true,
+            executable: false,
+            global: false,
+            cache_disable: false,
+        }
     }
 
     pub const fn user_execute_read() -> Self {
-        Self { writable: false, user_accessible: true, executable: true, global: false, cache_disable: false }
+        Self {
+            writable: false,
+            user_accessible: true,
+            executable: true,
+            global: false,
+            cache_disable: false,
+        }
     }
 
     pub const fn kernel_rw_nx() -> Self {
-        Self { writable: true, user_accessible: false, executable: false, global: false, cache_disable: false }
+        Self {
+            writable: true,
+            user_accessible: false,
+            executable: false,
+            global: false,
+            cache_disable: false,
+        }
     }
 
     pub const fn validate(self) -> Result<(), VmmError> {
@@ -218,15 +242,15 @@ pub struct BootstrapMapping {
 }
 
 impl BootstrapMapping {
-    pub const fn new(
-        phys_base: u64,
-        phys_end: u64,
-        virt_offset: u64,
-    ) -> Result<Self, VmmError> {
+    pub const fn new(phys_base: u64, phys_end: u64, virt_offset: u64) -> Result<Self, VmmError> {
         if phys_base >= phys_end || phys_base & PAGE_MASK != 0 || phys_end & PAGE_MASK != 0 {
             return Err(VmmError::InvalidPhysicalAddress);
         }
-        Ok(Self { phys_base, phys_end, virt_offset })
+        Ok(Self {
+            phys_base,
+            phys_end,
+            virt_offset,
+        })
     }
 
     pub const fn translate(&self, phys: u64, size: u64) -> Result<u64, VmmError> {
@@ -304,7 +328,11 @@ mod tests {
     #[test]
     fn user_mapping_inside_exact_interval_is_allowed() {
         assert!(validate_mapping_target(USER_SPACE_BASE, MappingFlags::user_read_only()).is_ok());
-        assert!(validate_mapping_target(USER_SPACE_TOP_EXCLUSIVE - PAGE_SIZE, MappingFlags::user_read_only()).is_ok());
+        assert!(validate_mapping_target(
+            USER_SPACE_TOP_EXCLUSIVE - PAGE_SIZE,
+            MappingFlags::user_read_only()
+        )
+        .is_ok());
     }
 
     #[test]
@@ -322,8 +350,14 @@ mod tests {
     #[test]
     fn physical_baseline_is_48_bit() {
         assert!(PhysFrame::new(MAX_PHYS_ADDR & !PAGE_MASK).is_ok());
-        assert_eq!(PhysFrame::new(1 << 48), Err(VmmError::InvalidPhysicalAddress));
-        assert_eq!(PhysFrame::new(0x1001), Err(VmmError::InvalidPhysicalAddress));
+        assert_eq!(
+            PhysFrame::new(1 << 48),
+            Err(VmmError::InvalidPhysicalAddress)
+        );
+        assert_eq!(
+            PhysFrame::new(0x1001),
+            Err(VmmError::InvalidPhysicalAddress)
+        );
     }
 
     #[test]
@@ -363,7 +397,10 @@ mod tests {
     #[test]
     fn bootstrap_translation_is_contained() {
         let mapping = BootstrapMapping::new(0x1000, 0x5000, HHDM_BASE).unwrap();
-        assert_eq!(mapping.translate(0x2000, 0x1000).unwrap(), HHDM_BASE + 0x2000);
+        assert_eq!(
+            mapping.translate(0x2000, 0x1000).unwrap(),
+            HHDM_BASE + 0x2000
+        );
         assert!(mapping.translate(0x4000, 0x1000).is_ok());
         assert_eq!(
             mapping.translate(0x4000, 0x1001),

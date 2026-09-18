@@ -7,15 +7,18 @@
 // Baut auf K13 (TCP/IP) und K6 (DID) auf.
 // ─────────────────────────────────────────────────────────────────────────
 
-use alloc::vec;
 use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
+use alloc::vec;
+use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::tcpip::{Ipv4Packet, UdpPacket, TcpSegment, SocketManager, SocketId, TcpState, IP_PROTO_UDP, IP_PROTO_TCP};
-use crate::net::{Ipv4Address, MacAddress, NetworkStack, NetworkError, ETH_TYPE_IPV4};
+use crate::net::{Ipv4Address, MacAddress, NetworkError, NetworkStack, ETH_TYPE_IPV4};
+use crate::tcpip::{
+    Ipv4Packet, SocketId, SocketManager, TcpSegment, TcpState, UdpPacket, IP_PROTO_TCP,
+    IP_PROTO_UDP,
+};
 
 // ─── Chain-ID ───────────────────────────────────────────────────────────────
 
@@ -66,7 +69,12 @@ pub struct P2pMessage {
 }
 
 impl P2pMessage {
-    pub fn new(msg_type: MessageType, sender_did: String, timestamp: u64, payload: Vec<u8>) -> Self {
+    pub fn new(
+        msg_type: MessageType,
+        sender_did: String,
+        timestamp: u64,
+        payload: Vec<u8>,
+    ) -> Self {
         P2pMessage {
             msg_type,
             chain_id: CHAIN_ID,
@@ -90,19 +98,38 @@ impl P2pMessage {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, P2pError> {
-        if data.len() < 15 { return Err(P2pError::MessageTooShort); }
-        let msg_type = MessageType::from_u8(data[0]).ok_or(P2pError::UnknownMessageType(data[0]))?;
+        if data.len() < 15 {
+            return Err(P2pError::MessageTooShort);
+        }
+        let msg_type =
+            MessageType::from_u8(data[0]).ok_or(P2pError::UnknownMessageType(data[0]))?;
         let chain_id = u32::from_be_bytes([data[1], data[2], data[3], data[4]]);
-        if chain_id != CHAIN_ID { return Err(P2pError::WrongChainId(chain_id)); }
+        if chain_id != CHAIN_ID {
+            return Err(P2pError::WrongChainId(chain_id));
+        }
         let did_len = u16::from_be_bytes([data[5], data[6]]) as usize;
-        if data.len() < 7 + did_len + 8 { return Err(P2pError::MessageTooShort); }
+        if data.len() < 7 + did_len + 8 {
+            return Err(P2pError::MessageTooShort);
+        }
         let sender_did = String::from_utf8_lossy(&data[7..7 + did_len]).to_string();
         let timestamp = u64::from_be_bytes([
-            data[7 + did_len], data[8 + did_len], data[9 + did_len], data[10 + did_len],
-            data[11 + did_len], data[12 + did_len], data[13 + did_len], data[14 + did_len],
+            data[7 + did_len],
+            data[8 + did_len],
+            data[9 + did_len],
+            data[10 + did_len],
+            data[11 + did_len],
+            data[12 + did_len],
+            data[13 + did_len],
+            data[14 + did_len],
         ]);
         let payload = data[15 + did_len..].to_vec();
-        Ok(P2pMessage { msg_type, chain_id, sender_did, timestamp, payload })
+        Ok(P2pMessage {
+            msg_type,
+            chain_id,
+            sender_did,
+            timestamp,
+            payload,
+        })
     }
 }
 
@@ -150,10 +177,16 @@ pub struct Peer {
 impl Peer {
     pub fn new(id: u64, ip: Ipv4Address, port: u16) -> Self {
         Peer {
-            id, ip, port, did: None,
+            id,
+            ip,
+            port,
+            did: None,
             status: PeerStatus::Disconnected,
-            last_seen: 0, bytes_sent: 0, bytes_recv: 0,
-            messages_sent: 0, messages_recv: 0,
+            last_seen: 0,
+            bytes_sent: 0,
+            bytes_recv: 0,
+            messages_sent: 0,
+            messages_recv: 0,
         }
     }
 }
@@ -196,7 +229,9 @@ impl PeerTable {
 
         let id = {
             let mut next = self.next_id.lock();
-            let v = *next; *next += 1; v
+            let v = *next;
+            *next += 1;
+            v
         };
 
         let peer = Peer::new(id, ip, port);
@@ -221,7 +256,9 @@ impl PeerTable {
 
     pub fn find_by_addr(&self, ip: Ipv4Address, port: u16) -> Option<Peer> {
         let by_ip = self.by_ip_port.lock();
-        by_ip.get(&(ip, port)).and_then(|&id| self.peers.lock().get(&id).cloned())
+        by_ip
+            .get(&(ip, port))
+            .and_then(|&id| self.peers.lock().get(&id).cloned())
     }
 
     pub fn set_status(&self, id: u64, status: PeerStatus) {
@@ -261,14 +298,20 @@ impl PeerTable {
     }
 
     pub fn connected_count(&self) -> usize {
-        self.peers.lock().values().filter(|p| p.status == PeerStatus::Connected).count()
+        self.peers
+            .lock()
+            .values()
+            .filter(|p| p.status == PeerStatus::Connected)
+            .count()
     }
 
     pub fn list_peers(&self) -> Vec<Peer> {
         self.peers.lock().values().cloned().collect()
     }
 
-    pub fn our_did(&self) -> &str { &self.our_did }
+    pub fn our_did(&self) -> &str {
+        &self.our_did
+    }
 }
 
 // ─── Gossip-Protocol ────────────────────────────────────────────────────────
@@ -314,7 +357,12 @@ impl GossipProtocol {
     }
 
     /// Verarbeitet eine empfangene Nachricht von einem Peer.
-    pub fn handle_message(&self, peer_id: u64, data: &[u8], timestamp: u64) -> Result<(), P2pError> {
+    pub fn handle_message(
+        &self,
+        peer_id: u64,
+        data: &[u8],
+        timestamp: u64,
+    ) -> Result<(), P2pError> {
         let msg = P2pMessage::from_bytes(data)?;
         self.peers.record_recv(peer_id, data.len() as u64);
         self.peers.touch(peer_id, timestamp);
@@ -350,7 +398,12 @@ impl GossipProtocol {
 
     /// Erzeugt einen Ping für einen Peer.
     pub fn make_ping(&self, timestamp: u64) -> P2pMessage {
-        P2pMessage::new(MessageType::Ping, self.peers.our_did().to_string(), timestamp, vec![])
+        P2pMessage::new(
+            MessageType::Ping,
+            self.peers.our_did().to_string(),
+            timestamp,
+            vec![],
+        )
     }
 
     /// Erzeugt einen Pong (Antwort auf Ping).
@@ -368,7 +421,12 @@ impl GossipProtocol {
         let mut payload = Vec::new();
         payload.extend_from_slice(&listen_port.to_be_bytes());
         payload.extend_from_slice(&CHAIN_ID.to_be_bytes());
-        P2pMessage::new(MessageType::Handshake, self.peers.our_did().to_string(), timestamp, payload)
+        P2pMessage::new(
+            MessageType::Handshake,
+            self.peers.our_did().to_string(),
+            timestamp,
+            payload,
+        )
     }
 
     /// Erzeugt einen Peer-List-Export (für Peer-Discovery).
@@ -380,17 +438,26 @@ impl GossipProtocol {
             payload.extend_from_slice(&peer.ip.0);
             payload.extend_from_slice(&peer.port.to_be_bytes());
         }
-        P2pMessage::new(MessageType::PeerList, self.peers.our_did().to_string(), timestamp, payload)
+        P2pMessage::new(
+            MessageType::PeerList,
+            self.peers.our_did().to_string(),
+            timestamp,
+            payload,
+        )
     }
 
     /// Verarbeitet eine empfangene Peer-List (fügt neue Peers hinzu).
     pub fn handle_peer_list(&self, data: &[u8]) -> Vec<u64> {
-        if data.is_empty() { return vec![]; }
+        if data.is_empty() {
+            return vec![];
+        }
         let count = data[0] as usize;
         let mut new_ids = Vec::new();
         let mut offset = 1;
         for _ in 0..count {
-            if offset + 6 > data.len() { break; }
+            if offset + 6 > data.len() {
+                break;
+            }
             let mut ip = [0u8; 4];
             ip.copy_from_slice(&data[offset..offset + 4]);
             let port = u16::from_be_bytes([data[offset + 4], data[offset + 5]]);
@@ -415,11 +482,20 @@ impl P2pNode {
     pub fn new(our_did: String, listen_port: u16, max_peers: usize) -> Self {
         let peers = Arc::new(PeerTable::new(our_did, max_peers));
         let gossip = Arc::new(GossipProtocol::new(peers.clone()));
-        P2pNode { peers, gossip, listen_port }
+        P2pNode {
+            peers,
+            gossip,
+            listen_port,
+        }
     }
 
     /// Verbindet sich mit einem neuen Peer (sendet Handshake).
-    pub fn connect_peer(&self, ip: Ipv4Address, port: u16, timestamp: u64) -> Result<(u64, Vec<u8>), P2pError> {
+    pub fn connect_peer(
+        &self,
+        ip: Ipv4Address,
+        port: u16,
+        timestamp: u64,
+    ) -> Result<(u64, Vec<u8>), P2pError> {
         let peer_id = self.peers.add_peer(ip, port)?;
         self.peers.set_status(peer_id, PeerStatus::Connecting);
         let handshake = self.gossip.make_handshake(timestamp, self.listen_port);
@@ -428,7 +504,12 @@ impl P2pNode {
     }
 
     /// Verarbeitet einen eingehenden Handshake von einem Peer.
-    pub fn handle_handshake(&self, peer_id: u64, data: &[u8], timestamp: u64) -> Result<Vec<u8>, P2pError> {
+    pub fn handle_handshake(
+        &self,
+        peer_id: u64,
+        data: &[u8],
+        timestamp: u64,
+    ) -> Result<Vec<u8>, P2pError> {
         self.gossip.handle_message(peer_id, data, timestamp)?;
 
         // Extrahiere DID aus Handshake
@@ -455,11 +536,21 @@ impl P2pNode {
     }
 
     /// Kündigt einen Block an alle Peers.
-    pub fn announce_block(&self, block_hash: &[u8], block_height: u64, timestamp: u64) -> Vec<(u64, Vec<u8>)> {
+    pub fn announce_block(
+        &self,
+        block_hash: &[u8],
+        block_height: u64,
+        timestamp: u64,
+    ) -> Vec<(u64, Vec<u8>)> {
         let mut payload = Vec::new();
         payload.extend_from_slice(block_hash);
         payload.extend_from_slice(&block_height.to_be_bytes());
-        let msg = P2pMessage::new(MessageType::BlockAnnounce, self.peers.our_did().to_string(), timestamp, payload);
+        let msg = P2pMessage::new(
+            MessageType::BlockAnnounce,
+            self.peers.our_did().to_string(),
+            timestamp,
+            payload,
+        );
         self.gossip.broadcast(&msg)
     }
 
@@ -476,16 +567,29 @@ impl P2pNode {
 
     /// Trennt einen Peer.
     pub fn disconnect_peer(&self, peer_id: u64, timestamp: u64) -> Result<(), P2pError> {
-        let bye = P2pMessage::new(MessageType::Bye, self.peers.our_did().to_string(), timestamp, vec![]);
+        let bye = P2pMessage::new(
+            MessageType::Bye,
+            self.peers.our_did().to_string(),
+            timestamp,
+            vec![],
+        );
         let _ = self.gossip.send_to(peer_id, &bye);
         self.peers.set_status(peer_id, PeerStatus::Disconnected);
         Ok(())
     }
 
-    pub fn peers(&self) -> &Arc<PeerTable> { &self.peers }
-    pub fn gossip(&self) -> &Arc<GossipProtocol> { &self.gossip }
-    pub fn listen_port(&self) -> u16 { self.listen_port }
-    pub fn peer_count(&self) -> usize { self.peers.peer_count() }
+    pub fn peers(&self) -> &Arc<PeerTable> {
+        &self.peers
+    }
+    pub fn gossip(&self) -> &Arc<GossipProtocol> {
+        &self.gossip
+    }
+    pub fn listen_port(&self) -> u16 {
+        self.listen_port
+    }
+    pub fn peer_count(&self) -> usize {
+        self.peers.peer_count()
+    }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -534,12 +638,18 @@ mod tests {
         bytes.extend_from_slice(&8888u32.to_be_bytes()); // wrong chain
         bytes.extend_from_slice(&0u16.to_be_bytes()); // empty DID
         bytes.extend_from_slice(&0u64.to_be_bytes()); // timestamp
-        assert_eq!(P2pMessage::from_bytes(&bytes), Err(P2pError::WrongChainId(8888)));
+        assert_eq!(
+            P2pMessage::from_bytes(&bytes),
+            Err(P2pError::WrongChainId(8888))
+        );
     }
 
     #[test]
     fn test_message_too_short() {
-        assert_eq!(P2pMessage::from_bytes(&[0; 5]), Err(P2pError::MessageTooShort));
+        assert_eq!(
+            P2pMessage::from_bytes(&[0; 5]),
+            Err(P2pError::MessageTooShort)
+        );
     }
 
     #[test]
@@ -549,15 +659,25 @@ mod tests {
         bytes.extend_from_slice(&CHAIN_ID.to_be_bytes());
         bytes.extend_from_slice(&0u16.to_be_bytes());
         bytes.extend_from_slice(&0u64.to_be_bytes());
-        assert!(matches!(P2pMessage::from_bytes(&bytes), Err(P2pError::UnknownMessageType(99))));
+        assert!(matches!(
+            P2pMessage::from_bytes(&bytes),
+            Err(P2pError::UnknownMessageType(99))
+        ));
     }
 
     #[test]
     fn test_all_message_types() {
-        for t in [MessageType::Ping, MessageType::Pong, MessageType::Handshake,
-                  MessageType::HandshakeAck, MessageType::BlockAnnounce,
-                  MessageType::TxAnnounce, MessageType::Vote,
-                  MessageType::PeerList, MessageType::Bye] {
+        for t in [
+            MessageType::Ping,
+            MessageType::Pong,
+            MessageType::Handshake,
+            MessageType::HandshakeAck,
+            MessageType::BlockAnnounce,
+            MessageType::TxAnnounce,
+            MessageType::Vote,
+            MessageType::PeerList,
+            MessageType::Bye,
+        ] {
             assert_eq!(MessageType::from_u8(t as u8), Some(t));
         }
     }
@@ -579,7 +699,10 @@ mod tests {
     fn test_add_duplicate_peer() {
         let table = PeerTable::new("did:me".into(), 50);
         table.add_peer(Ipv4Address::new(10, 0, 0, 2), 9000).unwrap();
-        assert_eq!(table.add_peer(Ipv4Address::new(10, 0, 0, 2), 9000), Err(P2pError::PeerAlreadyConnected));
+        assert_eq!(
+            table.add_peer(Ipv4Address::new(10, 0, 0, 2), 9000),
+            Err(P2pError::PeerAlreadyConnected)
+        );
     }
 
     #[test]
@@ -594,8 +717,12 @@ mod tests {
     #[test]
     fn test_find_by_addr() {
         let table = PeerTable::new("did:me".into(), 50);
-        table.add_peer(Ipv4Address::new(192, 168, 1, 10), 8080).unwrap();
-        let peer = table.find_by_addr(Ipv4Address::new(192, 168, 1, 10), 8080).unwrap();
+        table
+            .add_peer(Ipv4Address::new(192, 168, 1, 10), 8080)
+            .unwrap();
+        let peer = table
+            .find_by_addr(Ipv4Address::new(192, 168, 1, 10), 8080)
+            .unwrap();
         assert_eq!(peer.ip, Ipv4Address::new(192, 168, 1, 10));
     }
 
@@ -626,7 +753,10 @@ mod tests {
         let table = PeerTable::new("did:me".into(), 2);
         table.add_peer(Ipv4Address::new(10, 0, 0, 1), 9000).unwrap();
         table.add_peer(Ipv4Address::new(10, 0, 0, 2), 9000).unwrap();
-        assert_eq!(table.add_peer(Ipv4Address::new(10, 0, 0, 3), 9000), Err(P2pError::PeerAlreadyConnected));
+        assert_eq!(
+            table.add_peer(Ipv4Address::new(10, 0, 0, 3), 9000),
+            Err(P2pError::PeerAlreadyConnected)
+        );
     }
 
     #[test]
@@ -703,7 +833,9 @@ mod tests {
 
         let gossip = GossipProtocol::new(peers.clone());
         let handshake = P2pMessage::new(MessageType::Handshake, "did:peer".into(), 1000, vec![]);
-        gossip.handle_message(id, &handshake.to_bytes(), 1000).unwrap();
+        gossip
+            .handle_message(id, &handshake.to_bytes(), 1000)
+            .unwrap();
 
         let peer = peers.get_peer(id).unwrap();
         assert_eq!(peer.status, PeerStatus::Connected);
@@ -736,7 +868,10 @@ mod tests {
 
         let pong = gossip.make_pong(1001, 1000);
         assert_eq!(pong.msg_type, MessageType::Pong);
-        assert_eq!(u64::from_be_bytes(pong.payload[..8].try_into().unwrap()), 1000);
+        assert_eq!(
+            u64::from_be_bytes(pong.payload[..8].try_into().unwrap()),
+            1000
+        );
     }
 
     #[test]
@@ -746,7 +881,8 @@ mod tests {
         let hs = gossip.make_handshake(1000, 9000);
         assert_eq!(hs.msg_type, MessageType::Handshake);
         let port = u16::from_be_bytes([hs.payload[0], hs.payload[1]]);
-        let chain = u32::from_be_bytes([hs.payload[2], hs.payload[3], hs.payload[4], hs.payload[5]]);
+        let chain =
+            u32::from_be_bytes([hs.payload[2], hs.payload[3], hs.payload[4], hs.payload[5]]);
         assert_eq!(port, 9000);
         assert_eq!(chain, CHAIN_ID);
     }
@@ -777,34 +913,57 @@ mod tests {
     #[test]
     fn test_p2p_node_connect() {
         let node = setup();
-        let (peer_id, handshake_bytes) = node.connect_peer(
-            Ipv4Address::new(10, 0, 0, 2), 9001, 1000,
-        ).unwrap();
+        let (peer_id, handshake_bytes) = node
+            .connect_peer(Ipv4Address::new(10, 0, 0, 2), 9001, 1000)
+            .unwrap();
         assert!(!handshake_bytes.is_empty());
-        assert_eq!(node.peers().get_peer(peer_id).unwrap().status, PeerStatus::Connecting);
+        assert_eq!(
+            node.peers().get_peer(peer_id).unwrap().status,
+            PeerStatus::Connecting
+        );
     }
 
     #[test]
     fn test_p2p_node_handle_handshake() {
         let node = setup();
-        let peer_id = node.peers().add_peer(Ipv4Address::new(10, 0, 0, 2), 9001).unwrap();
+        let peer_id = node
+            .peers()
+            .add_peer(Ipv4Address::new(10, 0, 0, 2), 9001)
+            .unwrap();
 
         let handshake = P2pMessage::new(
-            MessageType::Handshake, "did:shivacore:ed25519:peerXYZ".into(), 1000, vec![]
+            MessageType::Handshake,
+            "did:shivacore:ed25519:peerXYZ".into(),
+            1000,
+            vec![],
         );
-        let ack_bytes = node.handle_handshake(peer_id, &handshake.to_bytes(), 1000).unwrap();
+        let ack_bytes = node
+            .handle_handshake(peer_id, &handshake.to_bytes(), 1000)
+            .unwrap();
 
         let ack = P2pMessage::from_bytes(&ack_bytes).unwrap();
         assert_eq!(ack.msg_type, MessageType::HandshakeAck);
-        assert_eq!(node.peers().get_peer(peer_id).unwrap().status, PeerStatus::Connected);
-        assert_eq!(node.peers().get_peer(peer_id).unwrap().did, Some("did:shivacore:ed25519:peerXYZ".into()));
+        assert_eq!(
+            node.peers().get_peer(peer_id).unwrap().status,
+            PeerStatus::Connected
+        );
+        assert_eq!(
+            node.peers().get_peer(peer_id).unwrap().did,
+            Some("did:shivacore:ed25519:peerXYZ".into())
+        );
     }
 
     #[test]
     fn test_p2p_node_ping_all() {
         let node = setup();
-        let id1 = node.peers().add_peer(Ipv4Address::new(10, 0, 0, 2), 9001).unwrap();
-        let id2 = node.peers().add_peer(Ipv4Address::new(10, 0, 0, 3), 9002).unwrap();
+        let id1 = node
+            .peers()
+            .add_peer(Ipv4Address::new(10, 0, 0, 2), 9001)
+            .unwrap();
+        let id2 = node
+            .peers()
+            .add_peer(Ipv4Address::new(10, 0, 0, 3), 9002)
+            .unwrap();
         node.peers().set_status(id1, PeerStatus::Connected);
         node.peers().set_status(id2, PeerStatus::Connected);
 
@@ -815,7 +974,10 @@ mod tests {
     #[test]
     fn test_p2p_node_announce_block() {
         let node = setup();
-        let id = node.peers().add_peer(Ipv4Address::new(10, 0, 0, 2), 9001).unwrap();
+        let id = node
+            .peers()
+            .add_peer(Ipv4Address::new(10, 0, 0, 2), 9001)
+            .unwrap();
         node.peers().set_status(id, PeerStatus::Connected);
 
         let block_hash = [0xAA; 32];
@@ -832,7 +994,10 @@ mod tests {
     #[test]
     fn test_p2p_node_announce_tx() {
         let node = setup();
-        let id = node.peers().add_peer(Ipv4Address::new(10, 0, 0, 2), 9001).unwrap();
+        let id = node
+            .peers()
+            .add_peer(Ipv4Address::new(10, 0, 0, 2), 9001)
+            .unwrap();
         node.peers().set_status(id, PeerStatus::Connected);
 
         let tx_hash = [0xBB; 32];
@@ -847,11 +1012,17 @@ mod tests {
     #[test]
     fn test_p2p_node_disconnect() {
         let node = setup();
-        let id = node.peers().add_peer(Ipv4Address::new(10, 0, 0, 2), 9001).unwrap();
+        let id = node
+            .peers()
+            .add_peer(Ipv4Address::new(10, 0, 0, 2), 9001)
+            .unwrap();
         node.peers().set_status(id, PeerStatus::Connected);
 
         node.disconnect_peer(id, 2000).unwrap();
-        assert_eq!(node.peers().get_peer(id).unwrap().status, PeerStatus::Disconnected);
+        assert_eq!(
+            node.peers().get_peer(id).unwrap().status,
+            PeerStatus::Disconnected
+        );
     }
 
     #[test]

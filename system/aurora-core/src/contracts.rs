@@ -1,4 +1,7 @@
-use crate::{AgentId, ApprovalId, ApprovalState, AuroraError, AuroraRequest, CapabilityId, Decision, ModelId, PolicyId, RequestStatus, RiskLevel, SkillId, ToolId};
+use crate::{
+    AgentId, ApprovalId, ApprovalState, AuroraError, AuroraRequest, CapabilityId, Decision,
+    ModelId, PolicyId, RequestStatus, RiskLevel, SkillId, ToolId,
+};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct CapabilityResult {

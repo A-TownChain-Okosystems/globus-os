@@ -25,10 +25,7 @@ pub enum HardwareKeyError {
 /// Implementations must not persist or export the key through ordinary storage or
 /// configuration. The returned bytes are transient and must be zeroized by callers.
 pub trait IdentityKeyHal {
-    fn load_encryption_key(
-        &self,
-        handle: HardwareKeyHandle,
-    ) -> Result<[u8; 32], HardwareKeyError>;
+    fn load_encryption_key(&self, handle: HardwareKeyHandle) -> Result<[u8; 32], HardwareKeyError>;
 }
 
 /// Explicit production backend marker. No software implementation is provided.
@@ -52,9 +49,15 @@ impl<H: IdentityKeyHal> super::identity_key_service::IdentityKeyBackend
         self.hal
             .load_encryption_key(HardwareKeyHandle(handle.0))
             .map_err(|error| match error {
-                HardwareKeyError::InvalidHandle => super::identity_key_service::IdentityKeyError::InvalidHandle,
-                HardwareKeyError::AccessDenied => super::identity_key_service::IdentityKeyError::NotAuthorized,
-                HardwareKeyError::NotProvisioned => super::identity_key_service::IdentityKeyError::KeyUnavailable,
+                HardwareKeyError::InvalidHandle => {
+                    super::identity_key_service::IdentityKeyError::InvalidHandle
+                }
+                HardwareKeyError::AccessDenied => {
+                    super::identity_key_service::IdentityKeyError::NotAuthorized
+                }
+                HardwareKeyError::NotProvisioned => {
+                    super::identity_key_service::IdentityKeyError::KeyUnavailable
+                }
                 HardwareKeyError::Unavailable | HardwareKeyError::HardwareFailure => {
                     super::identity_key_service::IdentityKeyError::HardwareFailure
                 }

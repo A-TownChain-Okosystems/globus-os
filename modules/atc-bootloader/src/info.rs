@@ -8,7 +8,11 @@ pub struct BootInfo {
 
 impl BootInfo {
     pub fn new() -> Self {
-        Self { memory_map_addr: 0x8000, cmdline: String::new(), initrd_addr: None }
+        Self {
+            memory_map_addr: 0x8000,
+            cmdline: String::new(),
+            initrd_addr: None,
+        }
     }
 }
 

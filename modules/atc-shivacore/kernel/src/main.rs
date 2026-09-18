@@ -63,7 +63,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let phys_mem_offset = x86_64::VirtAddr::new(phys_mem_offset);
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
-    let mut frame_allocator = unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
+    let mut frame_allocator =
+        unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
 
     allocator::init_heap(&mut mapper, &mut frame_allocator)
         .expect("Heap-Initialisierung fehlgeschlagen");
@@ -77,7 +78,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     for i in 0..10 {
         vec.push(i);
     }
-    serial_println!("ShivaCore: Vec-Test -- Summe 0..10: {}", vec.iter().sum::<i32>());
+    serial_println!(
+        "ShivaCore: Vec-Test -- Summe 0..10: {}",
+        vec.iter().sum::<i32>()
+    );
 
     println!("K-Sprint 2: Paging/Heap OK (Box+Vec getestet)");
     serial_println!("ShivaCore: K-Sprint 2 abgeschlossen. Uebergabe an Idle-Loop.");

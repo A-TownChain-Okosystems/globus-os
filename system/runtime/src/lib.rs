@@ -6,7 +6,10 @@ use globus_services::ServiceState;
 use globus_system_core::SystemState;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RuntimeStatus { pub system: SystemState, pub services: ServiceState }
+pub struct RuntimeStatus {
+    pub system: SystemState,
+    pub services: ServiceState,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LoginContext {
@@ -14,12 +17,29 @@ pub struct LoginContext {
 }
 
 impl LoginContext {
-    pub fn new(user_id: UserId, wallet_address: WalletAddress, now_unix: u64, ttl_seconds: u64) -> Self {
-        Self { session: IdentitySession { user_id, wallet_address, state: LoginState::Authenticated, issued_at_unix: now_unix, expires_at_unix: now_unix.saturating_add(ttl_seconds) } }
+    pub fn new(
+        user_id: UserId,
+        wallet_address: WalletAddress,
+        now_unix: u64,
+        ttl_seconds: u64,
+    ) -> Self {
+        Self {
+            session: IdentitySession {
+                user_id,
+                wallet_address,
+                state: LoginState::Authenticated,
+                issued_at_unix: now_unix,
+                expires_at_unix: now_unix.saturating_add(ttl_seconds),
+            },
+        }
     }
 
-    pub fn active(&self, now_unix: u64) -> bool { self.session.is_active(now_unix) }
-    pub fn lock(&mut self) { self.session.lock(); }
+    pub fn active(&self, now_unix: u64) -> bool {
+        self.session.is_active(now_unix)
+    }
+    pub fn lock(&mut self) {
+        self.session.lock();
+    }
 }
 
 /// Aurora entry point for GlobusOS userspace.
@@ -47,14 +67,17 @@ pub fn aurora_request_lifecycle(request: &AuroraRequest) -> Result<AuroraRespons
 }
 
 pub fn initial_status() -> RuntimeStatus {
-    RuntimeStatus { system: SystemState::Booting, services: ServiceState::Defined }
+    RuntimeStatus {
+        system: SystemState::Booting,
+        services: ServiceState::Defined,
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use aurora_core::{RequestId, SessionId};
-    use globus_identity::{create_wallet, UserId};
+    use globus_identity::{UserId, create_wallet};
 
     #[test]
     fn runtime_can_establish_authenticated_context() {

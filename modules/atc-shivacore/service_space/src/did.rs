@@ -14,8 +14,7 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
-use ed25519_dalek::{SigningKey, VerifyingKey, Signer, Verifier, Signature};
-
+use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 
 /// Dezentrale Identitaet: did:shivacore:<hex-public-key>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -24,8 +23,14 @@ pub struct Did {
 }
 
 impl Did {
-    pub fn new(value: &str) -> Self { Self { value: value.to_string() } }
-    pub fn as_str(&self) -> &str { &self.value }
+    pub fn new(value: &str) -> Self {
+        Self {
+            value: value.to_string(),
+        }
+    }
+    pub fn as_str(&self) -> &str {
+        &self.value
+    }
 }
 
 /// Trait fuer kryptographische Operationen.
@@ -51,18 +56,26 @@ impl SoftwareSigner {
         let private = name.as_bytes().to_vec();
         let public_b64 = hex_encode(&private);
         let did = Did::new(&format!("did:shivacore:{}", public_b64));
-        Self { did, private_key: private }
+        Self {
+            did,
+            private_key: private,
+        }
     }
 
     pub fn with_key(private_key: &[u8]) -> Self {
         let public_b64 = hex_encode(private_key);
         let did = Did::new(&format!("did:shivacore:{}", public_b64));
-        Self { did, private_key: private_key.to_vec() }
+        Self {
+            did,
+            private_key: private_key.to_vec(),
+        }
     }
 }
 
 impl CryptoProvider for SoftwareSigner {
-    fn did(&self) -> &Did { &self.did }
+    fn did(&self) -> &Did {
+        &self.did
+    }
     fn sign(&self, payload: &[u8]) -> Vec<u8> {
         let mut sig = Vec::with_capacity(payload.len() + self.private_key.len());
         for (i, b) in payload.iter().enumerate() {
@@ -74,19 +87,27 @@ impl CryptoProvider for SoftwareSigner {
 
     fn verify(did: &Did, payload: &[u8], signature: &[u8]) -> bool {
         let prefix = "did:shivacore:";
-        if !did.value.starts_with(prefix) { return false; }
+        if !did.value.starts_with(prefix) {
+            return false;
+        }
         let public_b64 = &did.value[prefix.len()..];
         let key_bytes = match hex_decode(public_b64) {
             Some(k) => k,
             None => return false,
         };
-        if signature.len() < payload.len() { return false; }
+        if signature.len() < payload.len() {
+            return false;
+        }
         let key_hash = &signature[payload.len()..];
         let expected_hash = hex_encode(&key_bytes).into_bytes();
-        if key_hash != expected_hash.as_slice() { return false; }
+        if key_hash != expected_hash.as_slice() {
+            return false;
+        }
         for (i, b) in payload.iter().enumerate() {
             let decoded = signature[i] ^ key_bytes[i % key_bytes.len()];
-            if decoded != *b { return false; }
+            if decoded != *b {
+                return false;
+            }
         }
         true
     }
@@ -136,7 +157,9 @@ impl Ed25519Signer {
 }
 
 impl CryptoProvider for Ed25519Signer {
-    fn did(&self) -> &Did { &self.did }
+    fn did(&self) -> &Did {
+        &self.did
+    }
 
     fn sign(&self, payload: &[u8]) -> Vec<u8> {
         let sig: Signature = self.signing_key.sign(payload);
@@ -144,7 +167,9 @@ impl CryptoProvider for Ed25519Signer {
     }
 
     fn verify(did: &Did, payload: &[u8], signature: &[u8]) -> bool {
-        if !did.value.starts_with(ED25519_PREFIX) { return false; }
+        if !did.value.starts_with(ED25519_PREFIX) {
+            return false;
+        }
         let public_hex = &did.value[ED25519_PREFIX.len()..];
         let public_bytes = match hex_decode(public_hex) {
             Some(k) if k.len() == 32 => k,
@@ -160,7 +185,9 @@ impl CryptoProvider for Ed25519Signer {
             Err(_) => return false,
         };
 
-        if signature.len() != 64 { return false; }
+        if signature.len() != 64 {
+            return false;
+        }
         let mut sig_arr = [0u8; 64];
         sig_arr.copy_from_slice(signature);
         let sig = Signature::from_bytes(&sig_arr);
@@ -182,7 +209,9 @@ fn hex_encode(data: &[u8]) -> String {
 }
 
 fn hex_decode(hex: &str) -> Option<Vec<u8>> {
-    if hex.len() % 2 != 0 { return None; }
+    if hex.len() % 2 != 0 {
+        return None;
+    }
     let mut result = Vec::new();
     let bytes = hex.as_bytes();
     let mut i = 0;
@@ -237,7 +266,11 @@ mod tests {
     fn test_software_verify_rejects_tampered_payload() {
         let alice = SoftwareSigner::new("alice");
         let sig = alice.sign(b"original payload");
-        assert!(!SoftwareSigner::verify(alice.did(), b"tampered payload", &sig));
+        assert!(!SoftwareSigner::verify(
+            alice.did(),
+            b"tampered payload",
+            &sig
+        ));
     }
 
     #[test]
@@ -293,7 +326,11 @@ mod tests {
         let alice = Ed25519Signer::new();
         let sig = alice.sign(b"original message");
         // Tampered payload → verify fails
-        assert!(!Ed25519Signer::verify(alice.did(), b"tampered message", &sig));
+        assert!(!Ed25519Signer::verify(
+            alice.did(),
+            b"tampered message",
+            &sig
+        ));
     }
 
     #[test]

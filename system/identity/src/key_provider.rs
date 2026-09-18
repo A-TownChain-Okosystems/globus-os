@@ -19,8 +19,10 @@ pub struct SecureKeyId(pub u64);
 /// storage. The returned value is zeroizing and must only live for the duration of the crypto
 /// operation that needs it.
 pub trait SecureKeyService {
-    fn load_identity_key(&self, key_id: SecureKeyId)
-        -> Result<Zeroizing<[u8; 32]>, SecureKeyServiceError>;
+    fn load_identity_key(
+        &self,
+        key_id: SecureKeyId,
+    ) -> Result<Zeroizing<[u8; 32]>, SecureKeyServiceError>;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -92,6 +94,9 @@ mod tests {
     #[test]
     fn provider_maps_secure_service_failure_to_key_unavailable() {
         let provider = ShivaCoreKeyProvider::new(TestSecureService, SecureKeyId(8));
-        assert_eq!(provider.load_key().unwrap_err(), SecureStoreError::KeyUnavailable);
+        assert_eq!(
+            provider.load_key().unwrap_err(),
+            SecureStoreError::KeyUnavailable
+        );
     }
 }

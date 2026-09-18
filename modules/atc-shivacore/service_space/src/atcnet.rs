@@ -206,10 +206,7 @@ pub struct PeerEntry {
 pub fn serialize_handshake(msg: &HandshakeMsg) -> Vec<u8> {
     let did_bytes = msg.peer_did.as_bytes();
     let did_len = did_bytes.len() as u16;
-    let mut buf = vec![
-        MessageType::Handshake as u8,
-        msg.protocol_version,
-    ];
+    let mut buf = vec![MessageType::Handshake as u8, msg.protocol_version];
     buf.extend_from_slice(&msg.chain_id.to_le_bytes());
     buf.extend_from_slice(&msg.peer_id);
     buf.extend_from_slice(&did_len.to_le_bytes());
@@ -369,7 +366,11 @@ pub fn deserialize_peer_list(data: &[u8]) -> Result<PeerListMsg, AtcNetError> {
         offset += addr_len;
         let port = u16::from_le_bytes(data[offset..offset + 2].try_into().unwrap());
         offset += 2;
-        peers.push(PeerEntry { peer_id, address, port });
+        peers.push(PeerEntry {
+            peer_id,
+            address,
+            port,
+        });
     }
     Ok(PeerListMsg { peers })
 }
@@ -432,7 +433,11 @@ impl AtcNetHandler {
 
     /// Erstellt eine neue Verbindung zu einem Peer
     pub fn connect(&mut self, peer_id: PeerId, peer_did: String) -> Result<u64, AtcNetError> {
-        if self.connections.values().any(|c| c.peer_id == peer_id && c.state == ConnState::Connected) {
+        if self
+            .connections
+            .values()
+            .any(|c| c.peer_id == peer_id && c.state == ConnState::Connected)
+        {
             return Err(AtcNetError::AlreadyConnected);
         }
         let conn_id = self.next_conn_id.fetch_add(1, Ordering::SeqCst);
@@ -452,8 +457,15 @@ impl AtcNetHandler {
     }
 
     /// Sendet einen Handshake auf einer Verbindung
-    pub fn send_handshake(&mut self, conn_id: u64, listen_port: u16) -> Result<Vec<u8>, AtcNetError> {
-        let conn = self.connections.get(&conn_id).ok_or(AtcNetError::ConnectionNotFound)?;
+    pub fn send_handshake(
+        &mut self,
+        conn_id: u64,
+        listen_port: u16,
+    ) -> Result<Vec<u8>, AtcNetError> {
+        let conn = self
+            .connections
+            .get(&conn_id)
+            .ok_or(AtcNetError::ConnectionNotFound)?;
         if conn.state != ConnState::Connecting {
             return Err(AtcNetError::HandshakeFailed);
         }
@@ -478,7 +490,11 @@ impl AtcNetHandler {
     }
 
     /// Verarbeitet eine eingehende Nachricht
-    pub fn handle_message(&mut self, conn_id: u64, data: &[u8]) -> Result<Option<Vec<u8>>, AtcNetError> {
+    pub fn handle_message(
+        &mut self,
+        conn_id: u64,
+        data: &[u8],
+    ) -> Result<Option<Vec<u8>>, AtcNetError> {
         if data.is_empty() {
             return Err(AtcNetError::InvalidMessage);
         }
@@ -509,7 +525,11 @@ impl AtcNetHandler {
         }
     }
 
-    fn handle_handshake(&mut self, conn_id: u64, payload: &[u8]) -> Result<Option<Vec<u8>>, AtcNetError> {
+    fn handle_handshake(
+        &mut self,
+        conn_id: u64,
+        payload: &[u8],
+    ) -> Result<Option<Vec<u8>>, AtcNetError> {
         let msg = deserialize_handshake(payload)?;
 
         // Chain-ID prüfen
@@ -539,7 +559,8 @@ impl AtcNetHandler {
         }
 
         // Peer bekannt machen
-        self.known_peers.insert(msg.peer_id, format!("peer:{}", conn_id));
+        self.known_peers
+            .insert(msg.peer_id, format!("peer:{}", conn_id));
 
         // Antwort: eigener Handshake
         let response = HandshakeMsg {
@@ -569,7 +590,11 @@ impl AtcNetHandler {
         Ok(None)
     }
 
-    fn handle_block_ann(&mut self, conn_id: u64, payload: &[u8]) -> Result<Option<Vec<u8>>, AtcNetError> {
+    fn handle_block_ann(
+        &mut self,
+        conn_id: u64,
+        payload: &[u8],
+    ) -> Result<Option<Vec<u8>>, AtcNetError> {
         let msg = deserialize_block_ann(payload)?;
         // Wenn der Block höher als unsere aktuelle Höhe ist, anfordern
         let our_height = self.current_height.load(Ordering::SeqCst);
@@ -583,30 +608,46 @@ impl AtcNetHandler {
         Ok(None)
     }
 
-    fn handle_tx_broadcast(&self, _conn_id: u64, payload: &[u8]) -> Result<Option<Vec<u8>>, AtcNetError> {
+    fn handle_tx_broadcast(
+        &self,
+        _conn_id: u64,
+        payload: &[u8],
+    ) -> Result<Option<Vec<u8>>, AtcNetError> {
         let _msg = deserialize_tx_broadcast(payload)?;
         // Tx an Mempool weiterleiten (hier: nur akzeptieren)
         Ok(None)
     }
 
-    fn handle_get_blocks(&self, _conn_id: u64, payload: &[u8]) -> Result<Option<Vec<u8>>, AtcNetError> {
+    fn handle_get_blocks(
+        &self,
+        _conn_id: u64,
+        payload: &[u8],
+    ) -> Result<Option<Vec<u8>>, AtcNetError> {
         let request = deserialize_get_blocks(payload)?;
         // Dummy: leere Block-Liste (in echt: aus blockchain.rs holen)
         let _ = request;
         Ok(None)
     }
 
-    fn handle_peer_list(&mut self, _conn_id: u64, payload: &[u8]) -> Result<Option<Vec<u8>>, AtcNetError> {
+    fn handle_peer_list(
+        &mut self,
+        _conn_id: u64,
+        payload: &[u8],
+    ) -> Result<Option<Vec<u8>>, AtcNetError> {
         let msg = deserialize_peer_list(payload)?;
         for peer in &msg.peers {
-            self.known_peers.insert(peer.peer_id, format!("{}:{}", peer.address, peer.port));
+            self.known_peers
+                .insert(peer.peer_id, format!("{}:{}", peer.address, peer.port));
         }
         Ok(None)
     }
 
     /// Sendet einen Ping
     pub fn send_ping(&mut self, conn_id: u64, nonce: u64) -> Result<Vec<u8>, AtcNetError> {
-        let conn = self.connections.get(&conn_id).ok_or(AtcNetError::ConnectionNotFound)?;
+        let conn = self
+            .connections
+            .get(&conn_id)
+            .ok_or(AtcNetError::ConnectionNotFound)?;
         if conn.state != ConnState::Connected {
             return Err(AtcNetError::NotConnected);
         }
@@ -623,13 +664,26 @@ impl AtcNetHandler {
     }
 
     /// Sendet eine Block-Ankündigung
-    pub fn send_block_ann(&mut self, conn_id: u64, block_hash: [u8; 32], block_height: u64, prev_hash: [u8; 32]) -> Result<Vec<u8>, AtcNetError> {
-        let conn = self.connections.get(&conn_id).ok_or(AtcNetError::ConnectionNotFound)?;
+    pub fn send_block_ann(
+        &mut self,
+        conn_id: u64,
+        block_hash: [u8; 32],
+        block_height: u64,
+        prev_hash: [u8; 32],
+    ) -> Result<Vec<u8>, AtcNetError> {
+        let conn = self
+            .connections
+            .get(&conn_id)
+            .ok_or(AtcNetError::ConnectionNotFound)?;
         if conn.state != ConnState::Connected {
             return Err(AtcNetError::NotConnected);
         }
         self.current_height.store(block_height, Ordering::SeqCst);
-        let msg = BlockAnnMsg { block_hash, block_height, prev_hash };
+        let msg = BlockAnnMsg {
+            block_hash,
+            block_height,
+            prev_hash,
+        };
         let data = serialize_block_ann(&msg);
         self.messages_sent.fetch_add(1, Ordering::SeqCst);
         if let Some(c) = self.connections.get_mut(&conn_id) {
@@ -643,7 +697,9 @@ impl AtcNetHandler {
         let msg = TxBroadcastMsg { tx_hash, tx_data };
         let serialized = serialize_tx_broadcast(&msg);
         let mut results = Vec::new();
-        let connected_ids: Vec<u64> = self.connections.iter()
+        let connected_ids: Vec<u64> = self
+            .connections
+            .iter()
             .filter(|(_, c)| c.state == ConnState::Connected)
             .map(|(id, _)| *id)
             .collect();
@@ -674,7 +730,10 @@ impl AtcNetHandler {
 
     /// Anzahl aktiver Verbindungen
     pub fn connection_count(&self) -> usize {
-        self.connections.values().filter(|c| c.state == ConnState::Connected).count()
+        self.connections
+            .values()
+            .filter(|c| c.state == ConnState::Connected)
+            .count()
     }
 
     /// Alle Verbindungs-IDs
@@ -779,12 +838,18 @@ mod tests {
 
     #[test]
     fn test_ping_pong_roundtrip() {
-        let ping = PingMsg { timestamp: 12345, nonce: 999 };
+        let ping = PingMsg {
+            timestamp: 12345,
+            nonce: 999,
+        };
         let serialized = serialize_ping(&ping);
         let deserialized = deserialize_ping(&serialized[1..]).unwrap();
         assert_eq!(ping, deserialized);
 
-        let pong = PongMsg { timestamp: 12345, nonce: 999 };
+        let pong = PongMsg {
+            timestamp: 12345,
+            nonce: 999,
+        };
         let serialized = serialize_pong(&pong);
         let deserialized = deserialize_pong(&serialized[1..]).unwrap();
         assert_eq!(pong, deserialized);
@@ -803,7 +868,10 @@ mod tests {
 
     #[test]
     fn test_get_blocks_roundtrip() {
-        let msg = GetBlocksMsg { from_height: 100, max_count: 50 };
+        let msg = GetBlocksMsg {
+            from_height: 100,
+            max_count: 50,
+        };
         let serialized = serialize_get_blocks(&msg);
         let deserialized = deserialize_get_blocks(&serialized[1..]).unwrap();
         assert_eq!(msg, deserialized);
@@ -813,8 +881,16 @@ mod tests {
     fn test_peer_list_roundtrip() {
         let msg = PeerListMsg {
             peers: vec![
-                PeerEntry { peer_id: dummy_peer_id(1), address: "10.0.0.1".to_string(), port: 9000 },
-                PeerEntry { peer_id: dummy_peer_id(2), address: "10.0.0.2".to_string(), port: 9000 },
+                PeerEntry {
+                    peer_id: dummy_peer_id(1),
+                    address: "10.0.0.1".to_string(),
+                    port: 9000,
+                },
+                PeerEntry {
+                    peer_id: dummy_peer_id(2),
+                    address: "10.0.0.2".to_string(),
+                    port: 9000,
+                },
             ],
         };
         let serialized = serialize_peer_list(&msg);
@@ -827,7 +903,9 @@ mod tests {
     #[test]
     fn test_handler_connect() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         assert!(conn > 0);
         assert_eq!(h.connection_count(), 0); // Not connected yet (Connecting state)
     }
@@ -835,7 +913,8 @@ mod tests {
     #[test]
     fn test_handler_connect_duplicate_rejected() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         // Second connect with same peer_id should fail IF first is Connected
         // But first is still Connecting, so second succeeds
         let conn2 = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string());
@@ -845,7 +924,9 @@ mod tests {
     #[test]
     fn test_handler_handshake() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
 
         // Send handshake
         let hs_data = h.send_handshake(conn, 9000).unwrap();
@@ -871,7 +952,9 @@ mod tests {
     #[test]
     fn test_handler_handshake_wrong_chain() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
 
         let peer_hs = HandshakeMsg {
             protocol_version: PROTOCOL_VERSION,
@@ -890,7 +973,9 @@ mod tests {
     #[test]
     fn test_handler_handshake_wrong_version() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
 
         let peer_hs = HandshakeMsg {
             protocol_version: 99, // Wrong version
@@ -908,7 +993,9 @@ mod tests {
     #[test]
     fn test_handler_ping_pong() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
 
         // Manually set to Connected
         if let Some(c) = h.connections.get_mut(&conn) {
@@ -928,7 +1015,9 @@ mod tests {
     #[test]
     fn test_handler_block_ann_triggers_get_blocks() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         if let Some(c) = h.connections.get_mut(&conn) {
             c.state = ConnState::Connected;
         }
@@ -948,7 +1037,9 @@ mod tests {
     #[test]
     fn test_handler_block_ann_no_request_if_synced() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         if let Some(c) = h.connections.get_mut(&conn) {
             c.state = ConnState::Connected;
         }
@@ -971,7 +1062,9 @@ mod tests {
 
         // Connect 3 peers
         for i in 1..=3 {
-            let conn = h.connect(dummy_peer_id(i), format!("did:shivacore:peer{}", i)).unwrap();
+            let conn = h
+                .connect(dummy_peer_id(i), format!("did:shivacore:peer{}", i))
+                .unwrap();
             if let Some(c) = h.connections.get_mut(&conn) {
                 c.state = ConnState::Connected;
             }
@@ -988,7 +1081,9 @@ mod tests {
     #[test]
     fn test_handler_disconnect() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         assert!(h.disconnect(conn));
         // Disconnected state
         assert_eq!(h.connection_count(), 0);
@@ -998,7 +1093,9 @@ mod tests {
     fn test_handler_stats() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
 
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         h.send_handshake(conn, 9000).unwrap();
 
         let stats = h.stats();
@@ -1010,15 +1107,25 @@ mod tests {
     #[test]
     fn test_handler_peer_list_updates_known_peers() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         if let Some(c) = h.connections.get_mut(&conn) {
             c.state = ConnState::Connected;
         }
 
         let peer_list = PeerListMsg {
             peers: vec![
-                PeerEntry { peer_id: dummy_peer_id(10), address: "10.0.0.10".to_string(), port: 9000 },
-                PeerEntry { peer_id: dummy_peer_id(11), address: "10.0.0.11".to_string(), port: 9000 },
+                PeerEntry {
+                    peer_id: dummy_peer_id(10),
+                    address: "10.0.0.10".to_string(),
+                    port: 9000,
+                },
+                PeerEntry {
+                    peer_id: dummy_peer_id(11),
+                    address: "10.0.0.11".to_string(),
+                    port: 9000,
+                },
             ],
         };
         let data = serialize_peer_list(&peer_list);
@@ -1031,7 +1138,9 @@ mod tests {
     #[test]
     fn test_unknown_message_type() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         let result = h.handle_message(conn, &[0xFF, 0x00]); // Unknown type
         assert_eq!(result, Err(AtcNetError::UnknownMessageType));
     }
@@ -1039,7 +1148,9 @@ mod tests {
     #[test]
     fn test_message_too_large() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         let large = vec![0u8; MAX_MESSAGE_SIZE + 1];
         let result = h.handle_message(conn, &large);
         assert_eq!(result, Err(AtcNetError::MessageTooLarge));
@@ -1048,7 +1159,9 @@ mod tests {
     #[test]
     fn test_empty_message_rejected() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         let result = h.handle_message(conn, &[]);
         assert_eq!(result, Err(AtcNetError::InvalidMessage));
     }
@@ -1056,7 +1169,9 @@ mod tests {
     #[test]
     fn test_send_to_disconnected_rejected() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
-        let conn = h.connect(dummy_peer_id(1), "did:shivacore:peer1".to_string()).unwrap();
+        let conn = h
+            .connect(dummy_peer_id(1), "did:shivacore:peer1".to_string())
+            .unwrap();
         // Still Connecting, not Connected
         let result = h.send_ping(conn, 1);
         assert_eq!(result, Err(AtcNetError::NotConnected));

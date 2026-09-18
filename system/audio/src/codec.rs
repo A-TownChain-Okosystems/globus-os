@@ -71,14 +71,25 @@ mod tests {
 
     #[test]
     fn validates_pcm_frame() {
-        let spec = AudioSpec { sample_rate: 48_000, channels: 2, format: AudioFormat::PcmF32Le };
+        let spec = AudioSpec {
+            sample_rate: 48_000,
+            channels: 2,
+            format: AudioFormat::PcmF32Le,
+        };
         let frame = PcmFrame::new(spec, vec![0.0; 8]).expect("valid frame");
         assert_eq!(frame.frames(), 4);
     }
 
     #[test]
     fn rejects_partial_channel_frame() {
-        let spec = AudioSpec { sample_rate: 48_000, channels: 2, format: AudioFormat::PcmF32Le };
-        assert_eq!(PcmFrame::new(spec, vec![0.0; 3]), Err(CodecError::InvalidSampleCount));
+        let spec = AudioSpec {
+            sample_rate: 48_000,
+            channels: 2,
+            format: AudioFormat::PcmF32Le,
+        };
+        assert_eq!(
+            PcmFrame::new(spec, vec![0.0; 3]),
+            Err(CodecError::InvalidSampleCount)
+        );
     }
 }

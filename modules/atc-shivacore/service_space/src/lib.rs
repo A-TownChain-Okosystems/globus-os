@@ -12,15 +12,15 @@ extern crate std;
 
 extern crate alloc;
 
+pub mod atcnet;
 pub mod blockchain;
 pub mod consensus;
+pub mod did;
 pub mod genesis;
 pub mod genesis_bridge;
 pub mod gossip_bridge;
-pub mod atcnet;
-pub mod did;
-pub mod remote_caps;
-pub mod knowledge_graph;
-pub mod security_audit;
-pub mod identity_key_service;
 pub mod identity_key_hal;
+pub mod identity_key_service;
+pub mod knowledge_graph;
+pub mod remote_caps;
+pub mod security_audit;

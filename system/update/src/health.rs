@@ -18,17 +18,28 @@ pub enum HealthError {
 
 impl BootHealth {
     pub fn new(slot: Slot, max_attempts: u32) -> Result<Self, HealthError> {
-        if max_attempts == 0 { return Err(HealthError::InvalidLimit); }
-        Ok(Self { slot, attempts: 0, max_attempts, confirmed: false })
+        if max_attempts == 0 {
+            return Err(HealthError::InvalidLimit);
+        }
+        Ok(Self {
+            slot,
+            attempts: 0,
+            max_attempts,
+            confirmed: false,
+        })
     }
 
     pub fn record_attempt(&mut self) -> Result<bool, HealthError> {
-        if self.confirmed { return Err(HealthError::AlreadyConfirmed); }
+        if self.confirmed {
+            return Err(HealthError::AlreadyConfirmed);
+        }
         self.attempts = self.attempts.saturating_add(1);
         Ok(self.should_rollback())
     }
 
-    pub fn confirm(&mut self) { self.confirmed = true; }
+    pub fn confirm(&mut self) {
+        self.confirmed = true;
+    }
 
     pub fn should_rollback(&self) -> bool {
         !self.confirmed && self.attempts >= self.max_attempts

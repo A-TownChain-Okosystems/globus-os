@@ -16,14 +16,14 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use alloc::sync::Arc;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::genesis::{
-    GenesisConfig, GenesisBlock, GenesisState, GenesisBuilder, GenesisValidator,
-    GenesisError, GENESIS_CHAIN_ID, LockType,
+    GenesisBlock, GenesisBuilder, GenesisConfig, GenesisError, GenesisState, GenesisValidator,
+    LockType, GENESIS_CHAIN_ID,
 };
 
 // === Minimal Block (compatible mit blockchain.rs) === //
@@ -57,7 +57,7 @@ impl BridgeBlock {
             proposer_did: String::new(), // Genesis hat keinen Proposer
             timestamp: genesis.timestamp,
             poh_hash: genesis.genesis_hash, // PoH wird mit Genesis-Hash geseedt
-            tx_root: [0u8; 32], // Genesis hat keine Txs
+            tx_root: [0u8; 32],             // Genesis hat keine Txs
             state_root: genesis.state_root,
             gas_used: 0,
             total_fees: 0,
@@ -179,15 +179,18 @@ impl BridgeValidatorRegistry {
 
     pub fn register(&mut self, v: GenesisValidator) {
         self.total_stake += v.stake;
-        self.validators.insert(v.did.clone(), BridgeValidator {
-            did: v.did.clone(),
-            stake: v.stake,
-            active: true,
-            pubkey: v.pubkey,
-            commission: v.commission,
-            votes_cast: 0,
-            blocks_proposed: 0,
-        });
+        self.validators.insert(
+            v.did.clone(),
+            BridgeValidator {
+                did: v.did.clone(),
+                stake: v.stake,
+                active: true,
+                pubkey: v.pubkey,
+                commission: v.commission,
+                votes_cast: 0,
+                blocks_proposed: 0,
+            },
+        );
     }
 
     pub fn deactivate(&mut self, did: &str) {
@@ -380,7 +383,9 @@ impl GenesisBridge {
 
         // 5. BlockChain initialisieren
         let mut chain = BridgeBlockChain::new();
-        chain.add_genesis(bridge_block).map_err(|_| GenesisError::InvalidChainId)?;
+        chain
+            .add_genesis(bridge_block)
+            .map_err(|_| GenesisError::InvalidChainId)?;
 
         // 6. Validator Registry aus Konfiguration
         let validators = BridgeValidatorRegistry::from_genesis(config)?;
@@ -415,7 +420,10 @@ impl GenesisBridge {
         timestamp: u64,
         tx_root: [u8; 32],
     ) -> Result<BridgeBlock, BridgeChainError> {
-        let parent = self.chain.last_block().ok_or(BridgeChainError::ParentNotFound)?;
+        let parent = self
+            .chain
+            .last_block()
+            .ok_or(BridgeChainError::ParentNotFound)?;
         let poh_entry = self.poh.tick(timestamp);
         let height = parent.height + 1;
 
@@ -530,7 +538,13 @@ mod tests {
     }
 
     fn dummy_address(n: u8) -> String {
-        format!("ATC{}", "a".repeat(30).chars().chain(core::iter::once((b'a' + n) as char)).collect::<String>())
+        format!(
+            "ATC{}",
+            "a".repeat(30)
+                .chars()
+                .chain(core::iter::once((b'a' + n) as char))
+                .collect::<String>()
+        )
     }
 
     fn dummy_did(n: u8) -> String {
@@ -553,12 +567,14 @@ mod tests {
             config.add_validator(make_validator(i, 10000)).unwrap();
         }
         for i in 1..=4u8 {
-            config.add_allocation(crate::genesis::GenesisAllocation {
-                address: dummy_address(i),
-                amount: 1_000_000_000,
-                lock_type: LockType::None,
-                lock_duration: 0,
-            }).unwrap();
+            config
+                .add_allocation(crate::genesis::GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         config.memo = "A-TownChain Mainnet Genesis".to_string();
         config
@@ -739,12 +755,14 @@ mod tests {
     fn test_state_root_changes_with_allocations() {
         let mut config1 = make_test_config();
         let mut config2 = make_test_config();
-        config2.add_allocation(crate::genesis::GenesisAllocation {
-            address: dummy_address(9),
-            amount: 5_000_000_000,
-            lock_type: LockType::None,
-            lock_duration: 0,
-        }).unwrap();
+        config2
+            .add_allocation(crate::genesis::GenesisAllocation {
+                address: dummy_address(9),
+                amount: 5_000_000_000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
 
         let g1 = GenesisBuilder::build(&config1).unwrap();
         let g2 = GenesisBuilder::build(&config2).unwrap();
@@ -783,7 +801,10 @@ mod tests {
             validator_set: vec![],
             allocations: vec![],
         };
-        assert_eq!(chain.add_genesis(block), Err(BridgeChainError::InvalidChainId));
+        assert_eq!(
+            chain.add_genesis(block),
+            Err(BridgeChainError::InvalidChainId)
+        );
     }
 
     #[test]
@@ -805,7 +826,10 @@ mod tests {
             validator_set: vec![],
             allocations: vec![],
         };
-        assert_eq!(chain.add_genesis(block), Err(BridgeChainError::InvalidSignature));
+        assert_eq!(
+            chain.add_genesis(block),
+            Err(BridgeChainError::InvalidSignature)
+        );
     }
 
     #[test]
@@ -852,7 +876,10 @@ mod tests {
 
         let block = BridgeBlock::from_genesis(&genesis);
         let mut chain = BridgeBlockChain::new();
-        assert_eq!(chain.add_genesis(block), Err(BridgeChainError::InvalidSignature));
+        assert_eq!(
+            chain.add_genesis(block),
+            Err(BridgeChainError::InvalidSignature)
+        );
     }
 
     // === Full Bridge Integration === //
@@ -904,7 +931,9 @@ mod tests {
 
         for i in 1..=5 {
             let proposer = bridge.next_proposer().unwrap();
-            let block = bridge.propose_block(&proposer, 2000 + i * 100, [0xAB; 32]).unwrap();
+            let block = bridge
+                .propose_block(&proposer, 2000 + i * 100, [0xAB; 32])
+                .unwrap();
             assert_eq!(block.height, i as u64);
         }
 
@@ -919,7 +948,9 @@ mod tests {
 
         for i in 1..=3 {
             let proposer = bridge.next_proposer().unwrap();
-            let block = bridge.propose_block(&proposer, 2000 + i, [0xCD; 32]).unwrap();
+            let block = bridge
+                .propose_block(&proposer, 2000 + i, [0xCD; 32])
+                .unwrap();
             assert_eq!(block.chain_id, 658467);
         }
     }
@@ -948,7 +979,10 @@ mod tests {
             allocations: vec![],
         };
         let mut chain = bridge.chain.clone();
-        assert_eq!(chain.add_block(bad_block), Err(BridgeChainError::InvalidHeight));
+        assert_eq!(
+            chain.add_block(bad_block),
+            Err(BridgeChainError::InvalidHeight)
+        );
     }
 
     #[test]
@@ -1015,12 +1049,14 @@ mod tests {
             config.add_validator(make_validator(i, 50000)).unwrap();
         }
         for i in 1..=10u8 {
-            config.add_allocation(crate::genesis::GenesisAllocation {
-                address: dummy_address(i),
-                amount: 1_000_000_000,
-                lock_type: LockType::None,
-                lock_duration: 0,
-            }).unwrap();
+            config
+                .add_allocation(crate::genesis::GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         config.memo = "10-validator test".to_string();
 
@@ -1087,12 +1123,14 @@ mod tests {
     #[test]
     fn test_bridge_invalid_config_no_validators() {
         let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, 1726358400);
-        config.add_allocation(crate::genesis::GenesisAllocation {
-            address: dummy_address(1),
-            amount: 1000,
-            lock_type: LockType::None,
-            lock_duration: 0,
-        }).unwrap();
+        config
+            .add_allocation(crate::genesis::GenesisAllocation {
+                address: dummy_address(1),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
         assert!(GenesisBridge::init_from_config(&config).is_err());
     }
 }

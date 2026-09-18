@@ -7,8 +7,8 @@
 //! respektiert Deadlines. Hardware wird ueber ein Trait-Interface
 //! abstrahiert — echte Hardware spaeter ohne Algorithmus-Aenderung.
 
-use alloc::vec;
 use alloc::boxed::Box;
+use alloc::vec;
 extern crate alloc;
 
 use alloc::collections::BTreeMap;
@@ -18,7 +18,12 @@ use crate::capability::Pid;
 
 /// Beschleuniger-Typ
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AcceleratorType { Cpu, Gpu, Npu, Tpu }
+pub enum AcceleratorType {
+    Cpu,
+    Gpu,
+    Npu,
+    Tpu,
+}
 
 /// Hardware-Abstraktion: jeder Beschleuniger implementiert dieses Trait.
 pub trait Accelerator {
@@ -43,18 +48,38 @@ pub struct SimulatedAccelerator {
 }
 
 impl Accelerator for SimulatedAccelerator {
-    fn id(&self) -> u64 { self.id }
-    fn acc_type(&self) -> AcceleratorType { self.acc_type }
-    fn flops(&self) -> f64 { self.flops }
-    fn current_load(&self) -> f64 { self.load }
-    fn temperature(&self) -> f64 { self.temp }
-    fn is_thermal_ok(&self) -> bool { self.temp < 85.0 }
-    fn available_memory_mb(&self) -> u64 { self.mem_mb }
+    fn id(&self) -> u64 {
+        self.id
+    }
+    fn acc_type(&self) -> AcceleratorType {
+        self.acc_type
+    }
+    fn flops(&self) -> f64 {
+        self.flops
+    }
+    fn current_load(&self) -> f64 {
+        self.load
+    }
+    fn temperature(&self) -> f64 {
+        self.temp
+    }
+    fn is_thermal_ok(&self) -> bool {
+        self.temp < 85.0
+    }
+    fn available_memory_mb(&self) -> u64 {
+        self.mem_mb
+    }
 }
 
 /// Task-Typ
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum TaskKind { Inference, Training, MatMul, Convolution, Transfer }
+pub enum TaskKind {
+    Inference,
+    Training,
+    MatMul,
+    Convolution,
+    Transfer,
+}
 
 /// Ein Compute-Task
 #[derive(Debug, Clone)]
@@ -87,7 +112,10 @@ pub struct DaHeftScheduler {
 
 impl DaHeftScheduler {
     pub fn new() -> Self {
-        Self { accelerators: Vec::new(), accel_free_at: BTreeMap::new() }
+        Self {
+            accelerators: Vec::new(),
+            accel_free_at: BTreeMap::new(),
+        }
     }
 
     pub fn add_accelerator(&mut self, accel: Box<dyn Accelerator + Send>) {
@@ -99,7 +127,9 @@ impl DaHeftScheduler {
     /// Upward-Rank nach HEFT: rank_u(n) = w_n + max over SUCCESSORS { rank_u(s) + c_{n,s} }
     /// Entry-Tasks (keine Predecessors) haben den hoechsten Rank -> werden zuerst gescheduled.
     fn compute_upward_ranks(&self, tasks: &[Task]) -> BTreeMap<u64, f64> {
-        let min_flops = self.accelerators.iter()
+        let min_flops = self
+            .accelerators
+            .iter()
             .map(|a| a.flops())
             .fold(f64::INFINITY, f64::min);
 
@@ -126,7 +156,8 @@ impl DaHeftScheduler {
             for task in tasks {
                 let succs = successors.get(&task.id);
                 let succ_max: f64 = match succs {
-                    Some(s_list) => s_list.iter()
+                    Some(s_list) => s_list
+                        .iter()
                         .filter_map(|s| ranks.get(s))
                         .copied()
                         .fold(0.0_f64, f64::max),
@@ -140,7 +171,9 @@ impl DaHeftScheduler {
                     changed = true;
                 }
             }
-            if !changed { break; }
+            if !changed {
+                break;
+            }
         }
 
         ranks
@@ -160,7 +193,9 @@ impl DaHeftScheduler {
         sorted.sort_by(|a, b| {
             let rank_a = ranks.get(&a.id).copied().unwrap_or(0.0);
             let rank_b = ranks.get(&b.id).copied().unwrap_or(0.0);
-            rank_b.partial_cmp(&rank_a).unwrap_or(core::cmp::Ordering::Equal)
+            rank_b
+                .partial_cmp(&rank_a)
+                .unwrap_or(core::cmp::Ordering::Equal)
         });
 
         let mut schedule_result = Vec::new();
@@ -179,8 +214,12 @@ impl DaHeftScheduler {
             let mut best_finish = f64::INFINITY;
 
             for accel in &self.accelerators {
-                if !accel.is_thermal_ok() { continue; }
-                if accel.available_memory_mb() < task.memory_mb { continue; }
+                if !accel.is_thermal_ok() {
+                    continue;
+                }
+                if accel.available_memory_mb() < task.memory_mb {
+                    continue;
+                }
 
                 let free_at = self.accel_free_at.get(&accel.id()).copied().unwrap_or(0.0);
                 let start = earliest_start.max(free_at);
@@ -216,19 +255,34 @@ impl DaHeftScheduler {
 
     pub fn utilization(&self, schedule: &[ScheduleEntry]) -> BTreeMap<u64, f64> {
         let mut util: BTreeMap<u64, f64> = BTreeMap::new();
-        if schedule.is_empty() { return util; }
-        let max_finish = schedule.iter().map(|e| e.finish_time).fold(0.0_f64, f64::max);
+        if schedule.is_empty() {
+            return util;
+        }
+        let max_finish = schedule
+            .iter()
+            .map(|e| e.finish_time)
+            .fold(0.0_f64, f64::max);
         for accel in &self.accelerators {
-            let busy: f64 = schedule.iter()
+            let busy: f64 = schedule
+                .iter()
                 .filter(|e| e.accel_id == accel.id())
                 .map(|e| e.finish_time - e.start_time)
                 .sum();
-            util.insert(accel.id(), if max_finish > 0.0 { busy / max_finish } else { 0.0 });
+            util.insert(
+                accel.id(),
+                if max_finish > 0.0 {
+                    busy / max_finish
+                } else {
+                    0.0
+                },
+            );
         }
         util
     }
 
-    pub fn accelerator_count(&self) -> usize { self.accelerators.len() }
+    pub fn accelerator_count(&self) -> usize {
+        self.accelerators.len()
+    }
 }
 
 #[cfg(test)]
@@ -236,11 +290,26 @@ mod tests {
     use super::*;
 
     fn make_task(id: u64, flops: f64, deadline: f64, deps: Vec<u64>) -> Task {
-        Task { id, kind: TaskKind::Inference, compute_flops: flops,
-            memory_mb: 100, deadline, dependencies: deps, pid: None, priority: 128 }
+        Task {
+            id,
+            kind: TaskKind::Inference,
+            compute_flops: flops,
+            memory_mb: 100,
+            deadline,
+            dependencies: deps,
+            pid: None,
+            priority: 128,
+        }
     }
     fn make_accel(id: u64, at: AcceleratorType, flops: f64) -> SimulatedAccelerator {
-        SimulatedAccelerator { id, acc_type: at, flops, load: 0.0, temp: 50.0, mem_mb: 8192 }
+        SimulatedAccelerator {
+            id,
+            acc_type: at,
+            flops,
+            load: 0.0,
+            temp: 50.0,
+            mem_mb: 8192,
+        }
     }
 
     #[test]

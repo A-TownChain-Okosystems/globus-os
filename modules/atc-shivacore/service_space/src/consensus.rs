@@ -6,11 +6,11 @@
 // Baut auf K6 (DID), K14 (P2P), K15 (Security) auf.
 // ─────────────────────────────────────────────────────────────────────────
 
-use alloc::vec;
 use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
+use alloc::vec;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -84,9 +84,15 @@ impl PohSequence {
         entry
     }
 
-    pub fn current_hash(&self) -> [u8; 32] { *self.current_hash.lock() }
-    pub fn tick_count(&self) -> u64 { *self.tick.lock() }
-    pub fn entries(&self) -> Vec<PohEntry> { self.entries.lock().clone() }
+    pub fn current_hash(&self) -> [u8; 32] {
+        *self.current_hash.lock()
+    }
+    pub fn tick_count(&self) -> u64 {
+        *self.tick.lock()
+    }
+    pub fn entries(&self) -> Vec<PohEntry> {
+        self.entries.lock().clone()
+    }
 
     /// Verifiziert eine PoH-Sequenz ab einem Start-Hash.
     pub fn verify(start_hash: [u8; 32], entries: &[PohEntry]) -> bool {
@@ -96,7 +102,9 @@ impl PohSequence {
             input.extend_from_slice(&expected);
             input.extend_from_slice(&entry.tick.to_be_bytes());
             let computed = shivacore::security::simple_hash(&input);
-            if computed != entry.hash { return false; }
+            if computed != entry.hash {
+                return false;
+            }
             expected = entry.hash;
         }
         true
@@ -118,12 +126,12 @@ pub enum VertexType {
 pub struct DagVertex {
     pub id: [u8; 32],
     pub vertex_type: VertexType,
-    pub parents: Vec<[u8; 32]>,    // Referenzen auf Vorgänger (DAG!)
+    pub parents: Vec<[u8; 32]>, // Referenzen auf Vorgänger (DAG!)
     pub creator_did: String,
     pub timestamp: u64,
-    pub poh_hash: [u8; 32],        // Proof of History Verknüpfung
-    pub payload_hash: [u8; 32],    // Hash der Transaktion/des Events
-    pub signature: [u8; 64],       // Ed25519 Signatur des Creators
+    pub poh_hash: [u8; 32],     // Proof of History Verknüpfung
+    pub payload_hash: [u8; 32], // Hash der Transaktion/des Events
+    pub signature: [u8; 64],    // Ed25519 Signatur des Creators
     pub confirmed: bool,
     pub confirmation_votes: u32,
 }
@@ -142,21 +150,38 @@ impl DagVertex {
         let mut input = Vec::new();
         input.extend_from_slice(&poh_hash);
         input.extend_from_slice(&payload_hash);
-        for p in &parents { input.extend_from_slice(p); }
+        for p in &parents {
+            input.extend_from_slice(p);
+        }
         input.extend_from_slice(creator_did.as_bytes());
         let id = shivacore::security::simple_hash(&input);
 
         DagVertex {
-            id, vertex_type, parents, creator_did,
-            timestamp, poh_hash, payload_hash, signature,
-            confirmed: false, confirmation_votes: 0,
+            id,
+            vertex_type,
+            parents,
+            creator_did,
+            timestamp,
+            poh_hash,
+            payload_hash,
+            signature,
+            confirmed: false,
+            confirmation_votes: 0,
         }
     }
 
     pub fn genesis(creator_did: String, timestamp: u64, poh_hash: [u8; 32]) -> Self {
         let payload_hash = [0u8; 32];
         let sig = [0u8; 64];
-        let mut v = DagVertex::new(VertexType::Genesis, vec![], creator_did, timestamp, poh_hash, payload_hash, sig);
+        let mut v = DagVertex::new(
+            VertexType::Genesis,
+            vec![],
+            creator_did,
+            timestamp,
+            poh_hash,
+            payload_hash,
+            sig,
+        );
         v.confirmed = true;
         v
     }
@@ -168,7 +193,7 @@ impl DagVertex {
 
 pub struct Dag {
     vertices: Mutex<BTreeMap<[u8; 32], DagVertex>>,
-    tips: Mutex<Vec<[u8; 32]>>,  // Unbestätigte Spitzen des DAG
+    tips: Mutex<Vec<[u8; 32]>>, // Unbestätigte Spitzen des DAG
     genesis_id: Mutex<Option<[u8; 32]>>,
 }
 
@@ -212,7 +237,8 @@ impl Dag {
     /// Liefert alle direkten Nachfolger eines Vertex.
     pub fn get_children(&self, parent_id: &[u8; 32]) -> Vec<DagVertex> {
         let vertices = self.vertices.lock();
-        vertices.values()
+        vertices
+            .values()
             .filter(|v| v.parents.contains(parent_id))
             .cloned()
             .collect()
@@ -273,7 +299,11 @@ impl Dag {
 
     /// Anzahl der bestätigten Vertices.
     pub fn confirmed_count(&self) -> usize {
-        self.vertices.lock().values().filter(|v| v.confirmed).count()
+        self.vertices
+            .lock()
+            .values()
+            .filter(|v| v.confirmed)
+            .count()
     }
 
     /// Erzeugt einen Merkle-ähnlichen Hash über alle Tips (für Checkpoints).
@@ -315,7 +345,13 @@ impl ValidatorRegistry {
 
     pub fn register(&self, did: String, stake: u64) {
         let mut total = self.total_stake.lock();
-        let v = Validator { did: did.clone(), stake, active: true, votes_cast: 0, blocks_proposed: 0 };
+        let v = Validator {
+            did: did.clone(),
+            stake,
+            active: true,
+            votes_cast: 0,
+            blocks_proposed: 0,
+        };
         *total += stake;
         self.validators.lock().insert(did, v);
     }
@@ -328,28 +364,46 @@ impl ValidatorRegistry {
     }
 
     pub fn is_active(&self, did: &str) -> bool {
-        self.validators.lock().get(did).map(|v| v.active).unwrap_or(false)
+        self.validators
+            .lock()
+            .get(did)
+            .map(|v| v.active)
+            .unwrap_or(false)
     }
 
     pub fn get_stake(&self, did: &str) -> u64 {
-        self.validators.lock().get(did).map(|v| v.stake).unwrap_or(0)
+        self.validators
+            .lock()
+            .get(did)
+            .map(|v| v.stake)
+            .unwrap_or(0)
     }
 
-    pub fn total_stake(&self) -> u64 { *self.total_stake.lock() }
-    pub fn validator_count(&self) -> usize { self.validators.lock().len() }
-    pub fn active_count(&self) -> usize { self.validators.lock().values().filter(|v| v.active).count() }
+    pub fn total_stake(&self) -> u64 {
+        *self.total_stake.lock()
+    }
+    pub fn validator_count(&self) -> usize {
+        self.validators.lock().len()
+    }
+    pub fn active_count(&self) -> usize {
+        self.validators.lock().values().filter(|v| v.active).count()
+    }
 
     /// Wählt den nächsten Proposer basierend auf Stake (VRF-ähnlich, simplified).
     pub fn select_proposer(&self, poh_hash: &[u8; 32]) -> Option<String> {
         let validators = self.validators.lock();
         let active: Vec<&Validator> = validators.values().filter(|v| v.active).collect();
-        if active.is_empty() { return None; }
+        if active.is_empty() {
+            return None;
+        }
 
         // Simplified: Hash mod total_stake → weighted selection
         let total = *self.total_stake.lock();
         let mut input = poh_hash.to_vec();
         let hash_val = u64::from_be_bytes(
-            shivacore::security::simple_hash(&input)[..8].try_into().unwrap()
+            shivacore::security::simple_hash(&input)[..8]
+                .try_into()
+                .unwrap(),
         );
         let target = hash_val % total;
 
@@ -390,9 +444,9 @@ pub struct Vote {
 }
 
 pub struct VotePool {
-    votes: Mutex<BTreeMap<[u8; 32], Vec<Vote>>>,  // vertex_id → votes
+    votes: Mutex<BTreeMap<[u8; 32], Vec<Vote>>>, // vertex_id → votes
     validators: Arc<ValidatorRegistry>,
-    finality_threshold: f64,  // z.B. 0.667 für 2/3 Supermajority
+    finality_threshold: f64, // z.B. 0.667 für 2/3 Supermajority
 }
 
 impl VotePool {
@@ -406,7 +460,11 @@ impl VotePool {
 
     pub fn cast_vote(&self, vote: Vote) {
         self.validators.record_vote(&vote.voter_did);
-        self.votes.lock().entry(vote.vertex_id).or_insert_with(Vec::new).push(vote);
+        self.votes
+            .lock()
+            .entry(vote.vertex_id)
+            .or_insert_with(Vec::new)
+            .push(vote);
     }
 
     /// Prüft ob ein Vertex Finalität erreicht hat.
@@ -418,9 +476,12 @@ impl VotePool {
         };
 
         let total_stake = self.validators.total_stake();
-        if total_stake == 0 { return false; }
+        if total_stake == 0 {
+            return false;
+        }
 
-        let approving_stake: u64 = vertex_votes.iter()
+        let approving_stake: u64 = vertex_votes
+            .iter()
             .filter(|v| v.approve)
             .map(|v| self.validators.get_stake(&v.voter_did))
             .sum();
@@ -431,26 +492,36 @@ impl VotePool {
 
     /// Anzahl der Votes für einen Vertex.
     pub fn vote_count(&self, vertex_id: &[u8; 32]) -> usize {
-        self.votes.lock().get(vertex_id).map(|v| v.len()).unwrap_or(0)
+        self.votes
+            .lock()
+            .get(vertex_id)
+            .map(|v| v.len())
+            .unwrap_or(0)
     }
 
     /// Anzahl der zustimmenden Votes.
     pub fn approve_count(&self, vertex_id: &[u8; 32]) -> usize {
-        self.votes.lock().get(vertex_id)
+        self.votes
+            .lock()
+            .get(vertex_id)
             .map(|v| v.iter().filter(|vote| vote.approve).count())
             .unwrap_or(0)
     }
 
     /// Anzahl der ablehnenden Votes.
     pub fn reject_count(&self, vertex_id: &[u8; 32]) -> usize {
-        self.votes.lock().get(vertex_id)
+        self.votes
+            .lock()
+            .get(vertex_id)
             .map(|v| v.iter().filter(|vote| !vote.approve).count())
             .unwrap_or(0)
     }
 
     /// Liefert alle Vertices, die Finalität erreicht haben.
     pub fn finalized_vertices(&self) -> Vec<[u8; 32]> {
-        self.votes.lock().keys()
+        self.votes
+            .lock()
+            .keys()
             .filter(|id| self.is_final(id))
             .copied()
             .collect()
@@ -476,7 +547,13 @@ impl ConsensusEngine {
         let validators = Arc::new(ValidatorRegistry::new());
         let votes = Arc::new(VotePool::new(validators.clone(), 0.667));
 
-        ConsensusEngine { dag, poh, validators, votes, our_did }
+        ConsensusEngine {
+            dag,
+            poh,
+            validators,
+            votes,
+            our_did,
+        }
     }
 
     /// Initialisiert den DAG mit Genesis-Vertex.
@@ -558,10 +635,13 @@ impl ConsensusEngine {
 
         loop {
             let children = self.dag.get_children(&current);
-            if children.is_empty() { break; }
+            if children.is_empty() {
+                break;
+            }
 
             // Wähle das Kind mit den meisten Bestätigungs-Votes
-            let best = children.iter()
+            let best = children
+                .iter()
                 .max_by_key(|v| self.votes.vote_count(&v.id))
                 .map(|v| v.id);
 
@@ -576,11 +656,21 @@ impl ConsensusEngine {
         path
     }
 
-    pub fn our_did(&self) -> &str { &self.our_did }
-    pub fn dag(&self) -> &Arc<Dag> { &self.dag }
-    pub fn poh(&self) -> &Arc<PohSequence> { &self.poh }
-    pub fn validators(&self) -> &Arc<ValidatorRegistry> { &self.validators }
-    pub fn votes(&self) -> &Arc<VotePool> { &self.votes }
+    pub fn our_did(&self) -> &str {
+        &self.our_did
+    }
+    pub fn dag(&self) -> &Arc<Dag> {
+        &self.dag
+    }
+    pub fn poh(&self) -> &Arc<PohSequence> {
+        &self.poh
+    }
+    pub fn validators(&self) -> &Arc<ValidatorRegistry> {
+        &self.validators
+    }
+    pub fn votes(&self) -> &Arc<VotePool> {
+        &self.votes
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -695,11 +785,27 @@ mod tests {
 
         // Zwei Vertices parallel zu Genesis (manual parents for parallelism)
         let poh1 = engine.poh().record(1100, &[0x11; 32]);
-        let v1_vert = DagVertex::new(VertexType::Transaction, vec![gen], engine.our_did().to_string(), 1100, poh1.hash, [0x11; 32], [0; 64]);
+        let v1_vert = DagVertex::new(
+            VertexType::Transaction,
+            vec![gen],
+            engine.our_did().to_string(),
+            1100,
+            poh1.hash,
+            [0x11; 32],
+            [0; 64],
+        );
         engine.dag().add_vertex(v1_vert.clone()).unwrap();
         let v1 = v1_vert.id;
         let poh2 = engine.poh().record(1200, &[0x22; 32]);
-        let v2_vert = DagVertex::new(VertexType::Transaction, vec![gen], engine.our_did().to_string(), 1200, poh2.hash, [0x22; 32], [0; 64]);
+        let v2_vert = DagVertex::new(
+            VertexType::Transaction,
+            vec![gen],
+            engine.our_did().to_string(),
+            1200,
+            poh2.hash,
+            [0x22; 32],
+            [0; 64],
+        );
         engine.dag().add_vertex(v2_vert.clone()).unwrap();
         let v2 = v2_vert.id;
         assert_eq!(engine.dag().tip_count(), 2);
@@ -708,8 +814,13 @@ mod tests {
         let parents = engine.dag().get_tips();
         let poh_entry = engine.poh().record(1300, &[0x33; 32]);
         let v3 = DagVertex::new(
-            VertexType::Transaction, parents,
-            "did:v1".into(), 1300, poh_entry.hash, [0x33; 32], [0; 64],
+            VertexType::Transaction,
+            parents,
+            "did:v1".into(),
+            1300,
+            poh_entry.hash,
+            [0x33; 32],
+            [0; 64],
         );
         let v3_id = v3.id;
         engine.dag().add_vertex(v3).unwrap();
@@ -721,10 +832,18 @@ mod tests {
     fn test_dag_parent_not_found() {
         let dag = Dag::new();
         let v = DagVertex::new(
-            VertexType::Transaction, vec![[0xFF; 32]],
-            "did:x".into(), 1000, [0; 32], [0; 32], [0; 64],
+            VertexType::Transaction,
+            vec![[0xFF; 32]],
+            "did:x".into(),
+            1000,
+            [0; 32],
+            [0; 32],
+            [0; 64],
         );
-        assert_eq!(dag.add_vertex(v), Err(ConsensusError::ParentNotFound([0xFF; 32])));
+        assert_eq!(
+            dag.add_vertex(v),
+            Err(ConsensusError::ParentNotFound([0xFF; 32]))
+        );
     }
 
     #[test]
@@ -826,7 +945,11 @@ mod tests {
 
         let vertex_id = [0x42; 32];
         pool.cast_vote(Vote {
-            vertex_id, voter_did: "did:v1".into(), timestamp: 1000, approve: true, signature: [0; 64],
+            vertex_id,
+            voter_did: "did:v1".into(),
+            timestamp: 1000,
+            approve: true,
+            signature: [0; 64],
         });
         assert_eq!(pool.vote_count(&vertex_id), 1);
         assert_eq!(pool.approve_count(&vertex_id), 1);
@@ -844,11 +967,23 @@ mod tests {
         let vertex_id = [0x42; 32];
 
         // 1/3 approve → not final
-        pool.cast_vote(Vote { vertex_id, voter_did: "did:v1".into(), timestamp: 1000, approve: true, signature: [0; 64] });
+        pool.cast_vote(Vote {
+            vertex_id,
+            voter_did: "did:v1".into(),
+            timestamp: 1000,
+            approve: true,
+            signature: [0; 64],
+        });
         assert!(!pool.is_final(&vertex_id));
 
         // 2/3 approve → final (>= 66.7%)
-        pool.cast_vote(Vote { vertex_id, voter_did: "did:v2".into(), timestamp: 2000, approve: true, signature: [0; 64] });
+        pool.cast_vote(Vote {
+            vertex_id,
+            voter_did: "did:v2".into(),
+            timestamp: 2000,
+            approve: true,
+            signature: [0; 64],
+        });
         assert!(pool.is_final(&vertex_id));
     }
 
@@ -861,8 +996,20 @@ mod tests {
         let pool = VotePool::new(validators, 0.667);
 
         let vertex_id = [0x42; 32];
-        pool.cast_vote(Vote { vertex_id, voter_did: "did:v1".into(), timestamp: 1000, approve: true, signature: [0; 64] });
-        pool.cast_vote(Vote { vertex_id, voter_did: "did:v2".into(), timestamp: 2000, approve: false, signature: [0; 64] });
+        pool.cast_vote(Vote {
+            vertex_id,
+            voter_did: "did:v1".into(),
+            timestamp: 1000,
+            approve: true,
+            signature: [0; 64],
+        });
+        pool.cast_vote(Vote {
+            vertex_id,
+            voter_did: "did:v2".into(),
+            timestamp: 2000,
+            approve: false,
+            signature: [0; 64],
+        });
 
         assert_eq!(pool.approve_count(&vertex_id), 1);
         assert_eq!(pool.reject_count(&vertex_id), 1);
@@ -896,8 +1043,20 @@ mod tests {
         assert!(!engine.dag().get_vertex(&v_id).unwrap().confirmed);
 
         // 4. Vote (2/3 majority)
-        engine.handle_vote(Vote { vertex_id: v_id, voter_did: "did:validator2".into(), timestamp: 2100, approve: true, signature: [0; 64] });
-        engine.handle_vote(Vote { vertex_id: v_id, voter_did: "did:validator3".into(), timestamp: 2200, approve: true, signature: [0; 64] });
+        engine.handle_vote(Vote {
+            vertex_id: v_id,
+            voter_did: "did:validator2".into(),
+            timestamp: 2100,
+            approve: true,
+            signature: [0; 64],
+        });
+        engine.handle_vote(Vote {
+            vertex_id: v_id,
+            voter_did: "did:validator3".into(),
+            timestamp: 2200,
+            approve: true,
+            signature: [0; 64],
+        });
 
         // 5. Should be confirmed
         assert!(engine.dag().get_vertex(&v_id).unwrap().confirmed);
@@ -915,7 +1074,13 @@ mod tests {
 
         // Vote on v1 more
         engine.validators().register("did:voter".into(), 100);
-        engine.handle_vote(Vote { vertex_id: v1, voter_did: "did:voter".into(), timestamp: 1500, approve: true, signature: [0; 64] });
+        engine.handle_vote(Vote {
+            vertex_id: v1,
+            voter_did: "did:voter".into(),
+            timestamp: 1500,
+            approve: true,
+            signature: [0; 64],
+        });
 
         let path = engine.fork_choice();
         assert!(!path.is_empty());

@@ -3,51 +3,109 @@
 use crate::SurfaceId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Rect { pub x: i32, pub y: i32, pub width: u32, pub height: u32 }
+pub struct Rect {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
 
 impl Rect {
-    pub const fn new(x: i32, y: i32, width: u32, height: u32) -> Self { Self { x, y, width, height } }
+    pub const fn new(x: i32, y: i32, width: u32, height: u32) -> Self {
+        Self {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
     pub fn contains(self, x: i32, y: i32) -> bool {
-        x >= self.x && y >= self.y && x < self.x.saturating_add(self.width as i32) && y < self.y.saturating_add(self.height as i32)
+        x >= self.x
+            && y >= self.y
+            && x < self.x.saturating_add(self.width as i32)
+            && y < self.y.saturating_add(self.height as i32)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SurfacePlacement { pub surface: SurfaceId, pub bounds: Rect, pub z: u32, pub visible: bool }
+pub struct SurfacePlacement {
+    pub surface: SurfaceId,
+    pub bounds: Rect,
+    pub z: u32,
+    pub visible: bool,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CompositorError { SurfaceExists, SurfaceMissing, InvalidSize, TooManySurfaces }
+pub enum CompositorError {
+    SurfaceExists,
+    SurfaceMissing,
+    InvalidSize,
+    TooManySurfaces,
+}
 
 #[derive(Debug, Default)]
-pub struct Compositor { surfaces: Vec<SurfacePlacement>, next_z: u32 }
+pub struct Compositor {
+    surfaces: Vec<SurfacePlacement>,
+    next_z: u32,
+}
 
 impl Compositor {
-    pub fn new() -> Self { Self { surfaces: Vec::new(), next_z: 1 } }
+    pub fn new() -> Self {
+        Self {
+            surfaces: Vec::new(),
+            next_z: 1,
+        }
+    }
     pub fn create(&mut self, surface: SurfaceId, bounds: Rect) -> Result<(), CompositorError> {
-        if bounds.width == 0 || bounds.height == 0 { return Err(CompositorError::InvalidSize); }
-        if self.surfaces.iter().any(|s| s.surface == surface) { return Err(CompositorError::SurfaceExists); }
-        if self.surfaces.len() == 4096 { return Err(CompositorError::TooManySurfaces); }
-        let placement = SurfacePlacement { surface, bounds, z: self.next_z, visible: true };
+        if bounds.width == 0 || bounds.height == 0 {
+            return Err(CompositorError::InvalidSize);
+        }
+        if self.surfaces.iter().any(|s| s.surface == surface) {
+            return Err(CompositorError::SurfaceExists);
+        }
+        if self.surfaces.len() == 4096 {
+            return Err(CompositorError::TooManySurfaces);
+        }
+        let placement = SurfacePlacement {
+            surface,
+            bounds,
+            z: self.next_z,
+            visible: true,
+        };
         self.next_z = self.next_z.saturating_add(1);
         self.surfaces.push(placement);
         Ok(())
     }
     pub fn remove(&mut self, surface: SurfaceId) -> Result<(), CompositorError> {
-        let index = self.surfaces.iter().position(|s| s.surface == surface).ok_or(CompositorError::SurfaceMissing)?;
+        let index = self
+            .surfaces
+            .iter()
+            .position(|s| s.surface == surface)
+            .ok_or(CompositorError::SurfaceMissing)?;
         self.surfaces.remove(index);
         Ok(())
     }
     pub fn focus(&mut self, surface: SurfaceId) -> Result<(), CompositorError> {
         let max_z = self.next_z;
-        let item = self.surfaces.iter_mut().find(|s| s.surface == surface).ok_or(CompositorError::SurfaceMissing)?;
+        let item = self
+            .surfaces
+            .iter_mut()
+            .find(|s| s.surface == surface)
+            .ok_or(CompositorError::SurfaceMissing)?;
         item.z = max_z;
         self.next_z = self.next_z.saturating_add(1);
         Ok(())
     }
     pub fn hit_test(&self, x: i32, y: i32) -> Option<SurfaceId> {
-        self.surfaces.iter().filter(|s| s.visible && s.bounds.contains(x, y)).max_by_key(|s| s.z).map(|s| s.surface)
+        self.surfaces
+            .iter()
+            .filter(|s| s.visible && s.bounds.contains(x, y))
+            .max_by_key(|s| s.z)
+            .map(|s| s.surface)
     }
-    pub fn surfaces(&self) -> &[SurfacePlacement] { &self.surfaces }
+    pub fn surfaces(&self) -> &[SurfacePlacement] {
+        &self.surfaces
+    }
 }
 
 #[cfg(test)]

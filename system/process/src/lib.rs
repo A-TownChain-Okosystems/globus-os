@@ -9,7 +9,17 @@ pub struct ProcessId(pub u64);
 pub struct ThreadId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ProcessState { Created, Ready, Running, Blocked, Exited }
+pub enum ProcessState {
+    Created,
+    Ready,
+    Running,
+    Blocked,
+    Exited,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ProcessInfo { pub id: ProcessId, pub state: ProcessState, pub priority: u8 }
+pub struct ProcessInfo {
+    pub id: ProcessId,
+    pub state: ProcessState,
+    pub priority: u8,
+}

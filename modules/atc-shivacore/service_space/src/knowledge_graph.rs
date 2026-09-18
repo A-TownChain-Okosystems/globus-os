@@ -22,7 +22,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use shivacore::capability::{CapabilityTable, CapId, Pid, ResourceType, Rights};
+use shivacore::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
 
 /// Eindeutige Entity-ID im Knowledge Graph
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -116,12 +116,19 @@ impl KnowledgeGraph {
         let resource_id = id.0;
 
         // Creator bekommt READ + WRITE + DELEGATE
-        caps.create(creator, ResourceType::Memory, resource_id,
-            Rights::READ | Rights::WRITE | Rights::DELEGATE);
+        caps.create(
+            creator,
+            ResourceType::Memory,
+            resource_id,
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
+        );
 
         let entity = Entity {
-            id, label: label.to_string(), entity_type: entity_type.to_string(),
-            created_by: creator, triples_count: 0,
+            id,
+            label: label.to_string(),
+            entity_type: entity_type.to_string(),
+            created_by: creator,
+            triples_count: 0,
         };
         self.entities.insert(id, entity);
         Ok(id)
@@ -146,7 +153,11 @@ impl KnowledgeGraph {
             return Err(KgError::NoWriteCapability);
         }
 
-        let triple = Triple { subject, predicate, object: object.clone() };
+        let triple = Triple {
+            subject,
+            predicate,
+            object: object.clone(),
+        };
         let idx = self.triples.len();
         self.triples.push(triple);
 
@@ -157,9 +168,10 @@ impl KnowledgeGraph {
             self.osp_index.entry(*oid).or_default().push(idx);
         }
 
-        self.pso_index.entry(
-            self.triples[idx].predicate.0.clone()
-        ).or_default().push(idx);
+        self.pso_index
+            .entry(self.triples[idx].predicate.0.clone())
+            .or_default()
+            .push(idx);
 
         // Triple-Counter erhoehen
         if let Some(e) = self.entities.get_mut(&subject) {
@@ -183,15 +195,21 @@ impl KnowledgeGraph {
         for triple in &self.triples {
             // Subject-Match
             if let Some(s) = &pattern.subject {
-                if &triple.subject != s { continue; }
+                if &triple.subject != s {
+                    continue;
+                }
             }
             // Predicate-Match
             if let Some(p) = &pattern.predicate {
-                if triple.predicate.0 != *p { continue; }
+                if triple.predicate.0 != *p {
+                    continue;
+                }
             }
             // Object-Match
             if let Some(o) = &pattern.object {
-                if &triple.object != o { continue; }
+                if &triple.object != o {
+                    continue;
+                }
             }
 
             // Capability-Check: Caller braucht READ auf Subject
@@ -206,27 +224,21 @@ impl KnowledgeGraph {
     }
 
     /// Holt alle ausgehenden Tripel einer Entity (Subject-Lookup).
-    pub fn outgoing(
-        &self,
-        caps: &CapabilityTable,
-        caller: Pid,
-        entity: EntityId,
-    ) -> Vec<Triple> {
-        self.query(caps, caller, &QueryPattern {
-            subject: Some(entity),
-            predicate: None,
-            object: None,
-        })
+    pub fn outgoing(&self, caps: &CapabilityTable, caller: Pid, entity: EntityId) -> Vec<Triple> {
+        self.query(
+            caps,
+            caller,
+            &QueryPattern {
+                subject: Some(entity),
+                predicate: None,
+                object: None,
+            },
+        )
     }
 
     /// Holt alle eingehenden Tripel einer Entity (Object-Lookup).
     /// "Wer referenziert mich?"
-    pub fn incoming(
-        &self,
-        caps: &CapabilityTable,
-        caller: Pid,
-        entity: EntityId,
-    ) -> Vec<Triple> {
+    pub fn incoming(&self, caps: &CapabilityTable, caller: Pid, entity: EntityId) -> Vec<Triple> {
         let mut results = Vec::new();
 
         if let Some(indices) = self.osp_index.get(&entity) {
@@ -258,11 +270,15 @@ impl KnowledgeGraph {
         let mut result = Vec::new();
 
         for _ in 0..max_depth {
-            if frontier.is_empty() { break; }
+            if frontier.is_empty() {
+                break;
+            }
             let mut next_frontier = Vec::new();
 
             for node in frontier {
-                if visited.contains(&node) { continue; }
+                if visited.contains(&node) {
+                    continue;
+                }
                 visited.insert(node);
 
                 let out = self.outgoing(caps, caller, node);
@@ -330,11 +346,15 @@ impl KnowledgeGraph {
         }
 
         // Alle Tripel entfernen (als Subject UND als Object)
-        self.triples.retain(|t| t.subject != entity && !matches!(&t.object, ObjectValue::Entity(e) if *e == entity));
+        self.triples.retain(|t| {
+            t.subject != entity && !matches!(&t.object, ObjectValue::Entity(e) if *e == entity)
+        });
         self.rebuild_indices();
 
         // Capabilities widerrufen
-        let cap_ids: Vec<CapId> = caps.list_for(caller).iter()
+        let cap_ids: Vec<CapId> = caps
+            .list_for(caller)
+            .iter()
             .filter(|c| c.resource_type == ResourceType::Memory && c.resource_id == entity.0)
             .map(|c| c.id)
             .collect();
@@ -352,10 +372,14 @@ impl KnowledgeGraph {
     }
 
     /// Anzahl Entities im Graph
-    pub fn entity_count(&self) -> usize { self.entities.len() }
+    pub fn entity_count(&self) -> usize {
+        self.entities.len()
+    }
 
     /// Anzahl Tripel im Graph
-    pub fn triple_count(&self) -> usize { self.triples.len() }
+    pub fn triple_count(&self) -> usize {
+        self.triples.len()
+    }
 
     /// Grant: delegiert READ an einen anderen Prozess
     pub fn grant_read(
@@ -368,10 +392,14 @@ impl KnowledgeGraph {
         if !self.entities.contains_key(&entity) {
             return Err(KgError::EntityNotFound);
         }
-        let owner_caps: Vec<CapId> = caps.list_for(owner).iter()
-            .filter(|c| c.resource_type == ResourceType::Memory
-                && c.resource_id == entity.0
-                && c.rights.has(Rights::READ))
+        let owner_caps: Vec<CapId> = caps
+            .list_for(owner)
+            .iter()
+            .filter(|c| {
+                c.resource_type == ResourceType::Memory
+                    && c.resource_id == entity.0
+                    && c.rights.has(Rights::READ)
+            })
             .map(|c| c.id)
             .collect();
 
@@ -391,7 +419,10 @@ impl KnowledgeGraph {
             if let ObjectValue::Entity(oid) = &triple.object {
                 self.osp_index.entry(*oid).or_default().push(idx);
             }
-            self.pso_index.entry(triple.predicate.0.clone()).or_default().push(idx);
+            self.pso_index
+                .entry(triple.predicate.0.clone())
+                .or_default()
+                .push(idx);
         }
     }
 }
@@ -400,7 +431,9 @@ impl KnowledgeGraph {
 mod tests {
     use super::*;
 
-    fn pid(n: u32) -> Pid { Pid(n) }
+    fn pid(n: u32) -> Pid {
+        Pid(n)
+    }
 
     fn setup() -> (CapabilityTable, KnowledgeGraph) {
         (CapabilityTable::new(), KnowledgeGraph::new())
@@ -409,7 +442,9 @@ mod tests {
     #[test]
     fn test_create_entity() {
         let (mut caps, mut kg) = setup();
-        let eid = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let eid = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
         assert!(eid.0 > 0);
         assert_eq!(kg.entity_count(), 1);
         let e = kg.get_entity(eid).unwrap();
@@ -420,19 +455,32 @@ mod tests {
     #[test]
     fn test_add_and_query_triple() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
-        let bob = kg.create_entity(&mut caps, pid(1), "Bob", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(bob)).unwrap();
+            ObjectValue::Entity(bob),
+        )
+        .unwrap();
 
         // Query: Alice knows ?
-        let results = kg.query(&caps, pid(1), &QueryPattern {
-            subject: Some(alice),
-            predicate: Some("knows".to_string()),
-            object: None,
-        });
+        let results = kg.query(
+            &caps,
+            pid(1),
+            &QueryPattern {
+                subject: Some(alice),
+                predicate: Some("knows".to_string()),
+                object: None,
+            },
+        );
         assert_eq!(results.len(), 1);
         assert_eq!(results[0].object, ObjectValue::Entity(bob));
     }
@@ -440,78 +488,146 @@ mod tests {
     #[test]
     fn test_add_triple_without_write_cap_rejected() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
 
         // pid(2) hat keine WRITE-Cap auf Alice
-        let result = kg.add_triple(&caps, pid(2), alice,
+        let result = kg.add_triple(
+            &caps,
+            pid(2),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::String("someone".to_string()));
+            ObjectValue::String("someone".to_string()),
+        );
         assert_eq!(result, Err(KgError::NoWriteCapability));
     }
 
     #[test]
     fn test_query_without_read_cap_filtered() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
-        let bob = kg.create_entity(&mut caps, pid(1), "Bob", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(bob)).unwrap();
+            ObjectValue::Entity(bob),
+        )
+        .unwrap();
 
         // pid(1) hat READ (ist Creator) -> sieht Tripel
-        let r1 = kg.query(&caps, pid(1), &QueryPattern {
-            subject: Some(alice), predicate: None, object: None,
-        });
+        let r1 = kg.query(
+            &caps,
+            pid(1),
+            &QueryPattern {
+                subject: Some(alice),
+                predicate: None,
+                object: None,
+            },
+        );
         assert_eq!(r1.len(), 1);
 
         // pid(2) hat keine READ -> sieht nichts
-        let r2 = kg.query(&caps, pid(2), &QueryPattern {
-            subject: Some(alice), predicate: None, object: None,
-        });
+        let r2 = kg.query(
+            &caps,
+            pid(2),
+            &QueryPattern {
+                subject: Some(alice),
+                predicate: None,
+                object: None,
+            },
+        );
         assert_eq!(r2.len(), 0);
     }
 
     #[test]
     fn test_grant_read_enables_query() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
-        let bob = kg.create_entity(&mut caps, pid(1), "Bob", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(bob)).unwrap();
+            ObjectValue::Entity(bob),
+        )
+        .unwrap();
 
         // pid(2) sieht nichts
-        assert_eq!(kg.query(&caps, pid(2), &QueryPattern {
-            subject: Some(alice), predicate: None, object: None,
-        }).len(), 0);
+        assert_eq!(
+            kg.query(
+                &caps,
+                pid(2),
+                &QueryPattern {
+                    subject: Some(alice),
+                    predicate: None,
+                    object: None,
+                }
+            )
+            .len(),
+            0
+        );
 
         // pid(1) delegiert READ an pid(2)
         kg.grant_read(&mut caps, pid(1), alice, pid(2)).unwrap();
 
         // Jetzt sieht pid(2) das Tripel
-        let results = kg.query(&caps, pid(2), &QueryPattern {
-            subject: Some(alice), predicate: None, object: None,
-        });
+        let results = kg.query(
+            &caps,
+            pid(2),
+            &QueryPattern {
+                subject: Some(alice),
+                predicate: None,
+                object: None,
+            },
+        );
         assert_eq!(results.len(), 1);
     }
 
     #[test]
     fn test_outgoing_and_incoming() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
-        let bob = kg.create_entity(&mut caps, pid(1), "Bob", "Person").unwrap();
-        let charlie = kg.create_entity(&mut caps, pid(1), "Charlie", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .unwrap();
+        let charlie = kg
+            .create_entity(&mut caps, pid(1), "Charlie", "Person")
+            .unwrap();
 
         // Alice -> knows -> Bob
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(bob)).unwrap();
+            ObjectValue::Entity(bob),
+        )
+        .unwrap();
         // Charlie -> knows -> Alice
-        kg.add_triple(&caps, pid(1), charlie,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            charlie,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(alice)).unwrap();
+            ObjectValue::Entity(alice),
+        )
+        .unwrap();
 
         // Outgoing von Alice: 1 (Alice knows Bob)
         let out = kg.outgoing(&caps, pid(1), alice);
@@ -532,9 +648,30 @@ mod tests {
         let d = kg.create_entity(&mut caps, pid(1), "D", "Module").unwrap();
 
         // A depends_on B, B depends_on C, C depends_on D
-        kg.add_triple(&caps, pid(1), a, Predicate("depends_on".to_string()), ObjectValue::Entity(b)).unwrap();
-        kg.add_triple(&caps, pid(1), b, Predicate("depends_on".to_string()), ObjectValue::Entity(c)).unwrap();
-        kg.add_triple(&caps, pid(1), c, Predicate("depends_on".to_string()), ObjectValue::Entity(d)).unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            a,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(b),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            b,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(c),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            c,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(d),
+        )
+        .unwrap();
 
         // Transitive: A depends_on -> [B, C, D]
         let closure = kg.transitive_closure(&caps, pid(1), a, "depends_on", 10);
@@ -551,8 +688,22 @@ mod tests {
         let b = kg.create_entity(&mut caps, pid(1), "B", "Module").unwrap();
         let c = kg.create_entity(&mut caps, pid(1), "C", "Module").unwrap();
 
-        kg.add_triple(&caps, pid(1), a, Predicate("depends_on".to_string()), ObjectValue::Entity(b)).unwrap();
-        kg.add_triple(&caps, pid(1), b, Predicate("depends_on".to_string()), ObjectValue::Entity(c)).unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            a,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(b),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            b,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(c),
+        )
+        .unwrap();
 
         // max_depth=1: nur direkte Nachbarn (B)
         let closure = kg.transitive_closure(&caps, pid(1), a, "depends_on", 1);
@@ -570,9 +721,23 @@ mod tests {
         let a = kg.create_entity(&mut caps, pid(1), "A", "Module").unwrap();
         let b = kg.create_entity(&mut caps, pid(1), "B", "Module").unwrap();
 
-        kg.add_triple(&caps, pid(1), a, Predicate("depends_on".to_string()), ObjectValue::Entity(b)).unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            a,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(b),
+        )
+        .unwrap();
         // Zyklus: B depends_on A
-        kg.add_triple(&caps, pid(1), b, Predicate("depends_on".to_string()), ObjectValue::Entity(a)).unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            b,
+            Predicate("depends_on".to_string()),
+            ObjectValue::Entity(a),
+        )
+        .unwrap();
 
         // Trotz Zyklus sollte terminieren (visited-Set)
         let closure = kg.transitive_closure(&caps, pid(1), a, "depends_on", 100);
@@ -582,50 +747,87 @@ mod tests {
     #[test]
     fn test_literal_values() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
 
         // String-Literal
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("name".to_string()),
-            ObjectValue::String("Alice Wonder".to_string())).unwrap();
+            ObjectValue::String("Alice Wonder".to_string()),
+        )
+        .unwrap();
 
         // Integer-Literal
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("age".to_string()),
-            ObjectValue::Integer(30)).unwrap();
+            ObjectValue::Integer(30),
+        )
+        .unwrap();
 
         // Boolean-Literal
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("active".to_string()),
-            ObjectValue::Boolean(true)).unwrap();
+            ObjectValue::Boolean(true),
+        )
+        .unwrap();
 
         // Query alle Tripel
-        let results = kg.query(&caps, pid(1), &QueryPattern {
-            subject: Some(alice), predicate: None, object: None,
-        });
+        let results = kg.query(
+            &caps,
+            pid(1),
+            &QueryPattern {
+                subject: Some(alice),
+                predicate: None,
+                object: None,
+            },
+        );
         assert_eq!(results.len(), 3);
 
         // Query mit Object-Match
-        let r = kg.query(&caps, pid(1), &QueryPattern {
-            subject: Some(alice),
-            predicate: Some("age".to_string()),
-            object: Some(ObjectValue::Integer(30)),
-        });
+        let r = kg.query(
+            &caps,
+            pid(1),
+            &QueryPattern {
+                subject: Some(alice),
+                predicate: Some("age".to_string()),
+                object: Some(ObjectValue::Integer(30)),
+            },
+        );
         assert_eq!(r.len(), 1);
     }
 
     #[test]
     fn test_remove_triple() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
-        let bob = kg.create_entity(&mut caps, pid(1), "Bob", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(bob)).unwrap();
+            ObjectValue::Entity(bob),
+        )
+        .unwrap();
         assert_eq!(kg.triple_count(), 1);
 
-        kg.remove_triple(&caps, pid(1), alice, "knows", &ObjectValue::Entity(bob)).unwrap();
+        kg.remove_triple(&caps, pid(1), alice, "knows", &ObjectValue::Entity(bob))
+            .unwrap();
         assert_eq!(kg.triple_count(), 0);
 
         // Nochmal loeschen: nicht gefunden
@@ -636,27 +838,48 @@ mod tests {
     #[test]
     fn test_remove_triple_without_cap_rejected() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("name".to_string()),
-            ObjectValue::String("Alice".to_string())).unwrap();
+            ObjectValue::String("Alice".to_string()),
+        )
+        .unwrap();
 
         // pid(2) kann nicht loeschen (keine WRITE-Cap)
-        let result = kg.remove_triple(&caps, pid(2), alice, "name",
-            &ObjectValue::String("Alice".to_string()));
+        let result = kg.remove_triple(
+            &caps,
+            pid(2),
+            alice,
+            "name",
+            &ObjectValue::String("Alice".to_string()),
+        );
         assert_eq!(result, Err(KgError::NoWriteCapability));
     }
 
     #[test]
     fn test_delete_entity() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
-        let bob = kg.create_entity(&mut caps, pid(1), "Bob", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice,
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
             Predicate("knows".to_string()),
-            ObjectValue::Entity(bob)).unwrap();
+            ObjectValue::Entity(bob),
+        )
+        .unwrap();
 
         assert_eq!(kg.entity_count(), 2);
         assert_eq!(kg.triple_count(), 1);
@@ -670,7 +893,9 @@ mod tests {
     #[test]
     fn test_delete_entity_without_cap_rejected() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
 
         let result = kg.delete_entity(&mut caps, pid(2), alice);
         assert_eq!(result, Err(KgError::NoWriteCapability));
@@ -683,31 +908,66 @@ mod tests {
         let b = kg.create_entity(&mut caps, pid(1), "B", "Node").unwrap();
         let c = kg.create_entity(&mut caps, pid(1), "C", "Node").unwrap();
 
-        kg.add_triple(&caps, pid(1), a, Predicate("link".to_string()), ObjectValue::Entity(b)).unwrap();
-        kg.add_triple(&caps, pid(1), b, Predicate("link".to_string()), ObjectValue::Entity(c)).unwrap();
-        kg.add_triple(&caps, pid(1), c, Predicate("link".to_string()), ObjectValue::Entity(a)).unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            a,
+            Predicate("link".to_string()),
+            ObjectValue::Entity(b),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            b,
+            Predicate("link".to_string()),
+            ObjectValue::Entity(c),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            c,
+            Predicate("link".to_string()),
+            ObjectValue::Entity(a),
+        )
+        .unwrap();
 
         // Wildcard: alle Tripel mit Praedikat "link"
-        let results = kg.query(&caps, pid(1), &QueryPattern {
-            subject: None,
-            predicate: Some("link".to_string()),
-            object: None,
-        });
+        let results = kg.query(
+            &caps,
+            pid(1),
+            &QueryPattern {
+                subject: None,
+                predicate: Some("link".to_string()),
+                object: None,
+            },
+        );
         assert_eq!(results.len(), 3);
 
         // Vollstaendige Wildcard: alle Tripel
-        let results = kg.query(&caps, pid(1), &QueryPattern {
-            subject: None, predicate: None, object: None,
-        });
+        let results = kg.query(
+            &caps,
+            pid(1),
+            &QueryPattern {
+                subject: None,
+                predicate: None,
+                object: None,
+            },
+        );
         assert_eq!(results.len(), 3);
     }
 
     #[test]
     fn test_entity_not_found() {
         let (mut caps, mut kg) = setup();
-        let result = kg.add_triple(&caps, pid(1), EntityId(999),
+        let result = kg.add_triple(
+            &caps,
+            pid(1),
+            EntityId(999),
             Predicate("test".to_string()),
-            ObjectValue::Integer(1));
+            ObjectValue::Integer(1),
+        );
         assert_eq!(result, Err(KgError::EntityNotFound));
     }
 
@@ -715,41 +975,95 @@ mod tests {
     fn test_cross_process_isolation() {
         let (mut caps, mut kg) = setup();
         // pid(1) erstellt Alice
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
         // pid(2) erstellt Bob
-        let bob = kg.create_entity(&mut caps, pid(2), "Bob", "Person").unwrap();
+        let bob = kg
+            .create_entity(&mut caps, pid(2), "Bob", "Person")
+            .unwrap();
 
         // pid(1) kann auf Alice schreiben, nicht auf Bob
-        assert!(kg.add_triple(&caps, pid(1), alice,
-            Predicate("name".to_string()),
-            ObjectValue::String("A".to_string())).is_ok());
-        assert_eq!(kg.add_triple(&caps, pid(1), bob,
-            Predicate("name".to_string()),
-            ObjectValue::String("B".to_string())), Err(KgError::NoWriteCapability));
+        assert!(kg
+            .add_triple(
+                &caps,
+                pid(1),
+                alice,
+                Predicate("name".to_string()),
+                ObjectValue::String("A".to_string())
+            )
+            .is_ok());
+        assert_eq!(
+            kg.add_triple(
+                &caps,
+                pid(1),
+                bob,
+                Predicate("name".to_string()),
+                ObjectValue::String("B".to_string())
+            ),
+            Err(KgError::NoWriteCapability)
+        );
 
         // pid(2) kann auf Bob schreiben, nicht auf Alice
-        assert!(kg.add_triple(&caps, pid(2), bob,
-            Predicate("name".to_string()),
-            ObjectValue::String("B".to_string())).is_ok());
-        assert_eq!(kg.add_triple(&caps, pid(2), alice,
-            Predicate("name".to_string()),
-            ObjectValue::String("A".to_string())), Err(KgError::NoWriteCapability));
+        assert!(kg
+            .add_triple(
+                &caps,
+                pid(2),
+                bob,
+                Predicate("name".to_string()),
+                ObjectValue::String("B".to_string())
+            )
+            .is_ok());
+        assert_eq!(
+            kg.add_triple(
+                &caps,
+                pid(2),
+                alice,
+                Predicate("name".to_string()),
+                ObjectValue::String("A".to_string())
+            ),
+            Err(KgError::NoWriteCapability)
+        );
     }
 
     #[test]
     fn test_triple_count_tracking() {
         let (mut caps, mut kg) = setup();
-        let alice = kg.create_entity(&mut caps, pid(1), "Alice", "Person").unwrap();
+        let alice = kg
+            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .unwrap();
 
-        kg.add_triple(&caps, pid(1), alice, Predicate("a".to_string()), ObjectValue::Integer(1)).unwrap();
-        kg.add_triple(&caps, pid(1), alice, Predicate("b".to_string()), ObjectValue::Integer(2)).unwrap();
-        kg.add_triple(&caps, pid(1), alice, Predicate("c".to_string()), ObjectValue::Integer(3)).unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
+            Predicate("a".to_string()),
+            ObjectValue::Integer(1),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
+            Predicate("b".to_string()),
+            ObjectValue::Integer(2),
+        )
+        .unwrap();
+        kg.add_triple(
+            &caps,
+            pid(1),
+            alice,
+            Predicate("c".to_string()),
+            ObjectValue::Integer(3),
+        )
+        .unwrap();
 
         let e = kg.get_entity(alice).unwrap();
         assert_eq!(e.triples_count, 3);
 
         // Eines loeschen
-        kg.remove_triple(&caps, pid(1), alice, "b", &ObjectValue::Integer(2)).unwrap();
+        kg.remove_triple(&caps, pid(1), alice, "b", &ObjectValue::Integer(2))
+            .unwrap();
         let e = kg.get_entity(alice).unwrap();
         assert_eq!(e.triples_count, 2);
     }

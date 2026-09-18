@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // Shell — main command processor
-use std::collections::HashMap;
 use crate::CommandRegistry;
+use std::collections::HashMap;
 
 pub struct Shell {
     pub registry: CommandRegistry,
@@ -11,15 +11,25 @@ pub struct Shell {
 
 impl Shell {
     pub fn new() -> Self {
-        Self { registry: CommandRegistry::new(), running: false, cwd: "/".into() }
+        Self {
+            registry: CommandRegistry::new(),
+            running: false,
+            cwd: "/".into(),
+        }
     }
 
-    pub fn start(&mut self) { self.running = true; }
-    pub fn stop(&mut self) { self.running = false; }
+    pub fn start(&mut self) {
+        self.running = true;
+    }
+    pub fn stop(&mut self) {
+        self.running = false;
+    }
 
     pub fn execute(&mut self, input: &str) -> String {
         let parts: Vec<&str> = input.trim().split_whitespace().collect();
-        if parts.is_empty() { return String::new(); }
+        if parts.is_empty() {
+            return String::new();
+        }
         let cmd = parts[0];
         let args = &parts[1..];
         self.registry.run(cmd, args)

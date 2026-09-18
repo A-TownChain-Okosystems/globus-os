@@ -22,7 +22,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::ats1000::{MemoryManager, MemRegion, Pid};
+use crate::ats1000::{MemRegion, MemoryManager, Pid};
 use crate::capability::{CapabilityTable, ResourceType, Rights};
 
 // === Konstanten — synchronisiert mit allocator.rs === //
@@ -33,7 +33,7 @@ pub const HEAP_START: u64 = 0x_4444_4444_0000;
 pub const HEAP_SIZE: u64 = 100 * 1024; // 100 KiB — identisch zu allocator.rs
 pub const HEAP_END: u64 = HEAP_START + HEAP_SIZE;
 pub const USERSPACE_BASE: u64 = 0x_5555_5555_0000; // Getrennt vom Kernel-Heap
-pub const USERSPACE_MAX: u64 = 100 * 1024 * 1024;  // 100 MiB Userspace-Simulation
+pub const USERSPACE_MAX: u64 = 100 * 1024 * 1024; // 100 MiB Userspace-Simulation
 
 /// Verwaltete Speicherregion
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -123,7 +123,9 @@ impl KernelMemoryManager {
         pid: Pid,
         size: u64,
     ) -> Result<AllocatedRegion, MemError> {
-        if size == 0 { return Err(MemError::InvalidAlignment); }
+        if size == 0 {
+            return Err(MemError::InvalidAlignment);
+        }
 
         let region_id = self.next_region_id.fetch_add(1, Ordering::SeqCst);
 
@@ -137,7 +139,8 @@ impl KernelMemoryManager {
                 return Err(MemError::HeapOverflow);
             }
 
-            self.heap_allocations.insert(region_id, (size as usize, layout));
+            self.heap_allocations
+                .insert(region_id, (size as usize, layout));
             (ptr as u64, AllocSource::KernelHeap)
         } else {
             // Userspace-Bump
@@ -155,12 +158,18 @@ impl KernelMemoryManager {
         };
 
         let region = AllocatedRegion {
-            addr, size, owner_pid: pid, region_id, source,
+            addr,
+            size,
+            owner_pid: pid,
+            region_id,
+            source,
         };
 
         // Capability vergeben
         caps.create(
-            pid, ResourceType::Memory, region_id,
+            pid,
+            ResourceType::Memory,
+            region_id,
             Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
         );
 
@@ -183,7 +192,10 @@ impl KernelMemoryManager {
         region_id: u64,
     ) -> Result<(), MemError> {
         // Existiert die Region?
-        let region = self.regions.get(&region_id).ok_or(MemError::InvalidRegion)?;
+        let region = self
+            .regions
+            .get(&region_id)
+            .ok_or(MemError::InvalidRegion)?;
 
         // Capability-Check
         if !caps.check(pid, ResourceType::Memory, region_id, Rights::WRITE) {
@@ -195,7 +207,9 @@ impl KernelMemoryManager {
             if let Some((_, layout)) = self.heap_allocations.remove(&region_id) {
                 // Sichere dealloc: addr war ein echter Heap-Pointer
                 let ptr = region.addr as *mut u8;
-                unsafe { dealloc(ptr, layout); }
+                unsafe {
+                    dealloc(ptr, layout);
+                }
             }
         }
 
@@ -204,7 +218,9 @@ impl KernelMemoryManager {
         self.regions.remove(&region_id);
 
         // Capabilities widerrufen
-        let cap_ids: Vec<_> = caps.list_for(pid).iter()
+        let cap_ids: Vec<_> = caps
+            .list_for(pid)
+            .iter()
             .filter(|c| c.resource_type == ResourceType::Memory && c.resource_id == region_id)
             .map(|c| c.id)
             .collect();
@@ -223,7 +239,10 @@ impl KernelMemoryManager {
         pid: Pid,
         region_id: u64,
     ) -> Result<AllocatedRegion, MemError> {
-        let region = self.regions.get(&region_id).ok_or(MemError::InvalidRegion)?;
+        let region = self
+            .regions
+            .get(&region_id)
+            .ok_or(MemError::InvalidRegion)?;
         if !caps.check(pid, ResourceType::Memory, region_id, Rights::READ) {
             return Err(MemError::NoCapability);
         }
@@ -238,7 +257,10 @@ impl KernelMemoryManager {
         pid: Pid,
         region_id: u64,
     ) -> Result<AllocatedRegion, MemError> {
-        let region = self.regions.get(&region_id).ok_or(MemError::InvalidRegion)?;
+        let region = self
+            .regions
+            .get(&region_id)
+            .ok_or(MemError::InvalidRegion)?;
         if !caps.check(pid, ResourceType::Memory, region_id, Rights::WRITE) {
             return Err(MemError::NoCapability);
         }
@@ -271,7 +293,8 @@ impl KernelMemoryManager {
 
     /// Liste aller Regionen eines Prozesses
     pub fn regions_for(&self, pid: Pid) -> Vec<AllocatedRegion> {
-        self.regions.values()
+        self.regions
+            .values()
             .filter(|r| r.owner_pid == pid)
             .cloned()
             .collect()
@@ -382,7 +405,9 @@ impl MemorySubsystem {
 
 impl MemoryManager for KernelMemoryManager {
     fn alloc(&mut self, size: u64, pid: Pid) -> Option<MemRegion> {
-        if size == 0 { return None; }
+        if size == 0 {
+            return None;
+        }
 
         let region_id = self.next_region_id.fetch_add(1, Ordering::SeqCst);
 
@@ -390,12 +415,17 @@ impl MemoryManager for KernelMemoryManager {
         let (addr, source) = if size <= self.heap_threshold {
             let layout = Layout::from_size_align(size as usize, 4096).ok()?;
             let ptr = unsafe { alloc(layout) };
-            if ptr.is_null() { return None; }
-            self.heap_allocations.insert(region_id, (size as usize, layout));
+            if ptr.is_null() {
+                return None;
+            }
+            self.heap_allocations
+                .insert(region_id, (size as usize, layout));
             (ptr as u64, AllocSource::KernelHeap)
         } else {
             let current = self.next_addr.load(Ordering::SeqCst);
-            if current + size > USERSPACE_BASE + USERSPACE_MAX { return None; }
+            if current + size > USERSPACE_BASE + USERSPACE_MAX {
+                return None;
+            }
             let addr = self.next_addr.fetch_add(size, Ordering::SeqCst);
             let aligned = (addr + 0xFFF) & !0xFFF;
             if aligned != addr {
@@ -404,7 +434,13 @@ impl MemoryManager for KernelMemoryManager {
             (aligned, AllocSource::UserspaceBump)
         };
 
-        let region = AllocatedRegion { addr, size, owner_pid: pid, region_id, source };
+        let region = AllocatedRegion {
+            addr,
+            size,
+            owner_pid: pid,
+            region_id,
+            source,
+        };
         self.total_allocated += size;
         if self.total_allocated > self.peak_allocated {
             self.peak_allocated = self.total_allocated;
@@ -414,7 +450,9 @@ impl MemoryManager for KernelMemoryManager {
     }
 
     fn free(&mut self, region: MemRegion) -> bool {
-        let region_id = self.regions.iter()
+        let region_id = self
+            .regions
+            .iter()
             .find(|(_, r)| r.addr == region.addr && r.owner_pid == region.pid)
             .map(|(id, _)| *id);
 
@@ -428,7 +466,9 @@ impl MemoryManager for KernelMemoryManager {
             if r.source == AllocSource::KernelHeap {
                 if let Some((_, layout)) = self.heap_allocations.remove(&id) {
                     let ptr = r.addr as *mut u8;
-                    unsafe { dealloc(ptr, layout); }
+                    unsafe {
+                        dealloc(ptr, layout);
+                    }
                 }
             }
         }
@@ -453,14 +493,23 @@ pub fn validate_heap_config() -> Result<(), String> {
     // allocator.rs: HEAP_START = 0x_4444_4444_0000, HEAP_SIZE = 100 * 1024
     // memory_manager.rs: HEAP_START = 0x_4444_4444_0000, HEAP_SIZE = 100 * 1024
     if HEAP_START != 0x_4444_4444_0000 {
-        return Err(format!("HEAP_START mismatch: 0x{:x} != 0x444444440000", HEAP_START));
+        return Err(format!(
+            "HEAP_START mismatch: 0x{:x} != 0x444444440000",
+            HEAP_START
+        ));
     }
     if HEAP_SIZE != 100 * 1024 {
-        return Err(format!("HEAP_SIZE mismatch: {} != {}", HEAP_SIZE, 100 * 1024));
+        return Err(format!(
+            "HEAP_SIZE mismatch: {} != {}",
+            HEAP_SIZE,
+            100 * 1024
+        ));
     }
     if USERSPACE_BASE <= HEAP_END {
-        return Err(format!("USERSPACE_BASE (0x{:x}) must be > HEAP_END (0x{:x})",
-            USERSPACE_BASE, HEAP_END));
+        return Err(format!(
+            "USERSPACE_BASE (0x{:x}) must be > HEAP_END (0x{:x})",
+            USERSPACE_BASE, HEAP_END
+        ));
     }
     Ok(())
 }
@@ -479,7 +528,9 @@ pub fn boot_log() -> String {
 mod tests {
     use super::*;
 
-    fn pid(n: u32) -> Pid { Pid(n) }
+    fn pid(n: u32) -> Pid {
+        Pid(n)
+    }
 
     // === Basis-Tests === //
 
@@ -543,14 +594,20 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let mut caps = CapabilityTable::new();
         let r = mm.allocate(&mut caps, pid(1), 4096).unwrap();
-        assert_eq!(mm.deallocate(&mut caps, pid(2), r.region_id), Err(MemError::NoCapability));
+        assert_eq!(
+            mm.deallocate(&mut caps, pid(2), r.region_id),
+            Err(MemError::NoCapability)
+        );
     }
 
     #[test]
     fn test_deallocate_invalid_region() {
         let mut mm = KernelMemoryManager::new();
         let mut caps = CapabilityTable::new();
-        assert_eq!(mm.deallocate(&mut caps, pid(1), 999), Err(MemError::InvalidRegion));
+        assert_eq!(
+            mm.deallocate(&mut caps, pid(1), 999),
+            Err(MemError::InvalidRegion)
+        );
     }
 
     #[test]
@@ -573,7 +630,10 @@ mod tests {
         let r = mm.allocate(&mut caps, pid(1), 4096).unwrap();
 
         assert!(mm.read_check(&caps, pid(1), r.region_id).is_ok());
-        assert_eq!(mm.read_check(&caps, pid(2), r.region_id), Err(MemError::NoCapability));
+        assert_eq!(
+            mm.read_check(&caps, pid(2), r.region_id),
+            Err(MemError::NoCapability)
+        );
     }
 
     #[test]
@@ -583,7 +643,10 @@ mod tests {
         let r = mm.allocate(&mut caps, pid(1), 2048).unwrap();
 
         assert!(mm.write_check(&caps, pid(1), r.region_id).is_ok());
-        assert_eq!(mm.write_check(&caps, pid(2), r.region_id), Err(MemError::NoCapability));
+        assert_eq!(
+            mm.write_check(&caps, pid(2), r.region_id),
+            Err(MemError::NoCapability)
+        );
     }
 
     #[test]
@@ -634,7 +697,10 @@ mod tests {
     fn test_zero_size_rejected() {
         let mut mm = KernelMemoryManager::new();
         let mut caps = CapabilityTable::new();
-        assert_eq!(mm.allocate(&mut caps, pid(1), 0), Err(MemError::InvalidAlignment));
+        assert_eq!(
+            mm.allocate(&mut caps, pid(1), 0),
+            Err(MemError::InvalidAlignment)
+        );
     }
 
     // === ats1000 Trait-Tests === //
@@ -677,9 +743,6 @@ mod tests {
         assert!(!KernelMemoryManager::is_userspace_address(r.addr));
     }
 
-
-
-
     #[test]
     fn test_heap_threshold_routing() {
         let mut mm = KernelMemoryManager::new().with_heap_threshold(2048);
@@ -713,9 +776,9 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let mut caps = CapabilityTable::new();
 
-        let heap_r = mm.allocate(&mut caps, pid(1), 1024).unwrap();   // Heap
-        let user_r = mm.allocate(&mut caps, pid(1), 65536).unwrap();   // Userspace
-        let heap_r2 = mm.allocate(&mut caps, pid(2), 2048).unwrap();  // Heap
+        let heap_r = mm.allocate(&mut caps, pid(1), 1024).unwrap(); // Heap
+        let user_r = mm.allocate(&mut caps, pid(1), 65536).unwrap(); // Userspace
+        let heap_r2 = mm.allocate(&mut caps, pid(2), 2048).unwrap(); // Heap
 
         assert_eq!(heap_r.source, AllocSource::KernelHeap);
         assert_eq!(user_r.source, AllocSource::UserspaceBump);
@@ -758,7 +821,9 @@ mod tests {
     #[test]
     fn test_is_userspace_address() {
         assert!(KernelMemoryManager::is_userspace_address(USERSPACE_BASE));
-        assert!(KernelMemoryManager::is_userspace_address(USERSPACE_BASE + 1000));
+        assert!(KernelMemoryManager::is_userspace_address(
+            USERSPACE_BASE + 1000
+        ));
         assert!(!KernelMemoryManager::is_userspace_address(HEAP_START));
     }
 
@@ -812,8 +877,14 @@ mod tests {
         let r1 = ms.allocate(pid(1), 1024).unwrap();
 
         // pid(2) kann nicht auf pid(1)s Region zugreifen
-        assert_eq!(ms.read_check(pid(2), r1.region_id), Err(MemError::NoCapability));
-        assert_eq!(ms.write_check(pid(2), r1.region_id), Err(MemError::NoCapability));
+        assert_eq!(
+            ms.read_check(pid(2), r1.region_id),
+            Err(MemError::NoCapability)
+        );
+        assert_eq!(
+            ms.write_check(pid(2), r1.region_id),
+            Err(MemError::NoCapability)
+        );
     }
 
     // === Boot-Log === //
@@ -827,4 +898,3 @@ mod tests {
         assert!(log.contains("linked_list_allocator"));
     }
 }
-

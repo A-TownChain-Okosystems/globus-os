@@ -6,16 +6,16 @@
 // Baut auf K12 (Ethernet + ARP + NetworkDevice) auf.
 // ─────────────────────────────────────────────────────────────────────────
 
-use alloc::vec;
 use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
+use alloc::vec;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::net::{
-    MacAddress, Ipv4Address, EthernetFrame, ETH_TYPE_IPV4,
-    NetworkDevice, NetworkError, NetworkStack,
+    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, NetworkStack,
+    ETH_TYPE_IPV4,
 };
 
 // ─── Protokoll-Nummern ─────────────────────────────────────────────────────
@@ -50,10 +50,20 @@ impl Ipv4Packet {
     pub fn new(src: Ipv4Address, dst: Ipv4Address, protocol: u8, payload: Vec<u8>) -> Self {
         let total_length = (20 + payload.len()) as u16;
         Ipv4Packet {
-            version: 4, ihl: 5, dscp: 0, ecn: 0,
-            total_length, identification: 0, flags: 0,
-            fragment_offset: 0, ttl: 64, protocol,
-            header_checksum: 0, src_ip: src, dst_ip: dst, payload,
+            version: 4,
+            ihl: 5,
+            dscp: 0,
+            ecn: 0,
+            total_length,
+            identification: 0,
+            flags: 0,
+            fragment_offset: 0,
+            ttl: 64,
+            protocol,
+            header_checksum: 0,
+            src_ip: src,
+            dst_ip: dst,
+            payload,
         }
     }
 
@@ -75,10 +85,14 @@ impl Ipv4Packet {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
-        if data.len() < 20 { return Err(NetworkError::PacketTooShort); }
+        if data.len() < 20 {
+            return Err(NetworkError::PacketTooShort);
+        }
         let version = data[0] >> 4;
         let ihl = data[0] & 0x0F;
-        if version != 4 { return Err(NetworkError::UnsupportedProtocol); }
+        if version != 4 {
+            return Err(NetworkError::UnsupportedProtocol);
+        }
         let dscp = data[1] >> 2;
         let ecn = data[1] & 0x03;
         let total_length = u16::from_be_bytes([data[2], data[3]]);
@@ -94,13 +108,26 @@ impl Ipv4Packet {
         let mut dst_ip = [0u8; 4];
         dst_ip.copy_from_slice(&data[16..20]);
         let header_len = (ihl as usize) * 4;
-        if data.len() < header_len { return Err(NetworkError::PacketTooShort); }
+        if data.len() < header_len {
+            return Err(NetworkError::PacketTooShort);
+        }
         let payload = data[header_len..].to_vec();
 
         Ok(Ipv4Packet {
-            version, ihl, dscp, ecn, total_length, identification,
-            flags, fragment_offset, ttl, protocol, header_checksum,
-            src_ip: Ipv4Address(src_ip), dst_ip: Ipv4Address(dst_ip), payload,
+            version,
+            ihl,
+            dscp,
+            ecn,
+            total_length,
+            identification,
+            flags,
+            fragment_offset,
+            ttl,
+            protocol,
+            header_checksum,
+            src_ip: Ipv4Address(src_ip),
+            dst_ip: Ipv4Address(dst_ip),
+            payload,
         })
     }
 
@@ -111,14 +138,19 @@ impl Ipv4Packet {
             sum += u16::from_be_bytes([header[i], header[i + 1]]) as u32;
             i += 2;
         }
-        if i < header.len() { sum += (header[i] as u32) << 8; }
-        while sum >> 16 != 0 { sum = (sum & 0xFFFF) + (sum >> 16); }
+        if i < header.len() {
+            sum += (header[i] as u32) << 8;
+        }
+        while sum >> 16 != 0 {
+            sum = (sum & 0xFFFF) + (sum >> 16);
+        }
         !(sum as u16)
     }
 
     pub fn with_checksum(mut self) -> Self {
         let mut header = self.to_bytes();
-        header[10] = 0; header[11] = 0;
+        header[10] = 0;
+        header[11] = 0;
         self.header_checksum = Self::calculate_checksum(&header[..20]);
         self
     }
@@ -139,7 +171,13 @@ pub struct UdpPacket {
 
 impl UdpPacket {
     pub fn new(src_port: u16, dst_port: u16, payload: Vec<u8>) -> Self {
-        UdpPacket { src_port, dst_port, length: (8 + payload.len()) as u16, checksum: 0, payload }
+        UdpPacket {
+            src_port,
+            dst_port,
+            length: (8 + payload.len()) as u16,
+            checksum: 0,
+            payload,
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -153,7 +191,9 @@ impl UdpPacket {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
-        if data.len() < 8 { return Err(NetworkError::PacketTooShort); }
+        if data.len() < 8 {
+            return Err(NetworkError::PacketTooShort);
+        }
         Ok(UdpPacket {
             src_port: u16::from_be_bytes([data[0], data[1]]),
             dst_port: u16::from_be_bytes([data[2], data[3]]),
@@ -190,11 +230,25 @@ pub struct TcpSegment {
 }
 
 impl TcpSegment {
-    pub fn new(src_port: u16, dst_port: u16, seq: u32, ack: u32, flags: u8, payload: Vec<u8>) -> Self {
+    pub fn new(
+        src_port: u16,
+        dst_port: u16,
+        seq: u32,
+        ack: u32,
+        flags: u8,
+        payload: Vec<u8>,
+    ) -> Self {
         TcpSegment {
-            src_port, dst_port, seq_num: seq, ack_num: ack,
-            data_offset: 5, flags, window_size: 65535,
-            checksum: 0, urgent_ptr: 0, payload,
+            src_port,
+            dst_port,
+            seq_num: seq,
+            ack_num: ack,
+            data_offset: 5,
+            flags,
+            window_size: 65535,
+            checksum: 0,
+            urgent_ptr: 0,
+            payload,
         }
     }
 
@@ -214,16 +268,23 @@ impl TcpSegment {
     }
 
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
-        if data.len() < 20 { return Err(NetworkError::PacketTooShort); }
+        if data.len() < 20 {
+            return Err(NetworkError::PacketTooShort);
+        }
         let data_offset = data[12] >> 4;
         let header_len = (data_offset as usize) * 4;
-        let payload = if data.len() > header_len { data[header_len..].to_vec() } else { Vec::new() };
+        let payload = if data.len() > header_len {
+            data[header_len..].to_vec()
+        } else {
+            Vec::new()
+        };
         Ok(TcpSegment {
             src_port: u16::from_be_bytes([data[0], data[1]]),
             dst_port: u16::from_be_bytes([data[2], data[3]]),
             seq_num: u32::from_be_bytes([data[4], data[5], data[6], data[7]]),
             ack_num: u32::from_be_bytes([data[8], data[9], data[10], data[11]]),
-            data_offset, flags: data[13],
+            data_offset,
+            flags: data[13],
             window_size: u16::from_be_bytes([data[14], data[15]]),
             checksum: u16::from_be_bytes([data[16], data[17]]),
             urgent_ptr: u16::from_be_bytes([data[18], data[19]]),
@@ -231,10 +292,18 @@ impl TcpSegment {
         })
     }
 
-    pub fn is_syn(&self) -> bool { self.flags & TCP_SYN != 0 }
-    pub fn is_ack(&self) -> bool { self.flags & TCP_ACK != 0 }
-    pub fn is_fin(&self) -> bool { self.flags & TCP_FIN != 0 }
-    pub fn is_rst(&self) -> bool { self.flags & TCP_RST != 0 }
+    pub fn is_syn(&self) -> bool {
+        self.flags & TCP_SYN != 0
+    }
+    pub fn is_ack(&self) -> bool {
+        self.flags & TCP_ACK != 0
+    }
+    pub fn is_fin(&self) -> bool {
+        self.flags & TCP_FIN != 0
+    }
+    pub fn is_rst(&self) -> bool {
+        self.flags & TCP_RST != 0
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -255,7 +324,11 @@ pub struct RoutingTable {
 }
 
 impl RoutingTable {
-    pub fn new() -> Self { RoutingTable { routes: Mutex::new(Vec::new()) } }
+    pub fn new() -> Self {
+        RoutingTable {
+            routes: Mutex::new(Vec::new()),
+        }
+    }
 
     pub fn add(&self, route: Route) {
         let mut routes = self.routes.lock();
@@ -279,15 +352,25 @@ impl RoutingTable {
     }
 
     fn matches(ip: Ipv4Address, network: Ipv4Address, prefix: u8) -> bool {
-        if prefix == 0 { return true; }
-        let mask = if prefix >= 32 { 0xFFFFFFFFu32 } else { !((1u32 << (32 - prefix)) - 1) };
+        if prefix == 0 {
+            return true;
+        }
+        let mask = if prefix >= 32 {
+            0xFFFFFFFFu32
+        } else {
+            !((1u32 << (32 - prefix)) - 1)
+        };
         let ip_u32 = u32::from_be_bytes(ip.0);
         let net_u32 = u32::from_be_bytes(network.0);
         (ip_u32 & mask) == (net_u32 & mask)
     }
 
-    pub fn route_count(&self) -> usize { self.routes.lock().len() }
-    pub fn clear(&self) { self.routes.lock().clear(); }
+    pub fn route_count(&self) -> usize {
+        self.routes.lock().len()
+    }
+    pub fn clear(&self) {
+        self.routes.lock().clear();
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -298,8 +381,16 @@ pub type SocketId = u64;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TcpState {
-    Closed, Listen, SynSent, SynReceived, Established,
-    FinWait1, FinWait2, CloseWait, LastAck, TimeWait,
+    Closed,
+    Listen,
+    SynSent,
+    SynReceived,
+    Established,
+    FinWait1,
+    FinWait2,
+    CloseWait,
+    LastAck,
+    TimeWait,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -346,47 +437,89 @@ impl SocketManager {
 
     fn alloc_id(&self) -> SocketId {
         let mut id = self.next_id.lock();
-        let v = *id; *id += 1; v
+        let v = *id;
+        *id += 1;
+        v
     }
 
     // ── UDP ──────────────────────────────────────────────────────────────
 
     pub fn udp_bind(&self, local_ip: Ipv4Address, local_port: u16) -> SocketId {
         let id = self.alloc_id();
-        self.udp_sockets.lock().insert(id, UdpSocket {
-            id, local_ip, local_port,
-            remote_ip: None, remote_port: None, recv_queue: Vec::new(),
-        });
+        self.udp_sockets.lock().insert(
+            id,
+            UdpSocket {
+                id,
+                local_ip,
+                local_port,
+                remote_ip: None,
+                remote_port: None,
+                recv_queue: Vec::new(),
+            },
+        );
         id
     }
 
-    pub fn udp_connect(&self, id: SocketId, remote_ip: Ipv4Address, remote_port: u16) -> Result<(), NetworkError> {
+    pub fn udp_connect(
+        &self,
+        id: SocketId,
+        remote_ip: Ipv4Address,
+        remote_port: u16,
+    ) -> Result<(), NetworkError> {
         let mut sockets = self.udp_sockets.lock();
-        let socket = sockets.get_mut(&id).ok_or(NetworkError::ArpResolutionFailed)?;
+        let socket = sockets
+            .get_mut(&id)
+            .ok_or(NetworkError::ArpResolutionFailed)?;
         socket.remote_ip = Some(remote_ip);
         socket.remote_port = Some(remote_port);
         Ok(())
     }
 
-    pub fn udp_send(&self, id: SocketId, data: &[u8], stack: &NetworkStack) -> Result<(), NetworkError> {
+    pub fn udp_send(
+        &self,
+        id: SocketId,
+        data: &[u8],
+        stack: &NetworkStack,
+    ) -> Result<(), NetworkError> {
         let sockets = self.udp_sockets.lock();
         let socket = sockets.get(&id).ok_or(NetworkError::ArpResolutionFailed)?;
         let remote_ip = socket.remote_ip.ok_or(NetworkError::ArpResolutionFailed)?;
-        let remote_port = socket.remote_port.ok_or(NetworkError::ArpResolutionFailed)?;
+        let remote_port = socket
+            .remote_port
+            .ok_or(NetworkError::ArpResolutionFailed)?;
         let udp = UdpPacket::new(socket.local_port, remote_port, data.to_vec());
-        let ip = Ipv4Packet::new(socket.local_ip, remote_ip, IP_PROTO_UDP, udp.to_bytes()).with_checksum();
-        let dst_mac = stack.resolve_mac(remote_ip).ok_or(NetworkError::ArpResolutionFailed)?;
-        let frame = EthernetFrame::new(dst_mac, stack.device.mac_address(), ETH_TYPE_IPV4, ip.to_bytes());
+        let ip = Ipv4Packet::new(socket.local_ip, remote_ip, IP_PROTO_UDP, udp.to_bytes())
+            .with_checksum();
+        let dst_mac = stack
+            .resolve_mac(remote_ip)
+            .ok_or(NetworkError::ArpResolutionFailed)?;
+        let frame = EthernetFrame::new(
+            dst_mac,
+            stack.device.mac_address(),
+            ETH_TYPE_IPV4,
+            ip.to_bytes(),
+        );
         stack.device.send_frame(&frame.to_bytes())
     }
 
     pub fn udp_recv(&self, id: SocketId) -> Result<Vec<u8>, NetworkError> {
         let mut sockets = self.udp_sockets.lock();
-        let socket = sockets.get_mut(&id).ok_or(NetworkError::ArpResolutionFailed)?;
-        socket.recv_queue.pop().ok_or(NetworkError::NoFrameAvailable)
+        let socket = sockets
+            .get_mut(&id)
+            .ok_or(NetworkError::ArpResolutionFailed)?;
+        socket
+            .recv_queue
+            .pop()
+            .ok_or(NetworkError::NoFrameAvailable)
     }
 
-    pub fn handle_udp(&self, _src_ip: Ipv4Address, _src_port: u16, dst_port: u16, payload: Vec<u8>) {
+    pub fn handle_udp(
+        &self,
+        _src_ip: Ipv4Address,
+        _src_port: u16,
+        dst_port: u16,
+        payload: Vec<u8>,
+    ) {
         let mut sockets = self.udp_sockets.lock();
         for socket in sockets.values_mut() {
             if socket.local_port == dst_port {
@@ -395,22 +528,41 @@ impl SocketManager {
         }
     }
 
-    pub fn udp_close(&self, id: SocketId) { self.udp_sockets.lock().remove(&id); }
+    pub fn udp_close(&self, id: SocketId) {
+        self.udp_sockets.lock().remove(&id);
+    }
 
     // ── TCP ──────────────────────────────────────────────────────────────
 
     pub fn tcp_bind(&self, local_ip: Ipv4Address, local_port: u16) -> SocketId {
         let id = self.alloc_id();
-        self.tcp_sockets.lock().insert(id, TcpSocket {
-            id, local_ip, local_port, remote_ip: None, remote_port: None,
-            state: TcpState::Listen, seq_num: 1000, ack_num: 0, recv_queue: Vec::new(),
-        });
+        self.tcp_sockets.lock().insert(
+            id,
+            TcpSocket {
+                id,
+                local_ip,
+                local_port,
+                remote_ip: None,
+                remote_port: None,
+                state: TcpState::Listen,
+                seq_num: 1000,
+                ack_num: 0,
+                recv_queue: Vec::new(),
+            },
+        );
         id
     }
 
-    pub fn tcp_connect(&self, id: SocketId, remote_ip: Ipv4Address, remote_port: u16) -> Result<TcpState, NetworkError> {
+    pub fn tcp_connect(
+        &self,
+        id: SocketId,
+        remote_ip: Ipv4Address,
+        remote_port: u16,
+    ) -> Result<TcpState, NetworkError> {
         let mut sockets = self.tcp_sockets.lock();
-        let socket = sockets.get_mut(&id).ok_or(NetworkError::ArpResolutionFailed)?;
+        let socket = sockets
+            .get_mut(&id)
+            .ok_or(NetworkError::ArpResolutionFailed)?;
         socket.remote_ip = Some(remote_ip);
         socket.remote_port = Some(remote_port);
         socket.state = TcpState::SynSent;
@@ -423,8 +575,10 @@ impl SocketManager {
 
     pub fn handle_tcp(&self, src_ip: Ipv4Address, src_port: u16, dst_port: u16, seg: &TcpSegment) {
         let mut sockets = self.tcp_sockets.lock();
-        let matching_id: Option<SocketId> = sockets.values()
-            .find(|s| s.local_port == dst_port).map(|s| s.id);
+        let matching_id: Option<SocketId> = sockets
+            .values()
+            .find(|s| s.local_port == dst_port)
+            .map(|s| s.id);
 
         if let Some(id) = matching_id {
             let socket = sockets.get_mut(&id).unwrap();
@@ -454,11 +608,17 @@ impl SocketManager {
                     }
                 }
                 TcpState::FinWait1 => {
-                    if seg.is_ack() { socket.state = TcpState::FinWait2; }
-                    if seg.is_fin() { socket.state = TcpState::TimeWait; }
+                    if seg.is_ack() {
+                        socket.state = TcpState::FinWait2;
+                    }
+                    if seg.is_fin() {
+                        socket.state = TcpState::TimeWait;
+                    }
                 }
                 TcpState::LastAck => {
-                    if seg.is_ack() { socket.state = TcpState::Closed; }
+                    if seg.is_ack() {
+                        socket.state = TcpState::Closed;
+                    }
                 }
                 _ => {}
             }
@@ -467,13 +627,20 @@ impl SocketManager {
 
     pub fn tcp_recv(&self, id: SocketId) -> Result<Vec<u8>, NetworkError> {
         let mut sockets = self.tcp_sockets.lock();
-        let socket = sockets.get_mut(&id).ok_or(NetworkError::ArpResolutionFailed)?;
-        socket.recv_queue.pop().ok_or(NetworkError::NoFrameAvailable)
+        let socket = sockets
+            .get_mut(&id)
+            .ok_or(NetworkError::ArpResolutionFailed)?;
+        socket
+            .recv_queue
+            .pop()
+            .ok_or(NetworkError::NoFrameAvailable)
     }
 
     pub fn tcp_close(&self, id: SocketId) {
         let mut sockets = self.tcp_sockets.lock();
-        if let Some(socket) = sockets.get_mut(&id) { socket.state = TcpState::Closed; }
+        if let Some(socket) = sockets.get_mut(&id) {
+            socket.state = TcpState::Closed;
+        }
         sockets.remove(&id);
     }
 
@@ -495,21 +662,27 @@ pub struct IpStack {
 impl IpStack {
     pub fn new(net: Arc<NetworkStack>) -> Self {
         IpStack {
-            net, routing: Arc::new(RoutingTable::new()), sockets: Arc::new(SocketManager::new()),
+            net,
+            routing: Arc::new(RoutingTable::new()),
+            sockets: Arc::new(SocketManager::new()),
         }
     }
 
     pub fn handle_ipv4(&self, packet: &Ipv4Packet) {
-        if packet.dst_ip != self.net.our_ip() && !packet.dst_ip.is_broadcast() { return; }
+        if packet.dst_ip != self.net.our_ip() && !packet.dst_ip.is_broadcast() {
+            return;
+        }
         match packet.protocol {
             IP_PROTO_UDP => {
                 if let Ok(udp) = UdpPacket::from_bytes(&packet.payload) {
-                    self.sockets.handle_udp(packet.src_ip, udp.src_port, udp.dst_port, udp.payload);
+                    self.sockets
+                        .handle_udp(packet.src_ip, udp.src_port, udp.dst_port, udp.payload);
                 }
             }
             IP_PROTO_TCP => {
                 if let Ok(tcp) = TcpSegment::from_bytes(&packet.payload) {
-                    self.sockets.handle_tcp(packet.src_ip, tcp.src_port, tcp.dst_port, &tcp);
+                    self.sockets
+                        .handle_tcp(packet.src_ip, tcp.src_port, tcp.dst_port, &tcp);
                 }
             }
             _ => {}
@@ -529,9 +702,15 @@ impl IpStack {
         }
     }
 
-    pub fn routing(&self) -> &Arc<RoutingTable> { &self.routing }
-    pub fn sockets(&self) -> &Arc<SocketManager> { &self.sockets }
-    pub fn net(&self) -> &Arc<NetworkStack> { &self.net }
+    pub fn routing(&self) -> &Arc<RoutingTable> {
+        &self.routing
+    }
+    pub fn sockets(&self) -> &Arc<SocketManager> {
+        &self.sockets
+    }
+    pub fn net(&self) -> &Arc<NetworkStack> {
+        &self.net
+    }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
@@ -546,8 +725,10 @@ mod tests {
     #[test]
     fn test_ipv4_create() {
         let pkt = Ipv4Packet::new(
-            Ipv4Address::new(10, 0, 0, 1), Ipv4Address::new(10, 0, 0, 2),
-            IP_PROTO_UDP, vec![0xDE, 0xAD],
+            Ipv4Address::new(10, 0, 0, 1),
+            Ipv4Address::new(10, 0, 0, 2),
+            IP_PROTO_UDP,
+            vec![0xDE, 0xAD],
         );
         assert_eq!(pkt.version, 4);
         assert_eq!(pkt.ihl, 5);
@@ -559,8 +740,10 @@ mod tests {
     #[test]
     fn test_ipv4_serialize_deserialize() {
         let pkt = Ipv4Packet::new(
-            Ipv4Address::new(192, 168, 1, 1), Ipv4Address::new(192, 168, 1, 2),
-            IP_PROTO_TCP, vec![0x01, 0x02, 0x03],
+            Ipv4Address::new(192, 168, 1, 1),
+            Ipv4Address::new(192, 168, 1, 2),
+            IP_PROTO_TCP,
+            vec![0x01, 0x02, 0x03],
         );
         let bytes = pkt.to_bytes();
         assert_eq!(bytes.len(), 23);
@@ -574,19 +757,26 @@ mod tests {
     #[test]
     fn test_ipv4_checksum() {
         let pkt = Ipv4Packet::new(
-            Ipv4Address::new(10, 0, 0, 1), Ipv4Address::new(10, 0, 0, 2),
-            IP_PROTO_UDP, vec![],
-        ).with_checksum();
+            Ipv4Address::new(10, 0, 0, 1),
+            Ipv4Address::new(10, 0, 0, 2),
+            IP_PROTO_UDP,
+            vec![],
+        )
+        .with_checksum();
         assert_ne!(pkt.header_checksum, 0);
         let mut bytes = pkt.to_bytes();
-        bytes[10] = 0; bytes[11] = 0;
+        bytes[10] = 0;
+        bytes[11] = 0;
         let computed = Ipv4Packet::calculate_checksum(&bytes[..20]);
         assert_eq!(computed, pkt.header_checksum);
     }
 
     #[test]
     fn test_ipv4_too_short() {
-        assert_eq!(Ipv4Packet::from_bytes(&[0u8; 10]), Err(NetworkError::PacketTooShort));
+        assert_eq!(
+            Ipv4Packet::from_bytes(&[0u8; 10]),
+            Err(NetworkError::PacketTooShort)
+        );
     }
 
     // ── UDP ──────────────────────────────────────────────────────────────────
@@ -612,7 +802,10 @@ mod tests {
 
     #[test]
     fn test_udp_too_short() {
-        assert_eq!(UdpPacket::from_bytes(&[0; 4]), Err(NetworkError::PacketTooShort));
+        assert_eq!(
+            UdpPacket::from_bytes(&[0; 4]),
+            Err(NetworkError::PacketTooShort)
+        );
     }
 
     // ── TCP ──────────────────────────────────────────────────────────────────
@@ -650,7 +843,10 @@ mod tests {
 
     #[test]
     fn test_tcp_too_short() {
-        assert_eq!(TcpSegment::from_bytes(&[0; 10]), Err(NetworkError::PacketTooShort));
+        assert_eq!(
+            TcpSegment::from_bytes(&[0; 10]),
+            Err(NetworkError::PacketTooShort)
+        );
     }
 
     // ── Routing-Table ────────────────────────────────────────────────────────
@@ -659,8 +855,11 @@ mod tests {
     fn test_routing_exact() {
         let table = RoutingTable::new();
         table.add(Route {
-            network: Ipv4Address::new(192, 168, 1, 0), prefix_len: 24,
-            gateway: None, interface: "eth0".into(), metric: 100,
+            network: Ipv4Address::new(192, 168, 1, 0),
+            prefix_len: 24,
+            gateway: None,
+            interface: "eth0".into(),
+            metric: 100,
         });
         let route = table.lookup(Ipv4Address::new(192, 168, 1, 100)).unwrap();
         assert_eq!(route.prefix_len, 24);
@@ -670,9 +869,27 @@ mod tests {
     #[test]
     fn test_routing_longest_prefix() {
         let table = RoutingTable::new();
-        table.add(Route { network: Ipv4Address::new(0,0,0,0), prefix_len: 0, gateway: Some(Ipv4Address::new(10,0,0,1)), interface: "eth0".into(), metric: 200 });
-        table.add(Route { network: Ipv4Address::new(192,168,0,0), prefix_len: 16, gateway: None, interface: "eth1".into(), metric: 100 });
-        table.add(Route { network: Ipv4Address::new(192,168,1,0), prefix_len: 24, gateway: None, interface: "eth2".into(), metric: 50 });
+        table.add(Route {
+            network: Ipv4Address::new(0, 0, 0, 0),
+            prefix_len: 0,
+            gateway: Some(Ipv4Address::new(10, 0, 0, 1)),
+            interface: "eth0".into(),
+            metric: 200,
+        });
+        table.add(Route {
+            network: Ipv4Address::new(192, 168, 0, 0),
+            prefix_len: 16,
+            gateway: None,
+            interface: "eth1".into(),
+            metric: 100,
+        });
+        table.add(Route {
+            network: Ipv4Address::new(192, 168, 1, 0),
+            prefix_len: 24,
+            gateway: None,
+            interface: "eth2".into(),
+            metric: 50,
+        });
         let route = table.lookup(Ipv4Address::new(192, 168, 1, 50)).unwrap();
         assert_eq!(route.prefix_len, 24);
         assert_eq!(route.interface, "eth2");
@@ -681,7 +898,13 @@ mod tests {
     #[test]
     fn test_routing_default_route() {
         let table = RoutingTable::new();
-        table.add(Route { network: Ipv4Address::new(0,0,0,0), prefix_len: 0, gateway: Some(Ipv4Address::new(10,0,0,1)), interface: "eth0".into(), metric: 300 });
+        table.add(Route {
+            network: Ipv4Address::new(0, 0, 0, 0),
+            prefix_len: 0,
+            gateway: Some(Ipv4Address::new(10, 0, 0, 1)),
+            interface: "eth0".into(),
+            metric: 300,
+        });
         let route = table.lookup(Ipv4Address::new(8, 8, 8, 8)).unwrap();
         assert_eq!(route.prefix_len, 0);
     }
@@ -689,7 +912,13 @@ mod tests {
     #[test]
     fn test_routing_no_match() {
         let table = RoutingTable::new();
-        table.add(Route { network: Ipv4Address::new(192,168,1,0), prefix_len: 24, gateway: None, interface: "eth0".into(), metric: 100 });
+        table.add(Route {
+            network: Ipv4Address::new(192, 168, 1, 0),
+            prefix_len: 24,
+            gateway: None,
+            interface: "eth0".into(),
+            metric: 100,
+        });
         assert!(table.lookup(Ipv4Address::new(10, 0, 0, 1)).is_none());
     }
 
@@ -708,7 +937,8 @@ mod tests {
     fn test_udp_connect() {
         let mgr = SocketManager::new();
         let id = mgr.udp_bind(Ipv4Address::new(10, 0, 0, 1), 8080);
-        mgr.udp_connect(id, Ipv4Address::new(10, 0, 0, 2), 9090).unwrap();
+        mgr.udp_connect(id, Ipv4Address::new(10, 0, 0, 2), 9090)
+            .unwrap();
     }
 
     #[test]
@@ -749,7 +979,9 @@ mod tests {
     fn test_tcp_connect_syn_sent() {
         let mgr = SocketManager::new();
         let id = mgr.tcp_bind(Ipv4Address::new(10, 0, 0, 1), 80);
-        let state = mgr.tcp_connect(id, Ipv4Address::new(10, 0, 0, 2), 443).unwrap();
+        let state = mgr
+            .tcp_connect(id, Ipv4Address::new(10, 0, 0, 2), 443)
+            .unwrap();
         assert_eq!(state, TcpState::SynSent);
     }
 
@@ -812,9 +1044,16 @@ mod tests {
         let dev = Arc::new(LoopbackDevice::new("lo0"));
         let net = Arc::new(NetworkStack::new(dev, Ipv4Address::new(10, 0, 0, 1)));
         let stack = IpStack::new(net);
-        let sock_id = stack.sockets().udp_bind(Ipv4Address::new(10, 0, 0, 1), 8080);
+        let sock_id = stack
+            .sockets()
+            .udp_bind(Ipv4Address::new(10, 0, 0, 1), 8080);
         let udp = UdpPacket::new(9090, 8080, vec![0x42, 0x43]);
-        let ip = Ipv4Packet::new(Ipv4Address::new(10, 0, 0, 2), Ipv4Address::new(10, 0, 0, 1), IP_PROTO_UDP, udp.to_bytes());
+        let ip = Ipv4Packet::new(
+            Ipv4Address::new(10, 0, 0, 2),
+            Ipv4Address::new(10, 0, 0, 1),
+            IP_PROTO_UDP,
+            udp.to_bytes(),
+        );
         stack.handle_ipv4(&ip);
         let data = stack.sockets().udp_recv(sock_id).unwrap();
         assert_eq!(data, vec![0x42, 0x43]);
@@ -825,11 +1064,21 @@ mod tests {
         let dev = Arc::new(LoopbackDevice::new("lo0"));
         let net = Arc::new(NetworkStack::new(dev, Ipv4Address::new(10, 0, 0, 1)));
         let stack = IpStack::new(net);
-        let sock_id = stack.sockets().udp_bind(Ipv4Address::new(10, 0, 0, 1), 8080);
+        let sock_id = stack
+            .sockets()
+            .udp_bind(Ipv4Address::new(10, 0, 0, 1), 8080);
         let udp = UdpPacket::new(9090, 8080, vec![0x42]);
-        let ip = Ipv4Packet::new(Ipv4Address::new(10, 0, 0, 2), Ipv4Address::new(10, 0, 0, 99), IP_PROTO_UDP, udp.to_bytes());
+        let ip = Ipv4Packet::new(
+            Ipv4Address::new(10, 0, 0, 2),
+            Ipv4Address::new(10, 0, 0, 99),
+            IP_PROTO_UDP,
+            udp.to_bytes(),
+        );
         stack.handle_ipv4(&ip);
-        assert_eq!(stack.sockets().udp_recv(sock_id), Err(NetworkError::NoFrameAvailable));
+        assert_eq!(
+            stack.sockets().udp_recv(sock_id),
+            Err(NetworkError::NoFrameAvailable)
+        );
     }
 
     #[test]
@@ -839,9 +1088,17 @@ mod tests {
         let stack = IpStack::new(net);
         let sock_id = stack.sockets().tcp_bind(Ipv4Address::new(10, 0, 0, 1), 80);
         let tcp = TcpSegment::new(443, 80, 1000, 0, TCP_SYN, vec![]);
-        let ip = Ipv4Packet::new(Ipv4Address::new(10, 0, 0, 2), Ipv4Address::new(10, 0, 0, 1), IP_PROTO_TCP, tcp.to_bytes());
+        let ip = Ipv4Packet::new(
+            Ipv4Address::new(10, 0, 0, 2),
+            Ipv4Address::new(10, 0, 0, 1),
+            IP_PROTO_TCP,
+            tcp.to_bytes(),
+        );
         stack.handle_ipv4(&ip);
-        assert_eq!(stack.sockets().tcp_state(sock_id), Some(TcpState::SynReceived));
+        assert_eq!(
+            stack.sockets().tcp_state(sock_id),
+            Some(TcpState::SynReceived)
+        );
     }
 
     #[test]
@@ -849,10 +1106,22 @@ mod tests {
         let dev = Arc::new(LoopbackDevice::new("lo0"));
         let net = Arc::new(NetworkStack::new(dev, Ipv4Address::new(10, 0, 0, 1)));
         let stack = IpStack::new(net);
-        let sock_id = stack.sockets().udp_bind(Ipv4Address::new(10, 0, 0, 1), 5000);
+        let sock_id = stack
+            .sockets()
+            .udp_bind(Ipv4Address::new(10, 0, 0, 1), 5000);
         let udp = UdpPacket::new(4000, 5000, vec![0xAA, 0xBB]);
-        let ip = Ipv4Packet::new(Ipv4Address::new(10, 0, 0, 2), Ipv4Address::new(10, 0, 0, 1), IP_PROTO_UDP, udp.to_bytes());
-        let frame = EthernetFrame::new(stack.net().device.mac_address(), MacAddress::new(0x11, 0x22, 0x33, 0x44, 0x55, 0x66), ETH_TYPE_IPV4, ip.to_bytes());
+        let ip = Ipv4Packet::new(
+            Ipv4Address::new(10, 0, 0, 2),
+            Ipv4Address::new(10, 0, 0, 1),
+            IP_PROTO_UDP,
+            udp.to_bytes(),
+        );
+        let frame = EthernetFrame::new(
+            stack.net().device.mac_address(),
+            MacAddress::new(0x11, 0x22, 0x33, 0x44, 0x55, 0x66),
+            ETH_TYPE_IPV4,
+            ip.to_bytes(),
+        );
         stack.handle_frame(&frame.to_bytes(), 0).unwrap();
         let data = stack.sockets().udp_recv(sock_id).unwrap();
         assert_eq!(data, vec![0xAA, 0xBB]);

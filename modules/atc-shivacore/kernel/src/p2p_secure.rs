@@ -21,15 +21,15 @@
 // Baut auf K14 (p2p.rs, v0.9) und K15 (security.rs TokenBucket) auf.
 // ─────────────────────────────────────────────────────────────────────────
 
+use alloc::boxed::Box;
+use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use alloc::string::{String, ToString};
+use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use alloc::string::{String, ToString};
-use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
-use alloc::boxed::Box;
-use alloc::sync::Arc;
 use spin::Mutex;
 
-use crate::p2p::{P2pNode, P2pMessage, MessageType, CHAIN_ID};
+use crate::p2p::{MessageType, P2pMessage, P2pNode, CHAIN_ID};
 use crate::security::TokenBucket;
 
 // ─── Protokoll-Konstanten (ATC-PROTO-P2P-001 §1/§3/§11/§18) ──────────────────
@@ -55,7 +55,7 @@ pub const TIMESTAMP_WINDOW_MS: u64 = 120_000;
 pub const SEEN_SET_MAX: usize = 4096;
 
 /// Rate-Limit-Defaults (§14).
-pub const RATE_MSG_CAPACITY: u32 = 100;       // Messages/s je Peer
+pub const RATE_MSG_CAPACITY: u32 = 100; // Messages/s je Peer
 pub const RATE_MSG_REFILL: u32 = 100;
 pub const RATE_BYTES_CAPACITY: u32 = 256 * 1024; // Bytes/s je Peer
 pub const RATE_BYTES_REFILL: u32 = 256 * 1024;
@@ -105,9 +105,9 @@ pub enum V1Error {
     InvalidDID,
     NotConnected,
     /// ATC-PROTO-P2P-010..019: v1.0.0-NEU
-    EnvelopeInvalid,          // 010 (VALIDATION)
+    EnvelopeInvalid, // 010 (VALIDATION)
     SignatureInvalid,        // 011 (SECURITY)
-    NonceReuse,               // 012 (SECURITY)
+    NonceReuse,              // 012 (SECURITY)
     CapabilityDenied,        // 013 (AUTHORIZATION)
     RateLimited,             // 014 (RATE_LIMIT)
     ReplayDetected,          // 015 (SECURITY)
@@ -143,12 +143,18 @@ impl V1Error {
 
     pub fn category(&self) -> &'static str {
         match self {
-            V1Error::MessageTooShort | V1Error::EnvelopeInvalid
+            V1Error::MessageTooShort
+            | V1Error::EnvelopeInvalid
             | V1Error::TimestampOutsideWindow => "VALIDATION",
-            V1Error::UnknownMessageType(_) | V1Error::HandshakeFailed
-            | V1Error::HandshakePhaseViolation | V1Error::VersionIncompatible => "PROTOCOL",
-            V1Error::WrongChainId(_) | V1Error::SignatureInvalid | V1Error::NonceReuse
-            | V1Error::ReplayDetected | V1Error::PeerBanned => "SECURITY",
+            V1Error::UnknownMessageType(_)
+            | V1Error::HandshakeFailed
+            | V1Error::HandshakePhaseViolation
+            | V1Error::VersionIncompatible => "PROTOCOL",
+            V1Error::WrongChainId(_)
+            | V1Error::SignatureInvalid
+            | V1Error::NonceReuse
+            | V1Error::ReplayDetected
+            | V1Error::PeerBanned => "SECURITY",
             V1Error::PeerNotFound | V1Error::NotConnected => "NETWORK",
             V1Error::InvalidDID => "AUTHENTICATION",
             V1Error::CapabilityDenied => "AUTHORIZATION",
@@ -157,16 +163,26 @@ impl V1Error {
     }
 
     pub fn retryable(&self) -> bool {
-        matches!(self, V1Error::PeerNotFound | V1Error::NotConnected
-            | V1Error::HandshakeFailed | V1Error::RateLimited)
+        matches!(
+            self,
+            V1Error::PeerNotFound
+                | V1Error::NotConnected
+                | V1Error::HandshakeFailed
+                | V1Error::RateLimited
+        )
     }
 
     pub fn severity(&self) -> &'static str {
         match self {
-            V1Error::WrongChainId(_) | V1Error::SignatureInvalid | V1Error::NonceReuse
-            | V1Error::ReplayDetected | V1Error::PeerBanned => "CRITICAL",
-            V1Error::HandshakeFailed | V1Error::HandshakePhaseViolation
-            | V1Error::VersionIncompatible | V1Error::InvalidDID => "WARN",
+            V1Error::WrongChainId(_)
+            | V1Error::SignatureInvalid
+            | V1Error::NonceReuse
+            | V1Error::ReplayDetected
+            | V1Error::PeerBanned => "CRITICAL",
+            V1Error::HandshakeFailed
+            | V1Error::HandshakePhaseViolation
+            | V1Error::VersionIncompatible
+            | V1Error::InvalidDID => "WARN",
             _ => "INFO",
         }
     }
@@ -200,7 +216,9 @@ fn mix32(state: u64, data: &[u8]) -> [u8; 32] {
     }
     let mut out = [0u8; 32];
     for i in 0..4 {
-        s = s.wrapping_mul(0x2545F4914F6CDD1D).wrapping_add(0x9E3779B97F4A7C15);
+        s = s
+            .wrapping_mul(0x2545F4914F6CDD1D)
+            .wrapping_add(0x9E3779B97F4A7C15);
         out[i * 8..(i + 1) * 8].copy_from_slice(&s.to_le_bytes());
     }
     out
@@ -235,7 +253,6 @@ impl SignatureProvider for SimulatedSigner {
     }
 }
 
-
 // ─── Capabilities (ATC-PROTO-P2P-001 §8 Phase 3) ──────────────────────────────
 
 /// Capability-Bitmap gem. PROTOCOL-001 §8 (Mindestmenge).
@@ -252,14 +269,24 @@ impl Capabilities {
     pub const V1_ENVELOPE: u32 = 1 << 6;
     pub const V0_9_COMPAT: u32 = 1 << 7;
 
-    pub fn with(bits: u32) -> Self { Capabilities(bits) }
-    pub fn has(&self, bit: u32) -> bool { self.0 & bit != 0 }
-    pub fn intersection(&self, other: Capabilities) -> Capabilities { Capabilities(self.0 & other.0) }
+    pub fn with(bits: u32) -> Self {
+        Capabilities(bits)
+    }
+    pub fn has(&self, bit: u32) -> bool {
+        self.0 & bit != 0
+    }
+    pub fn intersection(&self, other: Capabilities) -> Capabilities {
+        Capabilities(self.0 & other.0)
+    }
 
     /// Serde: Bitmap[4]
-    pub fn to_bytes(&self) -> [u8; 4] { self.0.to_be_bytes() }
+    pub fn to_bytes(&self) -> [u8; 4] {
+        self.0.to_be_bytes()
+    }
     pub fn from_bytes(b: &[u8]) -> Option<Self> {
-        if b.len() < 4 { return None; }
+        if b.len() < 4 {
+            return None;
+        }
         Some(Capabilities(u32::from_be_bytes([b[0], b[1], b[2], b[3]])))
     }
 }
@@ -268,16 +295,16 @@ impl Capabilities {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Envelope {
-    pub protocol: [u8; 16],      // 1: ATC-PROTO-P2P (§3.1 fixed 16)
-    pub version: (u8, u8, u8),    // 2: SemVer des Absenders
-    pub message_type: u8,         // 3: §4-Tabelle
-    pub message_id: [u8; 32],     // 4: eindeutig (Seen-Set, §7/§15)
-    pub timestamp: u64,           // 5: ms seit Epoch
-    pub sender: String,           // 6: DID (K6) — Identität, nie IP (§9)
-    pub nonce: [u8; 16],          // 7: Replay-Schutz (§15)
-    pub payload: Vec<u8>,          // 8: typspezifisch (§4)
-    pub signature: [u8; 64],      // 9: Signatur über kanonische Bytes (§11)
-    pub chain_id: u32,            // 10: 658467 (§15 — Abweichung = Disconnect)
+    pub protocol: [u8; 16],    // 1: ATC-PROTO-P2P (§3.1 fixed 16)
+    pub version: (u8, u8, u8), // 2: SemVer des Absenders
+    pub message_type: u8,      // 3: §4-Tabelle
+    pub message_id: [u8; 32],  // 4: eindeutig (Seen-Set, §7/§15)
+    pub timestamp: u64,        // 5: ms seit Epoch
+    pub sender: String,        // 6: DID (K6) — Identität, nie IP (§9)
+    pub nonce: [u8; 16],       // 7: Replay-Schutz (§15)
+    pub payload: Vec<u8>,      // 8: typspezifisch (§4)
+    pub signature: [u8; 64],   // 9: Signatur über kanonische Bytes (§11)
+    pub chain_id: u32,         // 10: 658467 (§15 — Abweichung = Disconnect)
 }
 
 impl Envelope {
@@ -287,7 +314,9 @@ impl Envelope {
     /// payload || chain_id[4] — Big-Endian, feste Feldreihenfolge.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let sender = self.sender.as_bytes();
-        let mut buf = Vec::with_capacity(16 + 3 + 1 + 32 + 8 + 2 + sender.len() + 16 + 4 + self.payload.len() + 4);
+        let mut buf = Vec::with_capacity(
+            16 + 3 + 1 + 32 + 8 + 2 + sender.len() + 16 + 4 + self.payload.len() + 4,
+        );
         buf.extend_from_slice(&self.protocol);
         buf.push(self.version.0);
         buf.push(self.version.1);
@@ -330,34 +359,57 @@ impl Envelope {
     /// Parst Wire-Bytes; verifiziert Protokoll-ID und Chain-ID (§3/§15).
     pub fn from_bytes(data: &[u8]) -> Result<Self, V1Error> {
         // Minimum: 16+3+1+32+8+2+16+4+4+64 = 150 + Sender
-        if data.len() < 150 { return Err(V1Error::MessageTooShort); }
+        if data.len() < 150 {
+            return Err(V1Error::MessageTooShort);
+        }
         let mut protocol = [0u8; 16];
         protocol.copy_from_slice(&data[0..16]);
-        if protocol != PROTOCOL_ID { return Err(V1Error::EnvelopeInvalid); }
+        if protocol != PROTOCOL_ID {
+            return Err(V1Error::EnvelopeInvalid);
+        }
         let version = (data[16], data[17], data[18]);
         let message_type = data[19];
         let mut message_id = [0u8; 32];
         message_id.copy_from_slice(&data[20..52]);
-        let timestamp = u64::from_be_bytes([data[52], data[53], data[54], data[55],
-            data[56], data[57], data[58], data[59]]);
+        let timestamp = u64::from_be_bytes([
+            data[52], data[53], data[54], data[55], data[56], data[57], data[58], data[59],
+        ]);
         let sender_len = u16::from_be_bytes([data[60], data[61]]) as usize;
-        if data.len() < 62 + sender_len + 16 + 4 + 4 + 64 { return Err(V1Error::MessageTooShort); }
+        if data.len() < 62 + sender_len + 16 + 4 + 4 + 64 {
+            return Err(V1Error::MessageTooShort);
+        }
         let sender = String::from_utf8_lossy(&data[62..62 + sender_len]).to_string();
         let mut off = 62 + sender_len;
         let mut nonce = [0u8; 16];
         nonce.copy_from_slice(&data[off..off + 16]);
         off += 16;
-        let payload_len = u32::from_be_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]) as usize;
-        if data.len() < off + 4 + payload_len + 4 + 64 { return Err(V1Error::MessageTooShort); }
+        let payload_len =
+            u32::from_be_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]) as usize;
+        if data.len() < off + 4 + payload_len + 4 + 64 {
+            return Err(V1Error::MessageTooShort);
+        }
         off += 4;
         let payload = data[off..off + payload_len].to_vec();
         off += payload_len;
         let chain_id = u32::from_be_bytes([data[off], data[off + 1], data[off + 2], data[off + 3]]);
-        if chain_id != CHAIN_ID { return Err(V1Error::WrongChainId(chain_id)); }
+        if chain_id != CHAIN_ID {
+            return Err(V1Error::WrongChainId(chain_id));
+        }
         off += 4;
         let mut signature = [0u8; 64];
         signature.copy_from_slice(&data[off..off + 64]);
-        Ok(Envelope { protocol, version, message_type, message_id, timestamp, sender, nonce, payload, signature, chain_id })
+        Ok(Envelope {
+            protocol,
+            version,
+            message_type,
+            message_id,
+            timestamp,
+            sender,
+            nonce,
+            payload,
+            signature,
+            chain_id,
+        })
     }
 }
 
@@ -370,19 +422,31 @@ pub struct SeenSet {
 }
 
 impl SeenSet {
-    pub fn new(max: usize) -> Self { SeenSet { seen: BTreeSet::new(), order: VecDeque::new(), max } }
+    pub fn new(max: usize) -> Self {
+        SeenSet {
+            seen: BTreeSet::new(),
+            order: VecDeque::new(),
+            max,
+        }
+    }
 
     /// true = neu (und aufgenommen); false = Replay (§12: ATC-PROTO-P2P-015).
     pub fn check_and_insert(&mut self, id: [u8; 32]) -> bool {
-        if !self.seen.insert(id) { return false; }
+        if !self.seen.insert(id) {
+            return false;
+        }
         self.order.push_back(id);
         if self.order.len() > self.max {
-            if let Some(old) = self.order.pop_front() { self.seen.remove(&old); }
+            if let Some(old) = self.order.pop_front() {
+                self.seen.remove(&old);
+            }
         }
         true
     }
 
-    pub fn len(&self) -> usize { self.seen.len() }
+    pub fn len(&self) -> usize {
+        self.seen.len()
+    }
 }
 
 // ─── Secure-Peer-Verwaltung (§5/§8/§10/§14) ───────────────────────────────────
@@ -391,12 +455,12 @@ impl SeenSet {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum HandshakePhase {
     None = 0,
-    HelloSent = 1,          // Phase 1 (HELLO)
-    Negotiated = 2,         // Phase 2 (PROTOCOL_NEGOTIATION)
-    Capabilities = 3,       // Phase 3 (CAPABILITY_EXCHANGE)
-    Authenticated = 4,      // Phase 4 (AUTHENTICATION)
-    KeysExchanged = 5,      // Phase 5 (KEY_EXCHANGE)
-    Established = 6,        // Phase 6 (SESSION_ESTABLISHED)
+    HelloSent = 1,     // Phase 1 (HELLO)
+    Negotiated = 2,    // Phase 2 (PROTOCOL_NEGOTIATION)
+    Capabilities = 3,  // Phase 3 (CAPABILITY_EXCHANGE)
+    Authenticated = 4, // Phase 4 (AUTHENTICATION)
+    KeysExchanged = 5, // Phase 5 (KEY_EXCHANGE)
+    Established = 6,   // Phase 6 (SESSION_ESTABLISHED)
 }
 
 pub struct SecurePeer {
@@ -436,11 +500,17 @@ pub struct SecurePeerTable {
 }
 
 impl SecurePeerTable {
-    pub fn new() -> Self { SecurePeerTable { peers: Mutex::new(BTreeMap::new()) } }
+    pub fn new() -> Self {
+        SecurePeerTable {
+            peers: Mutex::new(BTreeMap::new()),
+        }
+    }
 
     pub fn ensure(&self, peer_id: u64, now: u64) {
         let mut peers = self.peers.lock();
-        peers.entry(peer_id).or_insert_with(|| Box::new(SecurePeer::new(now)));
+        peers
+            .entry(peer_id)
+            .or_insert_with(|| Box::new(SecurePeer::new(now)));
     }
 
     pub fn challenge_of(&self, peer_id: u64) -> Option<[u8; 32]> {
@@ -452,23 +522,37 @@ impl SecurePeerTable {
     }
 
     pub fn capabilities_of(&self, peer_id: u64) -> Capabilities {
-        self.peers.lock().get(&peer_id).map(|p| p.their_capabilities).unwrap_or_default()
+        self.peers
+            .lock()
+            .get(&peer_id)
+            .map(|p| p.their_capabilities)
+            .unwrap_or_default()
     }
 
     pub fn update(&self, peer_id: u64, f: impl FnOnce(&mut SecurePeer)) {
         let mut peers = self.peers.lock();
         // Update-Semantik: fehlende Einträge werden angelegt (lazy creation,
         // Bucket-Baseline t=0 — erste Nutzung füllt auf Kapazität auf).
-        let p = peers.entry(peer_id).or_insert_with(|| Box::new(SecurePeer::new(0)));
+        let p = peers
+            .entry(peer_id)
+            .or_insert_with(|| Box::new(SecurePeer::new(0)));
         f(p);
     }
 
     pub fn phase(&self, peer_id: u64) -> HandshakePhase {
-        self.peers.lock().get(&peer_id).map(|p| p.phase).unwrap_or(HandshakePhase::None)
+        self.peers
+            .lock()
+            .get(&peer_id)
+            .map(|p| p.phase)
+            .unwrap_or(HandshakePhase::None)
     }
 
     pub fn is_verified(&self, peer_id: u64) -> bool {
-        self.peers.lock().get(&peer_id).map(|p| p.verified).unwrap_or(false)
+        self.peers
+            .lock()
+            .get(&peer_id)
+            .map(|p| p.verified)
+            .unwrap_or(false)
     }
 
     pub fn session_key(&self, peer_id: u64) -> Option<[u8; 32]> {
@@ -476,14 +560,23 @@ impl SecurePeerTable {
     }
 
     pub fn ban(&self, peer_id: u64, until: u64) {
-        self.update(peer_id, |p| { p.banned_until = until; p.verified = false; });
+        self.update(peer_id, |p| {
+            p.banned_until = until;
+            p.verified = false;
+        });
     }
 
     pub fn is_banned(&self, peer_id: u64, now: u64) -> bool {
-        self.peers.lock().get(&peer_id).map(|p| p.banned_until > now).unwrap_or(false)
+        self.peers
+            .lock()
+            .get(&peer_id)
+            .map(|p| p.banned_until > now)
+            .unwrap_or(false)
     }
 
-    pub fn count(&self) -> usize { self.peers.lock().len() }
+    pub fn count(&self) -> usize {
+        self.peers.lock().len()
+    }
 }
 
 // ─── SecureP2pNode — v1.0.0-Schicht über der K14-Basis (P2pNode) ──────────────
@@ -492,7 +585,11 @@ impl SecurePeerTable {
 /// beide Public-Keys werden byteweise sortiert, damit Initiator und Responder
 /// unabhängig von der Rollen-Reihenfolge denselben Key ableiten.
 pub fn derive_session_key(pub_a: &[u8; 32], pub_b: &[u8; 32], salt: &[u8; 32]) -> [u8; 32] {
-    let (lo, hi) = if pub_a <= pub_b { (pub_a, pub_b) } else { (pub_b, pub_a) };
+    let (lo, hi) = if pub_a <= pub_b {
+        (pub_a, pub_b)
+    } else {
+        (pub_b, pub_a)
+    };
     mix32(0x5A827999, &[DOMAIN_SEPARATION, lo, hi, salt].concat())
 }
 
@@ -524,8 +621,12 @@ impl SecureP2pNode {
         }
     }
 
-    pub fn our_public_key(&self) -> [u8; 32] { self.our_public }
-    pub fn secure_peers(&self) -> &SecurePeerTable { &self.peers }
+    pub fn our_public_key(&self) -> [u8; 32] {
+        self.our_public
+    }
+    pub fn secure_peers(&self) -> &SecurePeerTable {
+        &self.peers
+    }
 
     /// Xorshift64 — deterministische Nonce-/Message-ID-Quelle (§15).
     fn next_random(&self) -> u64 {
@@ -539,7 +640,12 @@ impl SecureP2pNode {
     pub fn next_nonce(&self) -> [u8; 16] {
         let mut n = [0u8; 16];
         n[..8].copy_from_slice(&self.next_random().to_be_bytes());
-        let c = { let mut mc = self.msg_counter.lock(); let v = *mc; *mc += 1; v };
+        let c = {
+            let mut mc = self.msg_counter.lock();
+            let v = *mc;
+            *mc += 1;
+            v
+        };
         n[8..].copy_from_slice(&(c as u64).to_be_bytes());
         n
     }
@@ -588,17 +694,23 @@ impl SecureP2pNode {
         p.extend_from_slice(&self.inner.listen_port().to_be_bytes());
         p.push(SUPPORTED_VERSIONS.len() as u8);
         for (maj, min, pat) in SUPPORTED_VERSIONS.iter() {
-            p.push(*maj); p.push(*min); p.push(*pat);
+            p.push(*maj);
+            p.push(*min);
+            p.push(*pat);
         }
         p.extend_from_slice(&self.our_public);
         p
     }
 
     pub fn parse_hello(payload: &[u8]) -> Result<(u16, Vec<(u8, u8, u8)>, [u8; 32]), V1Error> {
-        if payload.len() < 3 { return Err(V1Error::MessageTooShort); }
+        if payload.len() < 3 {
+            return Err(V1Error::MessageTooShort);
+        }
         let port = u16::from_be_bytes([payload[0], payload[1]]);
         let n = payload[2] as usize;
-        if payload.len() < 3 + n * 3 + 32 { return Err(V1Error::MessageTooShort); }
+        if payload.len() < 3 + n * 3 + 32 {
+            return Err(V1Error::MessageTooShort);
+        }
         let mut versions = Vec::new();
         for i in 0..n {
             let o = 3 + i * 3;
@@ -613,15 +725,20 @@ impl SecureP2pNode {
 
     /// Phase 1: HELLO (Typ 3) — startet den erweiterten Handshake.
     pub fn begin_handshake(&self, peer_id: u64, timestamp: u64) -> Result<Envelope, V1Error> {
-        if self.peers.is_banned(peer_id, timestamp) { return Err(V1Error::PeerBanned); }
-        self.peers.update(peer_id, |p| p.phase = HandshakePhase::HelloSent);
+        if self.peers.is_banned(peer_id, timestamp) {
+            return Err(V1Error::PeerBanned);
+        }
+        self.peers
+            .update(peer_id, |p| p.phase = HandshakePhase::HelloSent);
         Ok(self.build_envelope(3, timestamp, self.hello_payload(false)))
     }
 
     /// Eingehendes HELLO: Phase 2 (Version-Verhandlung) + Antwort (CapabilityExchange).
     /// Rückgabe: Envelope Typ 10 an den Peer.
     pub fn handle_hello(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
-        if env.message_type != 3 { return Err(V1Error::HandshakeFailed); }
+        if env.message_type != 3 {
+            return Err(V1Error::HandshakeFailed);
+        }
         let (_port, versions, public) = Self::parse_hello(&env.payload)?;
         let version = Self::negotiate_version(&versions)?;
         self.peers.update(peer_id, |p| {
@@ -630,15 +747,27 @@ impl SecureP2pNode {
             p.their_public = Some(public);
         });
         // Phase 3: CapabilityExchange (Typ 10) — Payload: Capability-Bitmap[4].
-        Ok(self.build_envelope(10, env.timestamp + 1, Capabilities::with(
-            Capabilities::V1_ENVELOPE | Capabilities::V0_9_COMPAT | Capabilities::TX_VERSIONS
-        ).to_bytes().to_vec()))
+        Ok(self.build_envelope(
+            10,
+            env.timestamp + 1,
+            Capabilities::with(
+                Capabilities::V1_ENVELOPE | Capabilities::V0_9_COMPAT | Capabilities::TX_VERSIONS,
+            )
+            .to_bytes()
+            .to_vec(),
+        ))
     }
 
     /// Eingehendes CapabilityExchange: Phase 3 abschließen, Phase 4 starten
     /// (AuthChallenge, Typ 11 — Payload: challenge[32]).
-    pub fn handle_capability_exchange(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
-        if env.message_type != 10 { return Err(V1Error::HandshakeFailed); }
+    pub fn handle_capability_exchange(
+        &self,
+        peer_id: u64,
+        env: &Envelope,
+    ) -> Result<Envelope, V1Error> {
+        if env.message_type != 10 {
+            return Err(V1Error::HandshakeFailed);
+        }
         let caps = Capabilities::from_bytes(&env.payload).ok_or(V1Error::EnvelopeInvalid)?;
         let challenge = mix32(self.next_random(), &env.message_id);
         self.peers.update(peer_id, |p| {
@@ -652,7 +781,9 @@ impl SecureP2pNode {
     /// Eingehender AuthChallenge: Phase 4 Antwort (AuthResponse, Typ 12 —
     /// Payload: Ed25519-/HAL-Signatur[64] über DOMAIN_SEP || challenge).
     pub fn handle_auth_challenge(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
-        if env.message_type != 11 || env.payload.len() < 32 { return Err(V1Error::HandshakeFailed); }
+        if env.message_type != 11 || env.payload.len() < 32 {
+            return Err(V1Error::HandshakeFailed);
+        }
         let mut challenge = [0u8; 32];
         challenge.copy_from_slice(&env.payload[..32]);
         let mut msg = Vec::with_capacity(DOMAIN_SEPARATION.len() + 32);
@@ -669,19 +800,30 @@ impl SecureP2pNode {
     /// HELLO-Phase registrierte Public-Key prüfen → Phase 5 (KeyExchange, Typ 13 —
     /// Payload: public[32] || session_salt[32]).
     pub fn handle_auth_response(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
-        if env.message_type != 12 || env.payload.len() < 64 { return Err(V1Error::HandshakeFailed); }
+        if env.message_type != 12 || env.payload.len() < 64 {
+            return Err(V1Error::HandshakeFailed);
+        }
         let mut sig = [0u8; 64];
         sig.copy_from_slice(&env.payload[..64]);
-        let challenge = self.peers.challenge_of(peer_id).ok_or(V1Error::HandshakeFailed)?;
+        let challenge = self
+            .peers
+            .challenge_of(peer_id)
+            .ok_or(V1Error::HandshakeFailed)?;
         let mut msg = Vec::with_capacity(DOMAIN_SEPARATION.len() + 32);
         msg.extend_from_slice(DOMAIN_SEPARATION);
         msg.extend_from_slice(&challenge);
-        let their_public = self.peers.public_of(peer_id).ok_or(V1Error::HandshakeFailed)?;
+        let their_public = self
+            .peers
+            .public_of(peer_id)
+            .ok_or(V1Error::HandshakeFailed)?;
         if !self.signer.verify(&their_public, &msg, &sig) {
             self.peers.ban(peer_id, env.timestamp + 24 * 3600 * 1000);
             return Err(V1Error::SignatureInvalid);
         }
-        self.peers.update(peer_id, |p| { p.phase = HandshakePhase::Authenticated; p.verified = true; });
+        self.peers.update(peer_id, |p| {
+            p.phase = HandshakePhase::Authenticated;
+            p.verified = true;
+        });
         let session_salt = mix32(self.next_random(), &challenge);
         let mut payload = Vec::with_capacity(64);
         payload.extend_from_slice(&self.our_public);
@@ -693,7 +835,9 @@ impl SecureP2pNode {
     /// Phase 6 abschließen (SESSION_ESTABLISHED — HandshakeAck Typ 4).
     /// Session-Key-Simulation (§11): HKDF-Ersatz über beide Publics + Salt.
     pub fn handle_key_exchange(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
-        if env.message_type != 13 || env.payload.len() < 64 { return Err(V1Error::HandshakeFailed); }
+        if env.message_type != 13 || env.payload.len() < 64 {
+            return Err(V1Error::HandshakeFailed);
+        }
         let mut their_public = [0u8; 32];
         their_public.copy_from_slice(&env.payload[..32]);
         let mut salt = [0u8; 32];
@@ -706,15 +850,27 @@ impl SecureP2pNode {
             p.verified = true;
         });
         // SESSION_ESTABLISHED (Typ 4): Payload = Capability-Bitmap-Ack[4].
-        let caps = Capabilities::with(Capabilities::V1_ENVELOPE | Capabilities::V0_9_COMPAT | Capabilities::TX_VERSIONS);
+        let caps = Capabilities::with(
+            Capabilities::V1_ENVELOPE | Capabilities::V0_9_COMPAT | Capabilities::TX_VERSIONS,
+        );
         Ok(self.build_envelope(4, env.timestamp + 1, caps.to_bytes().to_vec()))
     }
 
     /// Abschluss auf der KeyExchange-Initiator-Seite: Session-Key symmetrisch
     /// ableiten (gleiche Inputs, andere Reihenfolge — symmetrische Funktion).
-    pub fn finalize_handshake(&self, peer_id: u64, env: &Envelope, session_salt: &[u8; 32]) -> Result<(), V1Error> {
-        if env.message_type != 4 { return Err(V1Error::HandshakeFailed); }
-        let their_public = self.peers.public_of(peer_id).ok_or(V1Error::HandshakeFailed)?;
+    pub fn finalize_handshake(
+        &self,
+        peer_id: u64,
+        env: &Envelope,
+        session_salt: &[u8; 32],
+    ) -> Result<(), V1Error> {
+        if env.message_type != 4 {
+            return Err(V1Error::HandshakeFailed);
+        }
+        let their_public = self
+            .peers
+            .public_of(peer_id)
+            .ok_or(V1Error::HandshakeFailed)?;
         let session_key = derive_session_key(&their_public, &self.our_public, session_salt);
         self.peers.update(peer_id, |p| {
             p.session_key = Some(session_key);
@@ -730,7 +886,9 @@ impl SecureP2pNode {
     /// (P2pMessage). Erzwingt Chain-ID (Ist: K14), Timestamp-Fenster, Nonce- und
     /// Message-ID-Einmaligkeit, Rate-Limits und Handshake-Phase-Gating.
     pub fn handle_wire(&self, peer_id: u64, data: &[u8], now: u64) -> Result<WireMessage, V1Error> {
-        if self.peers.is_banned(peer_id, now) { return Err(V1Error::PeerBanned); }
+        if self.peers.is_banned(peer_id, now) {
+            return Err(V1Error::PeerBanned);
+        }
 
         match Envelope::from_bytes(data) {
             Ok(env) => self.handle_v1(peer_id, env, now),
@@ -742,7 +900,9 @@ impl SecureP2pNode {
                     P2pError::MessageTooShort => V1Error::MessageTooShort,
                     _ => V1Error::EnvelopeInvalid,
                 })?;
-                if msg.chain_id != CHAIN_ID { return Err(V1Error::WrongChainId(msg.chain_id)); }
+                if msg.chain_id != CHAIN_ID {
+                    return Err(V1Error::WrongChainId(msg.chain_id));
+                }
                 Ok(WireMessage::V09(msg))
             }
             Err(e) => Err(e),
@@ -759,12 +919,25 @@ impl SecureP2pNode {
         let payload_len = env.payload.len() as u32;
         let mut gate_err: Option<V1Error> = None;
         self.peers.update(peer_id, |p| {
-            if !p.msg_bucket.try_consume(now, 1) { gate_err = Some(V1Error::RateLimited); return; }
-            if !p.bytes_bucket.try_consume(now, payload_len) { gate_err = Some(V1Error::RateLimited); return; }
-            if !p.nonces.insert(env.nonce) { gate_err = Some(V1Error::NonceReuse); return; }
-            if p.nonces.len() > SEEN_SET_MAX { p.nonces.clear(); } // Bounded-Reset (Periodik)
+            if !p.msg_bucket.try_consume(now, 1) {
+                gate_err = Some(V1Error::RateLimited);
+                return;
+            }
+            if !p.bytes_bucket.try_consume(now, payload_len) {
+                gate_err = Some(V1Error::RateLimited);
+                return;
+            }
+            if !p.nonces.insert(env.nonce) {
+                gate_err = Some(V1Error::NonceReuse);
+                return;
+            }
+            if p.nonces.len() > SEEN_SET_MAX {
+                p.nonces.clear();
+            } // Bounded-Reset (Periodik)
         });
-        if let Some(e) = gate_err { return Err(e); }
+        if let Some(e) = gate_err {
+            return Err(e);
+        }
         // §7/§15: Message-ID-Deduplizierung (Seen-Set, bounded)
         if !self.seen.lock().check_and_insert(env.message_id) {
             return Err(V1Error::ReplayDetected);
@@ -776,7 +949,12 @@ impl SecureP2pNode {
                 return Err(V1Error::HandshakePhaseViolation);
             }
             // §9: Capability-Authorization (Vote → Consensus-Bit)
-            if env.message_type == 7 && !self.peers.capabilities_of(peer_id).has(Capabilities::CONSENSUS) {
+            if env.message_type == 7
+                && !self
+                    .peers
+                    .capabilities_of(peer_id)
+                    .has(Capabilities::CONSENSUS)
+            {
                 return Err(V1Error::CapabilityDenied);
             }
         }
@@ -784,8 +962,16 @@ impl SecureP2pNode {
     }
 
     /// Sendet eine v1.0.0-Daten-Nachricht (nur nach Phase 6 zulässig, §8).
-    pub fn send_data(&self, peer_id: u64, msg_type: u8, timestamp: u64, payload: Vec<u8>) -> Result<Vec<u8>, V1Error> {
-        if self.peers.is_banned(peer_id, timestamp) { return Err(V1Error::PeerBanned); }
+    pub fn send_data(
+        &self,
+        peer_id: u64,
+        msg_type: u8,
+        timestamp: u64,
+        payload: Vec<u8>,
+    ) -> Result<Vec<u8>, V1Error> {
+        if self.peers.is_banned(peer_id, timestamp) {
+            return Err(V1Error::PeerBanned);
+        }
         if self.peers.phase(peer_id) != HandshakePhase::Established {
             return Err(V1Error::HandshakePhaseViolation);
         }
@@ -855,11 +1041,17 @@ mod tests {
         // Gleiche Nachricht-Daten → identische kanonische Bytes (§3.1/§5).
         // (message_id/nonce sind je Aufruf neu — für den Determinismus-Test
         // fixieren wir sie.)
-        let mut a2 = a.clone(); let mut b2 = b;
-        a2.message_id = [5; 32]; a2.nonce = [3; 16];
-        b2.message_id = [5; 32]; b2.nonce = [3; 16];
+        let mut a2 = a.clone();
+        let mut b2 = b;
+        a2.message_id = [5; 32];
+        a2.nonce = [3; 16];
+        b2.message_id = [5; 32];
+        b2.nonce = [3; 16];
         assert_eq!(a2.canonical_bytes(), b2.canonical_bytes());
-        assert_eq!(a2.canonical_bytes().len(), 16 + 3 + 1 + 32 + 8 + 2 + a2.sender.len() + 16 + 4 + 33 + 4);
+        assert_eq!(
+            a2.canonical_bytes().len(),
+            16 + 3 + 1 + 32 + 8 + 2 + a2.sender.len() + 16 + 4 + 33 + 4
+        );
     }
 
     #[test]
@@ -970,10 +1162,18 @@ mod tests {
         let mut peers_probe_ok = true;
         // Innerhalb ±120 s: ok
         let env_in = n.build_envelope(5, TS, vec![]);
-        match n.handle_v1(9, env_in, TS + 120_000) { Ok(_) => {}, Err(e) => { peers_probe_ok = false; let _ = e; } }
+        match n.handle_v1(9, env_in, TS + 120_000) {
+            Ok(_) => {}
+            Err(e) => {
+                peers_probe_ok = false;
+                let _ = e;
+            }
+        }
         // Genau außerhalb: abgewiesen
         let env_out = n.build_envelope(5, TS + 1, vec![]);
-        let err = n.handle_v1(9, env_out, TS + 120_000 + 120_000 + 2).unwrap_err();
+        let err = n
+            .handle_v1(9, env_out, TS + 120_000 + 120_000 + 2)
+            .unwrap_err();
         assert_eq!(err, V1Error::TimestampOutsideWindow);
         assert_eq!(err.error_code(), "ATC-PROTO-P2P-016");
         assert!(peers_probe_ok);
@@ -984,7 +1184,10 @@ mod tests {
         let n = node(12);
         let mut env = n.build_envelope(5, TS, vec![]);
         // Phase-6-Simulation: Peer established setzen, damit Daten durchgehen
-        n.peers.update(1, |p| { p.phase = HandshakePhase::Established; p.verified = true; });
+        n.peers.update(1, |p| {
+            p.phase = HandshakePhase::Established;
+            p.verified = true;
+        });
         assert!(matches!(n.handle_v1(1, env.clone(), TS), Ok(_)));
         // Gleiche Nonce erneut → NonceReuse (012)
         let mut env2 = n.build_envelope(5, TS, vec![]);
@@ -1026,7 +1229,10 @@ mod tests {
                 break;
             }
         }
-        assert!(limited, "Token-Bucket muss bei 50 Nachrichten in derselben Sekunde zuschlagen");
+        assert!(
+            limited,
+            "Token-Bucket muss bei 50 Nachrichten in derselben Sekunde zuschlagen"
+        );
     }
 
     // ── Banning (§5/§10) ──────────────────────────────────────────────────────
@@ -1101,7 +1307,9 @@ mod tests {
 
         // Phase 4→5: Initiator verifiziert gegen registriertes Public-Key.
         // WICHTIG: Public-Key des Responders vorab registrieren (DID-Bindung, §9).
-        initiator.peers.update(1, |p| p.their_public = Some(responder.our_public_key()));
+        initiator
+            .peers
+            .update(1, |p| p.their_public = Some(responder.our_public_key()));
         let key_exchange = initiator.handle_auth_response(1, &auth_resp).unwrap();
         assert_eq!(key_exchange.message_type, 13);
         assert_eq!(initiator.peers.phase(1), HandshakePhase::Authenticated);
@@ -1116,11 +1324,16 @@ mod tests {
         // Initiator schließt symmetrisch ab (gleicher Salt aus KeyExchange-Payload)
         let mut salt = [0u8; 32];
         salt.copy_from_slice(&key_exchange.payload[32..64]);
-        initiator.finalize_handshake(1, &session_established, &salt).unwrap();
+        initiator
+            .finalize_handshake(1, &session_established, &salt)
+            .unwrap();
         assert_eq!(initiator.peers.phase(1), HandshakePhase::Established);
 
         // Beide Seiten haben denselben Session-Key (§11 symmetrische Ableitung)
-        assert_eq!(initiator.peers.session_key(1), responder.peers.session_key(1));
+        assert_eq!(
+            initiator.peers.session_key(1),
+            responder.peers.session_key(1)
+        );
     }
 
     #[test]
@@ -1136,7 +1349,9 @@ mod tests {
         // Imposter signiert die Challenge mit SEINEM Schlüssel (Fälschung)
         let forged = imposter.handle_auth_challenge(1, &challenge).unwrap();
         // Initiator erwartet den registrierten Responder (DID-Bindung, §9)
-        initiator.peers.update(1, |p| p.their_public = Some(responder.our_public_key()));
+        initiator
+            .peers
+            .update(1, |p| p.their_public = Some(responder.our_public_key()));
         let err = initiator.handle_auth_response(1, &forged).unwrap_err();
         assert_eq!(err, V1Error::SignatureInvalid);
         assert_eq!(err.error_code(), "ATC-PROTO-P2P-011");
@@ -1155,9 +1370,18 @@ mod tests {
 
     #[test]
     fn test_version_negotiation() {
-        assert_eq!(SecureP2pNode::negotiate_version(&[(1, 0, 0)]), Ok((1, 0, 0)));
-        assert_eq!(SecureP2pNode::negotiate_version(&[(0, 9, 0), (1, 0, 0)]), Ok((1, 0, 0)));
-        assert_eq!(SecureP2pNode::negotiate_version(&[(0, 9, 0)]), Ok((0, 9, 0)));
+        assert_eq!(
+            SecureP2pNode::negotiate_version(&[(1, 0, 0)]),
+            Ok((1, 0, 0))
+        );
+        assert_eq!(
+            SecureP2pNode::negotiate_version(&[(0, 9, 0), (1, 0, 0)]),
+            Ok((1, 0, 0))
+        );
+        assert_eq!(
+            SecureP2pNode::negotiate_version(&[(0, 9, 0)]),
+            Ok((0, 9, 0))
+        );
         let err = SecureP2pNode::negotiate_version(&[(9, 9, 9)]).unwrap_err();
         assert_eq!(err, V1Error::VersionIncompatible);
         assert_eq!(err.error_code(), "ATC-PROTO-P2P-019");
@@ -1166,7 +1390,8 @@ mod tests {
     #[test]
     fn test_handshake_phase_gating_for_incoming_data() {
         let n = node(31);
-        n.peers.update(1, |p| p.phase = HandshakePhase::Authenticated);
+        n.peers
+            .update(1, |p| p.phase = HandshakePhase::Authenticated);
         let env = n.build_envelope(6, TS, vec![2]);
         let err = n.handle_v1(1, env, TS).unwrap_err();
         assert_eq!(err, V1Error::HandshakePhaseViolation);
@@ -1177,7 +1402,12 @@ mod tests {
     #[test]
     fn test_v09_compat_accepted() {
         let n = node(40);
-        let v09 = P2pMessage::new(MessageType::Ping, "did:legacy:old".into(), TS, vec![1, 2, 3]);
+        let v09 = P2pMessage::new(
+            MessageType::Ping,
+            "did:legacy:old".into(),
+            TS,
+            vec![1, 2, 3],
+        );
         match n.handle_wire(1, &v09.to_bytes(), TS).unwrap() {
             WireMessage::V09(msg) => {
                 assert_eq!(msg.msg_type, MessageType::Ping);
@@ -1228,7 +1458,10 @@ mod tests {
         assert!(!V1Error::SignatureInvalid.retryable());
         assert!(V1Error::RateLimited.retryable());
         assert_eq!(V1Error::RateLimited.category(), "RATE_LIMIT");
-        assert_eq!(V1Error::UnknownMessageType(77).error_code(), "ATC-PROTO-P2P-002");
+        assert_eq!(
+            V1Error::UnknownMessageType(77).error_code(),
+            "ATC-PROTO-P2P-002"
+        );
         assert_eq!(V1Error::InvalidDID.error_code(), "ATC-PROTO-P2P-006");
         assert_eq!(V1Error::InvalidDID.category(), "AUTHENTICATION");
     }
@@ -1241,13 +1474,21 @@ mod tests {
         assert_eq!(V1Type::from_u8(13), Some(V1Type::KeyExchange));
         assert_eq!(V1Type::from_u8(9), None);
         assert!(is_control_type(10) && is_control_type(3) && is_control_type(4));
-        assert!(!is_control_type(5) && !is_control_type(6) && !is_control_type(7) && !is_control_type(8));
+        assert!(
+            !is_control_type(5)
+                && !is_control_type(6)
+                && !is_control_type(7)
+                && !is_control_type(8)
+        );
     }
 
     #[test]
     fn test_multiple_peers_independent_state() {
         let n = node(60);
-        n.peers.update(1, |p| { p.phase = HandshakePhase::Established; p.verified = true; });
+        n.peers.update(1, |p| {
+            p.phase = HandshakePhase::Established;
+            p.verified = true;
+        });
         assert_eq!(n.peers.phase(1), HandshakePhase::Established);
         assert_eq!(n.peers.phase(2), HandshakePhase::None);
         assert!(!n.peers.is_verified(2));

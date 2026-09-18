@@ -18,16 +18,11 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::atcnet::{
-    self, AtcNetHandler, AtcNetError, PeerId,
-    BlockAnnMsg, GetBlocksMsg, BlocksMsg, BlockData,
-    serialize_block_ann, deserialize_block_ann,
-    serialize_get_blocks, deserialize_get_blocks,
-    serialize_tx_broadcast,
-    MessageType, CHAIN_ID,
+    self, deserialize_block_ann, deserialize_get_blocks, serialize_block_ann, serialize_get_blocks,
+    serialize_tx_broadcast, AtcNetError, AtcNetHandler, BlockAnnMsg, BlockData, BlocksMsg,
+    GetBlocksMsg, MessageType, PeerId, CHAIN_ID,
 };
-use crate::genesis_bridge::{
-    GenesisBridge, BridgeBlock, BridgeBlockChain, BridgeChainError,
-};
+use crate::genesis_bridge::{BridgeBlock, BridgeBlockChain, BridgeChainError, GenesisBridge};
 
 // === Gossip Error === //
 
@@ -45,11 +40,15 @@ pub enum GossipError {
 }
 
 impl From<AtcNetError> for GossipError {
-    fn from(e: AtcNetError) -> Self { GossipError::NetworkError(e) }
+    fn from(e: AtcNetError) -> Self {
+        GossipError::NetworkError(e)
+    }
 }
 
 impl From<BridgeChainError> for GossipError {
-    fn from(e: BridgeChainError) -> Self { GossipError::ChainError(e) }
+    fn from(e: BridgeChainError) -> Self {
+        GossipError::ChainError(e)
+    }
 }
 
 // === Peer State Tracking === //
@@ -85,8 +84,8 @@ impl GossipBridge {
         self_peer_id: PeerId,
         self_did: String,
     ) -> Result<Self, GossipError> {
-        let bridge = GenesisBridge::init_from_config(config)
-            .map_err(|_| GossipError::InvalidChainId)?;
+        let bridge =
+            GenesisBridge::init_from_config(config).map_err(|_| GossipError::InvalidChainId)?;
 
         let net = AtcNetHandler::new(self_peer_id, self_did);
         net.set_height(0);
@@ -108,11 +107,7 @@ impl GossipBridge {
     // === Peer Management === //
 
     /// Verbindet zu einem Peer und startet Handshake
-    pub fn connect_peer(
-        &mut self,
-        peer_id: PeerId,
-        peer_did: String,
-    ) -> Result<u64, GossipError> {
+    pub fn connect_peer(&mut self, peer_id: PeerId, peer_did: String) -> Result<u64, GossipError> {
         let conn_id = self.net.connect(peer_id, peer_did.clone())?;
 
         let peer_state = PeerState {
@@ -131,7 +126,11 @@ impl GossipBridge {
 
     /// Schliesst den Handshake ab (Connecting → Connected)
     /// In Produktion: wird durch handle_message mit HandshakeMsg aufgerufen
-    pub fn complete_handshake(&mut self, conn_id: u64, listen_port: u16) -> Result<(), GossipError> {
+    pub fn complete_handshake(
+        &mut self,
+        conn_id: u64,
+        listen_port: u16,
+    ) -> Result<(), GossipError> {
         // Sende unseren Handshake
         let _data = self.net.send_handshake(conn_id, listen_port)?;
         // Simuliere Empfang der Gegenseite (in Produktion: über TCP)
@@ -140,8 +139,16 @@ impl GossipBridge {
         let fake_hs = crate::atcnet::serialize_handshake(&crate::atcnet::HandshakeMsg {
             protocol_version: crate::atcnet::PROTOCOL_VERSION,
             chain_id: crate::atcnet::CHAIN_ID,
-            peer_id: self.peers.get(&conn_id).map(|p| p.peer_id).unwrap_or([0u8; 32]),
-            peer_did: self.peers.get(&conn_id).map(|p| p.did.clone()).unwrap_or_default(),
+            peer_id: self
+                .peers
+                .get(&conn_id)
+                .map(|p| p.peer_id)
+                .unwrap_or([0u8; 32]),
+            peer_did: self
+                .peers
+                .get(&conn_id)
+                .map(|p| p.did.clone())
+                .unwrap_or_default(),
             listen_port,
             current_height: 0,
         });
@@ -174,7 +181,8 @@ impl GossipBridge {
 
     /// Beste Peer-Height (für Sync-Entscheidungen)
     pub fn best_peer_height(&self) -> Option<(u64, u64)> {
-        self.peers.values()
+        self.peers
+            .values()
             .max_by_key(|p| p.block_height)
             .map(|p| (p.conn_id, p.block_height))
     }
@@ -191,12 +199,9 @@ impl GossipBridge {
         let mut sent = 0;
 
         for conn_id in conn_ids {
-            let data = self.net.send_block_ann(
-                conn_id,
-                block.id,
-                block.height,
-                block.parent_hash,
-            )?;
+            let data =
+                self.net
+                    .send_block_ann(conn_id, block.id, block.height, block.parent_hash)?;
             // In Produktion: data wird über TCP gesendet
             sent += 1;
 
@@ -220,7 +225,9 @@ impl GossipBridge {
         timestamp: u64,
         tx_root: [u8; 32],
     ) -> Result<(BridgeBlock, usize), GossipError> {
-        let block = self.bridge.propose_block(proposer_did, timestamp, tx_root)?;
+        let block = self
+            .bridge
+            .propose_block(proposer_did, timestamp, tx_root)?;
         let peers = self.gossip_block(&block)?;
         Ok((block, peers))
     }
@@ -238,7 +245,10 @@ impl GossipBridge {
             return Err(GossipError::PeerNotConnected);
         }
 
-        let msg = GetBlocksMsg { from_height, max_count };
+        let msg = GetBlocksMsg {
+            from_height,
+            max_count,
+        };
         let data = serialize_get_blocks(&msg);
         // In Produktion: send data over TCP to conn_id
         Ok(data)
@@ -297,8 +307,7 @@ impl GossipBridge {
                 return Err(GossipError::InvalidMessage);
             }
 
-            let block = deserialize_bridge_block(&bd.data)
-                .ok_or(GossipError::InvalidMessage)?;
+            let block = deserialize_bridge_block(&bd.data).ok_or(GossipError::InvalidMessage)?;
 
             if block.chain_id != CHAIN_ID {
                 return Err(GossipError::InvalidChainId);
@@ -398,11 +407,7 @@ impl GossipBridge {
     // === Gap 5: Mempool-Gossip === //
 
     /// Broadcastet eine Transaktion an alle Peers
-    pub fn gossip_transaction(
-        &mut self,
-        tx_hash: [u8; 32],
-        tx_data: Vec<u8>,
-    ) -> usize {
+    pub fn gossip_transaction(&mut self, tx_hash: [u8; 32], tx_data: Vec<u8>) -> usize {
         self.net.gossip_tx(tx_hash, tx_data).len()
     }
 
@@ -452,24 +457,18 @@ impl GossipBridge {
 
         match msg_type {
             Some(MessageType::BlockAnn) => {
-                let ann = deserialize_block_ann(data)
-                    .map_err(|_| GossipError::InvalidMessage)?;
+                let ann = deserialize_block_ann(data).map_err(|_| GossipError::InvalidMessage)?;
                 let needs_sync = self.handle_block_ann(conn_id, &ann)?;
                 if needs_sync {
                     // Request missing blocks
-                    let sync_data = self.request_blocks(
-                        conn_id,
-                        self.bridge.height() + 1,
-                        50,
-                    )?;
+                    let sync_data = self.request_blocks(conn_id, self.bridge.height() + 1, 50)?;
                     Ok(Some(sync_data))
                 } else {
                     Ok(None)
                 }
             }
             Some(MessageType::GetBlocks) => {
-                let msg = deserialize_get_blocks(data)
-                    .map_err(|_| GossipError::InvalidMessage)?;
+                let msg = deserialize_get_blocks(data).map_err(|_| GossipError::InvalidMessage)?;
                 let response = self.respond_get_blocks(msg.from_height, msg.max_count)?;
                 // Serialize BlocksMsg (simplified — in production: proper serializer)
                 let mut buf = Vec::new();
@@ -488,9 +487,7 @@ impl GossipBridge {
                 if data.len() < 5 {
                     return Err(GossipError::InvalidMessage);
                 }
-                let count = u32::from_le_bytes(
-                    data[1..5].try_into().unwrap()
-                ) as usize;
+                let count = u32::from_le_bytes(data[1..5].try_into().unwrap()) as usize;
                 let mut blocks = Vec::new();
                 let mut offset = 5;
 
@@ -498,28 +495,29 @@ impl GossipBridge {
                     if offset + 40 > data.len() {
                         return Err(GossipError::InvalidMessage);
                     }
-                    let height = u64::from_le_bytes(
-                        data[offset..offset+8].try_into().unwrap()
-                    );
+                    let height = u64::from_le_bytes(data[offset..offset + 8].try_into().unwrap());
                     let mut hash = [0u8; 32];
-                    hash.copy_from_slice(&data[offset+8..offset+40]);
+                    hash.copy_from_slice(&data[offset + 8..offset + 40]);
                     offset += 40;
 
                     if offset + 4 > data.len() {
                         return Err(GossipError::InvalidMessage);
                     }
-                    let data_len = u32::from_le_bytes(
-                        data[offset..offset+4].try_into().unwrap()
-                    ) as usize;
+                    let data_len =
+                        u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()) as usize;
                     offset += 4;
 
                     if offset + data_len > data.len() {
                         return Err(GossipError::InvalidMessage);
                     }
-                    let block_data = data[offset..offset+data_len].to_vec();
+                    let block_data = data[offset..offset + data_len].to_vec();
                     offset += data_len;
 
-                    blocks.push(BlockData { height, hash, data: block_data });
+                    blocks.push(BlockData {
+                        height,
+                        hash,
+                        data: block_data,
+                    });
                 }
 
                 let msg = BlocksMsg { blocks };
@@ -654,74 +652,87 @@ pub fn deserialize_bridge_block(data: &[u8]) -> Option<BridgeBlock> {
     }
 
     let mut offset = 0;
-    let chain_id = u32::from_le_bytes(data[offset..offset+4].try_into().ok()?);
+    let chain_id = u32::from_le_bytes(data[offset..offset + 4].try_into().ok()?);
     offset += 4;
-    let height = u64::from_le_bytes(data[offset..offset+8].try_into().ok()?);
+    let height = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
     offset += 8;
     let mut id = [0u8; 32];
-    id.copy_from_slice(&data[offset..offset+32]);
+    id.copy_from_slice(&data[offset..offset + 32]);
     offset += 32;
     let mut parent_hash = [0u8; 32];
-    parent_hash.copy_from_slice(&data[offset..offset+32]);
+    parent_hash.copy_from_slice(&data[offset..offset + 32]);
     offset += 32;
 
-    let did_len = u16::from_le_bytes(data[offset..offset+2].try_into().ok()?) as usize;
+    let did_len = u16::from_le_bytes(data[offset..offset + 2].try_into().ok()?) as usize;
     offset += 2;
-    if offset + did_len > data.len() { return None; }
-    let proposer_did = String::from_utf8(data[offset..offset+did_len].to_vec()).ok()?;
+    if offset + did_len > data.len() {
+        return None;
+    }
+    let proposer_did = String::from_utf8(data[offset..offset + did_len].to_vec()).ok()?;
     offset += did_len;
 
-    let timestamp = u64::from_le_bytes(data[offset..offset+8].try_into().ok()?);
+    let timestamp = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
     offset += 8;
     let mut poh_hash = [0u8; 32];
-    poh_hash.copy_from_slice(&data[offset..offset+32]);
+    poh_hash.copy_from_slice(&data[offset..offset + 32]);
     offset += 32;
     let mut tx_root = [0u8; 32];
-    tx_root.copy_from_slice(&data[offset..offset+32]);
+    tx_root.copy_from_slice(&data[offset..offset + 32]);
     offset += 32;
     let mut state_root = [0u8; 32];
-    state_root.copy_from_slice(&data[offset..offset+32]);
+    state_root.copy_from_slice(&data[offset..offset + 32]);
     offset += 32;
-    let gas_used = u64::from_le_bytes(data[offset..offset+8].try_into().ok()?);
+    let gas_used = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
     offset += 8;
-    let total_fees = u64::from_le_bytes(data[offset..offset+8].try_into().ok()?);
+    let total_fees = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
     offset += 8;
     let mut signature = [0u8; 64];
-    signature.copy_from_slice(&data[offset..offset+64]);
+    signature.copy_from_slice(&data[offset..offset + 64]);
     offset += 64;
 
     // Validator set
-    let vs_len = u16::from_le_bytes(data[offset..offset+2].try_into().ok()?) as usize;
+    let vs_len = u16::from_le_bytes(data[offset..offset + 2].try_into().ok()?) as usize;
     offset += 2;
     let mut validator_set = Vec::new();
     for _ in 0..vs_len {
-        let dlen = u16::from_le_bytes(data[offset..offset+2].try_into().ok()?) as usize;
+        let dlen = u16::from_le_bytes(data[offset..offset + 2].try_into().ok()?) as usize;
         offset += 2;
-        let did = String::from_utf8(data[offset..offset+dlen].to_vec()).ok()?;
+        let did = String::from_utf8(data[offset..offset + dlen].to_vec()).ok()?;
         offset += dlen;
-        let stake = u64::from_le_bytes(data[offset..offset+8].try_into().ok()?);
+        let stake = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
         offset += 8;
         validator_set.push((did, stake));
     }
 
     // Allocations
-    let al_len = u16::from_le_bytes(data[offset..offset+2].try_into().ok()?) as usize;
+    let al_len = u16::from_le_bytes(data[offset..offset + 2].try_into().ok()?) as usize;
     offset += 2;
     let mut allocations = Vec::new();
     for _ in 0..al_len {
-        let alen = u16::from_le_bytes(data[offset..offset+2].try_into().ok()?) as usize;
+        let alen = u16::from_le_bytes(data[offset..offset + 2].try_into().ok()?) as usize;
         offset += 2;
-        let addr = String::from_utf8(data[offset..offset+alen].to_vec()).ok()?;
+        let addr = String::from_utf8(data[offset..offset + alen].to_vec()).ok()?;
         offset += alen;
-        let amount = u64::from_le_bytes(data[offset..offset+8].try_into().ok()?);
+        let amount = u64::from_le_bytes(data[offset..offset + 8].try_into().ok()?);
         offset += 8;
         allocations.push((addr, amount));
     }
 
     Some(BridgeBlock {
-        id, height, parent_hash, proposer_did, timestamp,
-        poh_hash, tx_root, state_root, gas_used, total_fees,
-        signature, chain_id, validator_set, allocations,
+        id,
+        height,
+        parent_hash,
+        proposer_did,
+        timestamp,
+        poh_hash,
+        tx_root,
+        state_root,
+        gas_used,
+        total_fees,
+        signature,
+        chain_id,
+        validator_set,
+        allocations,
     })
 }
 
@@ -732,7 +743,7 @@ fn simple_hash_local(data: &[u8]) -> [u8; 32] {
         h ^= b as u64;
         h = h.wrapping_mul(0x100000001b3);
         let off = (i * 4) % 24;
-        result[off..off+8].copy_from_slice(&h.to_le_bytes());
+        result[off..off + 8].copy_from_slice(&h.to_le_bytes());
     }
     result
 }
@@ -742,29 +753,59 @@ fn simple_hash_local(data: &[u8]) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::genesis::{GenesisConfig, GENESIS_CHAIN_ID, LockType, GenesisValidator, GenesisAllocation};
+    use crate::genesis::{
+        GenesisAllocation, GenesisConfig, GenesisValidator, LockType, GENESIS_CHAIN_ID,
+    };
 
     fn dummy_pubkey(n: u8) -> [u8; 33] {
-        let mut k = [0u8; 33]; k[0] = 0x02; k[1] = n; k
+        let mut k = [0u8; 33];
+        k[0] = 0x02;
+        k[1] = n;
+        k
     }
     fn dummy_address(n: u8) -> String {
-        format!("ATC{}", "a".repeat(30).chars().chain(core::iter::once((b'a' + n) as char)).collect::<String>())
+        format!(
+            "ATC{}",
+            "a".repeat(30)
+                .chars()
+                .chain(core::iter::once((b'a' + n) as char))
+                .collect::<String>()
+        )
     }
-    fn dummy_did(n: u8) -> String { format!("did:shivacore:validator{}", n) }
+    fn dummy_did(n: u8) -> String {
+        format!("did:shivacore:validator{}", n)
+    }
     fn make_validator(n: u8, stake: u64) -> GenesisValidator {
-        GenesisValidator { did: dummy_did(n), pubkey: dummy_pubkey(n), stake, address: dummy_address(n), commission: 500 }
+        GenesisValidator {
+            did: dummy_did(n),
+            pubkey: dummy_pubkey(n),
+            stake,
+            address: dummy_address(n),
+            commission: 500,
+        }
     }
     fn make_test_config() -> GenesisConfig {
         let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, 1726358400);
-        for i in 1..=4u8 { config.add_validator(make_validator(i, 10000)).unwrap(); }
         for i in 1..=4u8 {
-            config.add_allocation(GenesisAllocation { address: dummy_address(i), amount: 1_000_000_000, lock_type: LockType::None, lock_duration: 0 }).unwrap();
+            config.add_validator(make_validator(i, 10000)).unwrap();
+        }
+        for i in 1..=4u8 {
+            config
+                .add_allocation(GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         config.memo = "A-TownChain Mainnet Genesis".to_string();
         config
     }
     fn peer_id(n: u8) -> PeerId {
-        let mut p = [0u8; 32]; p[0] = n; p
+        let mut p = [0u8; 32];
+        p[0] = n;
+        p
     }
 
     // === Init Tests === //
@@ -918,7 +959,10 @@ mod tests {
         let config = make_test_config();
         let mut gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
 
-        assert_eq!(gb.request_blocks(999, 1, 10), Err(GossipError::PeerNotConnected));
+        assert_eq!(
+            gb.request_blocks(999, 1, 10),
+            Err(GossipError::PeerNotConnected)
+        );
     }
 
     #[test]
@@ -936,7 +980,10 @@ mod tests {
         let config = make_test_config();
         let gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
 
-        assert_eq!(gb.respond_get_blocks(100, 1), Err(GossipError::BlockNotFound));
+        assert_eq!(
+            gb.respond_get_blocks(100, 1),
+            Err(GossipError::BlockNotFound)
+        );
     }
 
     #[test]
@@ -986,7 +1033,10 @@ mod tests {
         let config = make_test_config();
         let mut gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
         let proposer = gb.bridge.next_proposer().unwrap();
-        let block = gb.bridge.propose_block(&proposer, 2000, [0xAB; 32]).unwrap();
+        let block = gb
+            .bridge
+            .propose_block(&proposer, 2000, [0xAB; 32])
+            .unwrap();
 
         let data = serialize_bridge_block(&block);
         let restored = deserialize_bridge_block(&data).unwrap();
@@ -1039,7 +1089,8 @@ mod tests {
         let mut gb_b = GossipBridge::init(&config, peer_id(2), dummy_did(1)).unwrap();
         let p = gb_b.bridge.next_proposer().unwrap();
         gb_b.bridge.propose_block(&p, 2000, [0xAB; 32]).unwrap(); // Same block
-        gb_b.known_blocks.insert(1, gb_b.bridge.chain.get_block(1).unwrap().clone());
+        gb_b.known_blocks
+            .insert(1, gb_b.bridge.chain.get_block(1).unwrap().clone());
 
         let response = gb_a.respond_get_blocks(1, 1).unwrap();
         let added = gb_b.process_blocks(&response).unwrap();
@@ -1111,7 +1162,10 @@ mod tests {
         let mut gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
         let conn = gb.connect_peer(peer_id(2), dummy_did(1)).unwrap();
 
-        assert_eq!(gb.validate_peer_chain(conn, 9999), Err(GossipError::InvalidChainId));
+        assert_eq!(
+            gb.validate_peer_chain(conn, 9999),
+            Err(GossipError::InvalidChainId)
+        );
     }
 
     #[test]
@@ -1119,7 +1173,11 @@ mod tests {
         let config = make_test_config();
         let gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
 
-        let ann = BlockAnnMsg { block_hash: [0x01; 32], block_height: 1, prev_hash: [0u8; 32] };
+        let ann = BlockAnnMsg {
+            block_hash: [0x01; 32],
+            block_height: 1,
+            prev_hash: [0u8; 32],
+        };
         assert_eq!(gb.validate_block_ann(&ann), Ok(true));
     }
 
@@ -1133,7 +1191,11 @@ mod tests {
         gb.known_blocks.insert(1, b1.clone());
 
         let block = gb.bridge.chain.get_block(1).unwrap();
-        let ann = BlockAnnMsg { block_hash: block.id, block_height: 1, prev_hash: block.parent_hash };
+        let ann = BlockAnnMsg {
+            block_hash: block.id,
+            block_height: 1,
+            prev_hash: block.parent_hash,
+        };
         assert_eq!(gb.validate_block_ann(&ann), Ok(false)); // Already known
     }
 
@@ -1142,7 +1204,11 @@ mod tests {
         let config = make_test_config();
         let gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
 
-        let ann = BlockAnnMsg { block_hash: [0x01; 32], block_height: 0, prev_hash: [0u8; 32] };
+        let ann = BlockAnnMsg {
+            block_hash: [0x01; 32],
+            block_height: 0,
+            prev_hash: [0u8; 32],
+        };
         assert_eq!(gb.validate_block_ann(&ann), Ok(false)); // Genesis not annonced
     }
 
@@ -1170,7 +1236,11 @@ mod tests {
         let conn = gb.connect_peer(peer_id(2), dummy_did(1)).unwrap();
         gb.complete_handshake(conn, 9000).unwrap();
 
-        let ann = BlockAnnMsg { block_hash: [0x01; 32], block_height: 5, prev_hash: [0u8; 32] };
+        let ann = BlockAnnMsg {
+            block_hash: [0x01; 32],
+            block_height: 5,
+            prev_hash: [0u8; 32],
+        };
         let needs_sync = gb.handle_block_ann(conn, &ann).unwrap();
 
         assert!(needs_sync); // Peer is ahead
@@ -1187,7 +1257,11 @@ mod tests {
         let conn = gb.connect_peer(peer_id(2), dummy_did(1)).unwrap();
         gb.complete_handshake(conn, 9000).unwrap();
 
-        let ann = BlockAnnMsg { block_hash: [0x01; 32], block_height: 1, prev_hash: [0u8; 32] };
+        let ann = BlockAnnMsg {
+            block_hash: [0x01; 32],
+            block_height: 1,
+            prev_hash: [0u8; 32],
+        };
         let needs_sync = gb.handle_block_ann(conn, &ann).unwrap();
 
         assert!(!needs_sync); // Same height
@@ -1204,7 +1278,8 @@ mod tests {
 
         let p = gb.bridge.next_proposer().unwrap();
         gb.bridge.propose_block(&p, 2000, [0xAB; 32]).unwrap();
-        gb.known_blocks.insert(1, gb.bridge.chain.get_block(1).unwrap().clone());
+        gb.known_blocks
+            .insert(1, gb.bridge.chain.get_block(1).unwrap().clone());
 
         let stats = gb.stats();
         assert_eq!(stats.height, 1);
@@ -1234,7 +1309,9 @@ mod tests {
 
         // A proposes a block and gossips
         let proposer = gb_a.bridge.next_proposer().unwrap();
-        let (block, sent) = gb_a.propose_and_gossip(&proposer, 2000, [0xAB; 32]).unwrap();
+        let (block, sent) = gb_a
+            .propose_and_gossip(&proposer, 2000, [0xAB; 32])
+            .unwrap();
         assert_eq!(sent, 2);
         assert_eq!(gb_a.height(), 1);
 
@@ -1279,7 +1356,9 @@ mod tests {
         // A creates 3 blocks
         for i in 1..=3 {
             let proposer = gb_a.bridge.next_proposer().unwrap();
-            let (block, _) = gb_a.propose_and_gossip(&proposer, 2000 + i * 100, [0xAB; 32]).unwrap();
+            let (block, _) = gb_a
+                .propose_and_gossip(&proposer, 2000 + i * 100, [0xAB; 32])
+                .unwrap();
         }
         assert_eq!(gb_a.height(), 3);
 
@@ -1334,7 +1413,8 @@ mod tests {
         for i in 1..=2 {
             let p = gb_a.bridge.next_proposer().unwrap();
             gb_a.bridge.propose_block(&p, 2000 + i, [0xAB; 32]).unwrap();
-            gb_a.known_blocks.insert(i, gb_a.bridge.chain.get_block(i).unwrap().clone());
+            gb_a.known_blocks
+                .insert(i, gb_a.bridge.chain.get_block(i).unwrap().clone());
         }
 
         // B syncs
@@ -1351,7 +1431,10 @@ mod tests {
         let config = make_test_config();
         let mut gb = GossipBridge::init(&config, peer_id(1), dummy_did(0)).unwrap();
 
-        assert_eq!(gb.request_blocks(999, 1, 10), Err(GossipError::PeerNotConnected));
+        assert_eq!(
+            gb.request_blocks(999, 1, 10),
+            Err(GossipError::PeerNotConnected)
+        );
     }
 
     #[test]
@@ -1402,7 +1485,11 @@ mod tests {
         gb.complete_handshake(conn, 9000).unwrap();
 
         for h in 1..=5 {
-            let ann = BlockAnnMsg { block_hash: [h as u8; 32], block_height: h, prev_hash: [0u8; 32] };
+            let ann = BlockAnnMsg {
+                block_hash: [h as u8; 32],
+                block_height: h,
+                prev_hash: [0u8; 32],
+            };
             gb.handle_block_ann(conn, &ann).unwrap();
         }
 

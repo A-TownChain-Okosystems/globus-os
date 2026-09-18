@@ -21,29 +21,29 @@ pub mod ats1000;
 // [K29-Build] ausgeschlossen: pub mod memory;
 // [K29-Build] ausgeschlossen: pub mod serial;
 pub mod net; // [K12] Netz-Primitive (HAL-Ebene) — verbleibt im Kernel (AD-028-Justierung)
-// [AD-028] Service-Space-Migration: blockchain, consensus, genesis, genesis_bridge,
-// gossip_bridge, atcnet, net, did, remote_caps, knowledge_graph, security_audit
-// sind in den Service-Space-Crate (service_space/) migriert — Kernel haelt nur Primitive.
+             // [AD-028] Service-Space-Migration: blockchain, consensus, genesis, genesis_bridge,
+             // gossip_bridge, atcnet, net, did, remote_caps, knowledge_graph, security_audit
+             // sind in den Service-Space-Crate (service_space/) migriert — Kernel haelt nur Primitive.
+pub mod atcfs;
 pub mod capability;
-pub mod process;
-pub mod scheduler;
 pub mod ipc;
 pub mod memory_manager;
-pub mod atcfs;
+pub mod process;
+pub mod scheduler;
 pub mod vfs;
 // [K29-Build] ausgeschlossen: pub mod syscall;
 pub mod timer;
 // [K29-Build] ausgeschlossen: pub mod block;
-pub mod tcpip;
+pub mod ai;
+pub mod contract;
+pub mod cross_subsystem;
+pub mod kernel_init;
+pub mod mempool;
 pub mod p2p;
 pub mod p2p_secure; // [K14-Upgrade] ATC-PROTO-P2P-001 v1.0.0 (SCR-0028)
 pub mod security;
-pub mod mempool;
+pub mod tcpip;
 pub mod vm;
-pub mod contract;
-pub mod ai;
-pub mod kernel_init;
-pub mod cross_subsystem;
 // [K29-Build] ausgeschlossen: pub mod userspace;
 // [K29-Build] ausgeschlossen: pub mod elf_loader;
 // [K29-Build] ausgeschlossen: pub mod page_fault;
@@ -59,9 +59,9 @@ pub mod cross_subsystem;
 // [K29-Build] ausgeschlossen: pub mod signals;
 // [K29-Build] ausgeschlossen: pub mod smp;
 pub mod vmm; // [M1.2] hardened VMM validation core
-// [K29-Build] ausgeschlossen: pub mod cow;
-// [K29-Build] ausgeschlossen: pub mod tracing;
-// [K29-Build] ausgeschlossen: pub mod container_net;
-// [K29-Build] ausgeschlossen: pub mod lkm;
-// [K29-Build] ausgeschlossen: pub mod module_security;
-// [K29-Build] ausgeschlossen: pub mod fs_journal;
+             // [K29-Build] ausgeschlossen: pub mod cow;
+             // [K29-Build] ausgeschlossen: pub mod tracing;
+             // [K29-Build] ausgeschlossen: pub mod container_net;
+             // [K29-Build] ausgeschlossen: pub mod lkm;
+             // [K29-Build] ausgeschlossen: pub mod module_security;
+             // [K29-Build] ausgeschlossen: pub mod fs_journal;

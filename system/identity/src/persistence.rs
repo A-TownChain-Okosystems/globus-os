@@ -17,7 +17,11 @@ pub struct CredentialRecord {
 
 impl CredentialRecord {
     pub fn argon2id(phc_hash: impl Into<String>) -> Self {
-        Self { scheme: "argon2id", version: 1, phc_hash: phc_hash.into() }
+        Self {
+            scheme: "argon2id",
+            version: 1,
+            phc_hash: phc_hash.into(),
+        }
     }
 
     pub fn is_supported(&self) -> bool {
@@ -34,7 +38,11 @@ pub struct IdentityRecord {
 
 impl IdentityRecord {
     pub fn new(profile: AccountProfile, credential: CredentialRecord) -> Self {
-        Self { version: IDENTITY_RECORD_VERSION, profile, credential }
+        Self {
+            version: IDENTITY_RECORD_VERSION,
+            profile,
+            credential,
+        }
     }
 
     pub fn validate(&self) -> Result<(), PersistenceError> {
@@ -80,9 +88,13 @@ pub struct InMemoryIdentityStore {
 }
 
 impl InMemoryIdentityStore {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
-    pub fn is_empty(&self) -> bool { self.committed.is_none() }
+    pub fn is_empty(&self) -> bool {
+        self.committed.is_none()
+    }
 }
 
 impl IdentityStore for InMemoryIdentityStore {
@@ -114,26 +126,42 @@ mod tests {
         let user = UserId::new("test-user").unwrap();
         let address = WalletAddress("ATC00000000000000000000000000000000AA".into());
         let binding = IdentityBinding {
-            user_id: user.clone(), wallet_address: address.clone(), chain_id: 600,
-            network: "devnet".into(), key_version: 1,
+            user_id: user.clone(),
+            wallet_address: address.clone(),
+            chain_id: 600,
+            network: "devnet".into(),
+            key_version: 1,
         };
         let profile = AccountProfile::new(user, "Test", binding).unwrap();
-        IdentityRecord::new(profile, CredentialRecord::argon2id("$argon2id$v=19$m=19456,t=2,p=1$test$hash"))
+        IdentityRecord::new(
+            profile,
+            CredentialRecord::argon2id("$argon2id$v=19$m=19456,t=2,p=1$test$hash"),
+        )
     }
 
     #[test]
-    fn record_validates_supported_schema() { assert!(record().validate().is_ok()); }
+    fn record_validates_supported_schema() {
+        assert!(record().validate().is_ok());
+    }
 
     #[test]
     fn unknown_version_is_rejected() {
-        let mut value = record(); value.version = 99;
-        assert_eq!(value.validate(), Err(PersistenceError::UnsupportedVersion(99)));
+        let mut value = record();
+        value.version = 99;
+        assert_eq!(
+            value.validate(),
+            Err(PersistenceError::UnsupportedVersion(99))
+        );
     }
 
     #[test]
     fn wrong_credential_scheme_is_rejected() {
-        let mut value = record(); value.credential.scheme = "sha256";
-        assert_eq!(value.validate(), Err(PersistenceError::UnsupportedCredentialScheme));
+        let mut value = record();
+        value.credential.scheme = "sha256";
+        assert_eq!(
+            value.validate(),
+            Err(PersistenceError::UnsupportedCredentialScheme)
+        );
     }
 
     #[test]

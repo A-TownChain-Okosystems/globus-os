@@ -3,23 +3,39 @@
 use crate::VirtualAddress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct PageRange { pub start: VirtualAddress, pub pages: u64 }
+pub struct PageRange {
+    pub start: VirtualAddress,
+    pub pages: u64,
+}
 
 #[derive(Debug)]
-pub struct PageAllocator { next: u64, page_size: u64 }
+pub struct PageAllocator {
+    next: u64,
+    page_size: u64,
+}
 
 impl PageAllocator {
     pub fn new(start: VirtualAddress, page_size: u64) -> Option<Self> {
-        if page_size == 0 || !page_size.is_power_of_two() { return None; }
-        Some(Self { next: start.0, page_size })
+        if page_size == 0 || !page_size.is_power_of_two() {
+            return None;
+        }
+        Some(Self {
+            next: start.0,
+            page_size,
+        })
     }
 
     pub fn allocate(&mut self, pages: u64) -> Option<PageRange> {
-        if pages == 0 { return None; }
+        if pages == 0 {
+            return None;
+        }
         let bytes = pages.checked_mul(self.page_size)?;
         let start = self.next;
         self.next = self.next.checked_add(bytes)?;
-        Some(PageRange { start: VirtualAddress(start), pages })
+        Some(PageRange {
+            start: VirtualAddress(start),
+            pages,
+        })
     }
 }
 

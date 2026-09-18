@@ -13,34 +13,59 @@ pub struct IoApicRedirection {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ApicError { InvalidId, InvalidVector, DuplicateVector, MissingVector }
+pub enum ApicError {
+    InvalidId,
+    InvalidVector,
+    DuplicateVector,
+    MissingVector,
+}
 
 #[derive(Debug, Default)]
-pub struct ApicController { entries: Vec<IoApicRedirection> }
+pub struct ApicController {
+    entries: Vec<IoApicRedirection>,
+}
 
 impl ApicController {
-    pub fn new() -> Self { Self::default() }
+    pub fn new() -> Self {
+        Self::default()
+    }
 
     pub fn set_redirection(&mut self, entry: IoApicRedirection) -> Result<(), ApicError> {
-        if entry.destination.0 == u8::MAX { return Err(ApicError::InvalidId); }
-        if !entry.vector.valid() { return Err(ApicError::InvalidVector); }
-        if self.entries.iter().any(|e| e.vector == entry.vector) { return Err(ApicError::DuplicateVector); }
+        if entry.destination.0 == u8::MAX {
+            return Err(ApicError::InvalidId);
+        }
+        if !entry.vector.valid() {
+            return Err(ApicError::InvalidVector);
+        }
+        if self.entries.iter().any(|e| e.vector == entry.vector) {
+            return Err(ApicError::DuplicateVector);
+        }
         self.entries.push(entry);
         self.entries.sort_by_key(|e| e.vector.0);
         Ok(())
     }
 
     pub fn get(&self, vector: InterruptVector) -> Result<IoApicRedirection, ApicError> {
-        self.entries.iter().find(|e| e.vector == vector).copied().ok_or(ApicError::MissingVector)
+        self.entries
+            .iter()
+            .find(|e| e.vector == vector)
+            .copied()
+            .ok_or(ApicError::MissingVector)
     }
 
     pub fn mask(&mut self, vector: InterruptVector, masked: bool) -> Result<(), ApicError> {
-        let entry = self.entries.iter_mut().find(|e| e.vector == vector).ok_or(ApicError::MissingVector)?;
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|e| e.vector == vector)
+            .ok_or(ApicError::MissingVector)?;
         entry.masked = masked;
         Ok(())
     }
 
-    pub fn entries(&self) -> &[IoApicRedirection] { &self.entries }
+    pub fn entries(&self) -> &[IoApicRedirection] {
+        &self.entries
+    }
 }
 
 #[cfg(test)]
@@ -49,7 +74,12 @@ mod tests {
     #[test]
     fn redirection_is_deterministic() {
         let mut a = ApicController::new();
-        a.set_redirection(IoApicRedirection { vector: InterruptVector(48), destination: ApicId(1), masked: true }).unwrap();
+        a.set_redirection(IoApicRedirection {
+            vector: InterruptVector(48),
+            destination: ApicId(1),
+            masked: true,
+        })
+        .unwrap();
         assert!(a.get(InterruptVector(48)).unwrap().masked);
         a.mask(InterruptVector(48), false).unwrap();
         assert!(!a.get(InterruptVector(48)).unwrap().masked);

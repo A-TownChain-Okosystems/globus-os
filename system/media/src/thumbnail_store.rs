@@ -4,7 +4,10 @@
 use crate::thumbnail_cache::{ThumbnailKey, ThumbnailSize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ThumbnailDimensions { pub width: u32, pub height: u32 }
+pub struct ThumbnailDimensions {
+    pub width: u32,
+    pub height: u32,
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StoredThumbnail {
@@ -21,18 +24,28 @@ pub trait ThumbnailStore {
 }
 
 #[derive(Debug, Default)]
-pub struct MemoryThumbnailStore { entries: Vec<StoredThumbnail> }
+pub struct MemoryThumbnailStore {
+    entries: Vec<StoredThumbnail>,
+}
 
 impl MemoryThumbnailStore {
-    pub fn new() -> Self { Self::default() }
-    pub fn len(&self) -> usize { self.entries.len() }
+    pub fn new() -> Self {
+        Self::default()
+    }
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
     pub fn contains(&self, uri: &str, size: ThumbnailSize) -> bool {
-        self.entries.iter().any(|x| x.key.uri == uri && x.key.size == size)
+        self.entries
+            .iter()
+            .any(|x| x.key.uri == uri && x.key.size == size)
     }
 }
 
 impl ThumbnailStore for MemoryThumbnailStore {
-    fn load(&self, key: &ThumbnailKey) -> Option<StoredThumbnail> { self.entries.iter().find(|x| &x.key == key).cloned() }
+    fn load(&self, key: &ThumbnailKey) -> Option<StoredThumbnail> {
+        self.entries.iter().find(|x| &x.key == key).cloned()
+    }
     fn save(&mut self, thumbnail: StoredThumbnail) -> Result<(), String> {
         self.entries.retain(|x| x.key != thumbnail.key);
         self.entries.push(thumbnail);

@@ -7,11 +7,11 @@ use alloc::string::ToString;
 // Capability-gegates VFS mit In-Memory-Backend, Pfad-Aufloesung, File-Handles.
 // ─────────────────────────────────────────────────────────────────────────
 
-use alloc::format;
 use alloc::collections::BTreeMap;
+use alloc::format;
 use alloc::string::{String, String as Str};
-use alloc::vec::Vec;
 use alloc::sync::Arc;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
@@ -27,7 +27,7 @@ pub enum FileType {
 }
 
 #[derive(Clone, Debug, PartialEq)]
-    pub struct FileMetadata {
+pub struct FileMetadata {
     pub file_type: FileType,
     pub size: u64,
     pub created_at: u64,
@@ -46,7 +46,7 @@ struct Inode {
     parent: Option<u64>,
     children: BTreeMap<String, u64>, // nur fuer Directories
     data: Vec<u8>,                   // nur fuer Files
-    symlink_target: Option<String>, // nur fuer Symlinks
+    symlink_target: Option<String>,  // nur fuer Symlinks
     metadata: FileMetadata,
 }
 
@@ -146,7 +146,10 @@ impl OpenMode {
     }
 
     fn allows_write(&self) -> bool {
-        matches!(self, OpenMode::Write | OpenMode::ReadWrite | OpenMode::Append | OpenMode::Create)
+        matches!(
+            self,
+            OpenMode::Write | OpenMode::ReadWrite | OpenMode::Append | OpenMode::Create
+        )
     }
 }
 
@@ -157,8 +160,12 @@ fn normalize_path(path: &str) -> Vec<String> {
     for part in path.split('/') {
         match part {
             "" | "." => {} // skip
-            ".." => { components.pop(); }
-            _ => { components.push(part.to_string()); }
+            ".." => {
+                components.pop();
+            }
+            _ => {
+                components.push(part.to_string());
+            }
         }
     }
     components
@@ -171,7 +178,7 @@ fn parent_path(path: &str) -> (String, String) {
     }
     let name = comps.last().unwrap().clone();
     let parent = if comps.len() > 1 {
-        format!("/{}/", comps[..comps.len()-1].join("/"))
+        format!("/{}/", comps[..comps.len() - 1].join("/"))
     } else {
         "/".to_string()
     };
@@ -223,7 +230,9 @@ impl Vfs {
                 return None; // Pfad geht durch eine Datei
             }
             match inode.children.get(comp) {
-                Some(&child_id) => { current = child_id; }
+                Some(&child_id) => {
+                    current = child_id;
+                }
                 None => return None,
             }
         }
@@ -249,8 +258,7 @@ impl Vfs {
         }
 
         let (parent_path, name) = parent_path(path);
-        let parent_id = self.resolve(&parent_path)
-            .ok_or(VfsError::NotFound)?;
+        let parent_id = self.resolve(&parent_path).ok_or(VfsError::NotFound)?;
 
         {
             let parent = self.inodes.get(&parent_id).ok_or(VfsError::NotFound)?;
@@ -268,11 +276,20 @@ impl Vfs {
         dir.parent = Some(parent_id);
         self.inodes.insert(id, dir);
 
-        self.inodes.get_mut(&parent_id).unwrap().children.insert(name, id);
+        self.inodes
+            .get_mut(&parent_id)
+            .unwrap()
+            .children
+            .insert(name, id);
         Ok(())
     }
 
-    pub fn list_dir(&self, path: &str, _pid: u64, cap_handle: u64) -> Result<Vec<DirEntry>, VfsError> {
+    pub fn list_dir(
+        &self,
+        path: &str,
+        _pid: u64,
+        cap_handle: u64,
+    ) -> Result<Vec<DirEntry>, VfsError> {
         if !self.check_cap(_pid, cap_handle, Rights::READ) {
             return Err(VfsError::PermissionDenied);
         }
@@ -318,7 +335,11 @@ impl Vfs {
         let name = inode.name.clone();
 
         self.inodes.remove(&dir_id);
-        self.inodes.get_mut(&parent_id).unwrap().children.remove(&name);
+        self.inodes
+            .get_mut(&parent_id)
+            .unwrap()
+            .children
+            .remove(&name);
         Ok(())
     }
 
@@ -348,11 +369,21 @@ impl Vfs {
         file.parent = Some(parent_id);
         self.inodes.insert(id, file);
 
-        self.inodes.get_mut(&parent_id).unwrap().children.insert(name, id);
+        self.inodes
+            .get_mut(&parent_id)
+            .unwrap()
+            .children
+            .insert(name, id);
         Ok(())
     }
 
-    pub fn open(&mut self, path: &str, mode: OpenMode, pid: u64, cap_handle: u64) -> Result<u64, VfsError> {
+    pub fn open(
+        &mut self,
+        path: &str,
+        mode: OpenMode,
+        pid: u64,
+        cap_handle: u64,
+    ) -> Result<u64, VfsError> {
         let required = if mode.allows_read() && mode.allows_write() {
             Rights::READ | Rights::WRITE
         } else if mode.allows_read() {
@@ -386,18 +417,27 @@ impl Vfs {
             _ => 0,
         };
 
-        self.handles.insert(fd, FileHandle {
-            inode_id,
-            position,
-            mode,
-            pid,
-            cap_handle,
-        });
+        self.handles.insert(
+            fd,
+            FileHandle {
+                inode_id,
+                position,
+                mode,
+                pid,
+                cap_handle,
+            },
+        );
 
         Ok(fd)
     }
 
-    pub fn read(&mut self, fd: u64, buf: &mut [u8], _pid: u64, cap_handle: u64) -> Result<usize, VfsError> {
+    pub fn read(
+        &mut self,
+        fd: u64,
+        buf: &mut [u8],
+        _pid: u64,
+        cap_handle: u64,
+    ) -> Result<usize, VfsError> {
         if !self.check_cap(_pid, cap_handle, Rights::READ) {
             return Err(VfsError::PermissionDenied);
         }
@@ -407,7 +447,10 @@ impl Vfs {
             return Err(VfsError::InvalidMode);
         }
 
-        let inode = self.inodes.get(&handle.inode_id).ok_or(VfsError::NotFound)?;
+        let inode = self
+            .inodes
+            .get(&handle.inode_id)
+            .ok_or(VfsError::NotFound)?;
         let pos = handle.position as usize;
         let available = inode.data.len().saturating_sub(pos);
         let to_read = buf.len().min(available);
@@ -418,7 +461,13 @@ impl Vfs {
         Ok(to_read)
     }
 
-    pub fn write(&mut self, fd: u64, data: &[u8], _pid: u64, cap_handle: u64) -> Result<usize, VfsError> {
+    pub fn write(
+        &mut self,
+        fd: u64,
+        data: &[u8],
+        _pid: u64,
+        cap_handle: u64,
+    ) -> Result<usize, VfsError> {
         if !self.check_cap(_pid, cap_handle, Rights::WRITE) {
             return Err(VfsError::PermissionDenied);
         }
@@ -444,12 +493,17 @@ impl Vfs {
     }
 
     pub fn close(&mut self, fd: u64) -> Result<(), VfsError> {
-        self.handles.remove(&fd).ok_or(VfsError::BadFileDescriptor)?;
+        self.handles
+            .remove(&fd)
+            .ok_or(VfsError::BadFileDescriptor)?;
         Ok(())
     }
 
     pub fn seek(&mut self, fd: u64, offset: u64) -> Result<u64, VfsError> {
-        let handle = self.handles.get_mut(&fd).ok_or(VfsError::BadFileDescriptor)?;
+        let handle = self
+            .handles
+            .get_mut(&fd)
+            .ok_or(VfsError::BadFileDescriptor)?;
         handle.position = offset;
         Ok(offset)
     }
@@ -465,7 +519,13 @@ impl Vfs {
 
     // ── Symlink ───────────────────────────────────────────────────────────
 
-    pub fn create_symlink(&mut self, path: &str, target: &str, pid: u64, cap_handle: u64) -> Result<(), VfsError> {
+    pub fn create_symlink(
+        &mut self,
+        path: &str,
+        target: &str,
+        pid: u64,
+        cap_handle: u64,
+    ) -> Result<(), VfsError> {
         if !self.check_cap(pid, cap_handle, Rights::WRITE) {
             return Err(VfsError::PermissionDenied);
         }
@@ -489,7 +549,11 @@ impl Vfs {
         link.parent = Some(parent_id);
         self.inodes.insert(id, link);
 
-        self.inodes.get_mut(&parent_id).unwrap().children.insert(name, id);
+        self.inodes
+            .get_mut(&parent_id)
+            .unwrap()
+            .children
+            .insert(name, id);
         Ok(())
     }
 
@@ -522,7 +586,9 @@ impl Vfs {
         let name = inode.name.clone();
 
         // Offene Handles schliessen
-        let fds_to_close: Vec<u64> = self.handles.iter()
+        let fds_to_close: Vec<u64> = self
+            .handles
+            .iter()
             .filter(|(_, h)| h.inode_id == inode_id)
             .map(|(&fd, _)| fd)
             .collect();
@@ -531,7 +597,11 @@ impl Vfs {
         }
 
         self.inodes.remove(&inode_id);
-        self.inodes.get_mut(&parent_id).unwrap().children.remove(&name);
+        self.inodes
+            .get_mut(&parent_id)
+            .unwrap()
+            .children
+            .remove(&name);
         Ok(())
     }
 
@@ -561,7 +631,10 @@ impl Vfs {
             String::new()
         };
 
-        out.push(format!("{}{}{}{}", prefix, type_marker, inode.name, size_str));
+        out.push(format!(
+            "{}{}{}{}",
+            prefix, type_marker, inode.name, size_str
+        ));
 
         if inode.is_dir() {
             let child_count = inode.children.len();
@@ -617,7 +690,14 @@ mod tests {
         // Grant full rights to process 1
         {
             let mut table = caps.lock();
-            let cap = table.create(Pid(1), ResourceType::FileSystem, 1, Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE).0;
+            let cap = table
+                .create(
+                    Pid(1),
+                    ResourceType::FileSystem,
+                    1,
+                    Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+                )
+                .0;
             // cap handle = 1 (first cap)
         }
         // We need the cap handle. Let's use a simpler approach:
@@ -627,7 +707,12 @@ mod tests {
 
     fn grant_full_caps(caps: &Arc<Mutex<CapabilityTable>>, pid: u64) -> u64 {
         let mut table = caps.lock();
-        let cap_id = table.create(Pid(pid as u32), ResourceType::FileSystem, 1, Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE);
+        let cap_id = table.create(
+            Pid(pid as u32),
+            ResourceType::FileSystem,
+            1,
+            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+        );
         cap_id.0
     }
 
@@ -804,13 +889,17 @@ mod tests {
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
-        let fd = vfs.open("/auto_created.txt", OpenMode::Create, 1, cap).unwrap();
+        let fd = vfs
+            .open("/auto_created.txt", OpenMode::Create, 1, cap)
+            .unwrap();
         let data = b"auto-created";
         vfs.write(fd, data, 1, cap).unwrap();
         vfs.close(fd).unwrap();
 
         // Zweites Open im Read-Modus
-        let fd2 = vfs.open("/auto_created.txt", OpenMode::Read, 1, cap).unwrap();
+        let fd2 = vfs
+            .open("/auto_created.txt", OpenMode::Read, 1, cap)
+            .unwrap();
         let mut buf = [0u8; 64];
         let read = vfs.read(fd2, &mut buf, 1, cap).unwrap();
         assert_eq!(&buf[..read], data);
@@ -842,7 +931,9 @@ mod tests {
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
-        let fd = vfs.open("/seek_test.bin", OpenMode::Create, 1, cap).unwrap();
+        let fd = vfs
+            .open("/seek_test.bin", OpenMode::Create, 1, cap)
+            .unwrap();
         vfs.write(fd, b"0123456789", 1, cap).unwrap();
         vfs.close(fd).unwrap();
 
@@ -933,7 +1024,8 @@ mod tests {
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/target.txt", 1, cap).unwrap();
-        vfs.create_symlink("/link.txt", "/target.txt", 1, cap).unwrap();
+        vfs.create_symlink("/link.txt", "/target.txt", 1, cap)
+            .unwrap();
 
         let target = vfs.read_symlink("/link.txt", 1, cap).unwrap();
         assert_eq!(target, "/target.txt");
@@ -987,7 +1079,9 @@ mod tests {
         // Prozess 2 bekommt nur READ (kein WRITE)
         let cap_read = {
             let mut table = caps.lock();
-            table.create(Pid(2), ResourceType::FileSystem, 2, Rights::READ).0
+            table
+                .create(Pid(2), ResourceType::FileSystem, 2, Rights::READ)
+                .0
         };
 
         let result = vfs.mkdir("/test", 2, cap_read);
@@ -1002,7 +1096,9 @@ mod tests {
         // Prozess 2 bekommt nur WRITE (kein READ)
         let cap_write = {
             let mut table = caps.lock();
-            table.create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE).0
+            table
+                .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
+                .0
         };
 
         vfs.create_file("/file.txt", 2, cap_write).unwrap();
@@ -1017,7 +1113,9 @@ mod tests {
 
         let cap_write = {
             let mut table = caps.lock();
-            table.create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE).0
+            table
+                .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
+                .0
         };
 
         vfs.create_file("/data.txt", 2, cap_write).unwrap();

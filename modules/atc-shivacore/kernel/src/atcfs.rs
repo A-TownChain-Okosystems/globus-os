@@ -51,14 +51,13 @@ pub struct AtcFileSystem {
 #[derive(Debug, Clone)]
 struct OpenFile {
     path: String,
-    mode: u8,  // 0=read, 1=write, 2=read+write
+    mode: u8, // 0=read, 1=write, 2=read+write
     offset: u64,
 }
 
 /// Fehler bei FS-Operationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FsError {
-
     NotFound,
     PermissionDenied,
     AlreadyExists,
@@ -113,11 +112,20 @@ impl AtcFileSystem {
 
     fn init_root(&mut self) {
         let now = self.now();
-        self.nodes.insert("/".to_string(), AtcNode {
-            path: "/".to_string(), name: "/".to_string(),
-            is_dir: true, owner: Pid(0), content_cid: "".to_string(),
-            size: 0, created: now, modified: now, children: Vec::new(),
-        });
+        self.nodes.insert(
+            "/".to_string(),
+            AtcNode {
+                path: "/".to_string(),
+                name: "/".to_string(),
+                is_dir: true,
+                owner: Pid(0),
+                content_cid: "".to_string(),
+                size: 0,
+                created: now,
+                modified: now,
+                children: Vec::new(),
+            },
+        );
         for d in ["atc", "home", "tmp", "bin", "var"] {
             self.mkdir(&format!("/{}", d), Pid(0));
         }
@@ -132,20 +140,32 @@ impl AtcFileSystem {
     }
 
     fn node_name(path: &str) -> String {
-        path.trim_end_matches('/').rsplit('/').next().unwrap_or("").to_string()
+        path.trim_end_matches('/')
+            .rsplit('/')
+            .next()
+            .unwrap_or("")
+            .to_string()
     }
 
     fn mkdir(&mut self, path: &str, owner: Pid) {
-        if self.nodes.contains_key(path) { return; }
+        if self.nodes.contains_key(path) {
+            return;
+        }
         let parent = Self::parent_path(path);
         if !self.nodes.contains_key(&parent) {
             self.mkdir(&parent, owner);
         }
         let now = self.now();
         let node = AtcNode {
-            path: path.to_string(), name: Self::node_name(path),
-            is_dir: true, owner, content_cid: "".to_string(),
-            size: 0, created: now, modified: now, children: Vec::new(),
+            path: path.to_string(),
+            name: Self::node_name(path),
+            is_dir: true,
+            owner,
+            content_cid: "".to_string(),
+            size: 0,
+            created: now,
+            modified: now,
+            children: Vec::new(),
         };
         self.nodes.insert(path.to_string(), node);
         if let Some(p) = self.nodes.get_mut(&parent) {
@@ -154,13 +174,14 @@ impl AtcFileSystem {
     }
 
     pub fn exists(&self, path: &str) -> bool {
-        self.nodes.contains_key(path.trim_end_matches('/'))
-            || path == "/"
+        self.nodes.contains_key(path.trim_end_matches('/')) || path == "/"
     }
 
     /// Prueft Lesezugriff
     fn check_read(&self, node: &AtcNode, actor: Pid) -> Result<(), FsError> {
-        if node.owner == actor || actor == Pid(0) { return Ok(()); }
+        if node.owner == actor || actor == Pid(0) {
+            return Ok(());
+        }
         // Oeffentliche Pfade
         if node.path.starts_with("/atc/") || node.path.starts_with("/tmp/") {
             return Ok(());
@@ -170,7 +191,9 @@ impl AtcFileSystem {
 
     /// Prueft Schreibzugriff
     fn check_write(&self, node: &AtcNode, actor: Pid) -> Result<(), FsError> {
-        if node.owner == actor || actor == Pid(0) { return Ok(()); }
+        if node.owner == actor || actor == Pid(0) {
+            return Ok(());
+        }
         Err(FsError::PermissionDenied)
     }
 
@@ -189,7 +212,9 @@ impl AtcFileSystem {
 
         // Wenn existiert: Schreibrechte pruefen
         if let Some(existing) = self.nodes.get(path) {
-            if existing.is_dir { return Err(FsError::IsADirectory); }
+            if existing.is_dir {
+                return Err(FsError::IsADirectory);
+            }
             self.check_write(existing, actor)?;
         }
 
@@ -204,9 +229,14 @@ impl AtcFileSystem {
         };
 
         let node = AtcNode {
-            path: path.to_string(), name: Self::node_name(path),
-            is_dir: false, owner, content_cid: cid.clone(),
-            size: data.len() as u64, created, modified: now,
+            path: path.to_string(),
+            name: Self::node_name(path),
+            is_dir: false,
+            owner,
+            content_cid: cid.clone(),
+            size: data.len() as u64,
+            created,
+            modified: now,
             children: Vec::new(),
         };
         self.nodes.insert(path.to_string(), node.clone());
@@ -229,7 +259,9 @@ impl AtcFileSystem {
         actor: Pid,
     ) -> Result<(Cid, AtcNode), FsError> {
         let node = self.nodes.get(path).ok_or(FsError::NotFound)?;
-        if node.is_dir { return Err(FsError::IsADirectory); }
+        if node.is_dir {
+            return Err(FsError::IsADirectory);
+        }
         self.check_read(node, actor)?;
         Ok((node.content_cid.clone(), node.clone()))
     }
@@ -245,7 +277,8 @@ impl AtcFileSystem {
             Some(n) if n.is_dir => n,
             _ => return Vec::new(),
         };
-        node.children.iter()
+        node.children
+            .iter()
             .filter_map(|c| self.nodes.get(c))
             .cloned()
             .collect()
@@ -253,7 +286,9 @@ impl AtcFileSystem {
 
     /// Exportiert Manifest fuer On-Chain-Anchoring
     pub fn export_manifest(&self) -> Manifest {
-        let mut entries: Vec<String> = self.nodes.iter()
+        let mut entries: Vec<String> = self
+            .nodes
+            .iter()
             .filter(|(_, n)| !n.is_dir)
             .map(|(p, n)| format!("{}:{}", p, n.content_cid))
             .collect();
@@ -269,13 +304,11 @@ impl AtcFileSystem {
     }
 
     /// Loescht eine Datei
-    pub fn delete_file(
-        &mut self,
-        path: &str,
-        actor: Pid,
-    ) -> Result<(), FsError> {
+    pub fn delete_file(&mut self, path: &str, actor: Pid) -> Result<(), FsError> {
         let node = self.nodes.get(path).ok_or(FsError::NotFound)?;
-        if node.is_dir { return Err(FsError::IsADirectory); }
+        if node.is_dir {
+            return Err(FsError::IsADirectory);
+        }
         self.check_write(node, actor)?;
 
         let cid = node.content_cid.clone();
@@ -314,14 +347,19 @@ pub struct Manifest {
 impl FileSystem for AtcFileSystem {
     fn open(&mut self, path: &str, mode: u8) -> Option<FileHandle> {
         let node = self.nodes.get(path)?;
-        if node.is_dir { return None; }
+        if node.is_dir {
+            return None;
+        }
 
         let fh = self.next_fh.fetch_add(1, Ordering::SeqCst);
-        self.open_files.insert(fh, OpenFile {
-            path: path.to_string(),
-            mode,
-            offset: 0,
-        });
+        self.open_files.insert(
+            fh,
+            OpenFile {
+                path: path.to_string(),
+                mode,
+                offset: 0,
+            },
+        );
         Some(fh)
     }
 
@@ -342,7 +380,9 @@ impl FileSystem for AtcFileSystem {
         };
 
         let offset = open.offset as usize;
-        if offset >= content.len() { return 0; }
+        if offset >= content.len() {
+            return 0;
+        }
 
         let available = content.len() - offset;
         let to_read = buf.len().min(available);
@@ -385,7 +425,9 @@ impl FileSystem for AtcFileSystem {
 mod tests {
     use super::*;
 
-    fn pid(n: u32) -> Pid { Pid(n) }
+    fn pid(n: u32) -> Pid {
+        Pid(n)
+    }
 
     #[test]
     fn test_content_id_deterministic() {
@@ -419,7 +461,9 @@ mod tests {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
 
-        let node = fs.write_file(&caps, "/home/alice/test.txt", b"hello world", pid(1)).unwrap();
+        let node = fs
+            .write_file(&caps, "/home/alice/test.txt", b"hello world", pid(1))
+            .unwrap();
         assert_eq!(node.size, 11);
         assert!(node.content_cid.starts_with("atc1"));
 
@@ -435,21 +479,30 @@ mod tests {
     fn test_read_nonexistent() {
         let fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
-        assert_eq!(fs.read_file(&caps, "/nonexistent", pid(1)), Err(FsError::NotFound));
+        assert_eq!(
+            fs.read_file(&caps, "/nonexistent", pid(1)),
+            Err(FsError::NotFound)
+        );
     }
 
     #[test]
     fn test_read_directory_rejected() {
         let fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
-        assert_eq!(fs.read_file(&caps, "/home", pid(1)), Err(FsError::IsADirectory));
+        assert_eq!(
+            fs.read_file(&caps, "/home", pid(1)),
+            Err(FsError::IsADirectory)
+        );
     }
 
     #[test]
     fn test_write_directory_rejected() {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
-        assert_eq!(fs.write_file(&caps, "/home", b"data", pid(1)), Err(FsError::IsADirectory));
+        assert_eq!(
+            fs.write_file(&caps, "/home", b"data", pid(1)),
+            Err(FsError::IsADirectory)
+        );
     }
 
     #[test]
@@ -458,10 +511,14 @@ mod tests {
         let caps = CapabilityTable::new();
 
         // pid(1) schreibt nach /home/alice/secret.txt
-        fs.write_file(&caps, "/home/alice/secret.txt", b"secret", pid(1)).unwrap();
+        fs.write_file(&caps, "/home/alice/secret.txt", b"secret", pid(1))
+            .unwrap();
 
         // pid(2) kann nicht lesen (owner-only in /home/)
-        assert_eq!(fs.read_file(&caps, "/home/alice/secret.txt", pid(2)), Err(FsError::PermissionDenied));
+        assert_eq!(
+            fs.read_file(&caps, "/home/alice/secret.txt", pid(2)),
+            Err(FsError::PermissionDenied)
+        );
     }
 
     #[test]
@@ -470,7 +527,8 @@ mod tests {
         let caps = CapabilityTable::new();
 
         // pid(1) schreibt nach /atc/public.txt
-        fs.write_file(&caps, "/atc/public.txt", b"public data", pid(1)).unwrap();
+        fs.write_file(&caps, "/atc/public.txt", b"public data", pid(1))
+            .unwrap();
 
         // pid(2) kann lesen (oeffentlicher Pfad)
         let (_, node) = fs.read_file(&caps, "/atc/public.txt", pid(2)).unwrap();
@@ -482,8 +540,10 @@ mod tests {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
 
-        fs.write_file(&caps, "/atc/file1.txt", b"a", pid(1)).unwrap();
-        fs.write_file(&caps, "/atc/file2.txt", b"b", pid(1)).unwrap();
+        fs.write_file(&caps, "/atc/file1.txt", b"a", pid(1))
+            .unwrap();
+        fs.write_file(&caps, "/atc/file2.txt", b"b", pid(1))
+            .unwrap();
 
         let entries = fs.ls("/atc");
         assert_eq!(entries.len(), 2);
@@ -494,7 +554,8 @@ mod tests {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
 
-        fs.write_file(&caps, "/tmp/test.txt", b"data", pid(1)).unwrap();
+        fs.write_file(&caps, "/tmp/test.txt", b"data", pid(1))
+            .unwrap();
         assert!(fs.exists("/tmp/test.txt"));
 
         fs.delete_file("/tmp/test.txt", pid(1)).unwrap();
@@ -506,8 +567,12 @@ mod tests {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
 
-        fs.write_file(&caps, "/home/alice/file.txt", b"data", pid(1)).unwrap();
-        assert_eq!(fs.delete_file("/home/alice/file.txt", pid(2)), Err(FsError::PermissionDenied));
+        fs.write_file(&caps, "/home/alice/file.txt", b"data", pid(1))
+            .unwrap();
+        assert_eq!(
+            fs.delete_file("/home/alice/file.txt", pid(2)),
+            Err(FsError::PermissionDenied)
+        );
     }
 
     #[test]
@@ -564,7 +629,8 @@ mod tests {
         let caps = CapabilityTable::new();
 
         // Datei schreiben
-        fs.write_file(&caps, "/tmp/test.bin", b"binary data", pid(1)).unwrap();
+        fs.write_file(&caps, "/tmp/test.bin", b"binary data", pid(1))
+            .unwrap();
 
         // ats1000 open
         let fh = fs.open("/tmp/test.bin", 0).unwrap();
@@ -592,7 +658,8 @@ mod tests {
     fn test_ats1000_read_after_close() {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
-        fs.write_file(&caps, "/tmp/test.txt", b"data", pid(1)).unwrap();
+        fs.write_file(&caps, "/tmp/test.txt", b"data", pid(1))
+            .unwrap();
 
         let fh = fs.open("/tmp/test.txt", 0).unwrap();
         fs.close(fh);
@@ -606,9 +673,11 @@ mod tests {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
 
-        fs.write_file(&caps, "/atc/file.txt", b"v1", pid(1)).unwrap();
+        fs.write_file(&caps, "/atc/file.txt", b"v1", pid(1))
+            .unwrap();
         // pid(0) ueberschreibt
-        fs.write_file(&caps, "/atc/file.txt", b"v2", pid(0)).unwrap();
+        fs.write_file(&caps, "/atc/file.txt", b"v2", pid(0))
+            .unwrap();
 
         let (_, node) = fs.read_file(&caps, "/atc/file.txt", pid(1)).unwrap();
         assert_eq!(node.owner, pid(1)); // Original owner
@@ -620,7 +689,13 @@ mod tests {
         let mut fs = AtcFileSystem::new();
         let caps = CapabilityTable::new();
 
-        fs.write_file(&caps, "/home/alice/docs/research/notes.txt", b"notes", pid(1)).unwrap();
+        fs.write_file(
+            &caps,
+            "/home/alice/docs/research/notes.txt",
+            b"notes",
+            pid(1),
+        )
+        .unwrap();
         assert!(fs.exists("/home/alice/docs/research/notes.txt"));
         assert!(fs.exists("/home/alice/docs/research"));
         assert!(fs.exists("/home/alice/docs"));

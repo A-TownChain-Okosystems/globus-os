@@ -8,7 +8,9 @@ pub struct CommandRegistry {
 
 impl CommandRegistry {
     pub fn new() -> Self {
-        let mut reg = Self { commands: HashMap::new() };
+        let mut reg = Self {
+            commands: HashMap::new(),
+        };
         reg.commands.insert("echo".into(), Self::cmd_echo);
         reg.commands.insert("help".into(), Self::cmd_help);
         reg.commands.insert("ls".into(), Self::cmd_ls);
@@ -26,15 +28,27 @@ impl CommandRegistry {
         }
     }
 
-    fn cmd_echo(args: &[&str]) -> String { args.join(" ") }
+    fn cmd_echo(args: &[&str]) -> String {
+        args.join(" ")
+    }
     fn cmd_help(_args: &[&str]) -> String {
         "Available: echo help ls pwd whoami clear version".into()
     }
-    fn cmd_ls(_args: &[&str]) -> String { "atcfs/  blockchain/  kernel/  modules/".into() }
-    fn cmd_pwd(_args: &[&str]) -> String { "/".into() }
-    fn cmd_whoami(_args: &[&str]) -> String { "shiva".into() }
-    fn cmd_clear(_args: &[&str]) -> String { String::new() }
-    fn cmd_version(_args: &[&str]) -> String { "GlobusOS Shell v1.0.0".into() }
+    fn cmd_ls(_args: &[&str]) -> String {
+        "atcfs/  blockchain/  kernel/  modules/".into()
+    }
+    fn cmd_pwd(_args: &[&str]) -> String {
+        "/".into()
+    }
+    fn cmd_whoami(_args: &[&str]) -> String {
+        "shiva".into()
+    }
+    fn cmd_clear(_args: &[&str]) -> String {
+        String::new()
+    }
+    fn cmd_version(_args: &[&str]) -> String {
+        "GlobusOS Shell v1.0.0".into()
+    }
 }
 
 #[cfg(test)]

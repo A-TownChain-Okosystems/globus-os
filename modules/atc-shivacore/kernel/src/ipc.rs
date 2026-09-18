@@ -18,7 +18,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use crate::capability::{CapabilityTable, CapId, Pid, ResourceType, Rights, CapabilityError};
+use crate::capability::{CapId, CapabilityError, CapabilityTable, Pid, ResourceType, Rights};
 
 /// Eindeutige Channel-ID
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -35,9 +35,9 @@ pub struct Message {
 /// IPC-Channel — unidirektional (Sender → Empfaenger)
 pub struct Channel {
     pub id: ChannelId,
-    pub owner: Pid,           // Empfaenger-Prozess
-    pub sender_cap: Option<CapId>,  // Cap die Senden erlaubt
-    pub recv_cap: Option<CapId>,    // Cap die Empfangen erlaubt
+    pub owner: Pid,                // Empfaenger-Prozess
+    pub sender_cap: Option<CapId>, // Cap die Senden erlaubt
+    pub recv_cap: Option<CapId>,   // Cap die Empfangen erlaubt
     pub buffer: Vec<Message>,
     pub capacity: usize,
     pub closed: bool,
@@ -69,10 +69,18 @@ impl IpcSubsystem {
         let resource_id = id.0;
 
         // Owner bekommt WRITE (senden) und READ (empfangen) + DELEGATE
-        let send_cap = caps.create(owner, ResourceType::IpcChannel, resource_id,
-            Rights::WRITE | Rights::DELEGATE);
-        let recv_cap = caps.create(owner, ResourceType::IpcChannel, resource_id,
-            Rights::READ | Rights::DELEGATE);
+        let send_cap = caps.create(
+            owner,
+            ResourceType::IpcChannel,
+            resource_id,
+            Rights::WRITE | Rights::DELEGATE,
+        );
+        let recv_cap = caps.create(
+            owner,
+            ResourceType::IpcChannel,
+            resource_id,
+            Rights::READ | Rights::DELEGATE,
+        );
 
         let channel = Channel {
             id,
@@ -97,7 +105,9 @@ impl IpcSubsystem {
         channel_id: ChannelId,
         data: Vec<u8>,
     ) -> Result<(), IpcError> {
-        let channel = self.channels.get_mut(&channel_id)
+        let channel = self
+            .channels
+            .get_mut(&channel_id)
             .ok_or(IpcError::ChannelNotFound)?;
 
         if channel.closed {
@@ -108,7 +118,12 @@ impl IpcSubsystem {
         }
 
         // Capability-Check: Sender muss WRITE haben
-        if !caps.check(sender, ResourceType::IpcChannel, channel_id.0, Rights::WRITE) {
+        if !caps.check(
+            sender,
+            ResourceType::IpcChannel,
+            channel_id.0,
+            Rights::WRITE,
+        ) {
             return Err(IpcError::NoWriteCapability);
         }
 
@@ -130,7 +145,9 @@ impl IpcSubsystem {
         receiver: Pid,
         channel_id: ChannelId,
     ) -> Result<Message, IpcError> {
-        let channel = self.channels.get_mut(&channel_id)
+        let channel = self
+            .channels
+            .get_mut(&channel_id)
             .ok_or(IpcError::ChannelNotFound)?;
 
         if channel.closed {
@@ -138,7 +155,12 @@ impl IpcSubsystem {
         }
 
         // Capability-Check VOR Buffer-Inspektion (Security: keine Info-Lecks an Unbefugte)
-        if !caps.check(receiver, ResourceType::IpcChannel, channel_id.0, Rights::READ) {
+        if !caps.check(
+            receiver,
+            ResourceType::IpcChannel,
+            channel_id.0,
+            Rights::READ,
+        ) {
             return Err(IpcError::NoReadCapability);
         }
 
@@ -150,18 +172,29 @@ impl IpcSubsystem {
     }
 
     /// Schliesst einen Channel und widerruft alle Capabilities.
-    pub fn close_channel(&mut self, caps: &mut CapabilityTable, owner: Pid, channel_id: ChannelId) -> bool {
+    pub fn close_channel(
+        &mut self,
+        caps: &mut CapabilityTable,
+        owner: Pid,
+        channel_id: ChannelId,
+    ) -> bool {
         let channel = match self.channels.get_mut(&channel_id) {
             Some(c) => c,
             None => return false,
         };
-        if channel.owner != owner { return false; }
+        if channel.owner != owner {
+            return false;
+        }
 
         channel.closed = true;
 
         // Alle Caps fuer diese Resource widerrufen (kaskadierend)
-        let cap_ids: Vec<CapId> = caps.list_for(owner).iter()
-            .filter(|c| c.resource_type == ResourceType::IpcChannel && c.resource_id == channel_id.0)
+        let cap_ids: Vec<CapId> = caps
+            .list_for(owner)
+            .iter()
+            .filter(|c| {
+                c.resource_type == ResourceType::IpcChannel && c.resource_id == channel_id.0
+            })
             .map(|c| c.id)
             .collect();
         for cap_id in cap_ids {
@@ -172,7 +205,9 @@ impl IpcSubsystem {
 
     /// Schliesst alle Channels eines Prozesses (wird von kill() aufgerufen)
     pub fn close_all_for(&mut self, caps: &mut CapabilityTable, pid: Pid) -> usize {
-        let to_close: Vec<ChannelId> = self.channels.values()
+        let to_close: Vec<ChannelId> = self
+            .channels
+            .values()
             .filter(|c| c.owner == pid && !c.closed)
             .map(|c| c.id)
             .collect();
@@ -193,27 +228,34 @@ impl IpcSubsystem {
         target: Pid,
         rights: Rights,
     ) -> Result<CapId, CapabilityError> {
-        let channel = self.channels.get(&channel_id)
+        let channel = self
+            .channels
+            .get(&channel_id)
             .ok_or(CapabilityError::NotFound)?;
         if channel.owner != owner {
             return Err(CapabilityError::NotOwner);
         }
 
         // Finde die entsprechende Cap des Owners
-        let owner_caps: Vec<CapId> = caps.list_for(owner).iter()
-            .filter(|c| c.resource_type == ResourceType::IpcChannel
-                && c.resource_id == channel_id.0
-                && c.rights.has(rights))
+        let owner_caps: Vec<CapId> = caps
+            .list_for(owner)
+            .iter()
+            .filter(|c| {
+                c.resource_type == ResourceType::IpcChannel
+                    && c.resource_id == channel_id.0
+                    && c.rights.has(rights)
+            })
             .map(|c| c.id)
             .collect();
 
-        let source_cap = owner_caps.first()
-            .ok_or(CapabilityError::NoDelegateRight)?;
+        let source_cap = owner_caps.first().ok_or(CapabilityError::NoDelegateRight)?;
 
         caps.delegate(owner, *source_cap, target, rights)
     }
 
-    pub fn channel_count(&self) -> usize { self.channels.len() }
+    pub fn channel_count(&self) -> usize {
+        self.channels.len()
+    }
     pub fn pending_messages(&self, channel_id: ChannelId) -> Option<usize> {
         self.channels.get(&channel_id).map(|c| c.buffer.len())
     }
@@ -234,7 +276,9 @@ pub enum IpcError {
 mod tests {
     use super::*;
 
-    fn pid(n: u32) -> Pid { Pid(n) }
+    fn pid(n: u32) -> Pid {
+        Pid(n)
+    }
 
     #[test]
     fn test_create_channel_and_send_recv() {
@@ -283,11 +327,19 @@ mod tests {
         let ch = ipc.create_channel(&mut caps, pid(1), 16);
 
         // pid(1) delegiert WRITE an pid(2), pid(2) kann senden
-        ipc.grant_access(&mut caps, pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE).unwrap();
+        ipc.grant_access(
+            &mut caps,
+            pid(1),
+            ch,
+            pid(2),
+            Rights::WRITE | Rights::DELEGATE,
+        )
+        .unwrap();
         ipc.send(&caps, pid(2), ch, b"from p2".to_vec()).unwrap();
 
         // pid(1) delegiert READ an pid(3), pid(3) kann empfangen
-        ipc.grant_access(&mut caps, pid(1), ch, pid(3), Rights::READ).unwrap();
+        ipc.grant_access(&mut caps, pid(1), ch, pid(3), Rights::READ)
+            .unwrap();
         let msg = ipc.recv(&caps, pid(3), ch).unwrap();
         assert_eq!(msg.data, b"from p2");
         assert_eq!(msg.sender, pid(2));
@@ -352,8 +404,14 @@ mod tests {
         assert_eq!(closed, 2);
 
         // pid(1)s Channels sind zu
-        assert_eq!(ipc.send(&caps, pid(1), ch1, b"x".to_vec()), Err(IpcError::ChannelClosed));
-        assert_eq!(ipc.send(&caps, pid(1), ch2, b"x".to_vec()), Err(IpcError::ChannelClosed));
+        assert_eq!(
+            ipc.send(&caps, pid(1), ch1, b"x".to_vec()),
+            Err(IpcError::ChannelClosed)
+        );
+        assert_eq!(
+            ipc.send(&caps, pid(1), ch2, b"x".to_vec()),
+            Err(IpcError::ChannelClosed)
+        );
         // pid(2)s Channel ist noch offen
         assert!(ipc.send(&caps, pid(2), ch3, b"x".to_vec()).is_ok());
     }
@@ -409,13 +467,22 @@ mod tests {
         let mut ipc = IpcSubsystem::new();
 
         let ch = ipc.create_channel(&mut caps, pid(1), 16);
-        ipc.grant_access(&mut caps, pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE).unwrap();
+        ipc.grant_access(
+            &mut caps,
+            pid(1),
+            ch,
+            pid(2),
+            Rights::WRITE | Rights::DELEGATE,
+        )
+        .unwrap();
 
         // pid(2) kann zunaechst senden
         assert!(ipc.send(&caps, pid(2), ch, b"first".to_vec()).is_ok());
 
         // Widerrufe pid(2)s WRITE-Cap
-        let p2_caps: Vec<CapId> = caps.list_for(pid(2)).into_iter()
+        let p2_caps: Vec<CapId> = caps
+            .list_for(pid(2))
+            .into_iter()
             .filter(|c| c.resource_type == ResourceType::IpcChannel && c.resource_id == ch.0)
             .map(|c| c.id)
             .collect();
@@ -435,7 +502,8 @@ mod tests {
         let mut ipc = IpcSubsystem::new();
 
         let ch = ipc.create_channel(&mut caps, pid(1), 16);
-        ipc.grant_access(&mut caps, pid(1), ch, pid(3), Rights::READ).unwrap();
+        ipc.grant_access(&mut caps, pid(1), ch, pid(3), Rights::READ)
+            .unwrap();
 
         // Message ablegen
         ipc.send(&caps, pid(1), ch, b"msg".to_vec()).unwrap();
@@ -445,7 +513,9 @@ mod tests {
 
         // Weitere Message + READ-Cap widerrufen
         ipc.send(&caps, pid(1), ch, b"msg2".to_vec()).unwrap();
-        let p3_caps: Vec<CapId> = caps.list_for(pid(3)).into_iter()
+        let p3_caps: Vec<CapId> = caps
+            .list_for(pid(3))
+            .into_iter()
             .filter(|c| c.resource_type == ResourceType::IpcChannel && c.resource_id == ch.0)
             .map(|c| c.id)
             .collect();
@@ -467,12 +537,16 @@ mod tests {
         let ch = ipc.create_channel(&mut caps, pid(1), 16);
 
         // pid(1) delegiert nur READ an pid(2)
-        ipc.grant_access(&mut caps, pid(1), ch, pid(2), Rights::READ).unwrap();
+        ipc.grant_access(&mut caps, pid(1), ch, pid(2), Rights::READ)
+            .unwrap();
 
         // pid(2) kann empfangen aber nicht senden
         ipc.send(&caps, pid(1), ch, b"data".to_vec()).unwrap();
         assert!(ipc.recv(&caps, pid(2), ch).is_ok());
-        assert_eq!(ipc.send(&caps, pid(2), ch, b"hack".to_vec()), Err(IpcError::NoWriteCapability));
+        assert_eq!(
+            ipc.send(&caps, pid(2), ch, b"hack".to_vec()),
+            Err(IpcError::NoWriteCapability)
+        );
     }
 
     #[test]
@@ -485,14 +559,25 @@ mod tests {
         let ch = ipc.create_channel(&mut caps, pid(1), 16); // Alice
 
         // Alice delegiert WRITE+DELEGATE an Bob
-        let bob_cap = ipc.grant_access(&mut caps, pid(1), ch, pid(2),
-            Rights::WRITE | Rights::DELEGATE).unwrap();
+        let bob_cap = ipc
+            .grant_access(
+                &mut caps,
+                pid(1),
+                ch,
+                pid(2),
+                Rights::WRITE | Rights::DELEGATE,
+            )
+            .unwrap();
 
         // Bob delegiert nur WRITE an Charlie (Attenuation)
-        let charlie_cap = caps.delegate(pid(2), bob_cap, pid(3), Rights::WRITE).unwrap();
+        let charlie_cap = caps
+            .delegate(pid(2), bob_cap, pid(3), Rights::WRITE)
+            .unwrap();
 
         // Charlie kann senden
-        assert!(ipc.send(&caps, pid(3), ch, b"from charlie".to_vec()).is_ok());
+        assert!(ipc
+            .send(&caps, pid(3), ch, b"from charlie".to_vec())
+            .is_ok());
 
         // Charlie kann aber nicht weiter delegieren (kein DELEGATE-Recht)
         let result = caps.delegate(pid(3), charlie_cap, pid(4), Rights::WRITE);
@@ -506,8 +591,16 @@ mod tests {
         let mut ipc = IpcSubsystem::new();
 
         let ch = ipc.create_channel(&mut caps, pid(1), 16);
-        ipc.grant_access(&mut caps, pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE).unwrap();
-        ipc.grant_access(&mut caps, pid(1), ch, pid(3), Rights::READ).unwrap();
+        ipc.grant_access(
+            &mut caps,
+            pid(1),
+            ch,
+            pid(2),
+            Rights::WRITE | Rights::DELEGATE,
+        )
+        .unwrap();
+        ipc.grant_access(&mut caps, pid(1), ch, pid(3), Rights::READ)
+            .unwrap();
 
         // Bevor schliessen: alle koennen zugreifen
         assert!(caps.check(pid(1), ResourceType::IpcChannel, ch.0, Rights::WRITE));
@@ -534,11 +627,17 @@ mod tests {
 
         // pid(1) kann auf ch1 senden aber nicht auf ch2
         assert!(ipc.send(&caps, pid(1), ch1, b"ok".to_vec()).is_ok());
-        assert_eq!(ipc.send(&caps, pid(1), ch2, b"no".to_vec()), Err(IpcError::NoWriteCapability));
+        assert_eq!(
+            ipc.send(&caps, pid(1), ch2, b"no".to_vec()),
+            Err(IpcError::NoWriteCapability)
+        );
 
         // pid(2) kann auf ch2 senden aber nicht auf ch1
         assert!(ipc.send(&caps, pid(2), ch2, b"ok".to_vec()).is_ok());
-        assert_eq!(ipc.send(&caps, pid(2), ch1, b"no".to_vec()), Err(IpcError::NoWriteCapability));
+        assert_eq!(
+            ipc.send(&caps, pid(2), ch1, b"no".to_vec()),
+            Err(IpcError::NoWriteCapability)
+        );
     }
 
     #[test]
@@ -550,12 +649,17 @@ mod tests {
         let ch = ipc.create_channel(&mut caps, pid(1), 16);
 
         // Grant WRITE an pid(2)
-        let cap = ipc.grant_access(&mut caps, pid(1), ch, pid(2), Rights::WRITE).unwrap();
+        let cap = ipc
+            .grant_access(&mut caps, pid(1), ch, pid(2), Rights::WRITE)
+            .unwrap();
         assert!(ipc.send(&caps, pid(2), ch, b"ok".to_vec()).is_ok());
 
         // Widerrufe die spezifische Cap
         caps.revoke(cap);
-        assert_eq!(ipc.send(&caps, pid(2), ch, b"blocked".to_vec()), Err(IpcError::NoWriteCapability));
+        assert_eq!(
+            ipc.send(&caps, pid(2), ch, b"blocked".to_vec()),
+            Err(IpcError::NoWriteCapability)
+        );
     }
 
     #[test]
@@ -568,16 +672,23 @@ mod tests {
         let ch_b = ipc.create_channel(&mut caps, pid(1), 16);
 
         // Grant WRITE auf ch_a an pid(2)
-        ipc.grant_access(&mut caps, pid(1), ch_a, pid(2), Rights::WRITE).unwrap();
+        ipc.grant_access(&mut caps, pid(1), ch_a, pid(2), Rights::WRITE)
+            .unwrap();
 
         // pid(2) kann auf ch_a senden
         assert!(ipc.send(&caps, pid(2), ch_a, b"a".to_vec()).is_ok());
 
         // pid(2) kann NICHT auf ch_b senden (keine Cap)
-        assert_eq!(ipc.send(&caps, pid(2), ch_b, b"b".to_vec()), Err(IpcError::NoWriteCapability));
+        assert_eq!(
+            ipc.send(&caps, pid(2), ch_b, b"b".to_vec()),
+            Err(IpcError::NoWriteCapability)
+        );
 
         // pid(2) kann auch nicht von ch_b empfangen
-        assert_eq!(ipc.recv(&caps, pid(2), ch_b), Err(IpcError::NoReadCapability));
+        assert_eq!(
+            ipc.recv(&caps, pid(2), ch_b),
+            Err(IpcError::NoReadCapability)
+        );
     }
 
     #[test]
@@ -597,5 +708,4 @@ mod tests {
         let result = ipc.recv(&caps, pid(1), ChannelId(999));
         assert_eq!(result, Err(IpcError::ChannelNotFound));
     }
-
 }

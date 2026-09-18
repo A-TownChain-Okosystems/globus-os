@@ -1,7 +1,11 @@
 //! Stable on-disk inode representation and deterministic inode allocation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InodeDiskError { Buffer, Invalid, Overflow }
+pub enum InodeDiskError {
+    Buffer,
+    Invalid,
+    Overflow,
+}
 
 pub const INODE_SIZE: usize = 64;
 
@@ -19,14 +23,21 @@ pub struct DiskInode {
 
 fn checksum(bytes: &[u8]) -> u32 {
     let mut hash = 0x811c9dc5u32;
-    for byte in bytes { hash ^= u32::from(*byte); hash = hash.wrapping_mul(0x01000193); }
+    for byte in bytes {
+        hash ^= u32::from(*byte);
+        hash = hash.wrapping_mul(0x01000193);
+    }
     hash
 }
 
 impl DiskInode {
     pub fn encode(&self, out: &mut [u8]) -> Result<(), InodeDiskError> {
-        if out.len() < INODE_SIZE { return Err(InodeDiskError::Buffer); }
-        if self.id == 0 || self.links == 0 { return Err(InodeDiskError::Invalid); }
+        if out.len() < INODE_SIZE {
+            return Err(InodeDiskError::Buffer);
+        }
+        if self.id == 0 || self.links == 0 {
+            return Err(InodeDiskError::Invalid);
+        }
         out[..INODE_SIZE].fill(0);
         out[..8].copy_from_slice(&self.id.to_le_bytes());
         out[8..10].copy_from_slice(&self.mode.to_le_bytes());
@@ -41,31 +52,75 @@ impl DiskInode {
     }
 
     pub fn decode(input: &[u8]) -> Result<Self, InodeDiskError> {
-        if input.len() < INODE_SIZE { return Err(InodeDiskError::Buffer); }
-        let expected = u32::from_le_bytes(input[48..52].try_into().map_err(|_| InodeDiskError::Buffer)?);
-        if checksum(&input[..48]) != expected || input[11] != 0 || input[52..INODE_SIZE].iter().any(|b| *b != 0) { return Err(InodeDiskError::Invalid); }
+        if input.len() < INODE_SIZE {
+            return Err(InodeDiskError::Buffer);
+        }
+        let expected = u32::from_le_bytes(
+            input[48..52]
+                .try_into()
+                .map_err(|_| InodeDiskError::Buffer)?,
+        );
+        if checksum(&input[..48]) != expected
+            || input[11] != 0
+            || input[52..INODE_SIZE].iter().any(|b| *b != 0)
+        {
+            return Err(InodeDiskError::Invalid);
+        }
         let inode = Self {
             id: u64::from_le_bytes(input[..8].try_into().map_err(|_| InodeDiskError::Buffer)?),
-            mode: u16::from_le_bytes(input[8..10].try_into().map_err(|_| InodeDiskError::Buffer)?),
+            mode: u16::from_le_bytes(
+                input[8..10]
+                    .try_into()
+                    .map_err(|_| InodeDiskError::Buffer)?,
+            ),
             kind: input[10],
-            links: u32::from_le_bytes(input[12..16].try_into().map_err(|_| InodeDiskError::Buffer)?),
-            size: u64::from_le_bytes(input[16..24].try_into().map_err(|_| InodeDiskError::Buffer)?),
-            generation: u64::from_le_bytes(input[24..32].try_into().map_err(|_| InodeDiskError::Buffer)?),
-            data_start: u64::from_le_bytes(input[32..40].try_into().map_err(|_| InodeDiskError::Buffer)?),
-            data_blocks: u64::from_le_bytes(input[40..48].try_into().map_err(|_| InodeDiskError::Buffer)?),
+            links: u32::from_le_bytes(
+                input[12..16]
+                    .try_into()
+                    .map_err(|_| InodeDiskError::Buffer)?,
+            ),
+            size: u64::from_le_bytes(
+                input[16..24]
+                    .try_into()
+                    .map_err(|_| InodeDiskError::Buffer)?,
+            ),
+            generation: u64::from_le_bytes(
+                input[24..32]
+                    .try_into()
+                    .map_err(|_| InodeDiskError::Buffer)?,
+            ),
+            data_start: u64::from_le_bytes(
+                input[32..40]
+                    .try_into()
+                    .map_err(|_| InodeDiskError::Buffer)?,
+            ),
+            data_blocks: u64::from_le_bytes(
+                input[40..48]
+                    .try_into()
+                    .map_err(|_| InodeDiskError::Buffer)?,
+            ),
         };
-        if inode.id == 0 || inode.links == 0 { return Err(InodeDiskError::Invalid); }
-        inode.data_start.checked_add(inode.data_blocks).ok_or(InodeDiskError::Overflow)?;
+        if inode.id == 0 || inode.links == 0 {
+            return Err(InodeDiskError::Invalid);
+        }
+        inode
+            .data_start
+            .checked_add(inode.data_blocks)
+            .ok_or(InodeDiskError::Overflow)?;
         Ok(inode)
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct InodeAllocator { next: u64 }
+pub struct InodeAllocator {
+    next: u64,
+}
 
 impl InodeAllocator {
     pub fn new(first: u64) -> Result<Self, InodeDiskError> {
-        if first == 0 { return Err(InodeDiskError::Invalid); }
+        if first == 0 {
+            return Err(InodeDiskError::Invalid);
+        }
         Ok(Self { next: first })
     }
 
@@ -82,7 +137,16 @@ mod tests {
 
     #[test]
     fn inode_round_trip() {
-        let inode = DiskInode { id: 2, mode: 0o644, kind: 1, links: 1, size: 123, generation: 4, data_start: 100, data_blocks: 3 };
+        let inode = DiskInode {
+            id: 2,
+            mode: 0o644,
+            kind: 1,
+            links: 1,
+            size: 123,
+            generation: 4,
+            data_start: 100,
+            data_blocks: 3,
+        };
         let mut bytes = [0u8; INODE_SIZE];
         inode.encode(&mut bytes).unwrap();
         assert_eq!(DiskInode::decode(&bytes).unwrap(), inode);
@@ -90,7 +154,16 @@ mod tests {
 
     #[test]
     fn corruption_is_rejected() {
-        let inode = DiskInode { id: 2, mode: 0o644, kind: 1, links: 1, size: 1, generation: 1, data_start: 2, data_blocks: 1 };
+        let inode = DiskInode {
+            id: 2,
+            mode: 0o644,
+            kind: 1,
+            links: 1,
+            size: 1,
+            generation: 1,
+            data_start: 2,
+            data_blocks: 1,
+        };
         let mut bytes = [0u8; INODE_SIZE];
         inode.encode(&mut bytes).unwrap();
         bytes[24] ^= 1;

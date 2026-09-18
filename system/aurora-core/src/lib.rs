@@ -8,7 +8,10 @@ pub mod types;
 pub use contracts::*;
 pub use errors::AuroraError;
 pub use state::StateMachine;
-pub use types::{AgentId, ApprovalId, AuroraRequest, AuroraResponse, CapabilityId, EventId, ModelId, PolicyId, RequestId, SessionId, SkillId, ToolId};
+pub use types::{
+    AgentId, ApprovalId, AuroraRequest, AuroraResponse, CapabilityId, EventId, ModelId, PolicyId,
+    RequestId, SessionId, SkillId, ToolId,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Decision {

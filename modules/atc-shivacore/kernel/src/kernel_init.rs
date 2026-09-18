@@ -31,21 +31,21 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::ats1000::{MemoryManager, FileSystem};
-use crate::capability::CapabilityTable;
-use crate::memory_manager::{MemorySubsystem, HEAP_START, HEAP_SIZE, HEAP_END};
+use crate::ai::AiEngine;
 use crate::atcfs::AtcFileSystem;
-use crate::vfs::Vfs;
+use crate::ats1000::{FileSystem, MemoryManager};
+use crate::capability::CapabilityTable;
+use crate::contract::ContractExecutor;
+use crate::ipc::IpcSubsystem;
+use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
+use crate::mempool::{MemoryPool, NonceTracker, StateDb, TxValidator};
+use crate::p2p::P2pNode;
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
-use crate::ipc::IpcSubsystem;
-use crate::p2p::P2pNode;
 use crate::security::SecurityManager;
-use crate::mempool::{MemoryPool, StateDb, TxValidator, NonceTracker};
+use crate::timer::{MonotonicClock, SimulatedTimerSource, TimerManager};
+use crate::vfs::Vfs;
 use crate::vm::VmEngine;
-use crate::contract::ContractExecutor;
-use crate::ai::AiEngine;
-use crate::timer::{SimulatedTimerSource, MonotonicClock, TimerManager};
 
 /// Kernel-Init-Status für jedes Subsystem
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,17 +59,17 @@ pub enum InitStatus {
 /// Boot-Phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootPhase {
-    Heap,           // L0: allocator::init_heap
-    Memory,         // L1: MemorySubsystem
-    Capabilities,   // L2: CapabilityTable
-    Processes,       // L3: ProcessManager
-    Scheduler,       // L4: DA-HEFT Scheduler
-    Ipc,             // L5: IPC Channels
-    FileSystem,       // L6: ATCFS + VFS
-    Network,         // L7: P2P Network
-    Security,        // L8: Security/Audit/MultiSig
-    Blockchain,      // L9: Mempool/VM/Contracts (Consensus+Chain -> Service Space)
-    Ai,              // L10: AI Subsystem
+    Heap,         // L0: allocator::init_heap
+    Memory,       // L1: MemorySubsystem
+    Capabilities, // L2: CapabilityTable
+    Processes,    // L3: ProcessManager
+    Scheduler,    // L4: DA-HEFT Scheduler
+    Ipc,          // L5: IPC Channels
+    FileSystem,   // L6: ATCFS + VFS
+    Network,      // L7: P2P Network
+    Security,     // L8: Security/Audit/MultiSig
+    Blockchain,   // L9: Mempool/VM/Contracts (Consensus+Chain -> Service Space)
+    Ai,           // L10: AI Subsystem
     Done,
 }
 
@@ -237,19 +237,24 @@ impl KernelState {
             };
             out.push_str(&format!("  [{}] {}\n", icon, phase.label()));
         }
-        out.push_str(&format!("\n  Memory: {} regions, {} bytes allocated\n",
+        out.push_str(&format!(
+            "\n  Memory: {} regions, {} bytes allocated\n",
             self.memory.stats().active_regions,
-            self.memory.stats().total_allocated));
+            self.memory.stats().total_allocated
+        ));
         out.push_str(&format!("  FS: {} nodes\n", self.fs.ls("/").len()));
-        out.push_str(&format!("  P2P: port {}, {} peers\n",
+        out.push_str(&format!(
+            "  P2P: port {}, {} peers\n",
             self.p2p.listen_port(),
-            self.p2p.peer_count()));
-        out.push_str(&format!("  Mempool: {}/{} txs\n",
-            self.mempool.count(), 10000));
-        out.push_str(&format!("  VM: {} contracts\n",
-            self.vm.contract_count()));
-        out.push_str(&format!("  AI: {} models\n",
-            self.ai.model_count()));
+            self.p2p.peer_count()
+        ));
+        out.push_str(&format!(
+            "  Mempool: {}/{} txs\n",
+            self.mempool.count(),
+            10000
+        ));
+        out.push_str(&format!("  VM: {} contracts\n", self.vm.contract_count()));
+        out.push_str(&format!("  AI: {} models\n", self.ai.model_count()));
         out.push_str("=== Boot Complete ===\n");
         out
     }
@@ -257,21 +262,32 @@ impl KernelState {
     /// Smoke-Test: allokiert Speicher, schreibt eine Datei, liest sie zurück
     pub fn smoke_test(&mut self) -> Result<(), BootError> {
         // 1. Memory allocation
-        let region = self.memory.allocate(crate::ats1000::Pid(1), 1024)
+        let region = self
+            .memory
+            .allocate(crate::ats1000::Pid(1), 1024)
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 2. FS write
         let caps = &self.memory.caps;
-        self.fs.write_file(caps, "/tmp/smoke_test.txt", b"ShivaCore boot OK", crate::ats1000::Pid(1))
+        self.fs
+            .write_file(
+                caps,
+                "/tmp/smoke_test.txt",
+                b"ShivaCore boot OK",
+                crate::ats1000::Pid(1),
+            )
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 3. FS read
-        let (_cid, node) = self.fs.read_file(caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
+        let (_cid, node) = self
+            .fs
+            .read_file(caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
             .map_err(|_| BootError::SmokeTestFailed)?;
         assert_eq!(node.size, 17);
 
         // 4. Memory free
-        self.memory.deallocate(crate::ats1000::Pid(1), region.region_id)
+        self.memory
+            .deallocate(crate::ats1000::Pid(1), region.region_id)
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         Ok(())

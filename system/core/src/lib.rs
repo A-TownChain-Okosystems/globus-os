@@ -7,7 +7,7 @@ use globus_memory::AddressSpace;
 use globus_process::ProcessId;
 use globus_security::Capability;
 
-pub use boot::{validate_boot_plan, BootService, BootStep, BOOT_PLAN};
+pub use boot::{BOOT_PLAN, BootService, BootStep, validate_boot_plan};
 
 /// Kernel-facing identity of a GlobusOS service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

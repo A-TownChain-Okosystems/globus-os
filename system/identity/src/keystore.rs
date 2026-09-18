@@ -19,7 +19,9 @@ impl KeyId {
         Ok(Self(value))
     }
 
-    pub fn as_str(&self) -> &str { &self.0 }
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
 }
 
 /// Metadata that may be persisted without secret material.
@@ -57,7 +59,12 @@ pub struct Signature {
 /// Production implementations should map this to TPM/TEE/OS credential facilities where
 /// available. A backend must reject unauthorized access and must never export private keys.
 pub trait KeyStore {
-    fn provision(&mut self, key_id: KeyId, secret: Zeroizing<Vec<u8>>, algorithm: String) -> Result<ProtectedKey, KeystoreError>;
+    fn provision(
+        &mut self,
+        key_id: KeyId,
+        secret: Zeroizing<Vec<u8>>,
+        algorithm: String,
+    ) -> Result<ProtectedKey, KeystoreError>;
     fn sign(&self, request: SignRequest) -> Result<Signature, KeystoreError>;
     fn delete(&mut self, key_id: &KeyId) -> Result<(), KeystoreError>;
 }
@@ -78,6 +85,9 @@ mod tests {
     #[test]
     fn key_id_is_validated() {
         assert_eq!(KeyId::new("").unwrap_err(), KeystoreError::InvalidKeyId);
-        assert_eq!(KeyId::new("wallet-primary").unwrap().as_str(), "wallet-primary");
+        assert_eq!(
+            KeyId::new("wallet-primary").unwrap().as_str(),
+            "wallet-primary"
+        );
     }
 }

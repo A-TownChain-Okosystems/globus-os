@@ -18,16 +18,28 @@ pub struct FreeSpaceBitmap {
 
 impl FreeSpaceBitmap {
     pub fn new(total_blocks: u64) -> Result<Self, BitmapError> {
-        if total_blocks == 0 { return Err(BitmapError::InvalidGeometry); }
-        let bytes = total_blocks.checked_add(7).ok_or(BitmapError::InvalidGeometry)? / 8;
+        if total_blocks == 0 {
+            return Err(BitmapError::InvalidGeometry);
+        }
+        let bytes = total_blocks
+            .checked_add(7)
+            .ok_or(BitmapError::InvalidGeometry)?
+            / 8;
         let bytes = usize::try_from(bytes).map_err(|_| BitmapError::InvalidGeometry)?;
-        Ok(Self { total_blocks, bits: vec![0xff; bytes] })
+        Ok(Self {
+            total_blocks,
+            bits: vec![0xff; bytes],
+        })
     }
 
-    pub fn total_blocks(&self) -> u64 { self.total_blocks }
+    pub fn total_blocks(&self) -> u64 {
+        self.total_blocks
+    }
 
     fn check(&self, block: u64) -> Result<(usize, u8), BitmapError> {
-        if block >= self.total_blocks { return Err(BitmapError::InvalidBlock); }
+        if block >= self.total_blocks {
+            return Err(BitmapError::InvalidBlock);
+        }
         let index = usize::try_from(block / 8).map_err(|_| BitmapError::InvalidBlock)?;
         Ok((index, 1u8 << (block % 8)))
     }
@@ -36,10 +48,14 @@ impl FreeSpaceBitmap {
         let (index, mask) = self.check(block)?;
         let allocated = self.bits[index] & mask != 0;
         if free {
-            if allocated { return Err(BitmapError::AlreadyFree); }
+            if allocated {
+                return Err(BitmapError::AlreadyFree);
+            }
             self.bits[index] |= mask;
         } else {
-            if !allocated { return Err(BitmapError::AlreadyAllocated); }
+            if !allocated {
+                return Err(BitmapError::AlreadyAllocated);
+            }
             self.bits[index] &= !mask;
         }
         Ok(())
@@ -47,15 +63,23 @@ impl FreeSpaceBitmap {
 
     pub fn reserve(&mut self, start: u64, count: u64) -> Result<(), BitmapError> {
         let end = start.checked_add(count).ok_or(BitmapError::InvalidBlock)?;
-        if count == 0 || end > self.total_blocks { return Err(BitmapError::InvalidBlock); }
-        for block in start..end { self.set_free(block, false)?; }
+        if count == 0 || end > self.total_blocks {
+            return Err(BitmapError::InvalidBlock);
+        }
+        for block in start..end {
+            self.set_free(block, false)?;
+        }
         Ok(())
     }
 
     pub fn release(&mut self, start: u64, count: u64) -> Result<(), BitmapError> {
         let end = start.checked_add(count).ok_or(BitmapError::InvalidBlock)?;
-        if count == 0 || end > self.total_blocks { return Err(BitmapError::InvalidBlock); }
-        for block in start..end { self.set_free(block, true)?; }
+        if count == 0 || end > self.total_blocks {
+            return Err(BitmapError::InvalidBlock);
+        }
+        for block in start..end {
+            self.set_free(block, true)?;
+        }
         Ok(())
     }
 
@@ -65,33 +89,45 @@ impl FreeSpaceBitmap {
     }
 
     pub fn allocate(&mut self, count: u64) -> Result<u64, BitmapError> {
-        if count == 0 { return Err(BitmapError::InvalidBlock); }
+        if count == 0 {
+            return Err(BitmapError::InvalidBlock);
+        }
         let mut run_start = 0;
         let mut run = 0;
         for block in 0..self.total_blocks {
             if self.is_free(block)? {
-                if run == 0 { run_start = block; }
+                if run == 0 {
+                    run_start = block;
+                }
                 run += 1;
                 if run == count {
                     self.reserve(run_start, count)?;
                     return Ok(run_start);
                 }
-            } else { run = 0; }
+            } else {
+                run = 0;
+            }
         }
         Err(BitmapError::NoSpace)
     }
 
-    pub fn encoded_len(&self) -> usize { self.bits.len() }
+    pub fn encoded_len(&self) -> usize {
+        self.bits.len()
+    }
 
     pub fn encode(&self, out: &mut [u8]) -> Result<(), BitmapError> {
-        if out.len() < self.bits.len() { return Err(BitmapError::Buffer); }
+        if out.len() < self.bits.len() {
+            return Err(BitmapError::Buffer);
+        }
         out[..self.bits.len()].copy_from_slice(&self.bits);
         Ok(())
     }
 
     pub fn decode(total_blocks: u64, input: &[u8]) -> Result<Self, BitmapError> {
         let mut bitmap = Self::new(total_blocks)?;
-        if input.len() < bitmap.bits.len() { return Err(BitmapError::Buffer); }
+        if input.len() < bitmap.bits.len() {
+            return Err(BitmapError::Buffer);
+        }
         bitmap.bits.copy_from_slice(&input[..bitmap.bits.len()]);
         if total_blocks % 8 != 0 {
             let valid = (total_blocks % 8) as u8;

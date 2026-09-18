@@ -6,12 +6,12 @@
 // Trait-basiert: HPET/PIT in Hardware, SimulatedTimerSource für Tests.
 // ─────────────────────────────────────────────────────────────────────────
 
-use alloc::format;
 use alloc::boxed::Box;
 use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
+use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── Timer-Source Trait ────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ pub enum TimerCallback {
 
 /// Verwaltet alle Timer-Events, sortiert nach Deadline.
 pub struct TimerManager {
-    events: BTreeMap<u64, TimerEvent>,  // deadline_ns -> event
+    events: BTreeMap<u64, TimerEvent>, // deadline_ns -> event
     next_id: u64,
     source: &'static dyn TimerSource,
 }
@@ -194,7 +194,9 @@ impl TimerManager {
 
     /// Bricht einen Timer ab. (Sucht nach der event-ID.)
     pub fn cancel(&mut self, event_id: u64) -> bool {
-        let key = self.events.iter()
+        let key = self
+            .events
+            .iter()
             .find(|(_, e)| e.id == event_id)
             .map(|(&k, _)| k);
         match key {
@@ -210,12 +212,16 @@ impl TimerManager {
         let mut fired = Vec::new();
 
         loop {
-            let expired_keys: Vec<u64> = self.events.keys()
+            let expired_keys: Vec<u64> = self
+                .events
+                .keys()
                 .filter(|&&deadline| deadline <= now)
                 .copied()
                 .collect();
 
-            if expired_keys.is_empty() { break; }
+            if expired_keys.is_empty() {
+                break;
+            }
 
             for key in expired_keys {
                 if let Some(event) = self.events.remove(&key) {
@@ -246,7 +252,8 @@ impl TimerManager {
 
     /// Zeit bis zur nächsten Deadline in Nanosekunden.
     pub fn time_to_next_deadline(&self) -> Option<u64> {
-        self.next_deadline().map(|d| d.saturating_sub(self.source.now_ns()))
+        self.next_deadline()
+            .map(|d| d.saturating_sub(self.source.now_ns()))
     }
 }
 
@@ -259,14 +266,28 @@ pub mod duration {
     pub const NS_PER_MIN: u64 = 60 * NS_PER_SEC;
     pub const NS_PER_HOUR: u64 = 60 * NS_PER_MIN;
 
-    pub fn from_ms(ms: u64) -> u64 { ms * NS_PER_MS }
-    pub fn from_secs(secs: u64) -> u64 { secs * NS_PER_SEC }
-    pub fn from_us(us: u64) -> u64 { us * NS_PER_US }
-    pub fn from_mins(mins: u64) -> u64 { mins * NS_PER_MIN }
+    pub fn from_ms(ms: u64) -> u64 {
+        ms * NS_PER_MS
+    }
+    pub fn from_secs(secs: u64) -> u64 {
+        secs * NS_PER_SEC
+    }
+    pub fn from_us(us: u64) -> u64 {
+        us * NS_PER_US
+    }
+    pub fn from_mins(mins: u64) -> u64 {
+        mins * NS_PER_MIN
+    }
 
-    pub fn to_ms(ns: u64) -> u64 { ns / NS_PER_MS }
-    pub fn to_secs(ns: u64) -> u64 { ns / NS_PER_SEC }
-    pub fn to_us(ns: u64) -> u64 { ns / NS_PER_US }
+    pub fn to_ms(ns: u64) -> u64 {
+        ns / NS_PER_MS
+    }
+    pub fn to_secs(ns: u64) -> u64 {
+        ns / NS_PER_SEC
+    }
+    pub fn to_us(ns: u64) -> u64 {
+        ns / NS_PER_US
+    }
 }
 
 // ─── Tests ──────────────────────────────────────────────────────────────────

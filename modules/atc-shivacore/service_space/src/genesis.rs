@@ -58,10 +58,10 @@ fn genesis_hash(data: &[u8]) -> [u8; 32] {
         h2 ^= h2 >> 33;
         if i % 8 == 0 {
             let off = (i % 32) & !7;
-            result[off..off+8].copy_from_slice(&h1.to_le_bytes());
+            result[off..off + 8].copy_from_slice(&h1.to_le_bytes());
         } else if i % 8 == 4 {
             let off = ((i + 4) % 32) & !7;
-            result[off..off+8].copy_from_slice(&h2.to_le_bytes());
+            result[off..off + 8].copy_from_slice(&h2.to_le_bytes());
         }
     }
     result
@@ -192,7 +192,10 @@ impl GenesisConfig {
             validators: Vec::new(),
             allocations: Vec::new(),
             consensus: ConsensusParams::default(),
-            network: NetworkParams { chain_id, ..Default::default() },
+            network: NetworkParams {
+                chain_id,
+                ..Default::default()
+            },
             memo: String::new(),
         }
     }
@@ -539,13 +542,15 @@ impl GenesisBuilder {
         let genesis_hash = config.genesis_hash();
 
         // Validator-Set für den Block
-        let validator_set: Vec<(String, u64)> = config.validators
+        let validator_set: Vec<(String, u64)> = config
+            .validators
             .iter()
             .map(|v| (v.did.clone(), v.stake))
             .collect();
 
         // Allokationen für den Block
-        let allocations: Vec<(String, u64)> = config.allocations
+        let allocations: Vec<(String, u64)> = config
+            .allocations
             .iter()
             .map(|a| (a.address.clone(), a.amount))
             .collect();
@@ -608,20 +613,39 @@ impl GenesisBuilder {
         s.push_str(&format!("  \"chain_id\": {},\n", block.chain_id));
         s.push_str(&format!("  \"height\": {},\n", block.height));
         s.push_str(&format!("  \"timestamp\": {},\n", block.timestamp));
-        s.push_str(&format!("  \"genesis_hash\": \"0x{}\",\n", hex_string(&block.genesis_hash)));
-        s.push_str(&format!("  \"state_root\": \"0x{}\",\n", hex_string(&block.state_root)));
-        s.push_str(&format!("  \"prev_hash\": \"0x{}\",\n", hex_string(&block.prev_hash)));
+        s.push_str(&format!(
+            "  \"genesis_hash\": \"0x{}\",\n",
+            hex_string(&block.genesis_hash)
+        ));
+        s.push_str(&format!(
+            "  \"state_root\": \"0x{}\",\n",
+            hex_string(&block.state_root)
+        ));
+        s.push_str(&format!(
+            "  \"prev_hash\": \"0x{}\",\n",
+            hex_string(&block.prev_hash)
+        ));
         s.push_str("  \"validators\": [\n");
         for (i, (did, stake)) in block.validator_set.iter().enumerate() {
-            s.push_str(&format!("    {{\"did\": \"{}\", \"stake\": {}}}", did, stake));
-            if i + 1 < block.validator_set.len() { s.push(','); }
+            s.push_str(&format!(
+                "    {{\"did\": \"{}\", \"stake\": {}}}",
+                did, stake
+            ));
+            if i + 1 < block.validator_set.len() {
+                s.push(',');
+            }
             s.push('\n');
         }
         s.push_str("  ],\n");
         s.push_str("  \"allocations\": [\n");
         for (i, (addr, amount)) in block.allocations.iter().enumerate() {
-            s.push_str(&format!("    {{\"address\": \"{}\", \"amount\": {}}}", addr, amount));
-            if i + 1 < block.allocations.len() { s.push(','); }
+            s.push_str(&format!(
+                "    {{\"address\": \"{}\", \"amount\": {}}}",
+                addr, amount
+            ));
+            if i + 1 < block.allocations.len() {
+                s.push(',');
+            }
             s.push('\n');
         }
         s.push_str("  ],\n");
@@ -676,7 +700,13 @@ mod tests {
     }
 
     fn dummy_address(n: u8) -> String {
-        format!("ATC{}", "a".repeat(31).chars().chain(core::iter::once((b'a' + n) as char)).collect::<String>())
+        format!(
+            "ATC{}",
+            "a".repeat(31)
+                .chars()
+                .chain(core::iter::once((b'a' + n) as char))
+                .collect::<String>()
+        )
     }
 
     fn dummy_did(n: u8) -> String {
@@ -701,12 +731,14 @@ mod tests {
         }
         // Allocations
         for i in 1..=4u8 {
-            config.add_allocation(GenesisAllocation {
-                address: dummy_address(i),
-                amount: 1_000_000_000, // 10 ATC
-                lock_type: LockType::None,
-                lock_duration: 0,
-            }).unwrap();
+            config
+                .add_allocation(GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000, // 10 ATC
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         config.memo = "A-TownChain Mainnet Genesis".to_string();
         config
@@ -739,9 +771,14 @@ mod tests {
     #[test]
     fn test_genesis_config_no_validators() {
         let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, GENESIS_TIMESTAMP);
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(1), amount: 1000, lock_type: LockType::None, lock_duration: 0,
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(1),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
         assert_eq!(config.validate(), Err(GenesisError::NoValidators));
     }
 
@@ -751,9 +788,14 @@ mod tests {
         config.add_validator(make_test_validator(1, 10000)).unwrap();
         config.add_validator(make_test_validator(2, 10000)).unwrap();
         config.add_validator(make_test_validator(3, 10000)).unwrap();
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(1), amount: 1000, lock_type: LockType::None, lock_duration: 0,
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(1),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
         assert_eq!(config.validate(), Err(GenesisError::TooFewValidators)); // < 4
     }
 
@@ -806,12 +848,22 @@ mod tests {
         for i in 1..=4u8 {
             config.add_validator(make_test_validator(i, 10000)).unwrap();
         }
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(1), amount: 1000, lock_type: LockType::None, lock_duration: 0,
-        }).unwrap();
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(1), amount: 2000, lock_type: LockType::None, lock_duration: 0, // Same address
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(1),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(1),
+                amount: 2000,
+                lock_type: LockType::None,
+                lock_duration: 0, // Same address
+            })
+            .unwrap();
         assert_eq!(config.validate(), Err(GenesisError::DuplicateAllocation));
     }
 
@@ -833,10 +885,17 @@ mod tests {
     fn test_genesis_hash_changes_with_config() {
         let mut config1 = make_test_config();
         let mut config2 = make_test_config();
-        config2.add_validator(make_test_validator(5, 10000)).unwrap();
-        config2.add_allocation(GenesisAllocation {
-            address: dummy_address(5), amount: 1000, lock_type: LockType::None, lock_duration: 0,
-        }).unwrap();
+        config2
+            .add_validator(make_test_validator(5, 10000))
+            .unwrap();
+        config2
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(5),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
         assert_ne!(config1.genesis_hash(), config2.genesis_hash());
     }
 
@@ -1040,24 +1099,28 @@ mod tests {
     #[test]
     fn test_vesting_allocation() {
         let mut config = make_test_config();
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(9),
-            amount: 5_000_000_000, // 50 ATC
-            lock_type: LockType::Vesting,
-            lock_duration: 1000, // 1000 blocks
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(9),
+                amount: 5_000_000_000, // 50 ATC
+                lock_type: LockType::Vesting,
+                lock_duration: 1000, // 1000 blocks
+            })
+            .unwrap();
         assert!(config.validate().is_ok());
     }
 
     #[test]
     fn test_timelock_allocation() {
         let mut config = make_test_config();
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(8),
-            amount: 10_000_000_000, // 100 ATC
-            lock_type: LockType::TimeLock,
-            lock_duration: 5000, // 5000 blocks
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(8),
+                amount: 10_000_000_000, // 100 ATC
+                lock_type: LockType::TimeLock,
+                lock_duration: 5000, // 5000 blocks
+            })
+            .unwrap();
         assert!(config.validate().is_ok());
     }
 
@@ -1081,12 +1144,14 @@ mod tests {
             config.add_validator(make_test_validator(i, 50000)).unwrap();
         }
         for i in 1..=10u8 {
-            config.add_allocation(GenesisAllocation {
-                address: dummy_address(i),
-                amount: 1_000_000_000,
-                lock_type: LockType::None,
-                lock_duration: 0,
-            }).unwrap();
+            config
+                .add_allocation(GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         assert!(config.validate().is_ok());
 

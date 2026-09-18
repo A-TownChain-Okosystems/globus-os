@@ -7,7 +7,9 @@ pub struct StateMachine {
 
 impl StateMachine {
     pub const fn new() -> Self {
-        Self { status: RequestStatus::Created }
+        Self {
+            status: RequestStatus::Created,
+        }
     }
 
     pub const fn status(&self) -> RequestStatus {
@@ -51,7 +53,9 @@ impl StateMachine {
 }
 
 impl Default for StateMachine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -61,6 +65,9 @@ mod tests {
     #[test]
     fn rejects_invalid_transition() {
         let mut state = StateMachine::new();
-        assert_eq!(state.transition(RequestStatus::Completed), Err(AuroraError::InvalidStateTransition));
+        assert_eq!(
+            state.transition(RequestStatus::Completed),
+            Err(AuroraError::InvalidStateTransition)
+        );
     }
 }

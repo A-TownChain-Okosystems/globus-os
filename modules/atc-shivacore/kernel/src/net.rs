@@ -6,12 +6,12 @@
 // Trait-basiert: virtio-net/E1000 in Hardware, LoopbackDevice für Tests.
 // ─────────────────────────────────────────────────────────────────────────
 
-use alloc::format;
-use alloc::vec;
 use alloc::collections::BTreeMap;
-use alloc::vec::Vec;
+use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
+use alloc::vec;
+use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── MAC-Adresse ────────────────────────────────────────────────────────────
@@ -41,8 +41,10 @@ impl MacAddress {
     }
 
     pub fn to_string(&self) -> String {
-        format!("{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
-            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5])
+        format!(
+            "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
+        )
     }
 }
 
@@ -56,11 +58,19 @@ impl Ipv4Address {
         Ipv4Address([a, b, c, d])
     }
 
-    pub fn zero() -> Self { Ipv4Address([0; 4]) }
-    pub fn broadcast() -> Self { Ipv4Address([0xFF; 4]) }
+    pub fn zero() -> Self {
+        Ipv4Address([0; 4])
+    }
+    pub fn broadcast() -> Self {
+        Ipv4Address([0xFF; 4])
+    }
 
-    pub fn is_broadcast(&self) -> bool { self.0 == [0xFF; 4] }
-    pub fn is_zero(&self) -> bool { self.0 == [0; 4] }
+    pub fn is_broadcast(&self) -> bool {
+        self.0 == [0xFF; 4]
+    }
+    pub fn is_zero(&self) -> bool {
+        self.0 == [0; 4]
+    }
 
     pub fn to_string(&self) -> String {
         format!("{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3])
@@ -151,22 +161,28 @@ impl ArpTable {
 
     pub fn insert(&self, ip: Ipv4Address, mac: MacAddress, timestamp: u64) {
         let mut entries = self.entries.lock();
-        entries.insert(ip, ArpEntry {
+        entries.insert(
             ip,
-            mac,
-            timestamp,
-            permanent: false,
-        });
+            ArpEntry {
+                ip,
+                mac,
+                timestamp,
+                permanent: false,
+            },
+        );
     }
 
     pub fn insert_permanent(&self, ip: Ipv4Address, mac: MacAddress) {
         let mut entries = self.entries.lock();
-        entries.insert(ip, ArpEntry {
+        entries.insert(
             ip,
-            mac,
-            timestamp: 0,
-            permanent: true,
-        });
+            ArpEntry {
+                ip,
+                mac,
+                timestamp: 0,
+                permanent: true,
+            },
+        );
     }
 
     pub fn remove(&self, ip: Ipv4Address) -> bool {
@@ -177,7 +193,8 @@ impl ArpTable {
     pub fn purge_expired(&self, now: u64) -> usize {
         let mut entries = self.entries.lock();
         let timeout = self.timeout_ns;
-        let expired: Vec<Ipv4Address> = entries.iter()
+        let expired: Vec<Ipv4Address> = entries
+            .iter()
             .filter(|(_, e)| !e.permanent && now > e.timestamp && now - e.timestamp > timeout)
             .map(|(&ip, _)| ip)
             .collect();
@@ -230,7 +247,12 @@ impl ArpPacket {
         }
     }
 
-    pub fn reply(sender_mac: MacAddress, sender_ip: Ipv4Address, target_mac: MacAddress, target_ip: Ipv4Address) -> Self {
+    pub fn reply(
+        sender_mac: MacAddress,
+        sender_ip: Ipv4Address,
+        target_mac: MacAddress,
+        target_ip: Ipv4Address,
+    ) -> Self {
         ArpPacket {
             hw_type: ARP_HW_ETHERNET,
             proto_type: ETH_TYPE_IPV4,
@@ -304,13 +326,19 @@ pub trait NetworkDevice: Send + Sync {
     fn mac_address(&self) -> MacAddress;
 
     /// MTU (Maximum Transmission Unit) in Bytes.
-    fn mtu(&self) -> usize { 1500 }
+    fn mtu(&self) -> usize {
+        1500
+    }
 
     /// Ob das Gerät "up" ist (verlinkt).
-    fn is_up(&self) -> bool { true }
+    fn is_up(&self) -> bool {
+        true
+    }
 
     /// Gerätename.
-    fn name(&self) -> &str { "net-device" }
+    fn name(&self) -> &str {
+        "net-device"
+    }
 }
 
 // ─── LoopbackDevice (für Tests) ─────────────────────────────────────────────
@@ -347,8 +375,12 @@ impl NetworkDevice for LoopbackDevice {
         queue.pop().ok_or(NetworkError::NoFrameAvailable)
     }
 
-    fn mac_address(&self) -> MacAddress { self.mac }
-    fn name(&self) -> &str { &self.dev_name }
+    fn mac_address(&self) -> MacAddress {
+        self.mac
+    }
+    fn name(&self) -> &str {
+        &self.dev_name
+    }
 }
 
 // ─── NetworkError ──────────────────────────────────────────────────────────
@@ -449,13 +481,13 @@ impl NetworkStack {
     }
 
     /// Sendet ein Frame an eine bekannte MAC.
-    pub fn send_to(&self, dst_mac: MacAddress, ethertype: u16, payload: Vec<u8>) -> Result<(), NetworkError> {
-        let frame = EthernetFrame::new(
-            dst_mac,
-            self.device.mac_address(),
-            ethertype,
-            payload,
-        );
+    pub fn send_to(
+        &self,
+        dst_mac: MacAddress,
+        ethertype: u16,
+        payload: Vec<u8>,
+    ) -> Result<(), NetworkError> {
+        let frame = EthernetFrame::new(dst_mac, self.device.mac_address(), ethertype, payload);
         self.device.send_frame(&frame.to_bytes())
     }
 }
@@ -550,7 +582,10 @@ mod tests {
     #[test]
     fn test_ethernet_frame_too_short() {
         let data = [0u8; 10]; // < 14
-        assert_eq!(EthernetFrame::from_bytes(&data), Err(NetworkError::FrameTooShort));
+        assert_eq!(
+            EthernetFrame::from_bytes(&data),
+            Err(NetworkError::FrameTooShort)
+        );
     }
 
     // ── ARP-Packet ──────────────────────────────────────────────────────────
@@ -600,7 +635,10 @@ mod tests {
     #[test]
     fn test_arp_packet_too_short() {
         let data = [0u8; 10];
-        assert_eq!(ArpPacket::from_bytes(&data), Err(NetworkError::PacketTooShort));
+        assert_eq!(
+            ArpPacket::from_bytes(&data),
+            Err(NetworkError::PacketTooShort)
+        );
     }
 
     // ── ARP-Table ────────────────────────────────────────────────────────────
@@ -643,8 +681,16 @@ mod tests {
     #[test]
     fn test_arp_table_purge_expired() {
         let table = ArpTable::new(1_000_000_000); // 1s timeout
-        table.insert(Ipv4Address::new(10, 0, 0, 1), MacAddress::new(1, 2, 3, 4, 5, 6), 0);
-        table.insert(Ipv4Address::new(10, 0, 0, 2), MacAddress::new(7, 8, 9, 10, 11, 12), 0);
+        table.insert(
+            Ipv4Address::new(10, 0, 0, 1),
+            MacAddress::new(1, 2, 3, 4, 5, 6),
+            0,
+        );
+        table.insert(
+            Ipv4Address::new(10, 0, 0, 2),
+            MacAddress::new(7, 8, 9, 10, 11, 12),
+            0,
+        );
 
         // Nach 2s: beide abgelaufen
         let purged = table.purge_expired(2_000_000_000);
@@ -655,7 +701,11 @@ mod tests {
     #[test]
     fn test_arp_table_not_expired_yet() {
         let table = ArpTable::new(10_000_000_000); // 10s timeout
-        table.insert(Ipv4Address::new(10, 0, 0, 1), MacAddress::new(1, 2, 3, 4, 5, 6), 0);
+        table.insert(
+            Ipv4Address::new(10, 0, 0, 1),
+            MacAddress::new(1, 2, 3, 4, 5, 6),
+            0,
+        );
         let purged = table.purge_expired(5_000_000_000); // 5s
         assert_eq!(purged, 0);
         assert_eq!(table.entry_count(), 1);
@@ -775,7 +825,9 @@ mod tests {
         let stack = NetworkStack::new(dev.clone(), Ipv4Address::new(10, 0, 0, 1));
 
         let dst = MacAddress::new(0x11, 0x22, 0x33, 0x44, 0x55, 0x66);
-        stack.send_to(dst, ETH_TYPE_IPV4, vec![0x01, 0x02, 0x03]).unwrap();
+        stack
+            .send_to(dst, ETH_TYPE_IPV4, vec![0x01, 0x02, 0x03])
+            .unwrap();
 
         assert_eq!(dev.queue_len(), 1);
         let data = dev.recv_frame().unwrap();

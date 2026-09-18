@@ -18,7 +18,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::capability::{CapabilityTable, CapId, Pid, ResourceType, Rights};
+use crate::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -85,14 +85,21 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.create(pid, ResourceType::Memory, addr_space, Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE);
+        self.caps.create(
+            pid,
+            ResourceType::Memory,
+            addr_space,
+            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+        );
 
         pid
     }
 
     /// Erzeugt einen Kind-Prozess unter einem Elterprozess
     pub fn spawn_child(&mut self, parent: Pid, ptype: ProcessType, priority: u8) -> Option<Pid> {
-        if !self.processes.contains_key(&parent) { return None; }
+        if !self.processes.contains_key(&parent) {
+            return None;
+        }
         let child_pid = self.spawn(ptype, priority);
 
         // Kind-Prozess mit Parent verknuepfen
@@ -113,7 +120,9 @@ impl ProcessManager {
             None => return false,
         };
 
-        if pcb.state == ProcessState::Terminated(0) || matches!(pcb.state, ProcessState::Terminated(_)) {
+        if pcb.state == ProcessState::Terminated(0)
+            || matches!(pcb.state, ProcessState::Terminated(_))
+        {
             return false; // Bereits terminiert
         }
 
@@ -202,18 +211,31 @@ impl ProcessManager {
 
     /// Anzahl aktiver (nicht-terminierter) Prozesse
     pub fn active_count(&self) -> usize {
-        self.processes.values()
+        self.processes
+            .values()
             .filter(|p| !matches!(p.state, ProcessState::Terminated(_)))
             .count()
     }
 
     /// Capability-Check: Hat der Prozess die geforderten Rechte?
-    pub fn check_capability(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, required: Rights) -> bool {
+    pub fn check_capability(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        required: Rights,
+    ) -> bool {
         self.caps.check(pid, resource_type, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
-    pub fn delegate_capability(&mut self, source: Pid, cap_id: CapId, target: Pid, rights: Rights) -> Result<CapId, crate::capability::CapabilityError> {
+    pub fn delegate_capability(
+        &mut self,
+        source: Pid,
+        cap_id: CapId,
+        target: Pid,
+        rights: Rights,
+    ) -> Result<CapId, crate::capability::CapabilityError> {
         self.caps.delegate(source, cap_id, target, rights)
     }
 }
@@ -257,7 +279,8 @@ mod tests {
 
         // p1 delegiert READ an p2
         let p1_mem_cap = pm.caps.list_for(p1)[0].id;
-        pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE).unwrap();
+        pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
+            .unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
 
         // Kill p1 -> alle Caps weg (auch p2s delegierte)

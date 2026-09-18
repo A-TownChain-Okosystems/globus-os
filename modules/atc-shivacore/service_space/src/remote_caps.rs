@@ -19,8 +19,8 @@ use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
+use crate::did::{CryptoProvider, Did};
 use shivacore::capability::Rights;
-use crate::did::{Did, CryptoProvider};
 
 /// Fehler bei Ticket-Operationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -138,8 +138,20 @@ pub struct LocalCap {
 }
 
 impl LocalCap {
-    pub fn new(cap_id: String, resource: ResourceDescriptor, constraints: Constraints, issuer_did: Did) -> Self {
-        Self { cap_id, resource, constraints, issuer_did, operations_used: 0, revoked: false }
+    pub fn new(
+        cap_id: String,
+        resource: ResourceDescriptor,
+        constraints: Constraints,
+        issuer_did: Did,
+    ) -> Self {
+        Self {
+            cap_id,
+            resource,
+            constraints,
+            issuer_did,
+            operations_used: 0,
+            revoked: false,
+        }
     }
 
     /// Verbraucht eine Operation. Widerruft bei Ueberschreitung.
@@ -162,12 +174,18 @@ pub struct NonceStore {
 }
 
 impl NonceStore {
-    pub fn new() -> Self { Self { seen: BTreeSet::new() } }
+    pub fn new() -> Self {
+        Self {
+            seen: BTreeSet::new(),
+        }
+    }
 
     /// Gibt true zurueck wenn der Nonce NEU ist (und merkt ihn sich).
     /// false bei Replay-Versuch.
     pub fn check_and_record(&mut self, nonce: &str) -> bool {
-        if self.seen.contains(nonce) { return false; }
+        if self.seen.contains(nonce) {
+            return false;
+        }
         self.seen.insert(nonce.to_string());
         true
     }
@@ -177,20 +195,33 @@ impl NonceStore {
 pub struct RemoteCapabilityResolver {
     own_did: Did,
     nonces: NonceStore,
-    current_time: f64,  // Injektierbar fuer Tests
+    current_time: f64, // Injektierbar fuer Tests
 }
 
 impl RemoteCapabilityResolver {
     pub fn new(own_did: Did) -> Self {
-        Self { own_did, nonces: NonceStore::new(), current_time: 1_000_000.0 }
+        Self {
+            own_did,
+            nonces: NonceStore::new(),
+            current_time: 1_000_000.0,
+        }
     }
 
-    pub fn set_time(&mut self, t: f64) { self.current_time = t; }
+    pub fn set_time(&mut self, t: f64) {
+        self.current_time = t;
+    }
 
     /// Validiert ein eingehendes Ticket vollstaendig und erzeugt eine lokale Capability.
-    pub fn resolve<C: CryptoProvider>(&mut self, ticket: &RemoteCapabilityTicket) -> Result<LocalCap, TicketError> {
+    pub fn resolve<C: CryptoProvider>(
+        &mut self,
+        ticket: &RemoteCapabilityTicket,
+    ) -> Result<LocalCap, TicketError> {
         // 1. Signatur pruefen
-        if !C::verify(&ticket.issuer_did, &ticket.signing_payload(), &ticket.issuer_signature) {
+        if !C::verify(
+            &ticket.issuer_did,
+            &ticket.signing_payload(),
+            &ticket.issuer_signature,
+        ) {
             return Err(TicketError::InvalidSignature);
         }
         // 2. Subject pruefen
@@ -239,7 +270,8 @@ impl RemoteCapabilityResolver {
             }
             // Andere Ressource
             if child.resource.resource_type != parent.resource.resource_type
-                || child.resource.resource_id != parent.resource.resource_id {
+                || child.resource.resource_id != parent.resource.resource_id
+            {
                 return Err(TicketError::ResourceMismatch);
             }
             // Rechte erweitert (Attenuation-Verletzung)
@@ -273,9 +305,15 @@ mod tests {
     use super::*;
     use crate::did::SoftwareSigner;
 
-    fn alice() -> SoftwareSigner { SoftwareSigner::new("alice") }
-    fn bob() -> SoftwareSigner { SoftwareSigner::new("bob") }
-    fn charlie() -> SoftwareSigner { SoftwareSigner::new("charlie") }
+    fn alice() -> SoftwareSigner {
+        SoftwareSigner::new("alice")
+    }
+    fn bob() -> SoftwareSigner {
+        SoftwareSigner::new("bob")
+    }
+    fn charlie() -> SoftwareSigner {
+        SoftwareSigner::new("charlie")
+    }
 
     fn make_resource() -> ResourceDescriptor {
         ResourceDescriptor {
@@ -286,7 +324,11 @@ mod tests {
     }
 
     fn make_constraints(max_ops: u32, deadline: f64) -> Constraints {
-        Constraints { max_operations: max_ops, deadline_unix: deadline, energy_budget_uj: None }
+        Constraints {
+            max_operations: max_ops,
+            deadline_unix: deadline,
+            energy_budget_uj: None,
+        }
     }
 
     #[test]
@@ -296,8 +338,12 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(bob.did().clone());
 
         let ticket = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-1".to_string(),
         );
 
         let cap = resolver.resolve::<SoftwareSigner>(&ticket).unwrap();
@@ -315,8 +361,12 @@ mod tests {
 
         // Eve signiert, behauptet aber Alice zu sein (unmoeglich ohne Alice's Key)
         let ticket = issue_ticket(
-            &eve, bob.did().clone(), make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-2".to_string(),
+            &eve,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-2".to_string(),
         );
 
         // Manuell Issuer-DID auf Alice setzen (Forge-Versuch)
@@ -336,8 +386,12 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(bob.did().clone());
 
         let ticket = issue_ticket(
-            &alice, charlie_did, make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-3".to_string(),
+            &alice,
+            charlie_did,
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-3".to_string(),
         );
 
         let result = resolver.resolve::<SoftwareSigner>(&ticket);
@@ -351,8 +405,12 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(bob.did().clone());
 
         let ticket = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-replay".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-replay".to_string(),
         );
 
         // Erste Einloesung: OK
@@ -370,8 +428,12 @@ mod tests {
         resolver.set_time(3_000_000.0); // Zeit nach Deadline
 
         let ticket = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(10, 1_000_000.0),
-            None, "nonce-exp".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 1_000_000.0),
+            None,
+            "nonce-exp".to_string(),
         );
 
         let result = resolver.resolve::<SoftwareSigner>(&ticket);
@@ -385,8 +447,12 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(bob.did().clone());
 
         let ticket = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(0, 2_000_000.0),
-            None, "nonce-strict".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(0, 2_000_000.0),
+            None,
+            "nonce-strict".to_string(),
         );
 
         let result = resolver.resolve::<SoftwareSigner>(&ticket);
@@ -427,19 +493,27 @@ mod tests {
 
         // Ticket 1: Alice -> Bob (volle Rechte, 100 Ops)
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(100, 2_000_000.0),
-            None, "nonce-t1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(100, 2_000_000.0),
+            None,
+            "nonce-t1".to_string(),
         );
 
         // Ticket 2: Bob -> Charlie (eingeschraenkte Rechte: nur READ, 50 Ops)
         let attenuated_resource = ResourceDescriptor {
             resource_type: "MEMORY".to_string(),
             resource_id: 0x1000,
-            rights: Rights::READ,  // Nur READ, nicht WRITE/DELEGATE
+            rights: Rights::READ, // Nur READ, nicht WRITE/DELEGATE
         };
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(), attenuated_resource, make_constraints(50, 1_500_000.0),
-            Some("nonce-t1".to_string()), "nonce-t2".to_string(),
+            &bob,
+            charlie.did().clone(),
+            attenuated_resource,
+            make_constraints(50, 1_500_000.0),
+            Some("nonce-t1".to_string()),
+            "nonce-t2".to_string(),
         );
 
         let chain = vec![t1, t2];
@@ -456,13 +530,21 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(charlie.did().clone());
 
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(100, 2_000_000.0),
-            None, "nonce-real-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(100, 2_000_000.0),
+            None,
+            "nonce-real-1".to_string(),
         );
         // t2 referenziert falschen Parent-Nonce
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(), make_resource(), make_constraints(50, 1_500_000.0),
-            Some("nonce-WRONG".to_string()), "nonce-real-2".to_string(),
+            &bob,
+            charlie.did().clone(),
+            make_resource(),
+            make_constraints(50, 1_500_000.0),
+            Some("nonce-WRONG".to_string()),
+            "nonce-real-2".to_string(),
         );
 
         let result = resolver.resolve_chain::<SoftwareSigner>(&[t1, t2]);
@@ -483,18 +565,26 @@ mod tests {
             rights: Rights::READ,
         };
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), limited, make_constraints(100, 2_000_000.0),
-            None, "nonce-lim-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            limited,
+            make_constraints(100, 2_000_000.0),
+            None,
+            "nonce-lim-1".to_string(),
         );
         // Bob versucht, Charlie READ+WRITE zu geben (Rechte-Erweiterung!)
         let expanded = ResourceDescriptor {
             resource_type: "MEMORY".to_string(),
             resource_id: 0x1000,
-            rights: Rights::READ | Rights::WRITE,  // Erweiterung!
+            rights: Rights::READ | Rights::WRITE, // Erweiterung!
         };
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(), expanded, make_constraints(50, 1_500_000.0),
-            Some("nonce-lim-1".to_string()), "nonce-lim-2".to_string(),
+            &bob,
+            charlie.did().clone(),
+            expanded,
+            make_constraints(50, 1_500_000.0),
+            Some("nonce-lim-1".to_string()),
+            "nonce-lim-2".to_string(),
         );
 
         let result = resolver.resolve_chain::<SoftwareSigner>(&[t1, t2]);
@@ -509,13 +599,21 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(charlie.did().clone());
 
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-ops-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-ops-1".to_string(),
         );
         // Bob versucht, Charlie 50 Ops zu geben (mehr als Alice's 10!)
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(), make_resource(), make_constraints(50, 1_500_000.0),
-            Some("nonce-ops-1".to_string()), "nonce-ops-2".to_string(),
+            &bob,
+            charlie.did().clone(),
+            make_resource(),
+            make_constraints(50, 1_500_000.0),
+            Some("nonce-ops-1".to_string()),
+            "nonce-ops-2".to_string(),
         );
 
         let result = resolver.resolve_chain::<SoftwareSigner>(&[t1, t2]);
@@ -530,13 +628,21 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(charlie.did().clone());
 
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(100, 1_000_000.0),
-            None, "nonce-dl-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(100, 1_000_000.0),
+            None,
+            "nonce-dl-1".to_string(),
         );
         // Bob versucht, Charlie eine laengere Deadline zu geben
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(), make_resource(), make_constraints(50, 2_000_000.0), // laenger!
-            Some("nonce-dl-1".to_string()), "nonce-dl-2".to_string(),
+            &bob,
+            charlie.did().clone(),
+            make_resource(),
+            make_constraints(50, 2_000_000.0), // laenger!
+            Some("nonce-dl-1".to_string()),
+            "nonce-dl-2".to_string(),
         );
 
         let result = resolver.resolve_chain::<SoftwareSigner>(&[t1, t2]);
@@ -551,18 +657,26 @@ mod tests {
         let mut resolver = RemoteCapabilityResolver::new(charlie.did().clone());
 
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(100, 2_000_000.0),
-            None, "nonce-res-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(100, 2_000_000.0),
+            None,
+            "nonce-res-1".to_string(),
         );
         // Bob versucht, Ticket fuer eine ANDERE Ressource
         let other_resource = ResourceDescriptor {
             resource_type: "MEMORY".to_string(),
-            resource_id: 0x2000,  // Andere Resource-ID!
+            resource_id: 0x2000, // Andere Resource-ID!
             rights: Rights::READ,
         };
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(), other_resource, make_constraints(50, 1_500_000.0),
-            Some("nonce-res-1".to_string()), "nonce-res-2".to_string(),
+            &bob,
+            charlie.did().clone(),
+            other_resource,
+            make_constraints(50, 1_500_000.0),
+            Some("nonce-res-1".to_string()),
+            "nonce-res-2".to_string(),
         );
 
         let result = resolver.resolve_chain::<SoftwareSigner>(&[t1, t2]);
@@ -582,12 +696,20 @@ mod tests {
         let alice = alice();
         let bob = bob();
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-det".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-det".to_string(),
         );
         let t2 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(10, 2_000_000.0),
-            None, "nonce-det".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(10, 2_000_000.0),
+            None,
+            "nonce-det".to_string(),
         );
         // Gleiche Parameter → gleiche Payload
         assert_eq!(t1.signing_payload(), t2.signing_payload());
@@ -604,22 +726,38 @@ mod tests {
 
         // Alice -> Bob (100 ops, all rights)
         let t1 = issue_ticket(
-            &alice, bob.did().clone(), make_resource(), make_constraints(100, 2_000_000.0),
-            None, "hop-1".to_string(),
+            &alice,
+            bob.did().clone(),
+            make_resource(),
+            make_constraints(100, 2_000_000.0),
+            None,
+            "hop-1".to_string(),
         );
         // Bob -> Charlie (50 ops, READ only)
         let t2 = issue_ticket(
-            &bob, charlie.did().clone(),
-            ResourceDescriptor { resource_type: "MEMORY".to_string(), resource_id: 0x1000, rights: Rights::READ },
+            &bob,
+            charlie.did().clone(),
+            ResourceDescriptor {
+                resource_type: "MEMORY".to_string(),
+                resource_id: 0x1000,
+                rights: Rights::READ,
+            },
             make_constraints(50, 1_800_000.0),
-            Some("hop-1".to_string()), "hop-2".to_string(),
+            Some("hop-1".to_string()),
+            "hop-2".to_string(),
         );
         // Charlie -> Dave (10 ops, READ only)
         let t3 = issue_ticket(
-            &charlie, dave.did().clone(),
-            ResourceDescriptor { resource_type: "MEMORY".to_string(), resource_id: 0x1000, rights: Rights::READ },
+            &charlie,
+            dave.did().clone(),
+            ResourceDescriptor {
+                resource_type: "MEMORY".to_string(),
+                resource_id: 0x1000,
+                rights: Rights::READ,
+            },
             make_constraints(10, 1_500_000.0),
-            Some("hop-2".to_string()), "hop-3".to_string(),
+            Some("hop-2".to_string()),
+            "hop-3".to_string(),
         );
 
         let chain = vec![t1, t2, t3];

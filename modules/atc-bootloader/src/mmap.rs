@@ -9,7 +9,12 @@ pub struct MemoryMap {
 
 impl MemoryMap {
     pub fn new() -> Self {
-        Self { kernel_start: 0x100000, kernel_size: 0x200000, stack_start: 0x80000, heap_start: 0x300000 }
+        Self {
+            kernel_start: 0x100000,
+            kernel_size: 0x200000,
+            stack_start: 0x80000,
+            heap_start: 0x300000,
+        }
     }
     pub fn is_in_kernel(&self, addr: u64) -> bool {
         addr >= self.kernel_start && addr < self.kernel_start + self.kernel_size

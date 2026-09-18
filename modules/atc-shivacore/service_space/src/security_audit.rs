@@ -21,24 +21,36 @@ use alloc::string::{String, ToString};
 use alloc::vec;
 use alloc::vec::Vec;
 
-use crate::genesis::{GenesisConfig, GenesisBlock, GenesisBuilder, GenesisError, GENESIS_CHAIN_ID, LockType, GenesisValidator, GenesisAllocation};
-use crate::genesis_bridge::{GenesisBridge, BridgeBlock, BridgeBlockChain, BridgeChainError, BridgePoh, BridgeValidatorRegistry};
+use crate::genesis::{
+    GenesisAllocation, GenesisBlock, GenesisBuilder, GenesisConfig, GenesisError, GenesisValidator,
+    LockType, GENESIS_CHAIN_ID,
+};
+use crate::genesis_bridge::{
+    BridgeBlock, BridgeBlockChain, BridgeChainError, BridgePoh, BridgeValidatorRegistry,
+    GenesisBridge,
+};
 
 // === Audit Severity === //
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
-    Critical,   // Exploitable vulnerability
-    High,       // Security control bypass
-    Medium,     // Missing validation
-    Low,        // Informational
-    Pass,       // Check passed
+    Critical, // Exploitable vulnerability
+    High,     // Security control bypass
+    Medium,   // Missing validation
+    Low,      // Informational
+    Pass,     // Check passed
 }
 
 impl Severity {
-    pub fn is_pass(&self) -> bool { matches!(self, Severity::Pass) }
-    pub fn is_critical(&self) -> bool { matches!(self, Severity::Critical) }
-    pub fn is_high(&self) -> bool { matches!(self, Severity::Critical | Severity::High) }
+    pub fn is_pass(&self) -> bool {
+        matches!(self, Severity::Pass)
+    }
+    pub fn is_critical(&self) -> bool {
+        matches!(self, Severity::Critical)
+    }
+    pub fn is_high(&self) -> bool {
+        matches!(self, Severity::Critical | Severity::High)
+    }
 
     pub fn label(&self) -> &'static str {
         match self {
@@ -142,14 +154,25 @@ impl AuditReport {
     pub fn summary(&self) -> String {
         format!(
             "Audit: {}/{} checks passed, {} critical, {} high, {} medium, {} low — {}",
-            self.passed, self.total_checks,
-            self.critical_count, self.high_count, self.medium_count, self.low_count,
-            if self.is_secure() { "SECURE" } else { "VULNERABILITIES FOUND" }
+            self.passed,
+            self.total_checks,
+            self.critical_count,
+            self.high_count,
+            self.medium_count,
+            self.low_count,
+            if self.is_secure() {
+                "SECURE"
+            } else {
+                "VULNERABILITIES FOUND"
+            }
         )
     }
 
     pub fn findings_by_severity(&self, severity: Severity) -> Vec<&AuditFinding> {
-        self.findings.iter().filter(|f| f.severity == severity).collect()
+        self.findings
+            .iter()
+            .filter(|f| f.severity == severity)
+            .collect()
     }
 }
 
@@ -181,35 +204,43 @@ impl SecurityAuditor {
             Some(genesis) => {
                 if genesis.height == 0 && genesis.is_genesis() {
                     report.add(AuditFinding::pass(
-                        "CHAIN-001", "BlockChain",
-                        "Genesis block exists at height 0 with correct is_genesis() flag"
+                        "CHAIN-001",
+                        "BlockChain",
+                        "Genesis block exists at height 0 with correct is_genesis() flag",
                     ));
                 } else {
                     report.add(AuditFinding::fail(
-                        "CHAIN-001", "BlockChain", Severity::Critical,
+                        "CHAIN-001",
+                        "BlockChain",
+                        Severity::Critical,
                         "Genesis block has wrong height or is_genesis() flag",
-                        "Ensure genesis block is at height 0 with prev_hash = [0;32]"
+                        "Ensure genesis block is at height 0 with prev_hash = [0;32]",
                     ));
                 }
             }
             None => report.add(AuditFinding::fail(
-                "CHAIN-001", "BlockChain", Severity::Critical,
+                "CHAIN-001",
+                "BlockChain",
+                Severity::Critical,
                 "No genesis block found",
-                "Initialize chain with genesis block before operation"
+                "Initialize chain with genesis block before operation",
             )),
         }
 
         // Check 1.2: Chain-ID is 658467
         if bridge.chain_id() == GENESIS_CHAIN_ID {
             report.add(AuditFinding::pass(
-                "CHAIN-002", "BlockChain",
-                "Chain-ID is 658467 (A-TownChain Mainnet)"
+                "CHAIN-002",
+                "BlockChain",
+                "Chain-ID is 658467 (A-TownChain Mainnet)",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "CHAIN-002", "BlockChain", Severity::Critical,
+                "CHAIN-002",
+                "BlockChain",
+                Severity::Critical,
                 &format!("Chain-ID is {} (expected 658467)", bridge.chain_id()),
-                "Set chain_id to 658467 in genesis configuration"
+                "Set chain_id to 658467 in genesis configuration",
             ));
         }
 
@@ -218,27 +249,37 @@ impl SecurityAuditor {
         let block_count = bridge.chain.block_count();
         if block_count == (height + 1) as usize {
             report.add(AuditFinding::pass(
-                "CHAIN-003", "BlockChain",
-                &format!("Chain height ({}) matches block count ({})", height, block_count)
+                "CHAIN-003",
+                "BlockChain",
+                &format!(
+                    "Chain height ({}) matches block count ({})",
+                    height, block_count
+                ),
             ));
         } else {
             report.add(AuditFinding::fail(
-                "CHAIN-003", "BlockChain", Severity::High,
+                "CHAIN-003",
+                "BlockChain",
+                Severity::High,
                 &format!("Chain height ({}) != block count ({})", height, block_count),
-                "Investigate missing or duplicate blocks"
+                "Investigate missing or duplicate blocks",
             ));
         }
 
         // Check 1.4: Parent hash linkage
         let mut linked = true;
         for h in 1..=height {
-            if let (Some(block), Some(parent)) = (bridge.chain.get_block(h), bridge.chain.get_block(h - 1)) {
+            if let (Some(block), Some(parent)) =
+                (bridge.chain.get_block(h), bridge.chain.get_block(h - 1))
+            {
                 if block.parent_hash != parent.id {
                     linked = false;
                     report.add(AuditFinding::fail(
-                        "CHAIN-004", "BlockChain", Severity::Critical,
+                        "CHAIN-004",
+                        "BlockChain",
+                        Severity::Critical,
                         &format!("Block {} parent_hash does not match block {} id", h, h - 1),
-                        "Verify block creation and chain append logic"
+                        "Verify block creation and chain append logic",
                     ));
                     break;
                 }
@@ -246,8 +287,9 @@ impl SecurityAuditor {
         }
         if linked {
             report.add(AuditFinding::pass(
-                "CHAIN-004", "BlockChain",
-                "All parent-hash linkages verified"
+                "CHAIN-004",
+                "BlockChain",
+                "All parent-hash linkages verified",
             ));
         }
 
@@ -259,17 +301,24 @@ impl SecurityAuditor {
             }
         }
         let unique_ids: Vec<_> = heights.iter().map(|(_, id)| *id).collect();
-        let unique_count: usize = heights.iter().map(|(_, id)| *id).collect::<alloc::collections::BTreeSet<_>>().len();
+        let unique_count: usize = heights
+            .iter()
+            .map(|(_, id)| *id)
+            .collect::<alloc::collections::BTreeSet<_>>()
+            .len();
         if unique_count == unique_ids.len() {
             report.add(AuditFinding::pass(
-                "CHAIN-005", "BlockChain",
-                "No duplicate block IDs detected"
+                "CHAIN-005",
+                "BlockChain",
+                "No duplicate block IDs detected",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "CHAIN-005", "BlockChain", Severity::High,
+                "CHAIN-005",
+                "BlockChain",
+                Severity::High,
                 "Duplicate block IDs detected",
-                "Investigate block creation for ID collisions"
+                "Investigate block creation for ID collisions",
             ));
         }
     }
@@ -281,54 +330,68 @@ impl SecurityAuditor {
             // Check 2.1: Genesis is signed
             if genesis.signature != [0u8; 64] {
                 report.add(AuditFinding::pass(
-                    "GEN-001", "Genesis", "Genesis block is signed"
+                    "GEN-001",
+                    "Genesis",
+                    "Genesis block is signed",
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "GEN-001", "Genesis", Severity::Critical,
+                    "GEN-001",
+                    "Genesis",
+                    Severity::Critical,
                     "Genesis block is unsigned",
-                    "Sign genesis block with genesis authority key"
+                    "Sign genesis block with genesis authority key",
                 ));
             }
 
             // Check 2.2: Genesis has validators
             if !genesis.validator_set.is_empty() {
                 report.add(AuditFinding::pass(
-                    "GEN-002", "Genesis",
-                    &format!("Genesis has {} validators", genesis.validator_set.len())
+                    "GEN-002",
+                    "Genesis",
+                    &format!("Genesis has {} validators", genesis.validator_set.len()),
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "GEN-002", "Genesis", Severity::Critical,
+                    "GEN-002",
+                    "Genesis",
+                    Severity::Critical,
                     "Genesis has no validators",
-                    "Initialize genesis with at least 4 validators"
+                    "Initialize genesis with at least 4 validators",
                 ));
             }
 
             // Check 2.3: Genesis has allocations
             if !genesis.allocations.is_empty() {
                 report.add(AuditFinding::pass(
-                    "GEN-003", "Genesis",
-                    &format!("Genesis has {} allocations", genesis.allocations.len())
+                    "GEN-003",
+                    "Genesis",
+                    &format!("Genesis has {} allocations", genesis.allocations.len()),
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "GEN-003", "Genesis", Severity::High,
+                    "GEN-003",
+                    "Genesis",
+                    Severity::High,
                     "Genesis has no token allocations",
-                    "Define initial token allocations in genesis config"
+                    "Define initial token allocations in genesis config",
                 ));
             }
 
             // Check 2.4: State root is non-zero
             if genesis.state_root != [0u8; 32] {
                 report.add(AuditFinding::pass(
-                    "GEN-004", "Genesis", "Genesis state_root is computed (non-zero)"
+                    "GEN-004",
+                    "Genesis",
+                    "Genesis state_root is computed (non-zero)",
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "GEN-004", "Genesis", Severity::Medium,
+                    "GEN-004",
+                    "Genesis",
+                    Severity::Medium,
                     "Genesis state_root is zero",
-                    "Compute state_root from initial balances and validators"
+                    "Compute state_root from initial balances and validators",
                 ));
             }
 
@@ -336,20 +399,25 @@ impl SecurityAuditor {
             let vc = genesis.validator_set.len();
             if vc >= 4 && vc <= 100 {
                 report.add(AuditFinding::pass(
-                    "GEN-005", "Genesis",
-                    &format!("Validator count ({}) within valid range [4, 100]", vc)
+                    "GEN-005",
+                    "Genesis",
+                    &format!("Validator count ({}) within valid range [4, 100]", vc),
                 ));
             } else if vc < 4 {
                 report.add(AuditFinding::fail(
-                    "GEN-005", "Genesis", Severity::High,
+                    "GEN-005",
+                    "Genesis",
+                    Severity::High,
                     &format!("Too few validators ({})", vc),
-                    "Require at least 4 validators for BFT safety"
+                    "Require at least 4 validators for BFT safety",
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "GEN-005", "Genesis", Severity::Medium,
+                    "GEN-005",
+                    "Genesis",
+                    Severity::Medium,
                     &format!("Too many validators ({})", vc),
-                    "Limit to 100 validators for performance"
+                    "Limit to 100 validators for performance",
                 ));
             }
         }
@@ -362,14 +430,17 @@ impl SecurityAuditor {
         let total = bridge.total_stake();
         if total > 0 {
             report.add(AuditFinding::pass(
-                "VAL-001", "Validators",
-                &format!("Total stake: {} (non-zero)", total)
+                "VAL-001",
+                "Validators",
+                &format!("Total stake: {} (non-zero)", total),
             ));
         } else {
             report.add(AuditFinding::fail(
-                "VAL-001", "Validators", Severity::Critical,
+                "VAL-001",
+                "Validators",
+                Severity::Critical,
                 "Total stake is zero",
-                "Register validators with positive stake"
+                "Register validators with positive stake",
             ));
         }
 
@@ -377,14 +448,17 @@ impl SecurityAuditor {
         let active = bridge.active_validators();
         if active > 0 {
             report.add(AuditFinding::pass(
-                "VAL-002", "Validators",
-                &format!("{} active validators", active)
+                "VAL-002",
+                "Validators",
+                &format!("{} active validators", active),
             ));
         } else {
             report.add(AuditFinding::fail(
-                "VAL-002", "Validators", Severity::High,
+                "VAL-002",
+                "Validators",
+                Severity::High,
                 "No active validators",
-                "Ensure validators are registered and active"
+                "Ensure validators are registered and active",
             ));
         }
 
@@ -392,15 +466,18 @@ impl SecurityAuditor {
         match bridge.next_proposer() {
             Some(did) => {
                 report.add(AuditFinding::pass(
-                    "VAL-003", "Validators",
-                    &format!("Proposer selection returns valid DID: {}", did)
+                    "VAL-003",
+                    "Validators",
+                    &format!("Proposer selection returns valid DID: {}", did),
                 ));
             }
             None => {
                 report.add(AuditFinding::fail(
-                    "VAL-003", "Validators", Severity::High,
+                    "VAL-003",
+                    "Validators",
+                    Severity::High,
                     "Proposer selection returns None",
-                    "Check validator registry and PoH state"
+                    "Check validator registry and PoH state",
                 ));
             }
         }
@@ -410,29 +487,39 @@ impl SecurityAuditor {
             let threshold = (total as f64 * 0.667) as u64;
             if threshold > 0 {
                 report.add(AuditFinding::pass(
-                    "VAL-004", "Validators",
-                    &format!("BFT finality threshold: {} / {} (66.7%)", threshold, total)
+                    "VAL-004",
+                    "Validators",
+                    &format!("BFT finality threshold: {} / {} (66.7%)", threshold, total),
                 ));
             }
         }
 
         // Check 3.5: No single validator has > 33% stake (BFT safety)
         if let Some(genesis) = bridge.chain.get_block(0) {
-            let max_stake = genesis.validator_set.iter()
+            let max_stake = genesis
+                .validator_set
+                .iter()
                 .map(|(_, s)| *s)
                 .max()
                 .unwrap_or(0);
-            let max_pct = if total > 0 { (max_stake * 100) / total } else { 0 };
+            let max_pct = if total > 0 {
+                (max_stake * 100) / total
+            } else {
+                0
+            };
             if max_pct <= 33 {
                 report.add(AuditFinding::pass(
-                    "VAL-005", "Validators",
-                    &format!("Max single validator stake: {}% (<=33%)", max_pct)
+                    "VAL-005",
+                    "Validators",
+                    &format!("Max single validator stake: {}% (<=33%)", max_pct),
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "VAL-005", "Validators", Severity::High,
+                    "VAL-005",
+                    "Validators",
+                    Severity::High,
                     &format!("Single validator has {}% stake (>33% BFT limit)", max_pct),
-                    "Redistribute stake to prevent single-validator dominance"
+                    "Redistribute stake to prevent single-validator dominance",
                 ));
             }
         }
@@ -445,28 +532,34 @@ impl SecurityAuditor {
         let genesis_hash = bridge.genesis_hash();
         if genesis_hash != [0x42; 32] && genesis_hash != [0u8; 32] {
             report.add(AuditFinding::pass(
-                "POH-001", "PoH",
-                "PoH seeded with genesis hash (not [0x42;32] or zero)"
+                "POH-001",
+                "PoH",
+                "PoH seeded with genesis hash (not [0x42;32] or zero)",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "POH-001", "PoH", Severity::Medium,
+                "POH-001",
+                "PoH",
+                Severity::Medium,
                 "PoH seed is default/zero value",
-                "Seed PoH with actual genesis block hash"
+                "Seed PoH with actual genesis block hash",
             ));
         }
 
         // Check 4.2: PoH has advanced (tick_count > 0)
         if bridge.poh.tick_count() > 0 {
             report.add(AuditFinding::pass(
-                "POH-002", "PoH",
-                &format!("PoH has advanced ({} ticks)", bridge.poh.tick_count())
+                "POH-002",
+                "PoH",
+                &format!("PoH has advanced ({} ticks)", bridge.poh.tick_count()),
             ));
         } else {
             report.add(AuditFinding::fail(
-                "POH-002", "PoH", Severity::Low,
+                "POH-002",
+                "PoH",
+                Severity::Low,
                 "PoH has not advanced (0 ticks)",
-                "Initialize PoH with genesis tick"
+                "Initialize PoH with genesis tick",
             ));
         }
 
@@ -476,34 +569,43 @@ impl SecurityAuditor {
             let verified = true; // PoH verified during init (verify would need entries accessor)
             if verified {
                 report.add(AuditFinding::pass(
-                    "POH-003", "PoH",
-                    "PoH entries verified against genesis hash"
+                    "POH-003",
+                    "PoH",
+                    "PoH entries verified against genesis hash",
                 ));
             } else {
                 report.add(AuditFinding::fail(
-                    "POH-003", "PoH", Severity::Critical,
+                    "POH-003",
+                    "PoH",
+                    Severity::Critical,
                     "PoH entries fail verification",
-                    "Investigate PoH hash chain for tampering"
+                    "Investigate PoH hash chain for tampering",
                 ));
             }
         } else {
             report.add(AuditFinding::fail(
-                "POH-003", "PoH", Severity::Low,
+                "POH-003",
+                "PoH",
+                Severity::Low,
                 "PoH has not advanced (0 ticks)",
-                "Generate PoH ticks during initialization"
+                "Generate PoH ticks during initialization",
             ));
         }
 
         // Check 4.4: PoH current hash != genesis hash (has advanced)
         if bridge.poh.current_hash() != genesis_hash {
             report.add(AuditFinding::pass(
-                "POH-004", "PoH", "PoH current hash differs from genesis (has advanced)"
+                "POH-004",
+                "PoH",
+                "PoH current hash differs from genesis (has advanced)",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "POH-004", "PoH", Severity::Medium,
+                "POH-004",
+                "PoH",
+                Severity::Medium,
                 "PoH current hash equals genesis hash (stalled)",
-                "Ensure PoH advances with each block proposal"
+                "Ensure PoH advances with each block proposal",
             ));
         }
     }
@@ -514,68 +616,104 @@ impl SecurityAuditor {
         // Check 5.1: Chain-ID validation enforced
         let mut test_chain = BridgeBlockChain::new();
         let bad_block = BridgeBlock {
-            id: [0xFF; 32], height: 0, parent_hash: [0u8; 32],
-            proposer_did: String::new(), timestamp: 1000,
-            poh_hash: [0u8; 32], tx_root: [0u8; 32], state_root: [0u8; 32],
-            gas_used: 0, total_fees: 0, signature: [0xAA; 64],
+            id: [0xFF; 32],
+            height: 0,
+            parent_hash: [0u8; 32],
+            proposer_did: String::new(),
+            timestamp: 1000,
+            poh_hash: [0u8; 32],
+            tx_root: [0u8; 32],
+            state_root: [0u8; 32],
+            gas_used: 0,
+            total_fees: 0,
+            signature: [0xAA; 64],
             chain_id: 9999, // Wrong!
-            validator_set: vec![], allocations: vec![],
+            validator_set: vec![],
+            allocations: vec![],
         };
         match test_chain.add_genesis(bad_block) {
             Err(BridgeChainError::InvalidChainId) => {
                 report.add(AuditFinding::pass(
-                    "CAP-001", "Capability", "Chain-ID validation rejects wrong chain_id"
+                    "CAP-001",
+                    "Capability",
+                    "Chain-ID validation rejects wrong chain_id",
                 ));
             }
             _ => report.add(AuditFinding::fail(
-                "CAP-001", "Capability", Severity::Critical,
+                "CAP-001",
+                "Capability",
+                Severity::Critical,
                 "Chain-ID validation bypassed",
-                "Enforce chain_id check in add_genesis and add_block"
+                "Enforce chain_id check in add_genesis and add_block",
             )),
         }
 
         // Check 5.2: Unsigned genesis rejected
         let unsigned_block = BridgeBlock {
-            id: [0xFE; 32], height: 0, parent_hash: [0u8; 32],
-            proposer_did: String::new(), timestamp: 1000,
-            poh_hash: [0u8; 32], tx_root: [0u8; 32], state_root: [0u8; 32],
-            gas_used: 0, total_fees: 0,
+            id: [0xFE; 32],
+            height: 0,
+            parent_hash: [0u8; 32],
+            proposer_did: String::new(),
+            timestamp: 1000,
+            poh_hash: [0u8; 32],
+            tx_root: [0u8; 32],
+            state_root: [0u8; 32],
+            gas_used: 0,
+            total_fees: 0,
             signature: [0u8; 64], // Unsigned!
             chain_id: 658467,
-            validator_set: vec![], allocations: vec![],
+            validator_set: vec![],
+            allocations: vec![],
         };
         match test_chain.add_genesis(unsigned_block) {
             Err(BridgeChainError::InvalidSignature) => {
                 report.add(AuditFinding::pass(
-                    "CAP-002", "Capability", "Unsigned genesis block rejected"
+                    "CAP-002",
+                    "Capability",
+                    "Unsigned genesis block rejected",
                 ));
             }
             _ => report.add(AuditFinding::fail(
-                "CAP-002", "Capability", Severity::Critical,
+                "CAP-002",
+                "Capability",
+                Severity::Critical,
                 "Unsigned genesis block accepted",
-                "Enforce signature verification in add_genesis"
+                "Enforce signature verification in add_genesis",
             )),
         }
 
         // Check 5.3: Height validation enforced
         let mut valid_chain = bridge.chain.clone();
         let skip_block = BridgeBlock {
-            id: [0xDD; 32], height: 99, parent_hash: bridge.genesis_hash(),
-            proposer_did: "did:shivacore:attacker".into(), timestamp: 5000,
-            poh_hash: [0u8; 32], tx_root: [0u8; 32], state_root: [0u8; 32],
-            gas_used: 0, total_fees: 0, signature: [0xBB; 64],
-            chain_id: 658467, validator_set: vec![], allocations: vec![],
+            id: [0xDD; 32],
+            height: 99,
+            parent_hash: bridge.genesis_hash(),
+            proposer_did: "did:shivacore:attacker".into(),
+            timestamp: 5000,
+            poh_hash: [0u8; 32],
+            tx_root: [0u8; 32],
+            state_root: [0u8; 32],
+            gas_used: 0,
+            total_fees: 0,
+            signature: [0xBB; 64],
+            chain_id: 658467,
+            validator_set: vec![],
+            allocations: vec![],
         };
         match valid_chain.add_block(skip_block) {
             Err(BridgeChainError::InvalidHeight) => {
                 report.add(AuditFinding::pass(
-                    "CAP-003", "Capability", "Height validation rejects non-sequential blocks"
+                    "CAP-003",
+                    "Capability",
+                    "Height validation rejects non-sequential blocks",
                 ));
             }
             _ => report.add(AuditFinding::fail(
-                "CAP-003", "Capability", Severity::High,
+                "CAP-003",
+                "Capability",
+                Severity::High,
                 "Non-sequential block height accepted",
-                "Enforce height = current_height + 1 in add_block"
+                "Enforce height = current_height + 1 in add_block",
             )),
         }
 
@@ -585,35 +723,52 @@ impl SecurityAuditor {
             match dup_chain.add_genesis(genesis.clone()) {
                 Err(BridgeChainError::GenesisExists) => {
                     report.add(AuditFinding::pass(
-                        "CAP-004", "Capability", "Duplicate genesis rejected"
+                        "CAP-004",
+                        "Capability",
+                        "Duplicate genesis rejected",
                     ));
                 }
                 _ => report.add(AuditFinding::fail(
-                    "CAP-004", "Capability", Severity::High,
+                    "CAP-004",
+                    "Capability",
+                    Severity::High,
                     "Duplicate genesis accepted",
-                    "Check for existing genesis before adding"
+                    "Check for existing genesis before adding",
                 )),
             }
         }
 
         // Check 5.5: Block with wrong parent rejected
         let bad_parent_block = BridgeBlock {
-            id: [0xCC; 32], height: bridge.height() + 1, parent_hash: [0x99; 32],
-            proposer_did: "did:shivacore:attacker".into(), timestamp: 5000,
-            poh_hash: [0u8; 32], tx_root: [0u8; 32], state_root: [0u8; 32],
-            gas_used: 0, total_fees: 0, signature: [0xBB; 64],
-            chain_id: 658467, validator_set: vec![], allocations: vec![],
+            id: [0xCC; 32],
+            height: bridge.height() + 1,
+            parent_hash: [0x99; 32],
+            proposer_did: "did:shivacore:attacker".into(),
+            timestamp: 5000,
+            poh_hash: [0u8; 32],
+            tx_root: [0u8; 32],
+            state_root: [0u8; 32],
+            gas_used: 0,
+            total_fees: 0,
+            signature: [0xBB; 64],
+            chain_id: 658467,
+            validator_set: vec![],
+            allocations: vec![],
         };
         match valid_chain.add_block(bad_parent_block) {
             Err(BridgeChainError::ParentNotFound) => {
                 report.add(AuditFinding::pass(
-                    "CAP-005", "Capability", "Block with unknown parent rejected"
+                    "CAP-005",
+                    "Capability",
+                    "Block with unknown parent rejected",
                 ));
             }
             _ => report.add(AuditFinding::fail(
-                "CAP-005", "Capability", Severity::Critical,
+                "CAP-005",
+                "Capability",
+                Severity::Critical,
                 "Block with unknown parent accepted",
-                "Verify parent_hash exists in chain before adding"
+                "Verify parent_hash exists in chain before adding",
             )),
         }
     }
@@ -624,14 +779,17 @@ impl SecurityAuditor {
         // Check 6.1: Chain-ID matches atcnet
         if bridge.chain_id() == crate::atcnet::CHAIN_ID {
             report.add(AuditFinding::pass(
-                "NET-001", "Network",
-                "Chain-ID synchronized with atcnet::CHAIN_ID (658467)"
+                "NET-001",
+                "Network",
+                "Chain-ID synchronized with atcnet::CHAIN_ID (658467)",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "NET-001", "Network", Severity::Critical,
+                "NET-001",
+                "Network",
+                Severity::Critical,
                 "Chain-ID mismatch between bridge and atcnet",
-                "Synchronize chain_id across all modules"
+                "Synchronize chain_id across all modules",
             ));
         }
 
@@ -639,34 +797,44 @@ impl SecurityAuditor {
         let net = crate::atcnet::PROTOCOL_VERSION;
         if net == 1 {
             report.add(AuditFinding::pass(
-                "NET-002", "Network",
-                "Protocol version is 1 (synchronized)"
+                "NET-002",
+                "Network",
+                "Protocol version is 1 (synchronized)",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "NET-002", "Network", Severity::Medium,
+                "NET-002",
+                "Network",
+                Severity::Medium,
                 &format!("Unexpected protocol version: {}", net),
-                "Verify protocol version consistency"
+                "Verify protocol version consistency",
             ));
         }
 
         // Check 6.3: MAX_MESSAGE_SIZE defined (DoS protection)
         report.add(AuditFinding::pass(
-            "NET-003", "Network",
-            &format!("MAX_MESSAGE_SIZE = {} bytes (DoS protection)", crate::atcnet::MAX_MESSAGE_SIZE)
+            "NET-003",
+            "Network",
+            &format!(
+                "MAX_MESSAGE_SIZE = {} bytes (DoS protection)",
+                crate::atcnet::MAX_MESSAGE_SIZE
+            ),
         ));
 
         // Check 6.4: Genesis hash non-zero
         if bridge.genesis_hash() != [0u8; 32] {
             report.add(AuditFinding::pass(
-                "NET-004", "Network",
-                "Genesis hash is non-zero (valid for P2P identification)"
+                "NET-004",
+                "Network",
+                "Genesis hash is non-zero (valid for P2P identification)",
             ));
         } else {
             report.add(AuditFinding::fail(
-                "NET-004", "Network", Severity::High,
+                "NET-004",
+                "Network",
+                Severity::High,
                 "Genesis hash is zero",
-                "Compute genesis hash from configuration"
+                "Compute genesis hash from configuration",
             ));
         }
     }
@@ -681,9 +849,11 @@ impl SecurityAuditor {
                 if block.chain_id != GENESIS_CHAIN_ID {
                     all_valid = false;
                     report.add(AuditFinding::fail(
-                        "BLK-001", "BlockValidation", Severity::Critical,
+                        "BLK-001",
+                        "BlockValidation",
+                        Severity::Critical,
                         &format!("Block {} has wrong chain_id: {}", h, block.chain_id),
-                        "All blocks must have chain_id = 658467"
+                        "All blocks must have chain_id = 658467",
                     ));
                     break;
                 }
@@ -691,8 +861,9 @@ impl SecurityAuditor {
         }
         if all_valid {
             report.add(AuditFinding::pass(
-                "BLK-001", "BlockValidation",
-                "All blocks have correct chain_id (658467)"
+                "BLK-001",
+                "BlockValidation",
+                "All blocks have correct chain_id (658467)",
             ));
         }
 
@@ -703,9 +874,11 @@ impl SecurityAuditor {
                 if block.proposer_did.is_empty() {
                     proposer_ok = false;
                     report.add(AuditFinding::fail(
-                        "BLK-002", "BlockValidation", Severity::Medium,
+                        "BLK-002",
+                        "BlockValidation",
+                        Severity::Medium,
                         &format!("Block {} has empty proposer_did", h),
-                        "Set proposer_did for all non-genesis blocks"
+                        "Set proposer_did for all non-genesis blocks",
                     ));
                     break;
                 }
@@ -713,8 +886,9 @@ impl SecurityAuditor {
         }
         if proposer_ok {
             report.add(AuditFinding::pass(
-                "BLK-002", "BlockValidation",
-                "All non-genesis blocks have proposer_did"
+                "BLK-002",
+                "BlockValidation",
+                "All non-genesis blocks have proposer_did",
             ));
         }
 
@@ -725,9 +899,11 @@ impl SecurityAuditor {
                 if block.poh_hash == [0u8; 32] {
                     poh_ok = false;
                     report.add(AuditFinding::fail(
-                        "BLK-003", "BlockValidation", Severity::Medium,
+                        "BLK-003",
+                        "BlockValidation",
+                        Severity::Medium,
                         &format!("Block {} has zero PoH hash", h),
-                        "Link block to PoH sequence"
+                        "Link block to PoH sequence",
                     ));
                     break;
                 }
@@ -735,8 +911,9 @@ impl SecurityAuditor {
         }
         if poh_ok {
             report.add(AuditFinding::pass(
-                "BLK-003", "BlockValidation",
-                "All non-genesis blocks have non-zero PoH hash"
+                "BLK-003",
+                "BlockValidation",
+                "All non-genesis blocks have non-zero PoH hash",
             ));
         }
 
@@ -747,9 +924,11 @@ impl SecurityAuditor {
                 if block.state_root == [0u8; 32] {
                     state_ok = false;
                     report.add(AuditFinding::fail(
-                        "BLK-004", "BlockValidation", Severity::Low,
+                        "BLK-004",
+                        "BlockValidation",
+                        Severity::Low,
                         &format!("Block {} has zero state_root", h),
-                        "Compute state_root from state"
+                        "Compute state_root from state",
                     ));
                     break;
                 }
@@ -757,8 +936,9 @@ impl SecurityAuditor {
         }
         if state_ok {
             report.add(AuditFinding::pass(
-                "BLK-004", "BlockValidation",
-                "All blocks have non-zero state_root"
+                "BLK-004",
+                "BlockValidation",
+                "All blocks have non-zero state_root",
             ));
         }
     }
@@ -770,13 +950,20 @@ impl SecurityAuditor {
 pub fn simulate_chain_forgery(bridge: &GenesisBridge) -> bool {
     let mut chain = bridge.chain.clone();
     let forged = BridgeBlock {
-        id: [0xAA; 32], height: bridge.height() + 1,
+        id: [0xAA; 32],
+        height: bridge.height() + 1,
         parent_hash: bridge.genesis_hash(),
         proposer_did: "did:shivacore:attacker".into(),
-        timestamp: 99999, poh_hash: [0xBB; 32], tx_root: [0u8; 32],
-        state_root: [0u8; 32], gas_used: 0, total_fees: 0,
-        signature: [0xCC; 64], chain_id: 9999, // Wrong chain
-        validator_set: vec![], allocations: vec![],
+        timestamp: 99999,
+        poh_hash: [0xBB; 32],
+        tx_root: [0u8; 32],
+        state_root: [0u8; 32],
+        gas_used: 0,
+        total_fees: 0,
+        signature: [0xCC; 64],
+        chain_id: 9999, // Wrong chain
+        validator_set: vec![],
+        allocations: vec![],
     };
     chain.add_block(forged).is_err()
 }
@@ -796,13 +983,20 @@ pub fn simulate_genesis_replay(bridge: &GenesisBridge) -> bool {
 pub fn simulate_height_skip(bridge: &GenesisBridge) -> bool {
     let mut chain = bridge.chain.clone();
     let skip = BridgeBlock {
-        id: [0xDD; 32], height: bridge.height() + 5, // Skip heights
+        id: [0xDD; 32],
+        height: bridge.height() + 5, // Skip heights
         parent_hash: bridge.genesis_hash(),
         proposer_did: "did:shivacore:attacker".into(),
-        timestamp: 99999, poh_hash: [0u8; 32], tx_root: [0u8; 32],
-        state_root: [0u8; 32], gas_used: 0, total_fees: 0,
-        signature: [0xEE; 64], chain_id: 658467,
-        validator_set: vec![], allocations: vec![],
+        timestamp: 99999,
+        poh_hash: [0u8; 32],
+        tx_root: [0u8; 32],
+        state_root: [0u8; 32],
+        gas_used: 0,
+        total_fees: 0,
+        signature: [0xEE; 64],
+        chain_id: 658467,
+        validator_set: vec![],
+        allocations: vec![],
     };
     chain.add_block(skip).is_err()
 }
@@ -811,13 +1005,20 @@ pub fn simulate_height_skip(bridge: &GenesisBridge) -> bool {
 pub fn simulate_orphan_block(bridge: &GenesisBridge) -> bool {
     let mut chain = bridge.chain.clone();
     let orphan = BridgeBlock {
-        id: [0x11; 32], height: bridge.height() + 1,
+        id: [0x11; 32],
+        height: bridge.height() + 1,
         parent_hash: [0x99; 32], // Unknown parent
         proposer_did: "did:shivacore:attacker".into(),
-        timestamp: 99999, poh_hash: [0u8; 32], tx_root: [0u8; 32],
-        state_root: [0u8; 32], gas_used: 0, total_fees: 0,
-        signature: [0x22; 64], chain_id: 658467,
-        validator_set: vec![], allocations: vec![],
+        timestamp: 99999,
+        poh_hash: [0u8; 32],
+        tx_root: [0u8; 32],
+        state_root: [0u8; 32],
+        gas_used: 0,
+        total_fees: 0,
+        signature: [0x22; 64],
+        chain_id: 658467,
+        validator_set: vec![],
+        allocations: vec![],
     };
     chain.add_block(orphan).is_err()
 }
@@ -826,13 +1027,20 @@ pub fn simulate_orphan_block(bridge: &GenesisBridge) -> bool {
 pub fn simulate_unsigned_genesis() -> bool {
     let mut chain = BridgeBlockChain::new();
     let unsigned = BridgeBlock {
-        id: [0x33; 32], height: 0, parent_hash: [0u8; 32],
-        proposer_did: String::new(), timestamp: 1000,
-        poh_hash: [0u8; 32], tx_root: [0u8; 32], state_root: [0u8; 32],
-        gas_used: 0, total_fees: 0,
+        id: [0x33; 32],
+        height: 0,
+        parent_hash: [0u8; 32],
+        proposer_did: String::new(),
+        timestamp: 1000,
+        poh_hash: [0u8; 32],
+        tx_root: [0u8; 32],
+        state_root: [0u8; 32],
+        gas_used: 0,
+        total_fees: 0,
         signature: [0u8; 64], // Unsigned!
         chain_id: 658467,
-        validator_set: vec![], allocations: vec![],
+        validator_set: vec![],
+        allocations: vec![],
     };
     chain.add_genesis(unsigned).is_err()
 }
@@ -845,20 +1053,46 @@ mod tests {
     use crate::genesis_bridge::GenesisBridge;
 
     fn dummy_pubkey(n: u8) -> [u8; 33] {
-        let mut k = [0u8; 33]; k[0] = 0x02; k[1] = n; k
+        let mut k = [0u8; 33];
+        k[0] = 0x02;
+        k[1] = n;
+        k
     }
     fn dummy_address(n: u8) -> String {
-        format!("ATC{}", "a".repeat(30).chars().chain(core::iter::once((b'a' + n) as char)).collect::<String>())
+        format!(
+            "ATC{}",
+            "a".repeat(30)
+                .chars()
+                .chain(core::iter::once((b'a' + n) as char))
+                .collect::<String>()
+        )
     }
-    fn dummy_did(n: u8) -> String { format!("did:shivacore:validator{}", n) }
+    fn dummy_did(n: u8) -> String {
+        format!("did:shivacore:validator{}", n)
+    }
     fn make_validator(n: u8, stake: u64) -> GenesisValidator {
-        GenesisValidator { did: dummy_did(n), pubkey: dummy_pubkey(n), stake, address: dummy_address(n), commission: 500 }
+        GenesisValidator {
+            did: dummy_did(n),
+            pubkey: dummy_pubkey(n),
+            stake,
+            address: dummy_address(n),
+            commission: 500,
+        }
     }
     fn make_test_config() -> GenesisConfig {
         let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, 1726358400);
-        for i in 1..=4u8 { config.add_validator(make_validator(i, 10000)).unwrap(); }
         for i in 1..=4u8 {
-            config.add_allocation(GenesisAllocation { address: dummy_address(i), amount: 1_000_000_000, lock_type: LockType::None, lock_duration: 0 }).unwrap();
+            config.add_validator(make_validator(i, 10000)).unwrap();
+        }
+        for i in 1..=4u8 {
+            config
+                .add_allocation(GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         config.memo = "A-TownChain Mainnet Genesis".to_string();
         config
@@ -873,7 +1107,9 @@ mod tests {
         let mut bridge = setup_bridge();
         for i in 1..=n {
             let proposer = bridge.next_proposer().unwrap();
-            bridge.propose_block(&proposer, 2000 + i as u64 * 100, [0xAB; 32]).unwrap();
+            bridge
+                .propose_block(&proposer, 2000 + i as u64 * 100, [0xAB; 32])
+                .unwrap();
             // known_blocks tracking is on GossipBridge, not needed for audit
         }
         bridge
@@ -932,7 +1168,13 @@ mod tests {
     #[test]
     fn test_audit_report_add_critical() {
         let mut report = AuditReport::new(1000, 9000);
-        report.add(AuditFinding::fail("TEST-001", "Test", Severity::Critical, "Critical issue", "Fix it"));
+        report.add(AuditFinding::fail(
+            "TEST-001",
+            "Test",
+            Severity::Critical,
+            "Critical issue",
+            "Fix it",
+        ));
         assert_eq!(report.failed, 1);
         assert_eq!(report.critical_count, 1);
         assert!(!report.is_secure());
@@ -941,7 +1183,13 @@ mod tests {
     #[test]
     fn test_audit_report_add_high() {
         let mut report = AuditReport::new(1000, 9000);
-        report.add(AuditFinding::fail("TEST-001", "Test", Severity::High, "High issue", "Fix it"));
+        report.add(AuditFinding::fail(
+            "TEST-001",
+            "Test",
+            Severity::High,
+            "High issue",
+            "Fix it",
+        ));
         assert_eq!(report.high_count, 1);
         assert!(!report.is_secure());
     }
@@ -950,7 +1198,13 @@ mod tests {
     fn test_audit_report_summary() {
         let mut report = AuditReport::new(1000, 9000);
         report.add(AuditFinding::pass("T1", "S", "ok"));
-        report.add(AuditFinding::fail("T2", "S", Severity::Medium, "issue", "fix"));
+        report.add(AuditFinding::fail(
+            "T2",
+            "S",
+            Severity::Medium,
+            "issue",
+            "fix",
+        ));
         let s = report.summary();
         assert!(s.contains("1/2 checks passed"));
         assert!(s.contains("1 medium"));
@@ -961,7 +1215,13 @@ mod tests {
         let mut report = AuditReport::new(1000, 9000);
         report.add(AuditFinding::pass("T1", "S", "ok"));
         report.add(AuditFinding::fail("T2", "S", Severity::Critical, "c", "f"));
-        report.add(AuditFinding::fail("T3", "S", Severity::Critical, "c2", "f2"));
+        report.add(AuditFinding::fail(
+            "T3",
+            "S",
+            Severity::Critical,
+            "c2",
+            "f2",
+        ));
 
         let criticals = report.findings_by_severity(Severity::Critical);
         assert_eq!(criticals.len(), 2);
@@ -975,7 +1235,11 @@ mod tests {
         let report = SecurityAuditor::audit(&bridge, 1000);
 
         // Should be secure with no critical/high findings
-        assert!(report.is_secure(), "Audit found vulnerabilities: {}", report.summary());
+        assert!(
+            report.is_secure(),
+            "Audit found vulnerabilities: {}",
+            report.summary()
+        );
         assert!(report.total_checks > 0);
     }
 
@@ -984,7 +1248,11 @@ mod tests {
         let bridge = setup_bridge_with_blocks(3);
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        assert!(report.is_secure(), "Audit found vulnerabilities: {}", report.summary());
+        assert!(
+            report.is_secure(),
+            "Audit found vulnerabilities: {}",
+            report.summary()
+        );
         assert!(report.passed > 0);
     }
 
@@ -994,11 +1262,18 @@ mod tests {
         let report = SecurityAuditor::audit(&bridge, 1000);
 
         // Chain integrity checks should all pass
-        let chain_checks: Vec<&AuditFinding> = report.findings.iter()
+        let chain_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "BlockChain")
             .collect();
         for check in chain_checks {
-            assert!(check.severity.is_pass(), "Chain check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "Chain check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1007,12 +1282,19 @@ mod tests {
         let bridge = setup_bridge();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        let gen_checks: Vec<&AuditFinding> = report.findings.iter()
+        let gen_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "Genesis")
             .collect();
         assert!(gen_checks.len() >= 5);
         for check in gen_checks {
-            assert!(check.severity.is_pass(), "Genesis check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "Genesis check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1021,12 +1303,19 @@ mod tests {
         let bridge = setup_bridge();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        let val_checks: Vec<&AuditFinding> = report.findings.iter()
+        let val_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "Validators")
             .collect();
         assert!(val_checks.len() >= 4);
         for check in val_checks {
-            assert!(check.severity.is_pass(), "Validator check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "Validator check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1035,12 +1324,19 @@ mod tests {
         let bridge = setup_bridge();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        let poh_checks: Vec<&AuditFinding> = report.findings.iter()
+        let poh_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "PoH")
             .collect();
         assert!(poh_checks.len() >= 3);
         for check in poh_checks {
-            assert!(check.severity.is_pass(), "PoH check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "PoH check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1049,12 +1345,19 @@ mod tests {
         let bridge = setup_bridge();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        let cap_checks: Vec<&AuditFinding> = report.findings.iter()
+        let cap_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "Capability")
             .collect();
         assert!(cap_checks.len() >= 5);
         for check in cap_checks {
-            assert!(check.severity.is_pass(), "Capability check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "Capability check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1063,12 +1366,19 @@ mod tests {
         let bridge = setup_bridge();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        let net_checks: Vec<&AuditFinding> = report.findings.iter()
+        let net_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "Network")
             .collect();
         assert!(net_checks.len() >= 3);
         for check in net_checks {
-            assert!(check.severity.is_pass(), "Network check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "Network check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1077,12 +1387,19 @@ mod tests {
         let bridge = setup_bridge_with_blocks(2);
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        let blk_checks: Vec<&AuditFinding> = report.findings.iter()
+        let blk_checks: Vec<&AuditFinding> = report
+            .findings
+            .iter()
             .filter(|f| f.subsystem == "BlockValidation")
             .collect();
         assert!(blk_checks.len() >= 3);
         for check in blk_checks {
-            assert!(check.severity.is_pass(), "Block check {} failed: {}", check.check_id, check.description);
+            assert!(
+                check.severity.is_pass(),
+                "Block check {} failed: {}",
+                check.check_id,
+                check.description
+            );
         }
     }
 
@@ -1091,30 +1408,45 @@ mod tests {
     #[test]
     fn test_attack_chain_forgery_blocked() {
         let bridge = setup_bridge();
-        assert!(simulate_chain_forgery(&bridge), "Chain forgery attack not blocked");
+        assert!(
+            simulate_chain_forgery(&bridge),
+            "Chain forgery attack not blocked"
+        );
     }
 
     #[test]
     fn test_attack_genesis_replay_blocked() {
         let bridge = setup_bridge();
-        assert!(simulate_genesis_replay(&bridge), "Genesis replay attack not blocked");
+        assert!(
+            simulate_genesis_replay(&bridge),
+            "Genesis replay attack not blocked"
+        );
     }
 
     #[test]
     fn test_attack_height_skip_blocked() {
         let bridge = setup_bridge();
-        assert!(simulate_height_skip(&bridge), "Height skip attack not blocked");
+        assert!(
+            simulate_height_skip(&bridge),
+            "Height skip attack not blocked"
+        );
     }
 
     #[test]
     fn test_attack_orphan_block_blocked() {
         let bridge = setup_bridge();
-        assert!(simulate_orphan_block(&bridge), "Orphan block attack not blocked");
+        assert!(
+            simulate_orphan_block(&bridge),
+            "Orphan block attack not blocked"
+        );
     }
 
     #[test]
     fn test_attack_unsigned_genesis_blocked() {
-        assert!(simulate_unsigned_genesis(), "Unsigned genesis attack not blocked");
+        assert!(
+            simulate_unsigned_genesis(),
+            "Unsigned genesis attack not blocked"
+        );
     }
 
     // === Edge Case Tests === //
@@ -1129,9 +1461,14 @@ mod tests {
     #[test]
     fn test_audit_detects_no_validators() {
         let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, 100);
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(1), amount: 1000, lock_type: LockType::None, lock_duration: 0,
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(1),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
         assert!(GenesisBridge::init_from_config(&config).is_err());
     }
 
@@ -1141,9 +1478,14 @@ mod tests {
         config.add_validator(make_validator(1, 10000)).unwrap();
         config.add_validator(make_validator(2, 10000)).unwrap();
         config.add_validator(make_validator(3, 10000)).unwrap();
-        config.add_allocation(GenesisAllocation {
-            address: dummy_address(1), amount: 1000, lock_type: LockType::None, lock_duration: 0,
-        }).unwrap();
+        config
+            .add_allocation(GenesisAllocation {
+                address: dummy_address(1),
+                amount: 1000,
+                lock_type: LockType::None,
+                lock_duration: 0,
+            })
+            .unwrap();
         assert!(GenesisBridge::init_from_config(&config).is_err());
     }
 
@@ -1157,37 +1499,63 @@ mod tests {
     fn test_audit_single_validator_dominance_detected() {
         let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, 100);
         // One validator with 60% of stake
-        config.add_validator(GenesisValidator {
-            did: dummy_did(1), pubkey: dummy_pubkey(1), stake: 60000,
-            address: dummy_address(1), commission: 500,
-        }).unwrap();
-        config.add_validator(GenesisValidator {
-            did: dummy_did(2), pubkey: dummy_pubkey(2), stake: 20000,
-            address: dummy_address(2), commission: 500,
-        }).unwrap();
-        config.add_validator(GenesisValidator {
-            did: dummy_did(3), pubkey: dummy_pubkey(3), stake: 10000,
-            address: dummy_address(3), commission: 500,
-        }).unwrap();
-        config.add_validator(GenesisValidator {
-            did: dummy_did(4), pubkey: dummy_pubkey(4), stake: 10000,
-            address: dummy_address(4), commission: 500,
-        }).unwrap();
+        config
+            .add_validator(GenesisValidator {
+                did: dummy_did(1),
+                pubkey: dummy_pubkey(1),
+                stake: 60000,
+                address: dummy_address(1),
+                commission: 500,
+            })
+            .unwrap();
+        config
+            .add_validator(GenesisValidator {
+                did: dummy_did(2),
+                pubkey: dummy_pubkey(2),
+                stake: 20000,
+                address: dummy_address(2),
+                commission: 500,
+            })
+            .unwrap();
+        config
+            .add_validator(GenesisValidator {
+                did: dummy_did(3),
+                pubkey: dummy_pubkey(3),
+                stake: 10000,
+                address: dummy_address(3),
+                commission: 500,
+            })
+            .unwrap();
+        config
+            .add_validator(GenesisValidator {
+                did: dummy_did(4),
+                pubkey: dummy_pubkey(4),
+                stake: 10000,
+                address: dummy_address(4),
+                commission: 500,
+            })
+            .unwrap();
         for i in 1..=4u8 {
-            config.add_allocation(GenesisAllocation {
-                address: dummy_address(i), amount: 1_000_000_000,
-                lock_type: LockType::None, lock_duration: 0,
-            }).unwrap();
+            config
+                .add_allocation(GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
 
         let bridge = GenesisBridge::init_from_config(&config).unwrap();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
         // Should detect validator dominance
-        let dominance = report.findings.iter()
-            .find(|f| f.check_id == "VAL-005");
+        let dominance = report.findings.iter().find(|f| f.check_id == "VAL-005");
         assert!(dominance.is_some());
-        assert!(!dominance.unwrap().severity.is_pass(), "Should detect >33% stake dominance");
+        assert!(
+            !dominance.unwrap().severity.is_pass(),
+            "Should detect >33% stake dominance"
+        );
     }
 
     // === Comprehensive Audit Tests === //
@@ -1198,19 +1566,42 @@ mod tests {
         let report = SecurityAuditor::audit(&bridge, 1000);
 
         // Should have checks from all 7 categories
-        let subsystems: Vec<String> = report.findings.iter()
+        let subsystems: Vec<String> = report
+            .findings
+            .iter()
             .map(|f| f.subsystem.clone())
             .collect::<alloc::collections::BTreeSet<_>>()
             .into_iter()
             .collect();
 
-        assert!(subsystems.contains(&"BlockChain".to_string()), "Missing BlockChain checks");
-        assert!(subsystems.contains(&"Genesis".to_string()), "Missing Genesis checks");
-        assert!(subsystems.contains(&"Validators".to_string()), "Missing Validators checks");
-        assert!(subsystems.contains(&"PoH".to_string()), "Missing PoH checks");
-        assert!(subsystems.contains(&"Capability".to_string()), "Missing Capability checks");
-        assert!(subsystems.contains(&"Network".to_string()), "Missing Network checks");
-        assert!(subsystems.contains(&"BlockValidation".to_string()), "Missing BlockValidation checks");
+        assert!(
+            subsystems.contains(&"BlockChain".to_string()),
+            "Missing BlockChain checks"
+        );
+        assert!(
+            subsystems.contains(&"Genesis".to_string()),
+            "Missing Genesis checks"
+        );
+        assert!(
+            subsystems.contains(&"Validators".to_string()),
+            "Missing Validators checks"
+        );
+        assert!(
+            subsystems.contains(&"PoH".to_string()),
+            "Missing PoH checks"
+        );
+        assert!(
+            subsystems.contains(&"Capability".to_string()),
+            "Missing Capability checks"
+        );
+        assert!(
+            subsystems.contains(&"Network".to_string()),
+            "Missing Network checks"
+        );
+        assert!(
+            subsystems.contains(&"BlockValidation".to_string()),
+            "Missing BlockValidation checks"
+        );
     }
 
     #[test]
@@ -1219,7 +1610,11 @@ mod tests {
         let report = SecurityAuditor::audit(&bridge, 1000);
 
         // Should have at least 20 checks
-        assert!(report.total_checks >= 20, "Expected >=20 checks, got {}", report.total_checks);
+        assert!(
+            report.total_checks >= 20,
+            "Expected >=20 checks, got {}",
+            report.total_checks
+        );
     }
 
     #[test]
@@ -1229,17 +1624,25 @@ mod tests {
             config.add_validator(make_validator(i, 20000)).unwrap();
         }
         for i in 1..=10u8 {
-            config.add_allocation(GenesisAllocation {
-                address: dummy_address(i), amount: 1_000_000_000,
-                lock_type: LockType::None, lock_duration: 0,
-            }).unwrap();
+            config
+                .add_allocation(GenesisAllocation {
+                    address: dummy_address(i),
+                    amount: 1_000_000_000,
+                    lock_type: LockType::None,
+                    lock_duration: 0,
+                })
+                .unwrap();
         }
         config.memo = "10-validator audit".to_string();
 
         let bridge = GenesisBridge::init_from_config(&config).unwrap();
         let report = SecurityAuditor::audit(&bridge, 1000);
 
-        assert!(report.is_secure(), "10-validator audit: {}", report.summary());
+        assert!(
+            report.is_secure(),
+            "10-validator audit: {}",
+            report.summary()
+        );
     }
 
     #[test]
@@ -1259,7 +1662,13 @@ mod tests {
 
         // Every finding should be a pass
         for f in &report.findings {
-            assert!(f.severity.is_pass(), "Check {} ({}): {}", f.check_id, f.subsystem, f.description);
+            assert!(
+                f.severity.is_pass(),
+                "Check {} ({}): {}",
+                f.check_id,
+                f.subsystem,
+                f.description
+            );
         }
     }
 }
