@@ -2,7 +2,7 @@
 
 use crate::MediaError;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ContainerFormat { Mp4, Mkv, Webm, Unknown }
 
 impl ContainerFormat {
