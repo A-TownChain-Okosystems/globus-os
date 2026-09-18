@@ -62,6 +62,6 @@ pub mod vmm; // [M1.2] hardened VMM validation core
              // [K29-Build] ausgeschlossen: pub mod cow;
              // [K29-Build] ausgeschlossen: pub mod tracing;
              // [K29-Build] ausgeschlossen: pub mod container_net;
-             // [K29-Build] ausgeschlossen: pub mod lkm;
+             // LKM is std-backed module-management logic; compile it in host-side kernel tests.\n#[cfg(test)]\npub mod lkm;
              // [K29-Build] ausgeschlossen: pub mod module_security;
              // [K29-Build] ausgeschlossen: pub mod fs_journal;
