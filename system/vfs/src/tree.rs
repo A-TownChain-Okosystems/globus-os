@@ -73,9 +73,13 @@ impl InodeTree {
         InodeId(1)
     }
 
-    fn components(path: &str) -> Result<impl Iterator<Item = &str>, FsError> {
+    fn components(path: &str) -> Result<Vec<String>, FsError> {
         let normalized = crate::normalize(path).map_err(|_| FsError::InvalidPath)?;
-        Ok(normalized.split('/').filter(|part| !part.is_empty()))
+        Ok(normalized
+            .split('/')
+            .filter(|part| !part.is_empty())
+            .map(str::to_owned)
+            .collect())
     }
 
     fn lookup(&self, path: &str) -> Result<InodeId, FsError> {
