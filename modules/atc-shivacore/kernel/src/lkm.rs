@@ -390,7 +390,6 @@ impl ModuleDescriptor {
     }
 
     pub fn with_export(mut self, symbol: ExportedSymbol) -> Self {
-        self.imports.push(symbol.name.clone());
         self.exports.push(symbol);
         self
     }
@@ -593,12 +592,14 @@ impl DependencyGraph {
         self.nodes.contains(name)
     }
 
-    pub fn dependencies(&self, name: &str) -> &[String] {
-        // Return sorted slice
-        // Actually BTreeSet doesn't give &[String], need to handle differently
-        // For now, collect on demand in callers
-        // This is a placeholder — actual callers use the BTreeSet directly
-        unimplemented!()
+    /// Returns the module's dependencies in deterministic lexicographic order.
+    /// The graph stores dependencies in a BTreeSet, so an owned Vec<String>
+    /// is the lifetime-safe public representation.
+    pub fn dependencies(&self, name: &str) -> Vec<String> {
+        self.edges
+            .get(name)
+            .map(|deps| deps.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     pub fn get_dependencies(&self, name: &str) -> Vec<String> {
@@ -661,38 +662,37 @@ impl DependencyGraph {
     }
 
     pub fn topological_sort(&self) -> Result<Vec<String>, Vec<String>> {
-        // Kahn's algorithm
-        let mut in_degree: HashMap<String, usize> = HashMap::new();
+        // Kahn's algorithm with dependency-first edge semantics.
+        // edges[module] contains that module's dependencies; reverse_edges
+        // contains the dependents that become ready after a dependency.
+        let mut in_degree: BTreeMap<String, usize> = BTreeMap::new();
         for node in &self.nodes {
-            in_degree.insert(node.clone(), 0);
+            in_degree.insert(
+                node.clone(),
+                self.edges.get(node).map_or(0, BTreeSet::len),
+            );
         }
-        for deps in self.edges.values() {
-            for dep in deps {
-                *in_degree.entry(dep.clone()).or_insert(0) += 1;
+
+        // BTreeSet keeps the ready queue globally deterministic.
+        let mut ready = BTreeSet::new();
+        for (node, degree) in &in_degree {
+            if *degree == 0 {
+                ready.insert(node.clone());
             }
         }
 
-        let mut queue: VecDeque<String> = VecDeque::new();
-        // Process in sorted order for determinism
-        let mut sorted_nodes: Vec<String> = self.nodes.iter().cloned().collect();
-        sorted_nodes.sort();
-        for node in &sorted_nodes {
-            if *in_degree.get(node).unwrap_or(&0) == 0 {
-                queue.push_back(node.clone());
-            }
-        }
-
-        let mut result = Vec::new();
-        while let Some(node) = queue.pop_front() {
+        let mut result = Vec::with_capacity(self.nodes.len());
+        while let Some(node) = ready.pop_first() {
             result.push(node.clone());
-            if let Some(deps) = self.edges.get(&node) {
-                let mut sorted_deps: Vec<String> = deps.iter().cloned().collect();
-                sorted_deps.sort();
-                for dep in &sorted_deps {
-                    let d = in_degree.get_mut(dep).unwrap();
-                    *d -= 1;
-                    if *d == 0 {
-                        queue.push_back(dep.clone());
+
+            if let Some(dependents) = self.reverse_edges.get(&node) {
+                for dependent in dependents {
+                    let degree = in_degree
+                        .get_mut(dependent)
+                        .expect("reverse edge must reference a known node");
+                    *degree -= 1;
+                    if *degree == 0 {
+                        ready.insert(dependent.clone());
                     }
                 }
             }
@@ -701,8 +701,8 @@ impl DependencyGraph {
         if result.len() == self.nodes.len() {
             Ok(result)
         } else {
-            // Cycle exists — return nodes that couldn't be sorted
-            let remaining: Vec<String> = self.nodes.iter()
+            let remaining: Vec<String> = self.nodes
+                .iter()
                 .filter(|n| !result.contains(n))
                 .cloned()
                 .collect();
@@ -1047,21 +1047,17 @@ impl ModuleRegistry {
         // Check for unresolved symbol imports
         let imports = module.imports.clone();
         let unresolved = self.symbol_table.unresolved_imports(&imports);
-        if !unresolved.is_empty() && !module.optional_deps.is_empty() {
-            // Only fail if unresolved imports are required (not optional)
-            let optional_set: BTreeSet<String> = module.optional_deps.iter().cloned().collect();
-            let truly_unresolved: Vec<String> = unresolved.iter()
-                .filter(|s| !optional_set.contains(*s))
-                .cloned().collect();
-            if !truly_unresolved.is_empty() {
-                let module = self.modules.get_mut(name).unwrap();
-                module.state = ModuleState::Failed;
-                module.stats.error_count += 1;
-                module.stats.last_error = Some(format!("Unresolved symbols: {}", truly_unresolved.join(", ")));
-                self.log_event(ModuleEventType::SymbolUnresolved, name, module.id,
-                    &format!("Unresolved symbols: {}", truly_unresolved.join(", ")));
-                return Err(format!("Module '{}' has unresolved symbols: {}", name, truly_unresolved.join(", ")));
-            }
+        if !unresolved.is_empty() {
+            // Imports are required by default. The current module model has no
+            // separate optional-import declaration, so unresolved symbols always
+            // fail closed at the kernel/module boundary.
+            let message = format!("Unresolved symbols: {}", unresolved.join(", "));
+            let module = self.modules.get_mut(name).unwrap();
+            module.state = ModuleState::Failed;
+            module.stats.error_count += 1;
+            module.stats.last_error = Some(message.clone());
+            self.log_event(ModuleEventType::SymbolUnresolved, name, module.id, &message);
+            return Err(format!("Module '{}' has unresolved symbols: {}", name, message));
         }
 
         // Register exported symbols
@@ -1502,7 +1498,6 @@ impl ModuleBuilder {
 
     pub fn export(mut self, name: &str, stype: SymbolType) -> Self {
         let symbol = ExportedSymbol::new(name, self.module.id, &self.module.name, stype);
-        self.module.imports.push(name.to_string());
         self.module.exports.push(symbol);
         self
     }
@@ -2784,6 +2779,69 @@ mod tests {
         assert_eq!(m.params.len(), 2);
         assert_eq!(m.exports.len(), 1);
         assert!(m.auto_load);
+    }
+
+    #[test]
+    fn test_dependency_graph_dependencies_are_owned_and_deterministic() {
+        let mut graph = DependencyGraph::new();
+        graph.add_node("app");
+        graph.add_node("lib-z");
+        graph.add_node("lib-a");
+        graph.add_dependency("app", "lib-z").unwrap();
+        graph.add_dependency("app", "lib-a").unwrap();
+
+        assert_eq!(graph.dependencies("app"), vec!["lib-a", "lib-z"]);
+        assert!(graph.dependencies("missing").is_empty());
+    }
+
+    #[test]
+    fn test_dependency_graph_topological_sort_is_dependency_first() {
+        let mut graph = DependencyGraph::new();
+        for node in ["app", "lib-b", "lib-a", "base"] {
+            graph.add_node(node);
+        }
+        graph.add_dependency("app", "lib-b").unwrap();
+        graph.add_dependency("app", "lib-a").unwrap();
+        graph.add_dependency("lib-b", "base").unwrap();
+        graph.add_dependency("lib-a", "base").unwrap();
+
+        assert_eq!(
+            graph.topological_sort().unwrap(),
+            vec!["base", "lib-a", "lib-b", "app"]
+        );
+    }
+
+    #[test]
+    fn test_export_does_not_create_import() {
+        let module = ModuleBuilder::new("exporter", "1.0.0")
+            .export("owned_symbol", SymbolType::Function)
+            .build();
+
+        assert_eq!(module.exports.len(), 1);
+        assert!(module.imports.is_empty());
+
+        let module = ModuleDescriptor::new("exporter", "1.0.0")
+            .with_export(ExportedSymbol::new(
+                "owned_symbol",
+                1,
+                "exporter",
+                SymbolType::Function,
+            ));
+        assert_eq!(module.exports.len(), 1);
+        assert!(module.imports.is_empty());
+    }
+
+    #[test]
+    fn test_required_unresolved_import_fails_closed_without_optional_deps() {
+        let mut reg = ModuleRegistry::new();
+        let module = ModuleBuilder::new("consumer", "1.0.0")
+            .import_symbol("missing_symbol")
+            .build();
+        reg.register(module).unwrap();
+
+        let error = reg.load("consumer").unwrap_err();
+        assert!(error.contains("unresolved symbols"));
+        assert_eq!(reg.get("consumer").unwrap().state, ModuleState::Failed);
     }
 
     // ── Builtin Modules Tests ──
