@@ -62,7 +62,7 @@ jobs:
           sudo apt-get install -y qemu-system-x86
 
       - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^${{ matrix.qemu_cpu }}([[:space:]]|$)'
+        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*${{ matrix.qemu_cpu }}([[:space:]]|$)'
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         run: |
