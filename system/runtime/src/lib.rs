@@ -10,8 +10,10 @@
 use aurora_core::{AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine};
 use globus_identity::{IdentitySession, LoginState, UserId, WalletAddress};
 use globus_services::ServiceState;
-use globus_system_core::{validate_boot_plan, SystemState, BOOT_PLAN};
-use shivacore_service_space::genesis::{GenesisAllocation, GenesisConfig, GenesisValidator, LockType, GENESIS_CHAIN_ID};
+use globus_system_core::{BOOT_PLAN, SystemState, validate_boot_plan};
+use shivacore_service_space::genesis::{
+    GENESIS_CHAIN_ID, GenesisAllocation, GenesisConfig, GenesisValidator, LockType,
+};
 use shivacore_service_space::genesis_bridge::GenesisBridge;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -113,8 +115,8 @@ pub fn boot_userspace() -> Result<BootedRuntime, RuntimeBootError> {
     }
 
     let config = devnet_genesis_config();
-    let blockchain = GenesisBridge::init_from_config(&config)
-        .map_err(|_| RuntimeBootError::InvalidBootPlan)?;
+    let blockchain =
+        GenesisBridge::init_from_config(&config).map_err(|_| RuntimeBootError::InvalidBootPlan)?;
 
     Ok(BootedRuntime {
         status: RuntimeStatus {
@@ -158,7 +160,7 @@ pub fn initial_status() -> RuntimeStatus {
 mod tests {
     use super::*;
     use aurora_core::{RequestId, SessionId};
-    use globus_identity::{create_wallet, UserId};
+    use globus_identity::{UserId, create_wallet};
 
     #[test]
     fn runtime_can_establish_authenticated_context() {
