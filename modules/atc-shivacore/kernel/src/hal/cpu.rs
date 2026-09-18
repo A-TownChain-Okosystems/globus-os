@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 //! Minimal x86 CPU HAL. Detects Intel/AMD at runtime using CPUID.
 
-use core::arch::x86_64::{__cpuid, __cpuid_count};
+use core::arch::x86_64::__cpuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuVendor { Intel, Amd, Other }
@@ -68,7 +68,11 @@ impl CpuInfo {
     }
 
     pub const fn vendor_name(&self) -> &'static str {
-        match self.vendor { CpuVendor::Intel => "Intel", CpuVendor::Amd => "AMD", CpuVendor::Other => "Other" }
+        match self.vendor {
+            CpuVendor::Intel => "Intel",
+            CpuVendor::Amd => "AMD",
+            CpuVendor::Other => "Other",
+        }
     }
 
     pub const fn boot_compatible(&self) -> bool {
@@ -76,11 +80,19 @@ impl CpuInfo {
     }
 }
 
-fn zero_cpuid() -> core::arch::x86_64::CpuidResult {\n    core::arch::x86_64::CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 }\n}\n\nfn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
+fn zero_cpuid() -> core::arch::x86_64::CpuidResult {
+    core::arch::x86_64::CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 }
+}
+
+fn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
     let bytes = [ebx.to_le_bytes(), edx.to_le_bytes(), ecx.to_le_bytes()];
-    if bytes == [*b"Genu", *b"ineI", *b"ntel"] { CpuVendor::Intel }
-    else if bytes == [*b"Auth", *b"enti", *b"cAMD"] { CpuVendor::Amd }
-    else { CpuVendor::Other }
+    if bytes == [*b"Genu", *b"ineI", *b"ntel"] {
+        CpuVendor::Intel
+    } else if bytes == [*b"Auth", *b"enti", *b"cAMD"] {
+        CpuVendor::Amd
+    } else {
+        CpuVendor::Other
+    }
 }
 
 #[cfg(test)]
