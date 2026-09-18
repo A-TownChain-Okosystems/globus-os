@@ -20,5 +20,6 @@ globus-update = { path = "../update" }
 globus-identity = { path = "../identity" }
 globus-wallet-service = { path = "../wallet-service" }
 globus-diagnostics = { path = "../diagnostics" }
+libshivacore = { path = "../shivacore-api" }
 
 shivacore-service-space = { path = "../../modules/atc-shivacore/service_space" }
