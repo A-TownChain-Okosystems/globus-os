@@ -1,6 +1,6 @@
 //! Architecture-neutral interrupt routing and acknowledgement contract.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InterruptVector(pub u16);
 
 impl InterruptVector {
