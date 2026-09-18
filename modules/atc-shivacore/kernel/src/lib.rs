@@ -46,7 +46,7 @@ pub mod p2p_secure; // [K14-Upgrade] ATC-PROTO-P2P-001 v1.0.0 (SCR-0028)
 pub mod security;
 pub mod tcpip;
 pub mod vm;
-// [K29-Build] ausgeschlossen: pub mod vmm; // [M1.2] hardened VMM validation core
+pub mod vmm; // [M1.2] hardened VMM validation core
              // [K29-Build] ausgeschlossen: pub mod cow;
              // [K29-Build] ausgeschlossen: pub mod tracing;
              // [K29-Build] ausgeschlossen: pub mod container_net;
