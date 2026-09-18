@@ -1,3 +1,5 @@
+use std::string::String;
+
 use globus_diagnostics::{CrashEvent, ErrorCode, EventLog, Severity};
 
 /// Userspace-facing, immutable presentation of a kernel/service fault.
@@ -28,16 +30,9 @@ pub fn present(event: &CrashEvent) -> SystemErrorView {
         ),
     };
     SystemErrorView {
-        code: event.code.as_str(),
-        severity: event.severity,
-        title,
-        message,
-        driver: event.driver.clone(),
-        device_id: event.device_id,
-        recovered: event.recovered,
+        code: event.code.as_str(), severity: event.severity, title, message,
+        driver: event.driver.clone(), device_id: event.device_id, recovered: event.recovered,
     }
 }
 
-pub fn latest_error(log: &EventLog) -> Option<SystemErrorView> {
-    log.latest().map(present)
-}
+pub fn latest_error(log: &EventLog) -> Option<SystemErrorView> { log.latest().map(present) }
