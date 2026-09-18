@@ -52,7 +52,7 @@ impl FrameTiming {
     pub const fn new(refresh_hz: u32) -> Self { Self { refresh_hz, vsync_enabled: true } }
     pub const fn frame_interval_us(self) -> Option<u64> { if self.refresh_hz == 0 { None } else { Some(1_000_000 / self.refresh_hz as u64) } }
     pub const fn deadline_us(self, vsync_us: u64) -> Option<u64> {
-        if !self.vsync_enabled { None } else { self.frame_interval_us().map(|interval| vsync_us.saturating_add(interval)) }
+        if !self.vsync_enabled { None } else { match self.frame_interval_us() { Some(interval) => Some(vsync_us.saturating_add(interval)), None => None } }
     }
 }
 
