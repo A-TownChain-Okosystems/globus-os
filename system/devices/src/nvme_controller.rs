@@ -142,9 +142,13 @@ impl NvmeController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[derive(Default)]
     struct Mock {
         regs: [u64; 64],
+    }
+    impl Default for Mock {
+        fn default() -> Self {
+            Self { regs: [0; 64] }
+        }
     }
     impl NvmeMmio for Mock {
         fn read32(&self, o: u64) -> u32 {
