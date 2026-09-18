@@ -36,7 +36,7 @@ impl CpuInfo {
         let ext = unsafe { __cpuid(0x8000_0000) };
         let max_extended_leaf = ext.eax;
 
-        let leaf1 = if max_basic_leaf >= 1 { unsafe { __cpuid(1) } } else { Default::default() };
+        let leaf1 = if max_basic_leaf >= 1 { unsafe { __cpuid(1) } } else { zero_cpuid() };
         let stepping = (leaf1.eax & 0xF) as u8;
         let base_family = ((leaf1.eax >> 8) & 0xF) as u8;
         let base_model = ((leaf1.eax >> 4) & 0xF) as u8;
@@ -45,8 +45,8 @@ impl CpuInfo {
         let family = if base_family == 0xF { base_family.saturating_add(ext_family) } else { base_family };
         let model = if base_family == 0x6 || base_family == 0xF { base_model | (ext_model << 4) } else { base_model };
 
-        let ext1 = if max_extended_leaf >= 0x8000_0001 { unsafe { __cpuid(0x8000_0001) } } else { Default::default() };
-        let ext7 = if max_extended_leaf >= 0x8000_0007 { unsafe { __cpuid(0x8000_0007) } } else { Default::default() };
+        let ext1 = if max_extended_leaf >= 0x8000_0001 { unsafe { __cpuid(0x8000_0001) } } else { zero_cpuid() };
+        let ext7 = if max_extended_leaf >= 0x8000_0007 { unsafe { __cpuid(0x8000_0007) } } else { zero_cpuid() };
 
         Self {
             vendor,
@@ -76,7 +76,7 @@ impl CpuInfo {
     }
 }
 
-fn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
+fn zero_cpuid() -> core::arch::x86_64::CpuidResult {\n    core::arch::x86_64::CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 }\n}\n\nfn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
     let bytes = [ebx.to_le_bytes(), edx.to_le_bytes(), ecx.to_le_bytes()];
     if bytes == [*b"Genu", *b"ineI", *b"ntel"] { CpuVendor::Intel }
     else if bytes == [*b"Auth", *b"enti", *b"cAMD"] { CpuVendor::Amd }
