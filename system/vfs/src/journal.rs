@@ -117,6 +117,10 @@ impl Journal {
         &self.records
     }
 
+    pub fn pending(&self) -> &[JournalRecord] {
+        &self.records
+    }
+
     pub fn append(
         &mut self,
         target_block: u64,
