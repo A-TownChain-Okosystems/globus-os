@@ -22,6 +22,13 @@ members = [
   "system/aurora-core",
   "modules/atc-shivacore/kernel",
   "sdk",
+  "modules/atc-bootloader",
+  "modules/atc-drivers",
+  "modules/atc-globus-shell",
+  "modules/atc-linux-edition",
+  "modules/atc-shivacore/boot",
+  "modules/atc-shivacore/service_space",
+  "modules/atc-windows-edition",
 ]
 
 [workspace.package]
