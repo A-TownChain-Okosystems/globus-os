@@ -405,8 +405,19 @@ impl ModuleDescriptor {
         self
     }
 
-    pub fn with_export(mut self, symbol: ExportedSymbol) -> Self {
+    pub fn with_export(mut self, name: &str, symbol_type: SymbolType) -> Self {
+        self.exports
+            .push(ExportedSymbol::new(name, self.id, &self.name, symbol_type));
+        self
+    }
+
+    pub fn with_export_symbol(mut self, symbol: ExportedSymbol) -> Self {
         self.exports.push(symbol);
+        self
+    }
+
+    pub fn import_symbol(mut self, name: &str) -> Self {
+        self.imports.push(name.to_string());
         self
     }
 
@@ -1044,13 +1055,10 @@ impl ModuleRegistry {
         self.by_id.insert(id, name.clone());
         self.modules.insert(name, module);
 
+        let registered_name = self.by_id.get(&id).cloned().unwrap_or_default();
         self.log_event(
             ModuleEventType::Registered,
-            &self
-                .modules
-                .get(&self.by_id.get(&id).unwrap())
-                .unwrap()
-                .name,
+            &registered_name,
             id,
             "Module registered",
         );
@@ -3122,7 +3130,7 @@ mod tests {
         assert_eq!(module.exports.len(), 1);
         assert!(module.imports.is_empty());
 
-        let module = ModuleDescriptor::new("exporter", "1.0.0").with_export(ExportedSymbol::new(
+        let module = ModuleDescriptor::new("exporter", "1.0.0").with_export_symbol(ExportedSymbol::new(
             "owned_symbol",
             1,
             "exporter",
