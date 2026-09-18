@@ -9,7 +9,7 @@ pub use fault::{authorize_fault, classify, FaultAccess, FaultAction, PageFault};
 pub use frames::{FrameAllocator, FrameError, FrameRange};
 pub use paging::{MapError, Mapping, PageTable, PhysicalAddress};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AddressSpace(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct VirtualAddress(pub u64);
