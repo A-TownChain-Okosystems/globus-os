@@ -62,7 +62,20 @@ jobs:
           sudo apt-get install -y qemu-system-x86
 
       - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*${{ matrix.qemu_cpu }}([[:space:]]|$)'
+        run: |
+          set +e
+          timeout 2s qemu-system-x86_64 \
+            -cpu \${{ matrix.qemu_cpu }} \
+            -machine none \
+            -S \
+            -display none \
+            -nodefaults >/tmp/shivacore-qemu-cpu-check.log 2>&1
+          status=$?
+          if [ "$status" -ne 124 ]; then
+            cat /tmp/shivacore-qemu-cpu-check.log
+            echo "QEMU CPU model \${{ matrix.qemu_cpu }} is not available (exit status $status)."
+            exit "$status"
+          fi
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         run: |
