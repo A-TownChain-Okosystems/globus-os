@@ -452,9 +452,10 @@ impl ModuleDescriptor {
     }
 
     pub fn set_param(&mut self, name: &str, value: &str) -> Result<(), String> {
+        let module_name = self.name.clone();
         let param = self
             .get_param_mut(name)
-            .ok_or_else(|| format!("Parameter '{}' not found in module '{}'", name, self.name))?;
+            .ok_or_else(|| format!("Parameter '{}' not found in module '{}'", name, module_name))?;
         param.set(value)
     }
 
