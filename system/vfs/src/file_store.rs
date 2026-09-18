@@ -1,6 +1,6 @@
 //! Persistent file data storage over block extents.
 
-use crate::{Extent, ExtentError, ExtentMap};
+use crate::{ExtentError, ExtentMap};
 use globus_devices::block::{BlockDevice, BlockRequest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -55,9 +55,7 @@ impl<D: BlockDevice> FileStore<D> {
         let last = (end - 1) / self.block_size;
         let mut copied = 0usize;
         for logical in first..=last {
-            let physical = extents
-                .physical_for(logical)
-                .ok_or(FileStoreError::OutOfRange)?;
+            let physical = extents.physical_for(logical)?;
             let mut block = vec![0u8; self.block_size as usize];
             self.device
                 .read(
@@ -94,7 +92,7 @@ impl<D: BlockDevice> FileStore<D> {
         let last = (end - 1) / self.block_size;
         let mut consumed = 0usize;
         for logical in first..=last {
-            let physical = extents.map(logical).ok_or(FileStoreError::OutOfRange)?;
+            let physical = extents.physical_for(logical)?;
             let block_start = logical * self.block_size;
             let from = offset.max(block_start) - block_start;
             let to = end.min(block_start + self.block_size) - block_start;
