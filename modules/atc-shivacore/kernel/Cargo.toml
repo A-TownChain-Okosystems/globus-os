@@ -36,6 +36,7 @@ rand = { version = "0.10", default-features = false }
 ed25519-dalek = { version = "3.0", default-features = false, features = ["alloc"] }
 libm = "0.2"
 globus-diagnostics = { path = "../../../system/diagnostics" }
+libshivacore = { path = "../../../system/shivacore-api" }
 
 [profile.dev]
 panic = "abort"
