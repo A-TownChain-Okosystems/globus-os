@@ -21,6 +21,7 @@ members = [
   "system/settings",
   "system/aurora-core",
   "modules/atc-shivacore/kernel",
+  "sdk",
 ]
 
 [workspace.package]
