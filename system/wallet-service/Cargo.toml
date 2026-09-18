@@ -9,6 +9,7 @@ globus-identity = { path = "../identity" }
 globus-security = { path = "../security" }
 globus-ipc = { path = "../ipc" }
 sha2 = "0.10"
+zeroize = { version = "1", features = ["zeroize_derive"] }
 
 [lints]
 workspace = true
