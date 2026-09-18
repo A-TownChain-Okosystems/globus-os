@@ -6,35 +6,35 @@
 #![allow(unused_variables)]
 #![allow(unused_mut)]
 
+extern crate alloc;
 #[cfg(test)]
 extern crate std;
-extern crate alloc;
 
+pub mod ai;
 #[cfg(test)]
 pub mod allocator;
-pub mod ats1000;
-pub mod hal;
-pub mod net;
 pub mod atcfs;
+pub mod ats1000;
 pub mod capability;
-pub mod ipc;
-pub mod memory_manager;
-pub mod process;
-pub mod scheduler;
-pub mod vfs;
-pub mod timer;
-pub mod ai;
 pub mod contract;
 pub mod cross_subsystem;
+pub mod diagnostics;
+pub mod hal;
+pub mod ipc;
 pub mod kernel_init;
+pub mod memory_manager;
 pub mod mempool;
+pub mod net;
 pub mod p2p;
 pub mod p2p_secure;
+pub mod process;
+pub mod scheduler;
 pub mod security;
 pub mod tcpip;
+pub mod timer;
+pub mod vfs;
 pub mod vm;
 pub mod vmm;
-pub mod diagnostics;
 
 #[cfg(test)]
 pub mod lkm;
