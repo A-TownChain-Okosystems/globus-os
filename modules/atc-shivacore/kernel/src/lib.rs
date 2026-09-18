@@ -14,8 +14,8 @@ extern crate std;
 extern crate alloc;
 
 pub mod allocator;
-pub mod hal;
 pub mod ats1000;
+pub mod hal;
 // [K29-Build] ausgeschlossen: pub mod framebuffer;
 // [K29-Build] ausgeschlossen: pub mod gdt;
 // [K29-Build] ausgeschlossen: pub mod interrupts;

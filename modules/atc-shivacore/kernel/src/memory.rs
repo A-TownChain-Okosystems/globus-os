@@ -3,9 +3,7 @@
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::{
-    structures::paging::{
-        FrameAllocator, Mapper, OffsetPageTable, PageTable, PhysFrame, Size4KiB,
-    },
+    structures::paging::{FrameAllocator, Mapper, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
 };
 
@@ -27,16 +25,21 @@ pub struct BootInfoFrameAllocator {
 
 impl BootInfoFrameAllocator {
     pub unsafe fn init(memory_regions: &'static MemoryRegions) -> Self {
-        Self { memory_regions, next: 0 }
+        Self {
+            memory_regions,
+            next: 0,
+        }
     }
 
     fn usable_frames(&self) -> impl Iterator<Item = PhysFrame> + '_ {
-        self.memory_regions.iter()
+        self.memory_regions
+            .iter()
             .filter(|r| r.kind == MemoryRegionKind::Usable)
             .flat_map(|r| {
                 let start = (r.start + 0xFFF) & !0xFFF;
                 let end = r.end & !0xFFF;
-                (start..end).step_by(0x1000)
+                (start..end)
+                    .step_by(0x1000)
                     .map(|addr| PhysFrame::containing_address(PhysAddr::new(addr)))
             })
     }

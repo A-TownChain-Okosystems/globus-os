@@ -4,7 +4,11 @@
 use core::arch::x86_64::__cpuid;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum CpuVendor { Intel, Amd, Other }
+pub enum CpuVendor {
+    Intel,
+    Amd,
+    Other,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuFeatures {
@@ -36,17 +40,37 @@ impl CpuInfo {
         let ext = unsafe { __cpuid(0x8000_0000) };
         let max_extended_leaf = ext.eax;
 
-        let leaf1 = if max_basic_leaf >= 1 { unsafe { __cpuid(1) } } else { zero_cpuid() };
+        let leaf1 = if max_basic_leaf >= 1 {
+            unsafe { __cpuid(1) }
+        } else {
+            zero_cpuid()
+        };
         let stepping = (leaf1.eax & 0xF) as u8;
         let base_family = ((leaf1.eax >> 8) & 0xF) as u8;
         let base_model = ((leaf1.eax >> 4) & 0xF) as u8;
         let ext_family = ((leaf1.eax >> 20) & 0xFF) as u8;
         let ext_model = ((leaf1.eax >> 16) & 0xF) as u8;
-        let family = if base_family == 0xF { base_family.saturating_add(ext_family) } else { base_family };
-        let model = if base_family == 0x6 || base_family == 0xF { base_model | (ext_model << 4) } else { base_model };
+        let family = if base_family == 0xF {
+            base_family.saturating_add(ext_family)
+        } else {
+            base_family
+        };
+        let model = if base_family == 0x6 || base_family == 0xF {
+            base_model | (ext_model << 4)
+        } else {
+            base_model
+        };
 
-        let ext1 = if max_extended_leaf >= 0x8000_0001 { unsafe { __cpuid(0x8000_0001) } } else { zero_cpuid() };
-        let ext7 = if max_extended_leaf >= 0x8000_0007 { unsafe { __cpuid(0x8000_0007) } } else { zero_cpuid() };
+        let ext1 = if max_extended_leaf >= 0x8000_0001 {
+            unsafe { __cpuid(0x8000_0001) }
+        } else {
+            zero_cpuid()
+        };
+        let ext7 = if max_extended_leaf >= 0x8000_0007 {
+            unsafe { __cpuid(0x8000_0007) }
+        } else {
+            zero_cpuid()
+        };
 
         Self {
             vendor,
@@ -81,7 +105,12 @@ impl CpuInfo {
 }
 
 fn zero_cpuid() -> core::arch::x86_64::CpuidResult {
-    core::arch::x86_64::CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 }
+    core::arch::x86_64::CpuidResult {
+        eax: 0,
+        ebx: 0,
+        ecx: 0,
+        edx: 0,
+    }
 }
 
 fn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
@@ -108,7 +137,13 @@ mod tests {
 
     #[test]
     fn vendor_parser_accepts_intel_and_amd() {
-        assert_eq!(vendor_from_regs(0x756e6547, 0x6c65746e, 0x49656e69), CpuVendor::Intel);
-        assert_eq!(vendor_from_regs(0x68747541, 0x444d4163, 0x69746e65), CpuVendor::Amd);
+        assert_eq!(
+            vendor_from_regs(0x756e6547, 0x6c65746e, 0x49656e69),
+            CpuVendor::Intel
+        );
+        assert_eq!(
+            vendor_from_regs(0x68747541, 0x444d4163, 0x69746e65),
+            CpuVendor::Amd
+        );
     }
 }
