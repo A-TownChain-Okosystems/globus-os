@@ -130,6 +130,7 @@ impl<D: BlockDevice> FileStore<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Extent;
     use globus_devices::block::{BlockGeometry, MemoryBlockDevice};
     #[test]
     fn partial_block_round_trip() {
