@@ -313,7 +313,7 @@ mod tests {
     fn kernel_high_half_cannot_be_user() {
         assert_eq!(
             validate_mapping_target(HHDM_BASE - 0x1000, MappingFlags::user_read_only()),
-            Err(VmmError::AddressNotCanonical)
+            Err(VmmError::PrivilegeViolation)
         );
         assert_eq!(
             validate_mapping_target(HHDM_BASE, MappingFlags::user_read_only()),
