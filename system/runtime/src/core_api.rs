@@ -3,7 +3,7 @@
 //! This module is the only runtime-facing facade for the ShivaCore ABI.
 //! It deliberately does not expose kernel internals.
 
-use libshivacore::{AbiError, CapabilityHandle, Syscall, ABI_VERSION, MAX_SYSCALL_PAYLOAD};
+use libshivacore::{ABI_VERSION, AbiError, CapabilityHandle, MAX_SYSCALL_PAYLOAD, Syscall};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ProcessHandle(pub u64);
@@ -19,14 +19,22 @@ pub struct RuntimeCore {
 
 impl RuntimeCore {
     pub const fn new() -> Self {
-        Self { abi_version: ABI_VERSION, next_process: 1 }
+        Self {
+            abi_version: ABI_VERSION,
+            next_process: 1,
+        }
     }
 
-    pub const fn abi_version(&self) -> u32 { self.abi_version }
+    pub const fn abi_version(&self) -> u32 {
+        self.abi_version
+    }
 
     pub fn spawn(&mut self) -> Result<ProcessHandle, RuntimeError> {
         let id = self.next_process;
-        self.next_process = self.next_process.checked_add(1).ok_or(RuntimeError(AbiError::ResourceExhausted))?;
+        self.next_process = self
+            .next_process
+            .checked_add(1)
+            .ok_or(RuntimeError(AbiError::ResourceExhausted))?;
         Ok(ProcessHandle(id))
     }
 
@@ -40,13 +48,19 @@ impl RuntimeCore {
 
     pub const fn syscall_supported(&self, syscall: Syscall) -> bool {
         match syscall {
-            Syscall::Yield | Syscall::IpcSend | Syscall::IpcReceive
-            | Syscall::CapabilityQuery | Syscall::HandleClose
+            Syscall::Yield
+            | Syscall::IpcSend
+            | Syscall::IpcReceive
+            | Syscall::CapabilityQuery
+            | Syscall::HandleClose
             | Syscall::MonotonicTime => true,
         }
     }
 
-    pub fn require_capability(&self, capability: Option<CapabilityHandle>) -> Result<CapabilityHandle, RuntimeError> {
+    pub fn require_capability(
+        &self,
+        capability: Option<CapabilityHandle>,
+    ) -> Result<CapabilityHandle, RuntimeError> {
         capability.ok_or(RuntimeError(AbiError::InvalidHandle))
     }
 }
@@ -71,12 +85,18 @@ mod tests {
     fn payload_limit_is_fail_closed() {
         let runtime = RuntimeCore::new();
         assert!(runtime.validate_payload_len(MAX_SYSCALL_PAYLOAD).is_ok());
-        assert_eq!(runtime.validate_payload_len(MAX_SYSCALL_PAYLOAD + 1), Err(RuntimeError(AbiError::InvalidPayload)));
+        assert_eq!(
+            runtime.validate_payload_len(MAX_SYSCALL_PAYLOAD + 1),
+            Err(RuntimeError(AbiError::InvalidPayload))
+        );
     }
 
     #[test]
     fn missing_capability_is_rejected() {
         let runtime = RuntimeCore::new();
-        assert_eq!(runtime.require_capability(None), Err(RuntimeError(AbiError::InvalidHandle)));
+        assert_eq!(
+            runtime.require_capability(None),
+            Err(RuntimeError(AbiError::InvalidHandle))
+        );
     }
 }
