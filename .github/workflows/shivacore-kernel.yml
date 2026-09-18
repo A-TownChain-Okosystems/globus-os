@@ -21,8 +21,18 @@ permissions:
 
 jobs:
   boot:
-    name: Build and smoke-test ShivaCore
+    name: Build and smoke-test ShivaCore (${{ matrix.cpu }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cpu: intel-skylake
+            qemu_cpu: Skylake-Client
+            expected_vendor: Intel
+          - cpu: amd-epyc
+            qemu_cpu: EPYC
+            expected_vendor: AMD
     steps:
       - uses: actions/checkout@v4
 
@@ -49,7 +59,42 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86
 
-      - name: BIOS boot smoke test
+      - name: Verify QEMU CPU model
+        run: qemu-system-x86_64 -cpu help | grep -E '^${{ matrix.qemu_cpu }}([[:space:]]|$)'
+
+      - name: BIOS boot smoke test (${{ matrix.cpu }})
+        run: |
+          set +e
+          timeout 20s qemu-system-x86_64 \
+            -cpu ${{ matrix.qemu_cpu }} \
+            -drive format=raw,file=target/boot-images/shivacore-bios.img \
+            -serial stdio \
+            -display none \
+            -no-reboot \
+            -no-shutdown 2>&1 | tee target/shivacore-qemu-${{ matrix.cpu }}.log
+          status=${PIPESTATUS[0]}
+          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "ShivaCore did not reach kernel_main."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: CPU HAL compatibility check OK." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "CPU HAL compatibility gate did not pass."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: K-Sprint 2 abgeschlossen." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "ShivaCore did not complete the heap smoke test."
+            exit 1
+          fi
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            echo "QEMU exited unexpectedly with status $status."
+            exit "$status"
+          fi
+
         run: |
           set +e
           timeout 20s qemu-system-x86_64 \
@@ -80,4 +125,4 @@ jobs:
           path: |
             target/boot-images/shivacore-bios.img
             target/boot-images/shivacore-uefi.img
-            target/shivacore-qemu.log
+            target/shivacore-qemu-${{ matrix.cpu }}.log
