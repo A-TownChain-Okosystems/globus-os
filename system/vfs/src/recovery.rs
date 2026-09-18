@@ -34,7 +34,7 @@ pub fn replay_pending(journal: &Journal) -> Result<Vec<ReplayWrite>, RecoveryErr
         match record.op {
             JournalOp::Write => out.push(ReplayWrite {
                 sequence: record.sequence,
-                block: record.block,
+                block: record.target_block,
                 checksum: record.checksum,
             }),
             JournalOp::Clear => {}
