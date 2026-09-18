@@ -51,7 +51,7 @@ impl MetadataLayout {
         let bitmap_blocks = ceil_div(bitmap_bytes, block_size)?;
         let inode_bytes = inode_count.checked_mul(64).ok_or(LayoutError::Overflow)?;
         let inode_blocks = ceil_div(inode_bytes, block_size)?;
-        let bitmap_start = 1;
+        let bitmap_start: u64 = 1;
         let inode_start = bitmap_start
             .checked_add(bitmap_blocks)
             .ok_or(LayoutError::Overflow)?;
