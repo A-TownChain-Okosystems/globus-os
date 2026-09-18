@@ -39,8 +39,7 @@ impl BlockAllocator {
         if reserved_start >= total_blocks || end > total_blocks || reserved_blocks == 0 {
             return Err(AllocationError::InvalidRange);
         }
-        let mut bitmap =
-            FreeSpaceBitmap::new(total_blocks).map_err(AllocationError::Bitmap)?;
+        let mut bitmap = FreeSpaceBitmap::new(total_blocks).map_err(AllocationError::Bitmap)?;
         for block in reserved_start..end {
             bitmap
                 .set_free(block, false)
@@ -115,9 +114,7 @@ impl BlockAllocator {
     }
 
     pub fn is_free(&self, block: u64) -> Result<bool, AllocationError> {
-        self.bitmap
-            .is_free(block)
-            .map_err(AllocationError::Bitmap)
+        self.bitmap.is_free(block).map_err(AllocationError::Bitmap)
     }
 
     pub fn free_blocks(&self) -> u64 {
