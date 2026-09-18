@@ -136,3 +136,31 @@ Security-sensitive issues must not be disclosed through public GitHub Issues. Fo
 ## License
 
 Apache License 2.0. See [`LICENSE`](LICENSE).
+
+## Installation
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Usage
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Configuration
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Testing
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Governance
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Contributing
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Support
+
+See the canonical repository documentation and applicable ATC standards.
