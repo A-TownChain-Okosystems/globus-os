@@ -3,7 +3,7 @@
 use crate::MediaError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum ContainerFormat { Mp4, Mkv, Webm, Unknown }
+pub enum ContainerFormat { Mp4, Mkv, Webm, #[default] Unknown }
 
 impl ContainerFormat {
     pub fn from_uri(uri: &str) -> Self {
