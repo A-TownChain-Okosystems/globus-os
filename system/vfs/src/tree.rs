@@ -86,7 +86,7 @@ impl InodeTree {
         let mut current = self.root();
         for part in Self::components(path)? {
             let node = self.nodes.get(&current).ok_or(FsError::NotFound)?;
-            current = *node.children.get(part).ok_or(FsError::NotFound)?;
+            current = *node.children.get(&part).ok_or(FsError::NotFound)?;
         }
         Ok(current)
     }
