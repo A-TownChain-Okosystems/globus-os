@@ -23,7 +23,9 @@ pub enum Syscall {
 }
 
 impl Syscall {
-    pub const fn id(self) -> u16 { self as u16 }
+    pub const fn id(self) -> u16 {
+        self as u16
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,9 +65,14 @@ pub struct AbiHandshake {
 }
 
 impl AbiHandshake {
-    pub const CURRENT: Self = Self { major: ABI_MAJOR, minor: ABI_MINOR };
+    pub const CURRENT: Self = Self {
+        major: ABI_MAJOR,
+        minor: ABI_MINOR,
+    };
 
-    pub const fn compatible(self) -> bool { self.major == ABI_MAJOR }
+    pub const fn compatible(self) -> bool {
+        self.major == ABI_MAJOR
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -106,7 +113,13 @@ mod tests {
 
     #[test]
     fn handshake_accepts_minor_changes() {
-        assert!(AbiHandshake { major: 1, minor: 99 }.compatible());
+        assert!(
+            AbiHandshake {
+                major: 1,
+                minor: 99
+            }
+            .compatible()
+        );
         assert!(!AbiHandshake { major: 2, minor: 0 }.compatible());
     }
 }
