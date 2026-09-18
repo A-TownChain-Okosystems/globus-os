@@ -1098,7 +1098,12 @@ impl ModuleRegistry {
         };
 
         let load_order = self.dep_graph.load_order(&module_name).map_err(|e| {
-            self.log_event(ModuleEventType::DependencyMissing, &module_name, module_id, &e);
+            self.log_event(
+                ModuleEventType::DependencyMissing,
+                &module_name,
+                module_id,
+                &e,
+            );
             e
         })?;
 
