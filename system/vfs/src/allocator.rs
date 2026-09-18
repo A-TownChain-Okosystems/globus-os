@@ -40,10 +40,10 @@ impl BlockAllocator {
             return Err(AllocationError::InvalidRange);
         }
         let mut bitmap =
-            FreeSpaceBitmap::new(total_blocks as usize).map_err(AllocationError::Bitmap)?;
+            FreeSpaceBitmap::new(total_blocks).map_err(AllocationError::Bitmap)?;
         for block in reserved_start..end {
             bitmap
-                .set_free(block as usize, false)
+                .set_free(block, false)
                 .map_err(AllocationError::Bitmap)?;
         }
         // Block zero contains the superblock and is never data-allocatable.
@@ -61,7 +61,7 @@ impl BlockAllocator {
         if blocks == 0 {
             return Err(AllocationError::InvalidRange);
         }
-        let count = blocks as usize;
+        let count = blocks;
         let total = self.bitmap.len();
         if blocks > total as u64 {
             return Err(AllocationError::OutOfSpace);
@@ -92,7 +92,7 @@ impl BlockAllocator {
 
     pub fn release(&mut self, start: u64, blocks: u64) -> Result<(), AllocationError> {
         let end = start.checked_add(blocks).ok_or(AllocationError::Overflow)?;
-        let total = self.bitmap.len() as u64;
+        let total = self.bitmap.len();
         if blocks == 0 || end > total {
             return Err(AllocationError::InvalidRange);
         }
@@ -108,7 +108,7 @@ impl BlockAllocator {
         }
         for block in start..end {
             self.bitmap
-                .set_free(block as usize, true)
+                .set_free(block, true)
                 .map_err(AllocationError::Bitmap)?;
         }
         Ok(())
@@ -116,7 +116,7 @@ impl BlockAllocator {
 
     pub fn is_free(&self, block: u64) -> Result<bool, AllocationError> {
         self.bitmap
-            .is_free(block as usize)
+            .is_free(block)
             .map_err(AllocationError::Bitmap)
     }
 
