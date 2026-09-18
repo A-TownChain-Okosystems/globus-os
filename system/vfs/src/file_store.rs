@@ -55,7 +55,7 @@ impl<D: BlockDevice> FileStore<D> {
         let last = (end - 1) / self.block_size;
         let mut copied = 0usize;
         for logical in first..=last {
-            let physical = extents.map(logical).ok_or(FileStoreError::OutOfRange)?;
+            let physical = extents.physical_for(logical).ok_or(FileStoreError::OutOfRange)?;
             let mut block = vec![0u8; self.block_size as usize];
             self.device
                 .read(
