@@ -95,28 +95,6 @@ jobs:
             exit "$status"
           fi
 
-        run: |
-          set +e
-          timeout 20s qemu-system-x86_64 \
-            -drive format=raw,file=target/boot-images/shivacore-bios.img \
-            -serial stdio \
-            -display none \
-            -no-reboot \
-            -no-shutdown 2>&1 | tee target/shivacore-qemu.log
-          status=${PIPESTATUS[0]}
-          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu.log; then
-            echo "ShivaCore did not reach kernel_main."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: K-Sprint 2 abgeschlossen." target/shivacore-qemu.log; then
-            echo "ShivaCore did not complete the heap smoke test."
-            exit 1
-          fi
-          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
-            echo "QEMU exited unexpectedly with status $status."
-            exit "$status"
-          fi
-
       - name: Upload boot artifacts
         if: always()
         uses: actions/upload-artifact@v4
