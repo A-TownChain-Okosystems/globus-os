@@ -5,7 +5,7 @@
 
 use super::DeviceId;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DmaDomainId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DmaRegion { pub iova: u64, pub physical: u64, pub length: u64, pub writable: bool }
