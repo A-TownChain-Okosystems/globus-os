@@ -19,7 +19,7 @@ pub struct SharedBufferHandle { pub id: u64, pub read_only: bool }
 pub struct ColorConversion { pub source: BufferFormat, pub destination: BufferFormat }
 
 impl ColorConversion {
-    pub const fn required(source: BufferFormat, destination: BufferFormat) -> bool { source != destination }
+    pub fn required(source: BufferFormat, destination: BufferFormat) -> bool { source != destination }
     pub const fn is_yuv_to_rgb(self) -> bool {
         matches!(self.source, BufferFormat::Nv12 | BufferFormat::Yuv420p)
             && matches!(self.destination, BufferFormat::Rgba8 | BufferFormat::Bgra8)
