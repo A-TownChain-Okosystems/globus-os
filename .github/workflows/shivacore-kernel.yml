@@ -1,0 +1,83 @@
+name: ShivaCore Kernel Boot
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "modules/atc-shivacore/kernel/**"
+      - "modules/atc-shivacore/boot/**"
+      - "Cargo.toml"
+      - ".github/workflows/shivacore-kernel.yml"
+  pull_request:
+    paths:
+      - "modules/atc-shivacore/kernel/**"
+      - "modules/atc-shivacore/boot/**"
+      - "Cargo.toml"
+      - ".github/workflows/shivacore-kernel.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  boot:
+    name: Build and smoke-test ShivaCore
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: x86_64-unknown-none
+          components: llvm-tools-preview
+
+      - name: Build kernel ELF
+        run: |
+          cargo build -p shivacore --release \
+            --target x86_64-unknown-none \
+            --features x86-boot
+
+      - name: Build BIOS and UEFI images
+        run: |
+          mkdir -p target/boot-images
+          cargo run -p boot --release -- \
+            target/x86_64-unknown-none/release/shivacore \
+            target/boot-images
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86
+
+      - name: BIOS boot smoke test
+        run: |
+          set +e
+          timeout 20s qemu-system-x86_64 \
+            -drive format=raw,file=target/boot-images/shivacore-bios.img \
+            -serial stdio \
+            -display none \
+            -no-reboot \
+            -no-shutdown 2>&1 | tee target/shivacore-qemu.log
+          status=${PIPESTATUS[0]}
+          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu.log; then
+            echo "ShivaCore did not reach kernel_main."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: K-Sprint 2 abgeschlossen." target/shivacore-qemu.log; then
+            echo "ShivaCore did not complete the heap smoke test."
+            exit 1
+          fi
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            echo "QEMU exited unexpectedly with status $status."
+            exit "$status"
+          fi
+
+      - name: Upload boot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shivacore-boot-images
+          path: |
+            target/boot-images/shivacore-bios.img
+            target/boot-images/shivacore-uefi.img
+            target/shivacore-qemu.log
