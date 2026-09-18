@@ -108,7 +108,7 @@ impl MappingFlags {
         }
     }
 
-    pub const fn to_x86_flags(self) -> Result<u64, VmmError> {
+    pub fn to_x86_flags(self) -> Result<u64, VmmError> {
         self.validate()?;
         let mut flags = 1u64; // Present
         if self.writable {
@@ -157,7 +157,7 @@ pub const fn validate_user_range(ptr: u64, len: u64) -> Result<(), VmmError> {
 /// Validate the destination address before any page-table allocation.
 /// User mappings are allowed only inside the exact userspace interval;
 /// merely being below HHDM is not sufficient.
-pub const fn validate_mapping_target(virt: u64, flags: MappingFlags) -> Result<(), VmmError> {
+pub fn validate_mapping_target(virt: u64, flags: MappingFlags) -> Result<(), VmmError> {
     VirtAddr::new(virt)?;
     flags.validate()?;
 
