@@ -21,7 +21,7 @@ pub use block_cache::{BlockCache, CacheError};
 pub use block_manager::{BlockDeviceId, BlockDeviceRegistry};
 pub use registry::DeviceRegistry;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DeviceId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DeviceClass { Storage, Network, Display, Input, Audio, Usb, Gpu, Other }
