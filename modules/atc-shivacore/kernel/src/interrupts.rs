@@ -239,7 +239,10 @@ shivacore_timer_trampoline:
 extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     let mut guard = USER_SCHEDULER.lock();
     let Some(scheduler) = guard.as_mut() else {
-        unsafe { PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8()); }
+        unsafe {
+            PICS.lock()
+                .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+        }
         return;
     };
 
