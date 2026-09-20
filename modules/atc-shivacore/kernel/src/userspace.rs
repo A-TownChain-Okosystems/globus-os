@@ -208,7 +208,10 @@ pub unsafe fn map_user_binary(
         physical_memory_offset,
         code_base,
         code_pages * 0x1000,
-        PageTableFlags::USER_ACCESSIBLE,
+        // The kernel must initialize the freshly allocated code pages before
+        // dropping kernel write access. With CR0.WP enabled, writing through a
+        // read-only user PTE from CPL0 faults immediately and can prevent boot.
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
     )?;
 
     if !binary.data.is_empty() {
@@ -247,6 +250,16 @@ pub unsafe fn map_user_binary(
             addr_space.data_base as *mut u8,
             binary.data.len(),
         );
+    }
+
+    // Restore W^X after the kernel has populated the code image.
+    let code_first = Page::<Size4KiB>::containing_address(VirtAddr::new(code_base));
+    let code_last = Page::<Size4KiB>::containing_address(VirtAddr::new(code_end - 1));
+    for page in Page::range_inclusive(code_first, code_last) {
+        let flush = mapper
+            .update_flags(page, PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
+            .map_err(|_| UserspaceError::InvalidAddress)?;
+        flush.flush();
     }
 
     Ok(())
