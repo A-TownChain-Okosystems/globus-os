@@ -92,6 +92,10 @@ jobs:
             echo "ShivaCore did not complete the heap smoke test."
             exit 1
           fi
+          if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Canonical KernelState::boot() was not reached from kernel_main."
+            exit 1
+          fi
           if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
             echo "QEMU exited unexpectedly with status $status."
             exit "$status"
