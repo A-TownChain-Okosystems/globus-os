@@ -30,6 +30,8 @@ pub mod p2p_secure;
 pub mod process;
 pub mod scheduler;
 pub mod security;
+pub mod system;
+pub mod userspace;
 pub mod syscall;
 pub mod tcpip;
 pub mod timer;
