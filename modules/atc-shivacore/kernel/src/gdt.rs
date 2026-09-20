@@ -66,6 +66,15 @@ lazy_static! {
 }
 
 pub fn init() {
+    let selectors = &GDT.1;
+    assert_eq!(selectors.code_selector.bits() & 0x7, 0, "kernel CS must be RPL0/GDT");
+    assert_eq!(selectors.data_selector.bits() & 0x7, 0, "kernel SS must be RPL0/GDT");
+    assert_eq!(selectors.user_code_selector.bits() & 0x7, 3, "user CS must be RPL3/GDT");
+    assert_eq!(selectors.user_data_selector.bits() & 0x7, 3, "user SS must be RPL3/GDT");
+    assert_eq!(selectors.user_code_selector.index(), 3, "unexpected user CS GDT index");
+    assert_eq!(selectors.user_data_selector.index(), 4, "unexpected user SS GDT index");
+    assert_eq!(selectors.tss_selector.index(), 5, "unexpected TSS GDT index");
+
     GDT.0.load();
     unsafe {
         CS::set_reg(GDT.1.code_selector);
@@ -87,6 +96,7 @@ pub fn init() {
 pub fn user_code_selector() -> SegmentSelector {
     GDT.1.user_code_selector
 }
+
 pub fn user_data_selector() -> SegmentSelector {
     GDT.1.user_data_selector
 }
