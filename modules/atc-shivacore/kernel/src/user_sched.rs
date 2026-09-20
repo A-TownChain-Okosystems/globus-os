@@ -79,16 +79,41 @@ impl SavedRegisters {
     pub fn from_user_context(ctx: &UserContext) -> Self {
         Self {
             rax: ctx.rax,
+            rbx: ctx.rbx,
+            rcx: ctx.rcx,
+            rdx: ctx.rdx,
+            rsi: ctx.rsi,
+            rdi: ctx.rdi,
             rbp: ctx.rbp,
             rsp: ctx.rsp,
-            ..Default::default()
+            r8: ctx.r8,
+            r9: ctx.r9,
+            r10: ctx.r10,
+            r11: ctx.r11,
+            r12: ctx.r12,
+            r13: ctx.r13,
+            r14: ctx.r14,
+            r15: ctx.r15,
         }
     }
 
     pub fn apply_to(&self, ctx: &mut UserContext) {
         ctx.rax = self.rax;
+        ctx.rbx = self.rbx;
+        ctx.rcx = self.rcx;
+        ctx.rdx = self.rdx;
+        ctx.rsi = self.rsi;
+        ctx.rdi = self.rdi;
         ctx.rbp = self.rbp;
         ctx.rsp = self.rsp;
+        ctx.r8 = self.r8;
+        ctx.r9 = self.r9;
+        ctx.r10 = self.r10;
+        ctx.r11 = self.r11;
+        ctx.r12 = self.r12;
+        ctx.r13 = self.r13;
+        ctx.r14 = self.r14;
+        ctx.r15 = self.r15;
     }
 }
 
@@ -110,8 +135,10 @@ impl SavedContext {
     pub fn apply_to(&self, ctx: &mut UserContext) {
         self.regs.apply_to(ctx);
         ctx.rip = self.iret.rip;
-        ctx.rsp = self.iret.rsp;
+        ctx.cs = self.iret.cs;
         ctx.rflags = self.iret.rflags;
+        ctx.rsp = self.iret.rsp;
+        ctx.ss = self.iret.ss;
     }
 
     pub fn is_ring3(&self) -> bool {
