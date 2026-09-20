@@ -88,8 +88,20 @@ jobs:
             echo "CPU HAL compatibility gate did not pass."
             exit 1
           fi
-          if ! grep -q "ShivaCore: K-Sprint 2 abgeschlossen." target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "ShivaCore did not complete the heap smoke test."
+          if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "USER-001 did not install the first Ring-3 process."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "SCHED-001 scheduler was not armed with two Ring-3 processes."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: USER-001 entering PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Kernel did not attempt the real Ring-3 IRETQ entry."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
             exit 1
           fi
           if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
