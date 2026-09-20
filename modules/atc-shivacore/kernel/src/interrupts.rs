@@ -266,7 +266,10 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
         }
         serial_println!(
             "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-            pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+            pid.0,
+            current.regs.rax,
+            current.regs.rbx,
+            current.regs.r12
         );
     }
 
