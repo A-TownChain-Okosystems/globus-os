@@ -105,11 +105,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
-    let user_binary = userspace::UserBinary::from_bytes(
-        "ring3-smoke",
-        alloc::vec![0xEB, 0xFE],
-        0x0040_0000,
-    );
+    let user_binary =
+        userspace::UserBinary::from_bytes("ring3-smoke", alloc::vec![0xEB, 0xFE], 0x0040_0000);
     let user_addr_space = userspace::UserAddressSpace::default();
     unsafe {
         userspace::map_user_binary(

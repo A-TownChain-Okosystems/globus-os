@@ -8,9 +8,9 @@
 use crate::ats1000::{ExitCode, Pid};
 use core::arch::asm;
 use x86_64::{
+    structures::paging::OffsetPageTable,
     structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
     VirtAddr,
-    structures::paging::OffsetPageTable,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -176,7 +176,12 @@ pub unsafe fn map_user_binary(
                 .allocate_frame()
                 .ok_or(UserspaceError::InvalidAddress)?;
             let flush = mapper
-                .map_to(page, frame, flags | PageTableFlags::PRESENT, frame_allocator)
+                .map_to(
+                    page,
+                    frame,
+                    flags | PageTableFlags::PRESENT,
+                    frame_allocator,
+                )
                 .map_err(|_| UserspaceError::InvalidAddress)?;
             flush.flush();
             let phys = physical_memory_offset + frame.start_address().as_u64();
