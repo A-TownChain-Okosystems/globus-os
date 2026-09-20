@@ -6,8 +6,8 @@
 
 use crate::gdt;
 use crate::serial_println;
-use crate::user_sched::{SavedContext, UserScheduler};
-use crate::userspace::UserContext;
+use shivacore::user_sched::{SavedContext, UserScheduler};
+use shivacore::userspace::UserContext;
 use core::arch::global_asm;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -174,7 +174,7 @@ pub struct UserTrapFrame {
 impl UserTrapFrame {
     fn saved_context(&self) -> SavedContext {
         SavedContext {
-            regs: crate::user_sched::SavedRegisters {
+            regs: shivacore::user_sched::SavedRegisters {
                 rax: self.rax,
                 rbx: self.rbx,
                 rcx: self.rcx,
@@ -192,7 +192,7 @@ impl UserTrapFrame {
                 r14: self.r14,
                 r15: self.r15,
             },
-            iret: crate::user_sched::IretFrame {
+            iret: shivacore::user_sched::IretFrame {
                 rip: self.rip,
                 cs: self.cs as u16,
                 rflags: self.rflags,
