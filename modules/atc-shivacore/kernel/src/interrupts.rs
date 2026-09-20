@@ -249,8 +249,12 @@ shivacore_timer_trampoline:
     push rcx
     push rbx
     push rax
+    // SysV x86-64 ABI: align RSP to 16 bytes before CALL.
+    // The CPU interrupt frame plus 15 pushes leaves RSP at 8 mod 16.
     mov rdi, rsp
+    sub rsp, 8
     call {handler}
+    add rsp, 8
     pop rax
     pop rbx
     pop rcx
