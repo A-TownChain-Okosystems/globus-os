@@ -104,6 +104,18 @@ jobs:
             echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
             exit 1
           fi
+          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Timer IRQ did not complete the round-trip back to PID=1000."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "PID=1000 register checkpoint was not preserved."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "PID=1001 register checkpoint was not preserved."
+            exit 1
+          fi
           if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Canonical KernelState::boot() was not reached from kernel_main."
             exit 1
