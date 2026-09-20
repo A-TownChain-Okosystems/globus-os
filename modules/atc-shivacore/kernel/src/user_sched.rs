@@ -1307,6 +1307,54 @@ mod tests {
     // --- UserProcessSystem (integrated) tests ---
 
     #[test]
+    fn test_saved_context_preserves_all_registers_and_segments() {
+        let mut ctx = make_context(1000);
+        ctx.rax = 0x1111;
+        ctx.rbx = 0x2222;
+        ctx.rcx = 0x3333;
+        ctx.rdx = 0x4444;
+        ctx.rsi = 0x5555;
+        ctx.rdi = 0x6666;
+        ctx.rbp = 0x7777;
+        ctx.rsp = 0x8888;
+        ctx.r8 = 0x9999;
+        ctx.r9 = 0xaaaa;
+        ctx.r10 = 0xbbbb;
+        ctx.r11 = 0xcccc;
+        ctx.r12 = 0xdddd;
+        ctx.r13 = 0xeeee;
+        ctx.r14 = 0xffff;
+        ctx.r15 = 0x1234;
+        ctx.cs = 0x1b;
+        ctx.ss = 0x23;
+
+        let saved = SavedContext::from_user_context(&ctx);
+        let mut restored = make_context(1001);
+        saved.apply_to(&mut restored);
+
+        assert_eq!(restored.rax, ctx.rax);
+        assert_eq!(restored.rbx, ctx.rbx);
+        assert_eq!(restored.rcx, ctx.rcx);
+        assert_eq!(restored.rdx, ctx.rdx);
+        assert_eq!(restored.rsi, ctx.rsi);
+        assert_eq!(restored.rdi, ctx.rdi);
+        assert_eq!(restored.rbp, ctx.rbp);
+        assert_eq!(restored.rsp, ctx.rsp);
+        assert_eq!(restored.r8, ctx.r8);
+        assert_eq!(restored.r9, ctx.r9);
+        assert_eq!(restored.r10, ctx.r10);
+        assert_eq!(restored.r11, ctx.r11);
+        assert_eq!(restored.r12, ctx.r12);
+        assert_eq!(restored.r13, ctx.r13);
+        assert_eq!(restored.r14, ctx.r14);
+        assert_eq!(restored.r15, ctx.r15);
+        assert_eq!(restored.rip, ctx.rip);
+        assert_eq!(restored.cs, ctx.cs);
+        assert_eq!(restored.rflags, ctx.rflags);
+        assert_eq!(restored.ss, ctx.ss);
+    }
+
+    #[test]
     fn test_system_new() {
         let sys = UserProcessSystem::new();
         assert_eq!(sys.process_count(), 0);
