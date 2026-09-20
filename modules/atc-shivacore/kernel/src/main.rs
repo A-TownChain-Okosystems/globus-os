@@ -143,7 +143,24 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             0x49, 0xBC, 0x12, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x2012
             0xEB, 0xFE, // loop forever until timer preemption
         ], 0x0040_1000);
-    let user_addr_space_2 = userspace::UserAddressSpace::default();
+    // Keep the first scheduler gate on the current shared CR3, but allocate
+    // a disjoint virtual region for PID 1001. This prevents the second mapping
+    // from colliding with PID 1000's code/data/stack pages. Full CR3 switching
+    // remains the next isolation gate.
+    let user_addr_space_2 = userspace::UserAddressSpace {
+        code_base: 0x0140_0000,
+        code_size: 0x0010_0000,
+        data_base: 0x0150_0000,
+        data_size: 0x0010_0000,
+        stack_base: 0x07FF_F000,
+        stack_size: 0x0001_0000,
+        heap_base: 0x0160_0000,
+        heap_size: 0x0020_0000,
+    };
+    let user_binary_2 = userspace::UserBinary {
+        entry_point: 0x0140_0000,
+        ..user_binary_2
+    };
     unsafe {
         userspace::map_user_binary(
             &mut mapper,
