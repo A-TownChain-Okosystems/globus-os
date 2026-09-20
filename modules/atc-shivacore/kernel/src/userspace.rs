@@ -143,6 +143,7 @@ impl UserBinary {
 /// user memory. Code/data/stack receive USER_ACCESSIBLE PTEs; code is executable
 /// and read-only, data/stack are writable. The helper uses the existing boot
 /// frame allocator and mapper instead of introducing another VM.
+#[cfg(feature = "x86-boot")]
 pub unsafe fn map_user_binary(
     mapper: &mut OffsetPageTable<'static>,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
@@ -242,6 +243,7 @@ pub unsafe fn map_user_binary(
 }
 
 /// Enter a validated user context through the CPU's real IRETQ path.
+#[cfg(feature = "x86-boot")]
 pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
     debug_assert!(ctx.is_user_mode());
     debug_assert!(ctx.valid_address(ctx.rip));
