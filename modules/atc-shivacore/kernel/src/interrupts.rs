@@ -190,6 +190,10 @@ impl UserTrapFrame {
     }
 }
 
+extern "C" {
+    fn shivacore_timer_trampoline();
+}
+
 global_asm!(
     r#"
     .global shivacore_timer_trampoline
