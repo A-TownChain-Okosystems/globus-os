@@ -246,7 +246,30 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
         return;
     };
 
+    let current_pid = scheduler.current_pid();
     let current = frame.saved_context();
+
+    // SCHED-001 runtime invariant: each Ring-3 smoke process owns a distinct
+    // register pattern. A mismatch fails the QEMU gate instead of masking
+    // register-save/restore corruption.
+    if let Some(pid) = current_pid {
+        let (rax, rbx, r12) = match pid.0 {
+            1000 => (0x1000, 0x1001, 0x1012),
+            1001 => (0x2000, 0x2001, 0x2012),
+            _ => (current.regs.rax, current.regs.rbx, current.regs.r12),
+        };
+        if current.regs.rax != rax || current.regs.rbx != rbx || current.regs.r12 != r12 {
+            panic!(
+                "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+            );
+        }
+        serial_println!(
+            "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+            pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+        );
+    }
+
     if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
         serial_println!(
             "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x} RAX={:#x}",
