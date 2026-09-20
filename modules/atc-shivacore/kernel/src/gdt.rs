@@ -23,13 +23,14 @@ lazy_static! {
         let mut tss = TaskStateSegment::new();
         tss.interrupt_stack_table[DOUBLE_FAULT_IST_INDEX as usize] = {
             // Statischer Stack (kein Heap -- Heap gibt es erst ab K-Sprint 2).
-            static mut STACK: [u8; STACK_SIZE] = [0; STACK_SIZE];
-            let stack_start = VirtAddr::from_ptr(core::ptr::addr_of!(STACK));
+            static mut STACK: AlignedStack<STACK_SIZE> = AlignedStack([0; STACK_SIZE]);
+            let stack_start = VirtAddr::from_ptr(core::ptr::addr_of!(STACK.0));
             stack_start + STACK_SIZE as u64
         };
-        static mut RING3_KERNEL_STACK: [u8; RING3_KERNEL_STACK_SIZE] = [0; RING3_KERNEL_STACK_SIZE];
+        static mut RING3_KERNEL_STACK: AlignedStack<RING3_KERNEL_STACK_SIZE> =
+            AlignedStack([0; RING3_KERNEL_STACK_SIZE]);
         tss.privilege_stack_table[0] = {
-            let stack_start = VirtAddr::from_ptr(core::ptr::addr_of!(RING3_KERNEL_STACK));
+            let stack_start = VirtAddr::from_ptr(core::ptr::addr_of!(RING3_KERNEL_STACK.0));
             stack_start + RING3_KERNEL_STACK_SIZE as u64
         };
         tss
