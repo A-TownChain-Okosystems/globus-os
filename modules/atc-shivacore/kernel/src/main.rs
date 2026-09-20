@@ -16,7 +16,6 @@
 extern crate alloc;
 
 mod allocator;
-mod ats1000;
 mod framebuffer;
 mod gdt;
 mod hal;
@@ -30,7 +29,7 @@ use bootloader_api::{
     entry_point, BootInfo,
 };
 use core::panic::PanicInfo;
-use shivacore::userspace;
+use shivacore::{ats1000::Pid, userspace};
 
 // Bootloader anweisen, das gesamte physische RAM linear ins virtuelle
 // Adressvolumen zu mappen (Voraussetzung fuer den Paging-Mapper in memory.rs).
@@ -125,7 +124,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         )
         .expect("ShivaCore: USER-001 user page mapping failed");
     }
-    let user_pid = ats1000::Pid(1000);
+    let user_pid = Pid(1000);
     let user_cs = gdt::user_code_selector().bits();
     let user_ss = gdt::user_data_selector().bits();
     serial_println!(
@@ -185,7 +184,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         )
         .expect("ShivaCore: second USER-001 user page mapping failed");
     }
-    let user_pid_2 = ats1000::Pid(1001);
+    let user_pid_2 = Pid(1001);
     let user_ctx_2 = userspace::UserContext::new_with_selectors(
         user_pid_2,
         &user_binary_2,
