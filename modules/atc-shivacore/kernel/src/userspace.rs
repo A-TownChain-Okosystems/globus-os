@@ -6,10 +6,12 @@
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
 use crate::ats1000::{ExitCode, Pid};
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
 use core::arch::asm;
 use x86_64::{
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
+    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, PageSize, Size4KiB},
     VirtAddr,
 };
 
@@ -263,16 +265,16 @@ pub unsafe fn enter_ring3(ctx: &UserContext, user_cs: u16, user_ss: u16) -> ! {
 
     asm!(
         "push rax", // SS
-        "push rbx", // RSP
-        "push rcx", // RFLAGS
-        "push rdx", // CS
-        "push rsi", // RIP
+        "push rcx", // RSP
+        "push rdx", // RFLAGS
+        "push rsi", // CS
+        "push rdi", // RIP
         "iretq",
         in("rax") user_ss as u64,
-        in("rbx") ctx.rsp,
-        in("rcx") ctx.rflags,
-        in("rdx") user_cs as u64,
-        in("rsi") ctx.rip,
+        in("rcx") ctx.rsp,
+        in("rdx") ctx.rflags,
+        in("rsi") user_cs as u64,
+        in("rdi") ctx.rip,
         options(noreturn)
     );
 }
