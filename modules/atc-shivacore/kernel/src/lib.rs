@@ -19,6 +19,7 @@ pub mod capability;
 pub mod contract;
 pub mod cross_subsystem;
 pub mod diagnostics;
+pub mod elf_loader;
 pub mod hal;
 pub mod ipc;
 pub mod kernel_init;
