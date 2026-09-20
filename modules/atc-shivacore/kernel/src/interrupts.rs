@@ -138,12 +138,12 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
-) {
+) -> ! {
     use x86_64::registers::control::Cr2;
     serial_println!("EXCEPTION: PAGE FAULT");
     serial_println!("Accessed Address: {:?}", Cr2::read());
     serial_println!("Error Code: {:?}", error_code);
-    serial_println!("{:#?}", stack_frame);
+    panic!("ShivaCore: unrecoverable page fault\n{:#?}", stack_frame);
 }
 
 #[repr(C)]
