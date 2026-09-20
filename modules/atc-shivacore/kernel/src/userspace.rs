@@ -191,12 +191,20 @@ pub unsafe fn map_user_binary(
         Ok(())
     }
 
-    let code_pages = ((binary.code.len() as u64 + 0xFFF) / 0x1000).max(1);
+    let code_base = binary.entry_point & !0xFFF;
+    let code_end = binary
+        .entry_point
+        .checked_add(binary.code.len() as u64)
+        .ok_or(UserspaceError::InvalidAddress)?;
+    if code_base < addr_space.code_base || code_end > addr_space.code_base + addr_space.code_size {
+        return Err(UserspaceError::InvalidAddress);
+    }
+    let code_pages = ((code_end - code_base + 0xFFF) / 0x1000).max(1);
     map_region(
         mapper,
         frame_allocator,
         physical_memory_offset,
-        addr_space.code_base,
+        code_base,
         code_pages * 0x1000,
         PageTableFlags::USER_ACCESSIBLE,
     )?;
@@ -228,7 +236,7 @@ pub unsafe fn map_user_binary(
     // The target virtual addresses are now backed by real user PTEs.
     core::ptr::copy_nonoverlapping(
         binary.code.as_ptr(),
-        addr_space.code_base as *mut u8,
+        binary.entry_point as *mut u8,
         binary.code.len(),
     );
     if !binary.data.is_empty() {
