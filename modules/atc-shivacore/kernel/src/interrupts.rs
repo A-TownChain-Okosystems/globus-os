@@ -45,6 +45,9 @@ lazy_static! {
         }
         idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+        // User-mode software interrupt gate. DPL3 permits CPL3 to enter the kernel.
+        idt[0x80].set_handler_fn(syscall_interrupt_handler)
+            .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
         idt
     };
 }
@@ -87,6 +90,12 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
+}
+
+extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
+    serial_println!("ShivaCore: CPL3 syscall gate entered at RIP={:#x}", stack_frame.instruction_pointer().as_u64());
+    // Return to the interrupted userspace instruction for now. The ABI dispatcher
+    // is wired next; this gate is intentionally observable before SCHED-001/SYS-001.
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
