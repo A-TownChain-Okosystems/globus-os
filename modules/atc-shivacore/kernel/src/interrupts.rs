@@ -11,10 +11,10 @@ use crate::userspace::{UserAddressSpace, UserBinary, UserContext};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin::Mutex;
+use x86_64::registers::rflags::RFlags;
 use x86_64::structures::idt::{
     InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode,
 };
-use x86_64::registers::rflags::RFlags;
 use x86_64::VirtAddr;
 
 pub const PIC_1_OFFSET: u8 = 0x20;
@@ -115,11 +115,8 @@ extern "x86-interrupt" fn timer_interrupt_handler(mut stack_frame: InterruptStac
             if let Some(current_pid) = scheduler.current_pid() {
                 if let Some(entry) = scheduler.get_entry(current_pid) {
                     let saved = entry.saved_ctx;
-                    let binary = UserBinary::from_bytes(
-                        "timer-context",
-                        alloc::vec![0x90],
-                        saved.iret.rip,
-                    );
+                    let binary =
+                        UserBinary::from_bytes("timer-context", alloc::vec![0x90], saved.iret.rip);
                     let mut current_ctx =
                         UserContext::new(current_pid, &binary, UserAddressSpace::default());
                     current_ctx.rip = stack_frame.instruction_pointer.as_u64();
@@ -129,7 +126,7 @@ extern "x86-interrupt" fn timer_interrupt_handler(mut stack_frame: InterruptStac
                     current_ctx.ss = stack_frame.stack_segment.0;
 
                     if let Some(next) = scheduler.timer_tick(&current_ctx) {
-                        switched = Some((next.0.0, next.1));
+                        switched = Some((next.0 .0, next.1));
                     }
                 }
             }
@@ -149,7 +146,9 @@ extern "x86-interrupt" fn timer_interrupt_handler(mut stack_frame: InterruptStac
             VirtAddr::new(next.iret.rsp),
             x86_64::structures::gdt::SegmentSelector::from_raw(next.iret.ss),
         );
-        unsafe { stack_frame.as_mut().write(frame); }
+        unsafe {
+            stack_frame.as_mut().write(frame);
+        }
     }
 
     unsafe {

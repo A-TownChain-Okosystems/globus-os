@@ -6,9 +6,9 @@
 // Context Switch (IRET-Frame), Timer-Driven Preemption, Quantum-Based Scheduling,
 // Integration von UserspaceManager + SignalManager + PageFaultHandler.
 
-use crate::ats1000::{Pid, ExitCode};
-use crate::userspace::{UserspaceManager, UserContext, UserspaceError, PrivilegeLevel};
+use crate::ats1000::{ExitCode, Pid};
 use crate::elf_loader::SignalManager;
+use crate::userspace::{PrivilegeLevel, UserContext, UserspaceError, UserspaceManager};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // IRET Frame (CPU state for ring-0 → ring-3 transition)
@@ -18,22 +18,22 @@ use crate::elf_loader::SignalManager;
 /// On x86-64, IRET pops: SS, RSP, RFLAGS, CS, RIP (in that order from stack).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IretFrame {
-    pub rip:    u64,
-    pub cs:     u16,
-    pub rflags:  u64,
-    pub rsp:    u64,
-    pub ss:     u16,
+    pub rip: u64,
+    pub cs: u16,
+    pub rflags: u64,
+    pub rsp: u64,
+    pub ss: u16,
 }
 
 impl IretFrame {
     /// Build an IRET frame from a UserContext
     pub fn from_user_context(ctx: &UserContext) -> Self {
         Self {
-            rip:    ctx.rip,
-            cs:     ctx.cs,     // 0x1B for ring 3
-            rflags: ctx.rflags,  // IF=1
-            rsp:    ctx.rsp,
-            ss:     ctx.ss,     // 0x23 for ring 3
+            rip: ctx.rip,
+            cs: ctx.cs,         // 0x1B for ring 3
+            rflags: ctx.rflags, // IF=1
+            rsp: ctx.rsp,
+            ss: ctx.ss, // 0x23 for ring 3
         }
     }
 
@@ -44,10 +44,8 @@ impl IretFrame {
 
     /// Verify the frame is valid for IRET
     pub fn is_valid(&self) -> bool {
-        self.is_ring3()
-            && self.rsp > 0
-            && self.rip > 0
-            && (self.rflags & 0x200) != 0  // IF must be set
+        self.is_ring3() && self.rsp > 0 && self.rip > 0 && (self.rflags & 0x200) != 0
+        // IF must be set
     }
 }
 
@@ -59,10 +57,22 @@ impl IretFrame {
 /// On x86-64, these are pushed/popped manually before/after IRET.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct SavedRegisters {
-    pub rax: u64, pub rbx: u64, pub rcx: u64, pub rdx: u64,
-    pub rsi: u64, pub rdi: u64, pub rbp: u64, pub rsp: u64,
-    pub r8:  u64, pub r9:  u64, pub r10: u64, pub r11: u64,
-    pub r12: u64, pub r13: u64, pub r14: u64, pub r15: u64,
+    pub rax: u64,
+    pub rbx: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub rbp: u64,
+    pub rsp: u64,
+    pub r8: u64,
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
 }
 
 impl SavedRegisters {
@@ -85,8 +95,8 @@ impl SavedRegisters {
 /// Full saved context: registers + IRET frame
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SavedContext {
-    pub regs:  SavedRegisters,
-    pub iret:  IretFrame,
+    pub regs: SavedRegisters,
+    pub iret: IretFrame,
 }
 
 impl SavedContext {
@@ -104,8 +114,12 @@ impl SavedContext {
         ctx.rflags = self.iret.rflags;
     }
 
-    pub fn is_ring3(&self) -> bool { self.iret.is_ring3() }
-    pub fn is_valid(&self) -> bool { self.iret.is_valid() }
+    pub fn is_ring3(&self) -> bool {
+        self.iret.is_ring3()
+    }
+    pub fn is_valid(&self) -> bool {
+        self.iret.is_valid()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -118,15 +132,20 @@ pub struct Quantum {
     /// Timer ticks remaining in this quantum
     pub ticks_remaining: u32,
     /// Total ticks per quantum (reset value)
-    pub ticks_total:    u32,
+    pub ticks_total: u32,
 }
 
 impl Quantum {
     pub fn new(ticks: u32) -> Self {
-        Self { ticks_remaining: ticks, ticks_total: ticks }
+        Self {
+            ticks_remaining: ticks,
+            ticks_total: ticks,
+        }
     }
 
-    pub fn default_quantum() -> Self { Self::new(10) }
+    pub fn default_quantum() -> Self {
+        Self::new(10)
+    }
 
     /// Decrement the quantum. Returns true if quantum expired.
     pub fn tick(&mut self) -> bool {
@@ -140,8 +159,12 @@ impl Quantum {
         self.ticks_remaining = self.ticks_total;
     }
 
-    pub fn is_expired(&self) -> bool { self.ticks_remaining == 0 }
-    pub fn remaining(&self) -> u32 { self.ticks_remaining }
+    pub fn is_expired(&self) -> bool {
+        self.ticks_remaining == 0
+    }
+    pub fn remaining(&self) -> u32 {
+        self.ticks_remaining
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -182,9 +205,15 @@ impl SchedState {
     pub fn is_runnable(&self) -> bool {
         matches!(self, SchedState::Ready | SchedState::Running)
     }
-    pub fn is_running(&self) -> bool { matches!(self, SchedState::Running) }
-    pub fn is_blocked(&self) -> bool { matches!(self, SchedState::Blocked(_)) }
-    pub fn is_zombie(&self) -> bool { matches!(self, SchedState::Zombie(_)) }
+    pub fn is_running(&self) -> bool {
+        matches!(self, SchedState::Running)
+    }
+    pub fn is_blocked(&self) -> bool {
+        matches!(self, SchedState::Blocked(_))
+    }
+    pub fn is_zombie(&self) -> bool {
+        matches!(self, SchedState::Zombie(_))
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -194,14 +223,14 @@ impl SchedState {
 /// A user process entry in the scheduler
 #[derive(Clone, Debug)]
 pub struct SchedEntry {
-    pub pid:        Pid,
-    pub state:      SchedState,
-    pub quantum:    Quantum,
-    pub priority:   u8,          // 0 = highest
-    pub saved_ctx:  SavedContext,
+    pub pid: Pid,
+    pub state: SchedState,
+    pub quantum: Quantum,
+    pub priority: u8, // 0 = highest
+    pub saved_ctx: SavedContext,
     pub total_cpu_ticks: u64,
     pub context_switches: u64,
-    pub wake_tick:   Option<u64>,  // When to wake (for Sleep)
+    pub wake_tick: Option<u64>, // When to wake (for Sleep)
 }
 
 impl SchedEntry {
@@ -218,7 +247,9 @@ impl SchedEntry {
         }
     }
 
-    pub fn is_runnable(&self) -> bool { self.state.is_runnable() }
+    pub fn is_runnable(&self) -> bool {
+        self.state.is_runnable()
+    }
 
     /// Save context when being preempted
     pub fn save_context(&mut self, ctx: &UserContext) {
@@ -227,10 +258,14 @@ impl SchedEntry {
     }
 
     /// Restore context when being scheduled
-    pub fn restore_context(&self) -> SavedContext { self.saved_ctx }
+    pub fn restore_context(&self) -> SavedContext {
+        self.saved_ctx
+    }
 
     /// Give the process a fresh quantum
-    pub fn reset_quantum(&mut self) { self.quantum.reset(); }
+    pub fn reset_quantum(&mut self) {
+        self.quantum.reset();
+    }
 
     /// Tick the quantum. Returns true if expired.
     pub fn tick_quantum(&mut self) -> bool {
@@ -245,16 +280,18 @@ impl SchedEntry {
 
 /// Preemptive round-robin scheduler for user processes
 pub struct UserScheduler {
-    entries:       Vec<SchedEntry>,
-    current:       Option<Pid>,
-    timer_ticks:   u64,
+    entries: Vec<SchedEntry>,
+    current: Option<Pid>,
+    timer_ticks: u64,
     context_switches: u64,
-    preemptions:   u64,
+    preemptions: u64,
     voluntary_yields: u64,
 }
 
 impl Default for UserScheduler {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UserScheduler {
@@ -283,7 +320,9 @@ impl UserScheduler {
     }
 
     /// Get the currently running process
-    pub fn current_pid(&self) -> Option<Pid> { self.current }
+    pub fn current_pid(&self) -> Option<Pid> {
+        self.current
+    }
 
     /// Get a scheduler entry by PID
     pub fn get_entry(&self, pid: Pid) -> Option<&SchedEntry> {
@@ -301,8 +340,12 @@ impl UserScheduler {
 
         let mut best: Option<(usize, u8)> = None;
         for (i, entry) in self.entries.iter().enumerate() {
-            if !entry.is_runnable() { continue; }
-            if Some(entry.pid) == current_pid { continue; } // Skip current (round-robin)
+            if !entry.is_runnable() {
+                continue;
+            }
+            if Some(entry.pid) == current_pid {
+                continue;
+            } // Skip current (round-robin)
             match best {
                 None => best = Some((i, entry.priority)),
                 Some((_, bp)) if entry.priority < bp => best = Some((i, entry.priority)),
@@ -399,7 +442,11 @@ impl UserScheduler {
     }
 
     /// Block the current process
-    pub fn block_current(&mut self, reason: BlockReason, current_ctx: &UserContext) -> Option<(Pid, SavedContext)> {
+    pub fn block_current(
+        &mut self,
+        reason: BlockReason,
+        current_ctx: &UserContext,
+    ) -> Option<(Pid, SavedContext)> {
         if let Some(pid) = self.current {
             if let Some(entry) = self.get_entry_mut(pid) {
                 entry.save_context(current_ctx);
@@ -418,7 +465,12 @@ impl UserScheduler {
     }
 
     /// Mark a process as exited (zombie)
-    pub fn exit_process(&mut self, pid: Pid, exit_code: ExitCode, current_ctx: Option<&UserContext>) -> Option<(Pid, SavedContext)> {
+    pub fn exit_process(
+        &mut self,
+        pid: Pid,
+        exit_code: ExitCode,
+        current_ctx: Option<&UserContext>,
+    ) -> Option<(Pid, SavedContext)> {
         if let Some(entry) = self.get_entry_mut(pid) {
             if let Some(ctx) = current_ctx {
                 entry.save_context(ctx);
@@ -433,19 +485,31 @@ impl UserScheduler {
 
     /// Reap zombie processes
     pub fn reap_zombies(&mut self) -> Vec<(Pid, ExitCode)> {
-        let zombies: Vec<(Pid, ExitCode)> = self.entries.iter()
+        let zombies: Vec<(Pid, ExitCode)> = self
+            .entries
+            .iter()
             .filter(|e| e.is_runnable() == false && e.state.is_zombie())
-            .map(|e| (e.pid, match e.state {
-                SchedState::Zombie(c) => c,
-                _ => 0,
-            }))
+            .map(|e| {
+                (
+                    e.pid,
+                    match e.state {
+                        SchedState::Zombie(c) => c,
+                        _ => 0,
+                    },
+                )
+            })
             .collect();
         self.entries.retain(|e| !e.state.is_zombie());
         zombies
     }
 
     /// Put a process to sleep for N ticks
-    pub fn sleep(&mut self, pid: Pid, ticks: u64, current_ctx: &UserContext) -> Option<(Pid, SavedContext)> {
+    pub fn sleep(
+        &mut self,
+        pid: Pid,
+        ticks: u64,
+        current_ctx: &UserContext,
+    ) -> Option<(Pid, SavedContext)> {
         let wake_at = self.timer_ticks + ticks;
         if let Some(entry) = self.get_entry_mut(pid) {
             entry.wake_tick = Some(wake_at);
@@ -458,7 +522,11 @@ impl UserScheduler {
     }
 
     /// Stop a process (SIGSTOP)
-    pub fn stop_process(&mut self, pid: Pid, current_ctx: Option<&UserContext>) -> Option<(Pid, SavedContext)> {
+    pub fn stop_process(
+        &mut self,
+        pid: Pid,
+        current_ctx: Option<&UserContext>,
+    ) -> Option<(Pid, SavedContext)> {
         if let Some(entry) = self.get_entry_mut(pid) {
             if let Some(ctx) = current_ctx {
                 entry.save_context(ctx);
@@ -486,14 +554,26 @@ impl UserScheduler {
     }
 
     /// List all entries
-    pub fn entries(&self) -> &[SchedEntry] { &self.entries }
-    pub fn entry_count(&self) -> usize { self.entries.len() }
+    pub fn entries(&self) -> &[SchedEntry] {
+        &self.entries
+    }
+    pub fn entry_count(&self) -> usize {
+        self.entries.len()
+    }
 
     /// Statistics
-    pub fn timer_ticks(&self) -> u64 { self.timer_ticks }
-    pub fn context_switches(&self) -> u64 { self.context_switches }
-    pub fn preemptions(&self) -> u64 { self.preemptions }
-    pub fn voluntary_yields(&self) -> u64 { self.voluntary_yields }
+    pub fn timer_ticks(&self) -> u64 {
+        self.timer_ticks
+    }
+    pub fn context_switches(&self) -> u64 {
+        self.context_switches
+    }
+    pub fn preemptions(&self) -> u64 {
+        self.preemptions
+    }
+    pub fn voluntary_yields(&self) -> u64 {
+        self.voluntary_yields
+    }
 
     /// Check if any process is runnable
     pub fn has_runnable(&self) -> bool {
@@ -508,26 +588,32 @@ impl UserScheduler {
 /// Combines UserspaceManager + SignalManager + UserScheduler
 /// into a single coherent user-space process management system.
 pub struct UserProcessSystem {
-    pub userspace:  UserspaceManager,
-    pub signals:    SignalManager,
-    pub scheduler:  UserScheduler,
+    pub userspace: UserspaceManager,
+    pub signals: SignalManager,
+    pub scheduler: UserScheduler,
 }
 
 impl Default for UserProcessSystem {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UserProcessSystem {
     pub fn new() -> Self {
         Self {
-            userspace:  UserspaceManager::new(),
-            signals:    SignalManager::new(),
-            scheduler:  UserScheduler::new(),
+            userspace: UserspaceManager::new(),
+            signals: SignalManager::new(),
+            scheduler: UserScheduler::new(),
         }
     }
 
     /// Spawn a new user process (full lifecycle)
-    pub fn spawn(&mut self, binary: crate::userspace::UserBinary, priority: u8) -> Result<Pid, UserspaceError> {
+    pub fn spawn(
+        &mut self,
+        binary: crate::userspace::UserBinary,
+        priority: u8,
+    ) -> Result<Pid, UserspaceError> {
         let pid = self.userspace.load_binary(binary)?;
         self.signals.register(pid);
         if let Some(ctx) = self.userspace.get_context(pid) {
@@ -551,11 +637,13 @@ impl UserProcessSystem {
         // Check for pending signals on current process
         if let Some(pid) = current {
             if let Some((signal, disp)) = self.signals.deliver(pid) {
-                use crate::elf_loader::{SignalResolution, Signal};
+                use crate::elf_loader::{Signal, SignalResolution};
                 let resolution = SignalManager::resolve_action(signal, disp);
                 match resolution {
                     SignalResolution::Terminate(_) | SignalResolution::Terminate(_)
-                        if signal == Signal::SigKill || signal == Signal::SigTerm || signal == Signal::SigSegv =>
+                        if signal == Signal::SigKill
+                            || signal == Signal::SigTerm
+                            || signal == Signal::SigSegv =>
                     {
                         self.kill(pid, 128 + signal as i32);
                         return self.scheduler.schedule(None);
@@ -590,8 +678,12 @@ impl UserProcessSystem {
     }
 
     /// Get process count
-    pub fn process_count(&self) -> usize { self.scheduler.entry_count() }
-    pub fn runnable_count(&self) -> usize { self.scheduler.runnable_count() }
+    pub fn process_count(&self) -> usize {
+        self.scheduler.entry_count()
+    }
+    pub fn runnable_count(&self) -> usize {
+        self.scheduler.runnable_count()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -601,7 +693,7 @@ impl UserProcessSystem {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::userspace::{UserBinary, UserAddressSpace};
+    use crate::userspace::{UserAddressSpace, UserBinary};
 
     fn make_context(pid: u32) -> UserContext {
         let bin = UserBinary::hello_world();
@@ -637,14 +729,26 @@ mod tests {
 
     #[test]
     fn test_iret_frame_invalid_ring0() {
-        let frame = IretFrame { rip: 0x1000, cs: 0x08, rflags: 0x202, rsp: 0x8000, ss: 0x10 };
+        let frame = IretFrame {
+            rip: 0x1000,
+            cs: 0x08,
+            rflags: 0x202,
+            rsp: 0x8000,
+            ss: 0x10,
+        };
         assert!(!frame.is_ring3());
         assert!(!frame.is_valid());
     }
 
     #[test]
     fn test_iret_frame_invalid_no_if() {
-        let frame = IretFrame { rip: 0x1000, cs: 0x1B, rflags: 0x000, rsp: 0x8000, ss: 0x23 };
+        let frame = IretFrame {
+            rip: 0x1000,
+            cs: 0x1B,
+            rflags: 0x000,
+            rsp: 0x8000,
+            ss: 0x23,
+        };
         assert!(!frame.is_valid()); // IF not set
     }
 
@@ -662,7 +766,12 @@ mod tests {
     #[test]
     fn test_saved_registers_apply() {
         let mut ctx = make_context(1000);
-        let regs = SavedRegisters { rax: 0xDEAD, rbp: 0x5000, rsp: 0x7000, ..Default::default() };
+        let regs = SavedRegisters {
+            rax: 0xDEAD,
+            rbp: 0x5000,
+            rsp: 0x7000,
+            ..Default::default()
+        };
         regs.apply_to(&mut ctx);
         assert_eq!(ctx.rax, 0xDEAD);
         assert_eq!(ctx.rbp, 0x5000);
@@ -710,13 +819,15 @@ mod tests {
         let mut q = Quantum::new(3);
         assert!(!q.tick()); // 2 remaining
         assert!(!q.tick()); // 1 remaining
-        assert!(q.tick());  // 0 → expired
+        assert!(q.tick()); // 0 → expired
     }
 
     #[test]
     fn test_quantum_reset() {
         let mut q = Quantum::new(5);
-        q.tick(); q.tick(); q.tick();
+        q.tick();
+        q.tick();
+        q.tick();
         assert_eq!(q.remaining(), 2);
         q.reset();
         assert_eq!(q.remaining(), 5);
@@ -886,8 +997,8 @@ mod tests {
         let mut sched = UserScheduler::new();
         let ctx1 = make_context(1000);
         let ctx2 = make_context(1001);
-        sched.add_process(Pid(1000), &ctx1, 5);  // Lower priority
-        sched.add_process(Pid(1001), &ctx2, 1);  // Higher priority
+        sched.add_process(Pid(1000), &ctx1, 5); // Lower priority
+        sched.add_process(Pid(1001), &ctx2, 1); // Higher priority
 
         let (pid, _) = sched.schedule(None).unwrap();
         assert_eq!(pid, Pid(1001)); // Higher priority (lower number) first
