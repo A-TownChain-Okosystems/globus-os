@@ -252,10 +252,14 @@ pub unsafe fn map_user_binary(
 
 /// Enter a validated user context through the CPU's real IRETQ path.
 #[cfg(feature = "x86-boot")]
-pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
+pub unsafe fn enter_ring3(ctx: &UserContext, user_cs: u16, user_ss: u16) -> ! {
     debug_assert!(ctx.is_user_mode());
     debug_assert!(ctx.valid_address(ctx.rip));
     debug_assert!(ctx.valid_address(ctx.rsp));
+    debug_assert_eq!(ctx.cs, user_cs);
+    debug_assert_eq!(ctx.ss, user_ss);
+    debug_assert_eq!(user_cs & 0x7, 0x3);
+    debug_assert_eq!(user_ss & 0x7, 0x3);
 
     asm!(
         "push rax", // SS
@@ -264,10 +268,10 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
         "push rdx", // CS
         "push rsi", // RIP
         "iretq",
-        in("rax") ctx.ss as u64,
+        in("rax") user_ss as u64,
         in("rbx") ctx.rsp,
         in("rcx") ctx.rflags,
-        in("rdx") ctx.cs as u64,
+        in("rdx") user_cs as u64,
         in("rsi") ctx.rip,
         options(noreturn)
     );
@@ -286,16 +290,28 @@ pub struct UserContext {
     pub rsp: u64,    // Stack Pointer
     pub rbp: u64,    // Base Pointer
     pub rax: u64,    // Return value register
-    pub cs: u16,     // Code Segment selector (ring 3 = 0x1B, ring 0 = 0x08)
-    pub ss: u16,     // Stack Segment selector (ring 3 = 0x23, ring 0 = 0x10)
+    pub cs: u16,     // Code Segment selector supplied by the active GDT
+    pub ss: u16,     // Stack Segment selector supplied by the active GDT
     pub rflags: u64, // CPU flags (IF must be set for user mode)
     pub addr_space: UserAddressSpace,
     pub exit_code: Option<ExitCode>,
 }
 
 impl UserContext {
-    /// Create initial context for a new user process
-    pub fn new(pid: Pid, binary: &UserBinary, addr_space: UserAddressSpace) -> Self {
+    /// Create initial context for a new user process using the active GDT selectors.
+    ///
+    /// The boot path must pass selectors produced by the actual GDT instance;
+    /// this prevents an IRETQ frame from silently depending on a duplicated
+    /// numeric GDT layout.
+    pub fn new_with_selectors(
+        pid: Pid,
+        binary: &UserBinary,
+        addr_space: UserAddressSpace,
+        cs: u16,
+        ss: u16,
+    ) -> Self {
+        assert_eq!(cs & 0x7, 0x3, "Ring-3 CS must use RPL=3 and GDT");
+        assert_eq!(ss & 0x7, 0x3, "Ring-3 SS must use RPL=3 and GDT");
         Self {
             pid,
             privilege: PrivilegeLevel::User,
@@ -303,12 +319,17 @@ impl UserContext {
             rsp: addr_space.initial_rsp(),
             rbp: addr_space.initial_rsp(),
             rax: 0,
-            cs: 0x1B,      // GDT entry 3, ring 3 (0x1B = (3 << 3) | 3)
-            ss: 0x23,      // GDT entry 4, ring 3 (0x23 = (4 << 3) | 3)
+            cs,
+            ss,
             rflags: 0x202, // IF=1 (interrupts enabled), reserved bit 1
             addr_space,
             exit_code: None,
         }
+    }
+
+    /// Model/test constructor. Real x86 boot code must use new_with_selectors.
+    pub fn new(pid: Pid, binary: &UserBinary, addr_space: UserAddressSpace) -> Self {
+        Self::new_with_selectors(pid, binary, addr_space, 0x1B, 0x23)
     }
 
     /// Check if this context is in user mode
