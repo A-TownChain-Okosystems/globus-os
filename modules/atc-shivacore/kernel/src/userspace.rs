@@ -6,6 +6,12 @@
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
 use crate::ats1000::{ExitCode, Pid};
+use core::arch::asm;
+use x86_64::{
+    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
+    VirtAddr,
+    structures::paging::OffsetPageTable,
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Privilege Levels
@@ -125,6 +131,131 @@ impl UserBinary {
     pub fn data_len(&self) -> usize {
         self.data.len()
     }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Real user-page installation / CPL3 entry
+// ═══════════════════════════════════════════════════════════════════════════════
+
+/// Map a user binary into the active x86-64 page table.
+///
+/// This is the first real bridge from the modelled UserAddressSpace to CPU-visible
+/// user memory. Code/data/stack receive USER_ACCESSIBLE PTEs; code is executable
+/// and read-only, data/stack are writable. The helper uses the existing boot
+/// frame allocator and mapper instead of introducing another VM.
+pub unsafe fn map_user_binary(
+    mapper: &mut OffsetPageTable<'static>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    physical_memory_offset: VirtAddr,
+    binary: &UserBinary,
+    addr_space: &UserAddressSpace,
+) -> Result<(), UserspaceError> {
+    if binary.code.is_empty()
+        || binary.code.len() as u64 > addr_space.code_size
+        || binary.entry_point < addr_space.code_base
+        || binary.entry_point >= addr_space.code_base + addr_space.code_size
+    {
+        return Err(UserspaceError::InvalidBinary);
+    }
+
+    fn map_region(
+        mapper: &mut OffsetPageTable<'static>,
+        frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+        physical_memory_offset: VirtAddr,
+        base: u64,
+        size: u64,
+        flags: PageTableFlags,
+    ) -> Result<(), UserspaceError> {
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(base));
+        let last_addr = base
+            .checked_add(size.saturating_sub(1))
+            .ok_or(UserspaceError::InvalidAddress)?;
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(last_addr));
+        for page in Page::range_inclusive(first, last) {
+            let frame = frame_allocator
+                .allocate_frame()
+                .ok_or(UserspaceError::InvalidAddress)?;
+            let flush = mapper
+                .map_to(page, frame, flags | PageTableFlags::PRESENT, frame_allocator)
+                .map_err(|_| UserspaceError::InvalidAddress)?;
+            flush.flush();
+            let phys = physical_memory_offset + frame.start_address().as_u64();
+            core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize);
+        }
+        Ok(())
+    }
+
+    let code_pages = ((binary.code.len() as u64 + 0xFFF) / 0x1000).max(1);
+    map_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        addr_space.code_base,
+        code_pages * 0x1000,
+        PageTableFlags::USER_ACCESSIBLE,
+    )?;
+
+    if !binary.data.is_empty() {
+        let data_pages = ((binary.data.len() as u64 + 0xFFF) / 0x1000).max(1);
+        map_region(
+            mapper,
+            frame_allocator,
+            physical_memory_offset,
+            addr_space.data_base,
+            data_pages * 0x1000,
+            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
+        )?;
+    }
+
+    let stack_pages = (addr_space.stack_size + 0xFFF) / 0x1000;
+    let stack_base = addr_space.stack_base + 1 - stack_pages * 0x1000;
+    map_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        stack_base,
+        stack_pages * 0x1000,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
+    )?;
+
+    // Install the user image through the already active address space.
+    // The target virtual addresses are now backed by real user PTEs.
+    core::ptr::copy_nonoverlapping(
+        binary.code.as_ptr(),
+        addr_space.code_base as *mut u8,
+        binary.code.len(),
+    );
+    if !binary.data.is_empty() {
+        core::ptr::copy_nonoverlapping(
+            binary.data.as_ptr(),
+            addr_space.data_base as *mut u8,
+            binary.data.len(),
+        );
+    }
+
+    Ok(())
+}
+
+/// Enter a validated user context through the CPU's real IRETQ path.
+pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
+    debug_assert!(ctx.is_user_mode());
+    debug_assert!(ctx.valid_address(ctx.rip));
+    debug_assert!(ctx.valid_address(ctx.rsp));
+
+    asm!(
+        "push rax", // SS
+        "push rbx", // RSP
+        "push rcx", // RFLAGS
+        "push rdx", // CS
+        "push rsi", // RIP
+        "iretq",
+        in("rax") ctx.ss as u64,
+        in("rbx") ctx.rsp,
+        in("rcx") ctx.rflags,
+        in("rdx") ctx.cs as u64,
+        in("rsi") ctx.rip,
+        options(noreturn)
+    );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
