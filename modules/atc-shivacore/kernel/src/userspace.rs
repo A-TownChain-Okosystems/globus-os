@@ -215,30 +215,28 @@ pub unsafe fn map_user_binary(
     if code_base < addr_space.code_base || code_end > addr_space.code_base + addr_space.code_size {
         return Err(UserspaceError::InvalidAddress);
     }
-    let code_pages = ((code_end - code_base + 0xFFF) / 0x1000).max(1);
+    // Map the complete declared code/data regions, not only the bytes currently
+    // occupied by the binary. UserAddressSpace::contains() treats the complete
+    // regions as valid, so the hardware PTE coverage must match that contract.
     map_region(
         mapper,
         frame_allocator,
         physical_memory_offset,
-        code_base,
-        code_pages * 0x1000,
-        // The kernel must initialize the freshly allocated code pages before
-        // dropping kernel write access. With CR0.WP enabled, writing through a
-        // read-only user PTE from CPL0 faults immediately and can prevent boot.
+        addr_space.code_base,
+        addr_space.code_size,
+        // The kernel initializes freshly allocated code pages before restoring
+        // W^X. With CR0.WP enabled, kernel writes through RO user PTEs can fault.
         PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
     )?;
 
-    if !binary.data.is_empty() {
-        let data_pages = ((binary.data.len() as u64 + 0xFFF) / 0x1000).max(1);
-        map_region(
-            mapper,
-            frame_allocator,
-            physical_memory_offset,
-            addr_space.data_base,
-            data_pages * 0x1000,
-            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
-        )?;
-    }
+    map_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        addr_space.data_base,
+        addr_space.data_size,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
+    )?;
 
     let stack_pages = (addr_space.stack_size + 0xFFF) / 0x1000;
     let stack_base = addr_space.stack_base - stack_pages * 0x1000;
@@ -280,8 +278,14 @@ pub unsafe fn map_user_binary(
     }
 
     // Restore W^X after the kernel has populated the code image.
-    let code_first = Page::<Size4KiB>::containing_address(VirtAddr::new(code_base));
-    let code_last = Page::<Size4KiB>::containing_address(VirtAddr::new(code_end - 1));
+    let code_first = Page::<Size4KiB>::containing_address(VirtAddr::new(addr_space.code_base));
+    let code_last = Page::<Size4KiB>::containing_address(VirtAddr::new(
+        addr_space
+            .code_base
+            .checked_add(addr_space.code_size)
+            .and_then(|end| end.checked_sub(1))
+            .ok_or(UserspaceError::InvalidAddress)?,
+    ));
     for page in Page::range_inclusive(code_first, code_last) {
         let flush = mapper
             .update_flags(page, PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
