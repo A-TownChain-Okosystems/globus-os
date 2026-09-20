@@ -96,6 +96,14 @@ jobs:
             echo "SCHED-001 scheduler was not armed with two Ring-3 processes."
             exit 1
           fi
+          if ! grep -q "ShivaCore: minimal kernel path ready (CPU/GDT/IDT/Paging/Heap)." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Minimal kernel path was not completed before userspace."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: active Ring-3 selectors CS=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Runtime GDT Ring-3 selectors were not passed into UserContext."
+            exit 1
+          fi
           if ! grep -q "ShivaCore: USER-001 entering PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Kernel did not attempt the real Ring-3 IRETQ entry."
             exit 1
@@ -116,10 +124,29 @@ jobs:
             echo "PID=1001 register checkpoint was not preserved."
             exit 1
           fi
-          if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "Canonical KernelState::boot() was not reached from kernel_main."
-            exit 1
-          fi
+          python3 - <<'PY'
+import pathlib
+
+log = pathlib.Path("target/shivacore-qemu-${{ matrix.cpu }}.log").read_text()
+markers = [
+    "ShivaCore: Kernel-Einstiegspunkt erreicht.",
+    "ShivaCore: minimal kernel path ready (CPU/GDT/IDT/Paging/Heap).",
+    "ShivaCore: USER-001 entering PID=1000",
+    "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012",
+    "ShivaCore: scheduler preemption -> context switch to PID=1001",
+    "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012",
+    "ShivaCore: scheduler preemption -> context switch to PID=1000",
+    "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012",
+]
+cursor = -1
+for marker in markers:
+    pos = log.find(marker, cursor + 1)
+    if pos < 0:
+        raise SystemExit(f"missing ordered marker: {marker}")
+    cursor = pos
+print("SCHED-001 ordered QEMU sequence verified.")
+PY
+
           if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
             echo "QEMU exited unexpectedly with status $status."
             exit "$status"
