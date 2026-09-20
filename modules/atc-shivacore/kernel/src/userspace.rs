@@ -213,7 +213,7 @@ pub unsafe fn map_user_binary(
     }
 
     let stack_pages = (addr_space.stack_size + 0xFFF) / 0x1000;
-    let stack_base = addr_space.stack_base + 1 - stack_pages * 0x1000;
+    let stack_base = addr_space.stack_base - stack_pages * 0x1000;
     map_region(
         mapper,
         frame_allocator,
