@@ -6,16 +6,37 @@
 
 use crate::gdt;
 use crate::serial_println;
+use crate::user_sched::{SavedContext, UserScheduler};
+use crate::userspace::{UserAddressSpace, UserBinary, UserContext};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin::Mutex;
-use x86_64::structures::idt::{InterruptDescriptorTable, InterruptStackFrame, PageFaultErrorCode};
+use x86_64::structures::idt::{
+    InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode,
+};
+use x86_64::registers::rflags::RFlags;
+use x86_64::VirtAddr;
 
 pub const PIC_1_OFFSET: u8 = 0x20;
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+
+static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
+
+pub fn init_user_scheduler(first: &UserContext, second: &UserContext) {
+    let mut scheduler = UserScheduler::new();
+    scheduler.add_process(first.pid, first, 0);
+    scheduler.add_process(second.pid, second, 0);
+    let _ = scheduler.schedule(None);
+    *USER_SCHEDULER.lock() = Some(scheduler);
+    serial_println!(
+        "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={}",
+        first.pid.0,
+        second.pid.0
+    );
+}
 
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
@@ -85,7 +106,52 @@ extern "x86-interrupt" fn page_fault_handler(
     serial_println!("{:#?}", stack_frame);
 }
 
-extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFrame) {
+extern "x86-interrupt" fn timer_interrupt_handler(mut stack_frame: InterruptStackFrame) {
+    let mut switched: Option<(u32, SavedContext)> = None;
+
+    {
+        let mut guard = USER_SCHEDULER.lock();
+        if let Some(scheduler) = guard.as_mut() {
+            if let Some(current_pid) = scheduler.current_pid() {
+                if let Some(entry) = scheduler.get_entry(current_pid) {
+                    let saved = entry.saved_ctx;
+                    let binary = UserBinary::from_bytes(
+                        "timer-context",
+                        alloc::vec![0x90],
+                        saved.iret.rip,
+                    );
+                    let mut current_ctx =
+                        UserContext::new(current_pid, &binary, UserAddressSpace::default());
+                    current_ctx.rip = stack_frame.instruction_pointer.as_u64();
+                    current_ctx.rsp = stack_frame.stack_pointer.as_u64();
+                    current_ctx.rflags = stack_frame.cpu_flags.bits();
+                    current_ctx.cs = stack_frame.code_segment.0;
+                    current_ctx.ss = stack_frame.stack_segment.0;
+
+                    if let Some(next) = scheduler.timer_tick(&current_ctx) {
+                        switched = Some((next.0.0, next.1));
+                    }
+                }
+            }
+        }
+    }
+
+    if let Some((next_pid, next)) = switched {
+        serial_println!(
+            "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x}",
+            next_pid,
+            next.iret.rip
+        );
+        let frame = InterruptStackFrameValue::new(
+            VirtAddr::new(next.iret.rip),
+            x86_64::structures::gdt::SegmentSelector::from_raw(next.iret.cs),
+            RFlags::from_bits_truncate(next.iret.rflags),
+            VirtAddr::new(next.iret.rsp),
+            x86_64::structures::gdt::SegmentSelector::from_raw(next.iret.ss),
+        );
+        unsafe { stack_frame.as_mut().write(frame); }
+    }
+
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
