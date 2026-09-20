@@ -7,7 +7,8 @@
 use crate::gdt;
 use crate::serial_println;
 use crate::user_sched::{SavedContext, UserScheduler};
-use crate::userspace::{UserAddressSpace, UserBinary, UserContext};
+use crate::userspace::UserContext;
+use core::arch::global_asm;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use spin::Mutex;
@@ -64,7 +65,10 @@ lazy_static! {
                 .set_handler_fn(double_fault_handler)
                 .set_stack_index(gdt::DOUBLE_FAULT_IST_INDEX);
         }
-        idt[InterruptIndex::Timer.as_u8()].set_handler_fn(timer_interrupt_handler);
+        unsafe {
+            idt[InterruptIndex::Timer.as_u8()]
+                .set_handler_addr(timer_interrupt_entry_addr())
+        };
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
         // User-mode software interrupt gate. DPL3 permits CPL3 to enter the kernel.
         idt[0x80].set_handler_fn(syscall_interrupt_handler)
@@ -106,55 +110,154 @@ extern "x86-interrupt" fn page_fault_handler(
     serial_println!("{:#?}", stack_frame);
 }
 
-extern "x86-interrupt" fn timer_interrupt_handler(mut stack_frame: InterruptStackFrame) {
-    let mut switched: Option<(u32, SavedContext)> = None;
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UserTrapFrame {
+    pub rax: u64,
+    pub rbx: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub rbp: u64,
+    pub r8: u64,
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
+    pub rip: u64,
+    pub cs: u64,
+    pub rflags: u64,
+    pub rsp: u64,
+    pub ss: u64,
+}
 
-    {
-        let mut guard = USER_SCHEDULER.lock();
-        if let Some(scheduler) = guard.as_mut() {
-            if let Some(current_pid) = scheduler.current_pid() {
-                if let Some(entry) = scheduler.get_entry(current_pid) {
-                    let saved = entry.saved_ctx;
-                    let binary =
-                        UserBinary::from_bytes("timer-context", alloc::vec![0x90], saved.iret.rip);
-                    let mut current_ctx =
-                        UserContext::new(current_pid, &binary, UserAddressSpace::default());
-                    current_ctx.rip = stack_frame.instruction_pointer.as_u64();
-                    current_ctx.rsp = stack_frame.stack_pointer.as_u64();
-                    current_ctx.rflags = stack_frame.cpu_flags.bits();
-                    current_ctx.cs = stack_frame.code_segment.0;
-                    current_ctx.ss = stack_frame.stack_segment.0;
-
-                    if let Some(next) = scheduler.timer_tick(&current_ctx) {
-                        switched = Some((next.0 .0, next.1));
-                    }
-                }
-            }
+impl UserTrapFrame {
+    fn saved_context(&self) -> SavedContext {
+        SavedContext {
+            regs: crate::user_sched::SavedRegisters {
+                rax: self.rax,
+                rbx: self.rbx,
+                rcx: self.rcx,
+                rdx: self.rdx,
+                rsi: self.rsi,
+                rdi: self.rdi,
+                rbp: self.rbp,
+                rsp: self.rsp,
+                r8: self.r8,
+                r9: self.r9,
+                r10: self.r10,
+                r11: self.r11,
+                r12: self.r12,
+                r13: self.r13,
+                r14: self.r14,
+                r15: self.r15,
+            },
+            iret: crate::user_sched::IretFrame {
+                rip: self.rip,
+                cs: self.cs as u16,
+                rflags: self.rflags,
+                rsp: self.rsp,
+                ss: self.ss as u16,
+            },
         }
     }
 
-    if let Some((next_pid, next)) = switched {
+    fn restore(&mut self, ctx: SavedContext) {
+        self.rax = ctx.regs.rax;
+        self.rbx = ctx.regs.rbx;
+        self.rcx = ctx.regs.rcx;
+        self.rdx = ctx.regs.rdx;
+        self.rsi = ctx.regs.rsi;
+        self.rdi = ctx.regs.rdi;
+        self.rbp = ctx.regs.rbp;
+        self.r8 = ctx.regs.r8;
+        self.r9 = ctx.regs.r9;
+        self.r10 = ctx.regs.r10;
+        self.r11 = ctx.regs.r11;
+        self.r12 = ctx.regs.r12;
+        self.r13 = ctx.regs.r13;
+        self.r14 = ctx.regs.r14;
+        self.r15 = ctx.regs.r15;
+        self.rip = ctx.iret.rip;
+        self.cs = ctx.iret.cs as u64;
+        self.rflags = ctx.iret.rflags;
+        self.rsp = ctx.iret.rsp;
+        self.ss = ctx.iret.ss as u64;
+    }
+}
+
+global_asm!(
+    r#"
+    .global shivacore_timer_trampoline
+shivacore_timer_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov rdi, rsp
+    call {handler}
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    iretq
+"#,
+    handler = sym timer_trap_rust
+);
+
+#[no_mangle]
+extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
+    let mut guard = USER_SCHEDULER.lock();
+    let Some(scheduler) = guard.as_mut() else {
+        unsafe { PICS.lock().notify_end_of_interrupt(InterruptIndex::Timer.as_u8()); }
+        return;
+    };
+
+    let current = frame.saved_context();
+    if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
         serial_println!(
-            "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x}",
-            next_pid,
-            next.iret.rip
+            "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x} RAX={:#x}",
+            next_pid.0,
+            next.iret.rip,
+            next.regs.rax
         );
-        let frame = InterruptStackFrameValue::new(
-            VirtAddr::new(next.iret.rip),
-            x86_64::structures::gdt::SegmentSelector::from_raw(next.iret.cs),
-            RFlags::from_bits_truncate(next.iret.rflags),
-            VirtAddr::new(next.iret.rsp),
-            x86_64::structures::gdt::SegmentSelector::from_raw(next.iret.ss),
-        );
-        unsafe {
-            stack_frame.as_mut().write(frame);
-        }
+        frame.restore(next);
     }
 
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
     }
+}
+
+fn timer_interrupt_entry_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_timer_trampoline as usize as u64)
 }
 
 extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
