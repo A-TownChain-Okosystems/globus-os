@@ -68,7 +68,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     interrupts::init_idt();
     x86_64::instructions::interrupts::int3();
     interrupts::init_pics();
-    serial_println!("ShivaCore: GDT/IDT/PIC initialized (interrupts still disabled).");
+    interrupts::init_timer();
+    serial_println!("ShivaCore: GDT/IDT/PIC/timer initialized (interrupts still disabled).");
 
     let phys_mem_offset = boot_info
         .physical_memory_offset
