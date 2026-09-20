@@ -1,6 +1,19 @@
 name: ShivaCore Real QEMU Gate
 
-on: [push, pull_request, workflow_dispatch]
+on:
+  push:
+    paths:
+      - "modules/atc-shivacore/kernel/**"
+      - "modules/atc-shivacore/boot/**"
+      - "Cargo.toml"
+      - ".github/workflows/shivacore-qemu-gate.yml"
+  pull_request:
+    paths:
+      - "modules/atc-shivacore/kernel/**"
+      - "modules/atc-shivacore/boot/**"
+      - "Cargo.toml"
+      - ".github/workflows/shivacore-qemu-gate.yml"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,6 +39,9 @@ jobs:
         with:
           targets: x86_64-unknown-none
           components: llvm-tools-preview, rust-src
+
+      - name: Check Rust formatting
+        run: cargo fmt --all -- --check
 
       - name: Run ShivaCore unit tests
         env:
@@ -75,6 +91,7 @@ jobs:
           grep -q "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log
           grep -q "ShivaCore: scheduler preemption -> context switch to PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log
           grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log
           grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log
 
           python3 - <<'PY'
