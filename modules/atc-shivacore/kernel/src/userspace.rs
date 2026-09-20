@@ -1138,11 +1138,12 @@ mod tests {
         // 2. Enter userspace (validate)
         let ctx = mgr.enter_userspace(pid).unwrap();
         assert!(ctx.is_user_mode());
+        let rip = ctx.rip;
         // 3. Handle syscalls
         let rsp = mgr.handle_syscall(pid, 1, &[]).unwrap();
         assert!(rsp > 0);
         // 4. Check memory
-        assert!(mgr.check_memory_access(pid, ctx.rip, 1).is_ok());
+        assert!(mgr.check_memory_access(pid, rip, 1).is_ok());
         // 5. Exit
         assert!(mgr.exit_process(pid, 0));
         assert_eq!(mgr.active_count(), 0);
