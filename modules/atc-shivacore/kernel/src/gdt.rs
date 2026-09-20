@@ -18,6 +18,10 @@ const STACK_SIZE: usize = 4096 * 5;
 // Kernel stack used when the CPU transitions from CPL3 to CPL0.
 const RING3_KERNEL_STACK_SIZE: usize = 4096 * 8;
 
+/// Statically allocated stacks with explicit ABI-safe alignment.
+#[repr(align(16))]
+struct AlignedStack<const N: usize>([u8; N]);
+
 lazy_static! {
     static ref TSS: TaskStateSegment = {
         let mut tss = TaskStateSegment::new();
