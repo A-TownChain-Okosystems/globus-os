@@ -47,6 +47,7 @@ jobs:
         run: |
           cargo build -p shivacore --release \
             --target x86_64-unknown-none \
+            --no-default-features \
             --features x86-boot
 
       - name: Build BIOS and UEFI images
