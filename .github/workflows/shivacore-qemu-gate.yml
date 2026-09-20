@@ -1,9 +1,6 @@
 name: ShivaCore Real QEMU Gate
 
-on:
-  push:
-  pull_request:
-  workflow_dispatch:
+on: [push, pull_request, workflow_dispatch]
 
 permissions:
   contents: read
