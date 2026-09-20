@@ -165,7 +165,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         code_size: 0x0010_0000,
         data_base: 0x0150_0000,
         data_size: 0x0010_0000,
-        stack_base: 0x07FF_F000,
+        // PID 1001 needs a disjoint stack: the first process uses
+        // 0x7FFFF000, so mapping the same pages twice would fail map_to().
+        stack_base: 0x08FF_F000,
         stack_size: 0x0001_0000,
         heap_base: 0x0160_0000,
         heap_size: 0x0020_0000,
