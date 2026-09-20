@@ -253,7 +253,11 @@ impl SchedEntry {
 
     /// Save context when being preempted
     pub fn save_context(&mut self, ctx: &UserContext) {
-        self.saved_ctx = SavedContext::from_user_context(ctx);
+        self.save_saved_context(SavedContext::from_user_context(ctx));
+    }
+
+    pub fn save_saved_context(&mut self, ctx: SavedContext) {
+        self.saved_ctx = ctx;
         self.context_switches += 1;
     }
 
@@ -372,7 +376,6 @@ impl UserScheduler {
     pub fn schedule(&mut self, current_ctx: Option<&UserContext>) -> Option<(Pid, SavedContext)> {
         self.context_switches += 1;
 
-        // Save current context if we have a running process
         if let Some(pid) = self.current {
             if let Some(ctx) = current_ctx {
                 if let Some(entry) = self.get_entry_mut(pid) {
@@ -400,6 +403,62 @@ impl UserScheduler {
 
         let saved = self.entries[next_idx].restore_context();
         Some((next_pid, saved))
+    }
+
+    /// Schedule directly from a CPU trap frame without reconstructing a synthetic UserContext.
+    pub fn schedule_saved(&mut self, current_ctx: SavedContext) -> Option<(Pid, SavedContext)> {
+        self.context_switches += 1;
+
+        if let Some(pid) = self.current {
+            if let Some(entry) = self.get_entry_mut(pid) {
+                entry.save_saved_context(current_ctx);
+            }
+        }
+
+        let next_idx = self.pick_next()?;
+
+        if let Some(old_pid) = self.current {
+            if let Some(entry) = self.get_entry_mut(old_pid) {
+                if entry.state == SchedState::Running {
+                    entry.state = SchedState::Ready;
+                }
+            }
+        }
+
+        let next_pid = self.entries[next_idx].pid;
+        self.entries[next_idx].state = SchedState::Running;
+        self.entries[next_idx].reset_quantum();
+        self.current = Some(next_pid);
+        Some((next_pid, self.entries[next_idx].restore_context()))
+    }
+
+    /// Timer tick driven by the real CPU-saved interrupt frame.
+    pub fn timer_tick_saved(&mut self, current_ctx: SavedContext) -> Option<(Pid, SavedContext)> {
+        self.timer_ticks += 1;
+
+        for entry in &mut self.entries {
+            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
+                if self.timer_ticks >= *wake {
+                    entry.state = SchedState::Ready;
+                    entry.wake_tick = None;
+                }
+            }
+        }
+
+        if let Some(pid) = self.current {
+            if let Some(entry) = self.get_entry_mut(pid) {
+                let expired = entry.tick_quantum();
+                if expired {
+                    self.preemptions += 1;
+                    return self.schedule_saved(current_ctx);
+                }
+                entry.save_saved_context(current_ctx);
+            }
+        } else {
+            return self.schedule_saved(current_ctx);
+        }
+
+        None
     }
 
     /// Timer tick handler: called on every timer interrupt.
