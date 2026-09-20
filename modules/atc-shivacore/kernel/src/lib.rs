@@ -35,6 +35,7 @@ pub mod system;
 pub mod tcpip;
 pub mod timer;
 pub mod userspace;
+pub mod user_sched;
 pub mod vfs;
 pub mod vm;
 pub mod vmm;
