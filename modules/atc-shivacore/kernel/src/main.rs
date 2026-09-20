@@ -96,6 +96,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
 
     println!("K-Sprint 2: Paging/Heap OK (Box+Vec getestet)");
+    // Real kernel integration gate: execute the canonical kernel initialization
+    // from the same UEFI -> kernel_main path after paging/heap are live.
+    let kernel_state = shivacore::kernel_init::KernelState::boot()
+        .expect("ShivaCore: canonical KernelState::boot() failed");
+    serial_println!("ShivaCore: KernelState::boot() -> Done.");
+    serial_println!("{}", kernel_state.boot_log());
+    serial_println!("ShivaCore: kernel init chain connected to kernel_main.");
+
     serial_println!("ShivaCore: K-Sprint 2 abgeschlossen. Uebergabe an Idle-Loop.");
 
     loop {
