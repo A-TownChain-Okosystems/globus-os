@@ -18,7 +18,8 @@ bench = false
 crate-type = ["lib"]
 
 [features]
-default = []
+default = ["full-stack"]
+full-stack = []
 x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:pc-keyboard", "dep:volatile", "dep:noto-sans-mono-bitmap"]
 
 [dependencies]
