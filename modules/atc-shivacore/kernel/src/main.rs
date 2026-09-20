@@ -29,6 +29,7 @@ use bootloader_api::{
     entry_point, BootInfo,
 };
 use core::panic::PanicInfo;
+use shivacore::userspace;
 
 // Bootloader anweisen, das gesamte physische RAM linear ins virtuelle
 // Adressvolumen zu mappen (Voraussetzung fuer den Paging-Mapper in memory.rs).
@@ -126,7 +127,32 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_ctx.rip,
         user_ctx.rsp
     );
-    serial_println!("ShivaCore: entering user process PID={}", user_pid.0);
+
+    // Second real Ring-3 image. Both processes intentionally share the current
+    // kernel page table for this first scheduler gate; the scheduler switches
+    // the CPU IRET frame while CR3/address-space switching remains a later gate.
+    let user_binary_2 =
+        userspace::UserBinary::from_bytes("ring3-smoke-2", alloc::vec![0xEB, 0xFE], 0x0040_1000);
+    let user_addr_space_2 = userspace::UserAddressSpace::default();
+    unsafe {
+        userspace::map_user_binary(
+            &mut mapper,
+            &mut frame_allocator,
+            phys_mem_offset,
+            &user_binary_2,
+            &user_addr_space_2,
+        )
+        .expect("ShivaCore: second USER-001 user page mapping failed");
+    }
+    let user_pid_2 = ats1000::Pid(1001);
+    let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
+
+    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
+    serial_println!(
+        "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
+        user_pid.0,
+        user_pid_2.0
+    );
     unsafe { userspace::enter_ring3(&user_ctx) }
 
     serial_println!("{}", kernel_state.boot_log());
