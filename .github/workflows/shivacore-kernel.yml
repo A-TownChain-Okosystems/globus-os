@@ -2,7 +2,7 @@ name: ShivaCore Kernel Boot
 
 on:
   push:
-    branches: [main]
+    branches: [main, "ci/verify-sched001-qemu-2026-09-20"]
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
