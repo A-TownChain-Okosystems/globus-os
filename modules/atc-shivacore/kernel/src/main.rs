@@ -107,7 +107,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
     let user_binary =
-        userspace::UserBinary::from_bytes("ring3-smoke", alloc::vec![0xEB, 0xFE], 0x0040_0000);
+        userspace::UserBinary::from_bytes("ring3-smoke", alloc::vec![
+            0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x1000
+            0x48, 0xBB, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x1001
+            0x49, 0xBC, 0x12, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x1012
+            0xEB, 0xFE, // loop forever until timer preemption
+        ], 0x0040_0000);
     let user_addr_space = userspace::UserAddressSpace::default();
     unsafe {
         userspace::map_user_binary(
@@ -132,7 +137,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // kernel page table for this first scheduler gate; the scheduler switches
     // the CPU IRET frame while CR3/address-space switching remains a later gate.
     let user_binary_2 =
-        userspace::UserBinary::from_bytes("ring3-smoke-2", alloc::vec![0xEB, 0xFE], 0x0040_1000);
+        userspace::UserBinary::from_bytes("ring3-smoke-2", alloc::vec![
+            0x48, 0xB8, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x2000
+            0x48, 0xBB, 0x01, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x2001
+            0x49, 0xBC, 0x12, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x2012
+            0xEB, 0xFE, // loop forever until timer preemption
+        ], 0x0040_1000);
     let user_addr_space_2 = userspace::UserAddressSpace::default();
     unsafe {
         userspace::map_user_binary(
