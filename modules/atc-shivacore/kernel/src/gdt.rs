@@ -15,6 +15,9 @@ pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 
 const STACK_SIZE: usize = 4096 * 5;
 
+// Kernel stack used when the CPU transitions from CPL3 to CPL0.
+const RING3_KERNEL_STACK_SIZE: usize = 4096 * 8;
+
 lazy_static! {
     static ref TSS: TaskStateSegment = {
         let mut tss = TaskStateSegment::new();
@@ -24,12 +27,20 @@ lazy_static! {
             let stack_start = VirtAddr::from_ptr(core::ptr::addr_of!(STACK));
             stack_start + STACK_SIZE as u64
         };
+        static mut RING3_KERNEL_STACK: [u8; RING3_KERNEL_STACK_SIZE] = [0; RING3_KERNEL_STACK_SIZE];
+        tss.privilege_stack_table[0] = {
+            let stack_start = VirtAddr::from_ptr(core::ptr::addr_of!(RING3_KERNEL_STACK));
+            stack_start + RING3_KERNEL_STACK_SIZE as u64
+        };
         tss
     };
 }
 
 struct Selectors {
     code_selector: SegmentSelector,
+    data_selector: SegmentSelector,
+    user_code_selector: SegmentSelector,
+    user_data_selector: SegmentSelector,
     tss_selector: SegmentSelector,
 }
 
@@ -37,11 +48,17 @@ lazy_static! {
     static ref GDT: (GlobalDescriptorTable, Selectors) = {
         let mut gdt = GlobalDescriptorTable::new();
         let code_selector = gdt.append(Descriptor::kernel_code_segment());
+        let data_selector = gdt.append(Descriptor::kernel_data_segment());
+        let user_code_selector = gdt.append(Descriptor::user_code_segment());
+        let user_data_selector = gdt.append(Descriptor::user_data_segment());
         let tss_selector = gdt.append(Descriptor::tss_segment(&TSS));
         (
             gdt,
             Selectors {
                 code_selector,
+                data_selector,
+                user_code_selector,
+                user_data_selector,
                 tss_selector,
             },
         )
@@ -52,6 +69,7 @@ pub fn init() {
     GDT.0.load();
     unsafe {
         CS::set_reg(GDT.1.code_selector);
+        SS::set_reg(GDT.1.data_selector);
         load_tss(GDT.1.tss_selector);
         // WICHTIG: Der alte SS-Selektor (vom Bootloader-eigenen GDT) zeigt nach
         // dem Laden unseres neuen, minimalen GDT ins Leere/auf einen ungueltigen
@@ -64,3 +82,9 @@ pub fn init() {
         SS::set_reg(SegmentSelector::NULL);
     }
 }
+
+
+/// Selectors used by a real CPL0 <-> CPL3 transition.
+pub fn user_code_selector() -> SegmentSelector { GDT.1.user_code_selector }
+pub fn user_data_selector() -> SegmentSelector { GDT.1.user_data_selector }
+pub fn kernel_code_selector() -> SegmentSelector { GDT.1.code_selector }
