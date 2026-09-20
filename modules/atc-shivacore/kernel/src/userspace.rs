@@ -89,9 +89,16 @@ impl UserAddressSpace {
     pub fn in_heap(&self, addr: u64) -> bool {
         addr >= self.heap_base && addr < self.heap_base + self.heap_size
     }
-    /// Stack pointer initial value (top of stack)
+    /// Initial user stack pointer.
+    ///
+    /// `stack_base` is the exclusive upper boundary of the mapped stack region.
+    /// RSP must point into a mapped byte, not one byte/page boundary above it.
+    /// Keeping an 8-byte headroom also gives the first user-mode push a valid
+    /// location inside the mapped stack.
     pub fn initial_rsp(&self) -> u64 {
         self.stack_base
+            .checked_sub(8)
+            .expect("user stack base must leave room for the initial RSP")
     }
 }
 
