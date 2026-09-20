@@ -120,7 +120,7 @@ impl UserBinary {
     pub fn hello_world() -> Self {
         Self {
             entry_point: 0x00400000,
-            code: vec![0xF4], // HLT instruction
+            // HLT is privileged at CPL3 and would immediately raise #GP.\n            // Use a non-privileged idle loop for a valid Ring-3 smoke binary.\n            code: vec![0xEB, 0xFE], // JMP $ (loop forever)
             data: vec![],
             name: "hello".to_string(),
         }
