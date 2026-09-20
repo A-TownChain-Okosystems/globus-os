@@ -87,6 +87,36 @@ pub fn init_pics() {
     }
 }
 
+/// Program the legacy 8253/8254 PIT so IRQ0 produces a real hardware timer
+/// interrupt during the Ring-3 scheduler gate. The PIC is already remapped to
+/// vector 0x20, so channel 0 is the source for InterruptIndex::Timer.
+pub fn init_timer() {
+    use x86_64::instructions::port::Port;
+
+    // 100 Hz gives a deterministic 10 ms scheduling quantum while remaining
+    // well within the range supported by the legacy PIT.
+    const PIT_FREQUENCY_HZ: u32 = 1_193_182;
+    const TICK_HZ: u32 = 100;
+    let divisor = (PIT_FREQUENCY_HZ / TICK_HZ).min(u16::MAX as u32) as u16;
+
+    unsafe {
+        let mut command: Port<u8> = Port::new(0x43);
+        let mut channel0: Port<u8> = Port::new(0x40);
+
+        // Channel 0, access low byte then high byte, mode 3 (square wave),
+        // binary counter.
+        command.write(0x36);
+        channel0.write((divisor & 0xFF) as u8);
+        channel0.write((divisor >> 8) as u8);
+    }
+
+    serial_println!(
+        "ShivaCore: PIT timer initialized: {} Hz divisor={}",
+        TICK_HZ,
+        divisor
+    );
+}
+
 /// Enable hardware interrupts only after the real Ring-3 scheduler has been
 /// armed. Keeping IF=0 during mapping/initialization prevents timer IRQs from
 /// entering the trap path before a valid userspace context exists.
