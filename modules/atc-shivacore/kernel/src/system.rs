@@ -5,10 +5,10 @@
 // Boot-Sequence, Init-Prozess (PID 1), Prozessgruppen/Sessions,
 // User/Group IDs, SystemManager (Top-Level Integration aller Subsysteme).
 
-use crate::ats1000::{Pid, ExitCode};
+use crate::ats1000::{ExitCode, Pid};
+use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
-use alloc::collections::BTreeMap;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Boot Phases
@@ -61,23 +61,31 @@ impl BootPhase {
     }
 
     pub fn is_pre_userspace(&self) -> bool {
-        matches!(self, BootPhase::PreBoot | BootPhase::Early | BootPhase::Memory
-            | BootPhase::Core | BootPhase::Drivers | BootPhase::Filesystem | BootPhase::Network)
+        matches!(
+            self,
+            BootPhase::PreBoot
+                | BootPhase::Early
+                | BootPhase::Memory
+                | BootPhase::Core
+                | BootPhase::Drivers
+                | BootPhase::Filesystem
+                | BootPhase::Network
+        )
     }
 
     pub fn name(&self) -> &'static str {
         match self {
-            BootPhase::PreBoot   => "pre-boot",
-            BootPhase::Early     => "early",
-            BootPhase::Memory    => "memory",
-            BootPhase::Core      => "core",
-            BootPhase::Drivers   => "drivers",
+            BootPhase::PreBoot => "pre-boot",
+            BootPhase::Early => "early",
+            BootPhase::Memory => "memory",
+            BootPhase::Core => "core",
+            BootPhase::Drivers => "drivers",
             BootPhase::Filesystem => "filesystem",
-            BootPhase::Network   => "network",
+            BootPhase::Network => "network",
             BootPhase::Userspace => "userspace",
-            BootPhase::Init      => "init",
-            BootPhase::Running   => "running",
-            BootPhase::Shutdown  => "shutdown",
+            BootPhase::Init => "init",
+            BootPhase::Running => "running",
+            BootPhase::Shutdown => "shutdown",
         }
     }
 }
@@ -91,11 +99,13 @@ pub struct BootSequence {
     completed_phases: Vec<BootPhase>,
     boot_log: Vec<String>,
     boot_time_ns: u64,
-    phase_timestamps: BTreeMap<u8, u64>,  // phase ordinal → timestamp
+    phase_timestamps: BTreeMap<u8, u64>, // phase ordinal → timestamp
 }
 
 impl Default for BootSequence {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BootSequence {
@@ -109,16 +119,26 @@ impl BootSequence {
         }
     }
 
-    pub fn current_phase(&self) -> BootPhase { self.current_phase }
+    pub fn current_phase(&self) -> BootPhase {
+        self.current_phase
+    }
 
     pub fn advance(&mut self, timestamp_ns: u64) -> BootPhase {
         let phases = BootPhase::order();
-        let current_idx = phases.iter().position(|p| *p == self.current_phase).unwrap_or(0);
+        let current_idx = phases
+            .iter()
+            .position(|p| *p == self.current_phase)
+            .unwrap_or(0);
 
         // Log completion of current phase
         self.completed_phases.push(self.current_phase);
-        self.phase_timestamps.insert(self.current_phase as u8, timestamp_ns);
-        self.log(&format!("phase '{}' completed at {}ns", self.current_phase.name(), timestamp_ns));
+        self.phase_timestamps
+            .insert(self.current_phase as u8, timestamp_ns);
+        self.log(&format!(
+            "phase '{}' completed at {}ns",
+            self.current_phase.name(),
+            timestamp_ns
+        ));
 
         if current_idx + 1 < phases.len() {
             self.current_phase = phases[current_idx + 1];
@@ -127,11 +147,19 @@ impl BootSequence {
         self.current_phase
     }
 
-    pub fn is_running(&self) -> bool { self.current_phase == BootPhase::Running }
-    pub fn is_booting(&self) -> bool { self.current_phase != BootPhase::Running && self.current_phase != BootPhase::Shutdown }
+    pub fn is_running(&self) -> bool {
+        self.current_phase == BootPhase::Running
+    }
+    pub fn is_booting(&self) -> bool {
+        self.current_phase != BootPhase::Running && self.current_phase != BootPhase::Shutdown
+    }
 
-    pub fn completed_count(&self) -> usize { self.completed_phases.len() }
-    pub fn total_phases(&self) -> usize { BootPhase::order().len() }
+    pub fn completed_count(&self) -> usize {
+        self.completed_phases.len()
+    }
+    pub fn total_phases(&self) -> usize {
+        BootPhase::order().len()
+    }
 
     pub fn boot_progress(&self) -> f32 {
         let completed = self.completed_count() as f32;
@@ -140,10 +168,13 @@ impl BootSequence {
     }
 
     pub fn log(&mut self, msg: &str) {
-        self.boot_log.push(format!("[{}] {}", self.current_phase.name(), msg));
+        self.boot_log
+            .push(format!("[{}] {}", self.current_phase.name(), msg));
     }
 
-    pub fn boot_log(&self) -> &[String] { &self.boot_log }
+    pub fn boot_log(&self) -> &[String] {
+        &self.boot_log
+    }
 
     pub fn phase_time(&self, phase: BootPhase) -> Option<u64> {
         self.phase_timestamps.get(&(phase as u8)).copied()
@@ -177,17 +208,27 @@ pub const INIT_PID: u32 = 1;
 pub struct UserGroup {
     pub uid: u32,
     pub gid: u32,
-    pub euid: u32,  // Effective UID
+    pub euid: u32, // Effective UID
     pub egid: u32, // Effective GID
 }
 
 impl UserGroup {
     pub fn root() -> Self {
-        Self { uid: ROOT_UID, gid: ROOT_GID, euid: ROOT_UID, egid: ROOT_GID }
+        Self {
+            uid: ROOT_UID,
+            gid: ROOT_GID,
+            euid: ROOT_UID,
+            egid: ROOT_GID,
+        }
     }
 
     pub fn new(uid: u32, gid: u32) -> Self {
-        Self { uid, gid, euid: uid, egid: gid }
+        Self {
+            uid,
+            gid,
+            euid: uid,
+            egid: gid,
+        }
     }
 
     pub fn is_root(&self) -> bool {
@@ -234,7 +275,12 @@ pub struct ProcessGroup {
 
 impl ProcessGroup {
     pub fn new(pgid: Pgid, leader: Pid, session: Sid) -> Self {
-        Self { pgid, leader, members: vec![leader], session }
+        Self {
+            pgid,
+            leader,
+            members: vec![leader],
+            session,
+        }
     }
 
     pub fn add_member(&mut self, pid: Pid) {
@@ -248,8 +294,12 @@ impl ProcessGroup {
         !self.members.is_empty()
     }
 
-    pub fn member_count(&self) -> usize { self.members.len() }
-    pub fn contains(&self, pid: Pid) -> bool { self.members.contains(&pid) }
+    pub fn member_count(&self) -> usize {
+        self.members.len()
+    }
+    pub fn contains(&self, pid: Pid) -> bool {
+        self.members.contains(&pid)
+    }
 }
 
 /// A login session
@@ -263,7 +313,12 @@ pub struct Session {
 
 impl Session {
     pub fn new(sid: Sid, leader: Pid) -> Self {
-        Self { sid, leader, groups: Vec::new(), controlling_tty: None }
+        Self {
+            sid,
+            leader,
+            groups: Vec::new(),
+            controlling_tty: None,
+        }
     }
 
     pub fn add_group(&mut self, pgid: Pgid) {
@@ -276,7 +331,9 @@ impl Session {
         self.controlling_tty = Some(tty);
     }
 
-    pub fn group_count(&self) -> usize { self.groups.len() }
+    pub fn group_count(&self) -> usize {
+        self.groups.len()
+    }
 }
 
 /// Process group/session manager
@@ -290,7 +347,9 @@ pub struct ProcessGroupManager {
 }
 
 impl Default for ProcessGroupManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl ProcessGroupManager {
@@ -394,12 +453,17 @@ impl ProcessGroupManager {
         self.process_sessions.remove(&pid.0);
     }
 
-    pub fn group_count(&self) -> usize { self.groups.len() }
-    pub fn session_count(&self) -> usize { self.sessions.len() }
+    pub fn group_count(&self) -> usize {
+        self.groups.len()
+    }
+    pub fn session_count(&self) -> usize {
+        self.sessions.len()
+    }
 
     /// Send a signal to all processes in a group (killpg)
     pub fn group_members(&self, pgid: Pgid) -> Vec<Pid> {
-        self.groups.iter()
+        self.groups
+            .iter()
             .find(|g| g.pgid == pgid)
             .map(|g| g.members.clone())
             .unwrap_or_default()
@@ -427,7 +491,7 @@ pub enum InitState {
     NotStarted,
     Starting,
     Running,
-    Reaping,    // Reaping zombie children
+    Reaping, // Reaping zombie children
     ShuttingDown,
     Exited,
 }
@@ -439,8 +503,8 @@ pub struct InitConfig {
     pub uid: u32,
     pub gid: u32,
     pub env: Vec<(String, String)>,
-    pub auto_reap: bool,      // Auto-reap zombie children
-    pub max_restarts: u32,    // Max restarts if init crashes
+    pub auto_reap: bool,   // Auto-reap zombie children
+    pub max_restarts: u32, // Max restarts if init crashes
     pub restart_count: u32,
 }
 
@@ -500,14 +564,18 @@ impl InitProcess {
         self.children.retain(|p| *p != pid);
     }
 
-    pub fn child_count(&self) -> usize { self.children.len() }
+    pub fn child_count(&self) -> usize {
+        self.children.len()
+    }
 
     pub fn should_restart(&self) -> bool {
         self.config.restart_count < self.config.max_restarts
     }
 
     pub fn restart(&mut self) -> bool {
-        if !self.should_restart() { return false; }
+        if !self.should_restart() {
+            return false;
+        }
         self.config.restart_count += 1;
         self.state = InitState::Starting;
         self.children.clear();
@@ -524,8 +592,12 @@ impl InitProcess {
         self.state = InitState::Exited;
     }
 
-    pub fn is_running(&self) -> bool { self.state == InitState::Running }
-    pub fn is_exited(&self) -> bool { self.state == InitState::Exited }
+    pub fn is_running(&self) -> bool {
+        self.state == InitState::Running
+    }
+    pub fn is_exited(&self) -> bool {
+        self.state == InitState::Exited
+    }
 
     pub fn uptime_ns(&self, now_ns: u64) -> u64 {
         now_ns.saturating_sub(self.start_time_ns)
@@ -537,16 +609,18 @@ impl InitProcess {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 pub struct SystemManager {
-    pub boot:        BootSequence,
-    pub init:        InitProcess,
+    pub boot: BootSequence,
+    pub init: InitProcess,
     pub proc_groups: ProcessGroupManager,
-    pub system_uid:  UserGroup,
-    pub uptime_ns:   u64,
-    pub running:     bool,
+    pub system_uid: UserGroup,
+    pub uptime_ns: u64,
+    pub running: bool,
 }
 
 impl Default for SystemManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SystemManager {
@@ -580,12 +654,14 @@ impl SystemManager {
         self.boot.advance(ts);
 
         // Phase 3: Core (process manager, scheduler, capabilities)
-        self.boot.log("initializing process manager, scheduler, capabilities");
+        self.boot
+            .log("initializing process manager, scheduler, capabilities");
         ts += 5_000_000;
         self.boot.advance(ts);
 
         // Phase 4: Drivers (PCI, HPET, virtio-blk, virtio-net)
-        self.boot.log("scanning PCI bus, initializing HPET, virtio-blk, virtio-net");
+        self.boot
+            .log("scanning PCI bus, initializing HPET, virtio-blk, virtio-net");
         ts += 10_000_000;
         self.boot.advance(ts);
 
@@ -595,12 +671,14 @@ impl SystemManager {
         self.boot.advance(ts);
 
         // Phase 6: Network (Ethernet, ARP, TCP/IP)
-        self.boot.log("initializing network stack, ARP table, TCP/IP");
+        self.boot
+            .log("initializing network stack, ARP table, TCP/IP");
         ts += 8_000_000;
         self.boot.advance(ts);
 
         // Phase 7: Userspace (userspace manager, ELF loader, signals)
-        self.boot.log("initializing userspace manager, ELF loader, signal manager");
+        self.boot
+            .log("initializing userspace manager, ELF loader, signal manager");
         ts += 4_000_000;
         self.boot.advance(ts);
 
@@ -624,14 +702,26 @@ impl SystemManager {
         self.running = false;
     }
 
-    pub fn uptime_ns(&self) -> u64 { self.uptime_ns }
-    pub fn uptime_ms(&self) -> u64 { self.uptime_ns / 1_000_000 }
-    pub fn uptime_secs(&self) -> u64 { self.uptime_ns / 1_000_000_000 }
+    pub fn uptime_ns(&self) -> u64 {
+        self.uptime_ns
+    }
+    pub fn uptime_ms(&self) -> u64 {
+        self.uptime_ns / 1_000_000
+    }
+    pub fn uptime_secs(&self) -> u64 {
+        self.uptime_ns / 1_000_000_000
+    }
 
-    pub fn is_running(&self) -> bool { self.running }
+    pub fn is_running(&self) -> bool {
+        self.running
+    }
 
-    pub fn boot_progress(&self) -> f32 { self.boot.boot_progress() }
-    pub fn current_phase(&self) -> BootPhase { self.boot.current_phase() }
+    pub fn boot_progress(&self) -> f32 {
+        self.boot.boot_progress()
+    }
+    pub fn current_phase(&self) -> BootPhase {
+        self.boot.current_phase()
+    }
 
     pub fn tick(&mut self, elapsed_ns: u64) {
         if self.running {
@@ -641,7 +731,9 @@ impl SystemManager {
 
     /// Create a new user process (fork from init or another process)
     pub fn spawn_user_process(&mut self, parent: Pid, new_pid: Pid) -> bool {
-        if !self.running { return false; }
+        if !self.running {
+            return false;
+        }
 
         // Add to init's children if parent is init
         if parent == Pid(INIT_PID) {
@@ -676,7 +768,11 @@ impl SystemManager {
             self.boot.current_phase().name(),
             self.uptime_ms(),
             self.init.pid.0,
-            if self.init.is_running() { "running" } else { "stopped" },
+            if self.init.is_running() {
+                "running"
+            } else {
+                "stopped"
+            },
             self.proc_groups.session_count(),
             self.proc_groups.group_count(),
             self.boot.boot_progress(),

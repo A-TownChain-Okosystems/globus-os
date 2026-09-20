@@ -5,7 +5,7 @@
 // User-Level Prozesse (Ring 3): Privilege-Level-Wechsel, User-Address-Spaces,
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
-use crate::ats1000::{Pid, ExitCode};
+use crate::ats1000::{ExitCode, Pid};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Privilege Levels
@@ -39,27 +39,27 @@ impl PrivilegeLevel {
 /// Layout eines User-Address-Space (flat model, 4 GiB window)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserAddressSpace {
-    pub code_base:   u64,
-    pub code_size:   u64,
-    pub data_base:   u64,
-    pub data_size:   u64,
-    pub stack_base:  u64,   // Top of stack (grows downward)
-    pub stack_size:  u64,
-    pub heap_base:   u64,
-    pub heap_size:   u64,
+    pub code_base: u64,
+    pub code_size: u64,
+    pub data_base: u64,
+    pub data_size: u64,
+    pub stack_base: u64, // Top of stack (grows downward)
+    pub stack_size: u64,
+    pub heap_base: u64,
+    pub heap_size: u64,
 }
 
 impl Default for UserAddressSpace {
     fn default() -> Self {
         Self {
-            code_base:  0x00400000,   // 4 MiB
-            code_size:  0x00100000,   // 1 MiB code region
-            data_base:  0x00500000,   // 5 MiB
-            data_size:  0x00100000,   // 1 MiB data region
-            stack_base: 0x7FFFF000,   // ~2 GiB (top, grows down)
-            stack_size: 0x00010000,   // 64 KiB stack
-            heap_base:  0x00600000,   // 6 MiB
-            heap_size:  0x00200000,   // 2 MiB heap
+            code_base: 0x00400000,  // 4 MiB
+            code_size: 0x00100000,  // 1 MiB code region
+            data_base: 0x00500000,  // 5 MiB
+            data_size: 0x00100000,  // 1 MiB data region
+            stack_base: 0x7FFFF000, // ~2 GiB (top, grows down)
+            stack_size: 0x00010000, // 64 KiB stack
+            heap_base: 0x00600000,  // 6 MiB
+            heap_size: 0x00200000,  // 2 MiB heap
         }
     }
 }
@@ -95,9 +95,9 @@ impl UserAddressSpace {
 #[derive(Clone, Debug)]
 pub struct UserBinary {
     pub entry_point: u64,
-    pub code:         Vec<u8>,
-    pub data:         Vec<u8>,
-    pub name:         String,
+    pub code: Vec<u8>,
+    pub data: Vec<u8>,
+    pub name: String,
 }
 
 impl UserBinary {
@@ -105,17 +105,26 @@ impl UserBinary {
     pub fn hello_world() -> Self {
         Self {
             entry_point: 0x00400000,
-            code: vec![0xF4],   // HLT instruction
+            code: vec![0xF4], // HLT instruction
             data: vec![],
             name: "hello".to_string(),
         }
     }
     /// Create a binary from raw bytes
     pub fn from_bytes(name: &str, code: Vec<u8>, entry: u64) -> Self {
-        Self { entry_point: entry, code, data: vec![], name: name.to_string() }
+        Self {
+            entry_point: entry,
+            code,
+            data: vec![],
+            name: name.to_string(),
+        }
     }
-    pub fn code_len(&self) -> usize { self.code.len() }
-    pub fn data_len(&self) -> usize { self.data.len() }
+    pub fn code_len(&self) -> usize {
+        self.code.len()
+    }
+    pub fn data_len(&self) -> usize {
+        self.data.len()
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -125,17 +134,17 @@ impl UserBinary {
 /// Saved CPU state for a user process (what IRET needs to restore)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserContext {
-    pub pid:        Pid,
-    pub privilege:  PrivilegeLevel,
-    pub rip:        u64,    // Instruction Pointer
-    pub rsp:        u64,    // Stack Pointer
-    pub rbp:        u64,    // Base Pointer
-    pub rax:        u64,    // Return value register
-    pub cs:         u16,    // Code Segment selector (ring 3 = 0x1B, ring 0 = 0x08)
-    pub ss:         u16,    // Stack Segment selector (ring 3 = 0x23, ring 0 = 0x10)
-    pub rflags:     u64,    // CPU flags (IF must be set for user mode)
+    pub pid: Pid,
+    pub privilege: PrivilegeLevel,
+    pub rip: u64,    // Instruction Pointer
+    pub rsp: u64,    // Stack Pointer
+    pub rbp: u64,    // Base Pointer
+    pub rax: u64,    // Return value register
+    pub cs: u16,     // Code Segment selector (ring 3 = 0x1B, ring 0 = 0x08)
+    pub ss: u16,     // Stack Segment selector (ring 3 = 0x23, ring 0 = 0x10)
+    pub rflags: u64, // CPU flags (IF must be set for user mode)
     pub addr_space: UserAddressSpace,
-    pub exit_code:  Option<ExitCode>,
+    pub exit_code: Option<ExitCode>,
 }
 
 impl UserContext {
@@ -143,16 +152,16 @@ impl UserContext {
     pub fn new(pid: Pid, binary: &UserBinary, addr_space: UserAddressSpace) -> Self {
         Self {
             pid,
-            privilege:    PrivilegeLevel::User,
-            rip:          binary.entry_point,
-            rsp:          addr_space.initial_rsp(),
-            rbp:          addr_space.initial_rsp(),
-            rax:          0,
-            cs:           0x1B,   // GDT entry 3, ring 3 (0x1B = (3 << 3) | 3)
-            ss:           0x23,   // GDT entry 4, ring 3 (0x23 = (4 << 3) | 3)
-            rflags:       0x202,  // IF=1 (interrupts enabled), reserved bit 1
+            privilege: PrivilegeLevel::User,
+            rip: binary.entry_point,
+            rsp: addr_space.initial_rsp(),
+            rbp: addr_space.initial_rsp(),
+            rax: 0,
+            cs: 0x1B,      // GDT entry 3, ring 3 (0x1B = (3 << 3) | 3)
+            ss: 0x23,      // GDT entry 4, ring 3 (0x23 = (4 << 3) | 3)
+            rflags: 0x202, // IF=1 (interrupts enabled), reserved bit 1
             addr_space,
-            exit_code:    None,
+            exit_code: None,
         }
     }
 
@@ -190,11 +199,11 @@ impl UserContext {
 ///   Entry 4: User Data (ring 3)    → selector 0x23
 ///   Entry 5: TSS                    → selector 0x2B
 pub struct GdtSelectors {
-    pub kernel_cs: u16,  // 0x08
-    pub kernel_ds: u16,  // 0x10
-    pub user_cs:    u16,  // 0x1B
-    pub user_ds:    u16,  // 0x23
-    pub tss:        u16,  // 0x2B
+    pub kernel_cs: u16, // 0x08
+    pub kernel_ds: u16, // 0x10
+    pub user_cs: u16,   // 0x1B
+    pub user_ds: u16,   // 0x23
+    pub tss: u16,       // 0x2B
 }
 
 impl Default for GdtSelectors {
@@ -202,9 +211,9 @@ impl Default for GdtSelectors {
         Self {
             kernel_cs: 0x08,
             kernel_ds: 0x10,
-            user_cs:   0x1B,   // (3 << 3) | 3 = 24 + 3 = 0x1B
-            user_ds:   0x23,   // (4 << 3) | 3 = 32 + 3 = 0x23
-            tss:       0x2B,   // (5 << 3) | 3 = 40 + 3 = 0x2B
+            user_cs: 0x1B, // (3 << 3) | 3 = 24 + 3 = 0x1B
+            user_ds: 0x23, // (4 << 3) | 3 = 32 + 3 = 0x23
+            tss: 0x2B,     // (5 << 3) | 3 = 40 + 3 = 0x2B
         }
     }
 }
@@ -212,8 +221,10 @@ impl Default for GdtSelectors {
 impl GdtSelectors {
     /// Verify that user selectors have ring 3 DPL
     pub fn verify(&self) -> bool {
-        (self.user_cs & 0x03) == 3 && (self.user_ds & 0x03) == 3
-            && (self.kernel_cs & 0x03) == 0 && (self.kernel_ds & 0x03) == 0
+        (self.user_cs & 0x03) == 3
+            && (self.user_ds & 0x03) == 3
+            && (self.kernel_cs & 0x03) == 0
+            && (self.kernel_ds & 0x03) == 0
     }
 }
 
@@ -236,14 +247,14 @@ pub enum UserspaceError {
 impl core::fmt::Display for UserspaceError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            UserspaceError::ProcessNotFound      => write!(f, "user process not found"),
+            UserspaceError::ProcessNotFound => write!(f, "user process not found"),
             UserspaceError::ProcessAlreadyExited => write!(f, "process already exited"),
-            UserspaceError::InvalidAddress        => write!(f, "invalid memory address"),
-            UserspaceError::SegmentFault          => write!(f, "segmentation fault"),
-            UserspaceError::StackOverflow         => write!(f, "stack overflow"),
-            UserspaceError::InvalidBinary         => write!(f, "invalid binary format"),
-            UserspaceError::PermissionDenied      => write!(f, "permission denied"),
-            UserspaceError::MaxProcessesReached   => write!(f, "max user processes reached"),
+            UserspaceError::InvalidAddress => write!(f, "invalid memory address"),
+            UserspaceError::SegmentFault => write!(f, "segmentation fault"),
+            UserspaceError::StackOverflow => write!(f, "stack overflow"),
+            UserspaceError::InvalidBinary => write!(f, "invalid binary format"),
+            UserspaceError::PermissionDenied => write!(f, "permission denied"),
+            UserspaceError::MaxProcessesReached => write!(f, "max user processes reached"),
         }
     }
 }
@@ -256,23 +267,25 @@ impl core::fmt::Display for UserspaceError {
 const MAX_USER_PROCESSES: usize = 64;
 
 pub struct UserspaceManager {
-    users:        Vec<UserContext>,
-    next_pid:     u32,
+    users: Vec<UserContext>,
+    next_pid: u32,
     syscall_count: u64,
-    gdt:          GdtSelectors,
+    gdt: GdtSelectors,
 }
 
 impl Default for UserspaceManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl UserspaceManager {
     pub fn new() -> Self {
         Self {
-            users:         Vec::new(),
-            next_pid:      1000,    // User PIDs start at 1000
+            users: Vec::new(),
+            next_pid: 1000, // User PIDs start at 1000
             syscall_count: 0,
-            gdt:           GdtSelectors::default(),
+            gdt: GdtSelectors::default(),
         }
     }
 
@@ -302,7 +315,10 @@ impl UserspaceManager {
 
     /// Prepare ring switch: validate context and return selectors
     pub fn enter_userspace(&self, pid: Pid) -> Result<&UserContext, UserspaceError> {
-        let ctx = self.users.iter().find(|u| u.pid == pid)
+        let ctx = self
+            .users
+            .iter()
+            .find(|u| u.pid == pid)
             .ok_or(UserspaceError::ProcessNotFound)?;
         if ctx.is_exited() {
             return Err(UserspaceError::ProcessAlreadyExited);
@@ -320,19 +336,30 @@ impl UserspaceManager {
     }
 
     /// Handle a syscall from user mode
-    pub fn handle_syscall(&mut self, pid: Pid, num: u32, _args: &[u64]) -> Result<u64, UserspaceError> {
+    pub fn handle_syscall(
+        &mut self,
+        pid: Pid,
+        num: u32,
+        _args: &[u64],
+    ) -> Result<u64, UserspaceError> {
         self.syscall_count += 1;
-        let ctx = self.users.iter_mut().find(|u| u.pid == pid)
+        let ctx = self
+            .users
+            .iter_mut()
+            .find(|u| u.pid == pid)
             .ok_or(UserspaceError::ProcessNotFound)?;
         if ctx.is_exited() {
             return Err(UserspaceError::ProcessAlreadyExited);
         }
         // Simulate syscall execution
         match num {
-            0 => { ctx.exit(0); Ok(0) }             // exit(0)
-            1 => { Ok(ctx.rsp) }                      // get_stack_ptr
-            2 => { Ok(ctx.rip) }                      // get_instruction_ptr
-            3 => { Ok(self.users.len() as u64) }      // get_process_count
+            0 => {
+                ctx.exit(0);
+                Ok(0)
+            } // exit(0)
+            1 => Ok(ctx.rsp),                 // get_stack_ptr
+            2 => Ok(ctx.rip),                 // get_instruction_ptr
+            3 => Ok(self.users.len() as u64), // get_process_count
             _ => Err(UserspaceError::PermissionDenied),
         }
     }
@@ -340,7 +367,9 @@ impl UserspaceManager {
     /// Exit a user process
     pub fn exit_process(&mut self, pid: Pid, code: ExitCode) -> bool {
         if let Some(ctx) = self.get_context_mut(pid) {
-            if ctx.is_exited() { return false; }
+            if ctx.is_exited() {
+                return false;
+            }
             ctx.exit(code);
             return true;
         }
@@ -355,17 +384,38 @@ impl UserspaceManager {
     }
 
     /// List all user processes
-    pub fn list_users(&self) -> Vec<&UserContext> { self.users.iter().collect() }
-    pub fn user_count(&self) -> usize { self.users.len() }
-    pub fn active_count(&self) -> usize { self.users.iter().filter(|u| !u.is_exited()).count() }
-    pub fn syscall_count(&self) -> u64 { self.syscall_count }
-    pub fn gdt_selectors(&self) -> &GdtSelectors { &self.gdt }
+    pub fn list_users(&self) -> Vec<&UserContext> {
+        self.users.iter().collect()
+    }
+    pub fn user_count(&self) -> usize {
+        self.users.len()
+    }
+    pub fn active_count(&self) -> usize {
+        self.users.iter().filter(|u| !u.is_exited()).count()
+    }
+    pub fn syscall_count(&self) -> u64 {
+        self.syscall_count
+    }
+    pub fn gdt_selectors(&self) -> &GdtSelectors {
+        &self.gdt
+    }
 
     /// Validate a memory access from user space (bounds check)
-    pub fn check_memory_access(&self, pid: Pid, addr: u64, size: u64) -> Result<(), UserspaceError> {
-        let ctx = self.get_context(pid).ok_or(UserspaceError::ProcessNotFound)?;
-        if ctx.is_exited() { return Err(UserspaceError::ProcessAlreadyExited); }
-        let end = addr.checked_add(size).ok_or(UserspaceError::InvalidAddress)?;
+    pub fn check_memory_access(
+        &self,
+        pid: Pid,
+        addr: u64,
+        size: u64,
+    ) -> Result<(), UserspaceError> {
+        let ctx = self
+            .get_context(pid)
+            .ok_or(UserspaceError::ProcessNotFound)?;
+        if ctx.is_exited() {
+            return Err(UserspaceError::ProcessAlreadyExited);
+        }
+        let end = addr
+            .checked_add(size)
+            .ok_or(UserspaceError::InvalidAddress)?;
         if !ctx.valid_address(addr) || !ctx.valid_address(end - 1) {
             return Err(UserspaceError::SegmentFault);
         }
@@ -374,9 +424,16 @@ impl UserspaceManager {
 
     /// Simulate stack push from user mode
     pub fn push_stack(&mut self, pid: Pid, value: u64) -> Result<(), UserspaceError> {
-        let ctx = self.get_context_mut(pid).ok_or(UserspaceError::ProcessNotFound)?;
-        if ctx.is_exited() { return Err(UserspaceError::ProcessAlreadyExited); }
-        let new_rsp = ctx.rsp.checked_sub(8).ok_or(UserspaceError::StackOverflow)?;
+        let ctx = self
+            .get_context_mut(pid)
+            .ok_or(UserspaceError::ProcessNotFound)?;
+        if ctx.is_exited() {
+            return Err(UserspaceError::ProcessAlreadyExited);
+        }
+        let new_rsp = ctx
+            .rsp
+            .checked_sub(8)
+            .ok_or(UserspaceError::StackOverflow)?;
         if !ctx.addr_space.in_stack(new_rsp) {
             return Err(UserspaceError::StackOverflow);
         }
@@ -386,12 +443,16 @@ impl UserspaceManager {
 
     /// Simulate stack pop from user mode
     pub fn pop_stack(&mut self, pid: Pid) -> Result<u64, UserspaceError> {
-        let ctx = self.get_context_mut(pid).ok_or(UserspaceError::ProcessNotFound)?;
-        if ctx.is_exited() { return Err(UserspaceError::ProcessAlreadyExited); }
+        let ctx = self
+            .get_context_mut(pid)
+            .ok_or(UserspaceError::ProcessNotFound)?;
+        if ctx.is_exited() {
+            return Err(UserspaceError::ProcessAlreadyExited);
+        }
         if !ctx.addr_space.in_stack(ctx.rsp) {
             return Err(UserspaceError::StackOverflow);
         }
-        let val = ctx.rax;  // Simulated pop goes to rax
+        let val = ctx.rax; // Simulated pop goes to rax
         ctx.rsp += 8;
         if ctx.rsp > ctx.addr_space.stack_base {
             ctx.rsp = ctx.addr_space.stack_base;
@@ -602,7 +663,10 @@ mod tests {
     #[test]
     fn test_enter_userspace_not_found() {
         let mgr = UserspaceManager::new();
-        assert_eq!(mgr.enter_userspace(Pid(9999)), Err(UserspaceError::ProcessNotFound));
+        assert_eq!(
+            mgr.enter_userspace(Pid(9999)),
+            Err(UserspaceError::ProcessNotFound)
+        );
     }
 
     #[test]
@@ -610,7 +674,10 @@ mod tests {
         let mut mgr = UserspaceManager::new();
         let pid = mgr.load_binary(UserBinary::hello_world()).unwrap();
         mgr.exit_process(pid, 0);
-        assert_eq!(mgr.enter_userspace(pid), Err(UserspaceError::ProcessAlreadyExited));
+        assert_eq!(
+            mgr.enter_userspace(pid),
+            Err(UserspaceError::ProcessAlreadyExited)
+        );
     }
 
     #[test]
@@ -641,7 +708,10 @@ mod tests {
     fn test_handle_syscall_unknown() {
         let mut mgr = UserspaceManager::new();
         let pid = mgr.load_binary(UserBinary::hello_world()).unwrap();
-        assert_eq!(mgr.handle_syscall(pid, 99, &[]), Err(UserspaceError::PermissionDenied));
+        assert_eq!(
+            mgr.handle_syscall(pid, 99, &[]),
+            Err(UserspaceError::PermissionDenied)
+        );
     }
 
     #[test]
@@ -649,7 +719,10 @@ mod tests {
         let mut mgr = UserspaceManager::new();
         let pid = mgr.load_binary(UserBinary::hello_world()).unwrap();
         mgr.exit_process(pid, 0);
-        assert_eq!(mgr.handle_syscall(pid, 1, &[]), Err(UserspaceError::ProcessAlreadyExited));
+        assert_eq!(
+            mgr.handle_syscall(pid, 1, &[]),
+            Err(UserspaceError::ProcessAlreadyExited)
+        );
     }
 
     #[test]
@@ -706,7 +779,9 @@ mod tests {
     fn test_list_users() {
         let mut mgr = UserspaceManager::new();
         let _p1 = mgr.load_binary(UserBinary::hello_world()).unwrap();
-        let _p2 = mgr.load_binary(UserBinary::from_bytes("b", vec![0x90], 0x400000)).unwrap();
+        let _p2 = mgr
+            .load_binary(UserBinary::from_bytes("b", vec![0x90], 0x400000))
+            .unwrap();
         let users = mgr.list_users();
         assert_eq!(users.len(), 2);
         assert_eq!(users[0].pid, Pid(1000));
@@ -725,8 +800,14 @@ mod tests {
     fn test_check_memory_access_invalid() {
         let mut mgr = UserspaceManager::new();
         let pid = mgr.load_binary(UserBinary::hello_world()).unwrap();
-        assert_eq!(mgr.check_memory_access(pid, 0x00000000, 4), Err(UserspaceError::SegmentFault));
-        assert_eq!(mgr.check_memory_access(pid, 0xFFFFFFFF, 1), Err(UserspaceError::SegmentFault));
+        assert_eq!(
+            mgr.check_memory_access(pid, 0x00000000, 4),
+            Err(UserspaceError::SegmentFault)
+        );
+        assert_eq!(
+            mgr.check_memory_access(pid, 0xFFFFFFFF, 1),
+            Err(UserspaceError::SegmentFault)
+        );
     }
 
     #[test]
@@ -734,7 +815,10 @@ mod tests {
         let mut mgr = UserspaceManager::new();
         let pid = mgr.load_binary(UserBinary::hello_world()).unwrap();
         mgr.exit_process(pid, 0);
-        assert_eq!(mgr.check_memory_access(pid, 0x00400000, 4), Err(UserspaceError::ProcessAlreadyExited));
+        assert_eq!(
+            mgr.check_memory_access(pid, 0x00400000, 4),
+            Err(UserspaceError::ProcessAlreadyExited)
+        );
     }
 
     #[test]
@@ -784,7 +868,10 @@ mod tests {
         assert_eq!(mgr.user_count(), MAX_USER_PROCESSES);
         // Next one should fail
         let bin = UserBinary::hello_world();
-        assert_eq!(mgr.load_binary(bin), Err(UserspaceError::MaxProcessesReached));
+        assert_eq!(
+            mgr.load_binary(bin),
+            Err(UserspaceError::MaxProcessesReached)
+        );
     }
 
     #[test]
@@ -832,10 +919,25 @@ mod tests {
 
     #[test]
     fn test_userspace_error_display() {
-        assert_eq!(format!("{}", UserspaceError::ProcessNotFound), "user process not found");
-        assert_eq!(format!("{}", UserspaceError::SegmentFault), "segmentation fault");
-        assert_eq!(format!("{}", UserspaceError::StackOverflow), "stack overflow");
-        assert_eq!(format!("{}", UserspaceError::InvalidBinary), "invalid binary format");
-        assert_eq!(format!("{}", UserspaceError::MaxProcessesReached), "max user processes reached");
+        assert_eq!(
+            format!("{}", UserspaceError::ProcessNotFound),
+            "user process not found"
+        );
+        assert_eq!(
+            format!("{}", UserspaceError::SegmentFault),
+            "segmentation fault"
+        );
+        assert_eq!(
+            format!("{}", UserspaceError::StackOverflow),
+            "stack overflow"
+        );
+        assert_eq!(
+            format!("{}", UserspaceError::InvalidBinary),
+            "invalid binary format"
+        );
+        assert_eq!(
+            format!("{}", UserspaceError::MaxProcessesReached),
+            "max user processes reached"
+        );
     }
 }
