@@ -101,6 +101,37 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let kernel_state = shivacore::kernel_init::KernelState::boot()
         .expect("ShivaCore: canonical KernelState::boot() failed");
     serial_println!("ShivaCore: KernelState::boot() -> Done.");
+
+    // Real USER-001 smoke path: install executable user pages and enter CPL3
+    // through IRETQ. The payload loops forever so timer IRQs can observe a
+    // genuine ring-3 CPU context without executing privileged instructions.
+    let user_binary = userspace::UserBinary::from_bytes(
+        "ring3-smoke",
+        alloc::vec![0xEB, 0xFE],
+        0x0040_0000,
+    );
+    let user_addr_space = userspace::UserAddressSpace::default();
+    unsafe {
+        userspace::map_user_binary(
+            &mut mapper,
+            &mut frame_allocator,
+            phys_mem_offset,
+            &user_binary,
+            &user_addr_space,
+        )
+        .expect("ShivaCore: USER-001 user page mapping failed");
+    }
+    let user_pid = ats1000::Pid(1000);
+    let user_ctx = userspace::UserContext::new(user_pid, &user_binary, user_addr_space);
+    serial_println!(
+        "ShivaCore: USER-001 mapped PID={} RIP={:#x} RSP={:#x}",
+        user_pid.0,
+        user_ctx.rip,
+        user_ctx.rsp
+    );
+    serial_println!("ShivaCore: entering user process PID={}", user_pid.0);
+    unsafe { userspace::enter_ring3(&user_ctx) }
+
     serial_println!("{}", kernel_state.boot_log());
     serial_println!("ShivaCore: kernel init chain connected to kernel_main.");
 
