@@ -187,13 +187,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("ShivaCore: second USER-001 user page mapping failed");
     }
     let user_pid_2 = Pid(1001);
-    let user_ctx_2 = userspace::UserContext::new_with_selectors(
+    let mut user_ctx_2 = userspace::UserContext::new_with_selectors(
         user_pid_2,
         &user_binary_2,
         user_addr_space_2,
         user_cs,
         user_ss,
     );
+    // PID 1001 has not executed yet, so seed the registers its Ring-3
+    // smoke binary will establish before the first timer-driven switch.
+    user_ctx_2.rax = 0x2000;
+    user_ctx_2.rbx = 0x2001;
+    user_ctx_2.r12 = 0x2012;
 
     interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
     serial_println!(
