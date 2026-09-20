@@ -85,6 +85,12 @@ pub fn init_pics() {
     unsafe {
         PICS.lock().initialize();
     }
+}
+
+/// Enable hardware interrupts only after the real Ring-3 scheduler has been
+/// armed. Keeping IF=0 during mapping/initialization prevents timer IRQs from
+/// entering the trap path before a valid userspace context exists.
+pub fn enable_interrupts() {
     x86_64::instructions::interrupts::enable();
 }
 
