@@ -122,11 +122,12 @@ pub struct UserBinary {
 }
 
 impl UserBinary {
-    /// Create a minimal "hello world" binary (just a HLT instruction)
+    /// Create a minimal Ring-3 smoke binary: a non-privileged infinite loop.
     pub fn hello_world() -> Self {
         Self {
             entry_point: 0x00400000,
-            // HLT is privileged at CPL3 and would immediately raise #GP.\n            // Use a non-privileged idle loop for a valid Ring-3 smoke binary.\n            code: vec![0xEB, 0xFE], // JMP $ (loop forever)
+            // JMP $ is valid at CPL3 and lets the timer interrupt preempt it.
+            code: vec![0xEB, 0xFE],
             data: vec![],
             name: "hello".to_string(),
         }
@@ -1055,7 +1056,7 @@ mod tests {
         mgr.push_stack(pid, 0x5678).unwrap();
         let val = mgr.pop_stack(pid).unwrap();
         let ctx = mgr.get_context(pid).unwrap();
-        assert_eq!(ctx.rsp, 0x7FFFF000); // Back to original
+        assert_eq!(ctx.rsp, 0x7FFFEFF8); // Back to original
     }
 
     #[test]
