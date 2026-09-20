@@ -244,6 +244,19 @@ pub unsafe fn map_user_binary(
         PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
     )?;
 
+    // Back the declared user heap with real user-writable pages as well.
+    // The heap is part of UserAddressSpace::contains(), so leaving it unmapped
+    // would make a valid userspace heap address fault immediately.
+    let heap_pages = (addr_space.heap_size + 0xFFF) / 0x1000;
+    map_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        addr_space.heap_base,
+        heap_pages * 0x1000,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
+    )?;
+
     // Install the user image through the already active address space.
     // The target virtual addresses are now backed by real user PTEs.
     core::ptr::copy_nonoverlapping(
@@ -275,13 +288,20 @@ pub unsafe fn map_user_binary(
 /// Enter a validated user context through the CPU's real IRETQ path.
 #[cfg(feature = "x86-boot")]
 pub unsafe fn enter_ring3(ctx: &UserContext, user_cs: u16, user_ss: u16) -> ! {
-    debug_assert!(ctx.is_user_mode());
-    debug_assert!(ctx.valid_address(ctx.rip));
-    debug_assert!(ctx.valid_address(ctx.rsp));
-    debug_assert_eq!(ctx.cs, user_cs);
-    debug_assert_eq!(ctx.ss, user_ss);
-    debug_assert_eq!(user_cs & 0x7, 0x3);
-    debug_assert_eq!(user_ss & 0x7, 0x3);
+    // These are security/CPU-safety invariants, not debug-only assertions.
+    // They must remain active in the release kernel because violating any one
+    // of them makes the IRETQ frame invalid and can escalate to #GP/#SS/#DF.
+    if !ctx.is_user_mode()
+        || !ctx.valid_address(ctx.rip)
+        || !ctx.valid_address(ctx.rsp)
+        || ctx.cs != user_cs
+        || ctx.ss != user_ss
+        || (user_cs & 0x7) != 0x3
+        || (user_ss & 0x7) != 0x3
+        || (ctx.rflags & 0x2) == 0
+    {
+        panic!("ShivaCore: invalid Ring-3 IRETQ context");
+    }
 
     asm!(
         "push rax", // SS
