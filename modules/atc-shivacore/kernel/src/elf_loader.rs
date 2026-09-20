@@ -5,7 +5,7 @@
 // ELF64-Parser und -Loader für User-Prozesse (Ring 3).
 // Signal-Handling für Userspace-Prozesse (POSIX-ähnlich).
 
-use crate::ats1000::{Pid, ExitCode};
+use crate::ats1000::{ExitCode, Pid};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ELF64 Constants
@@ -13,18 +13,18 @@ use crate::ats1000::{Pid, ExitCode};
 
 const ELF_MAGIC: [u8; 4] = [0x7F, b'E', b'L', b'F'];
 const ELFCLASS64: u8 = 2;
-const ELFDATA2LSB: u8 = 1;  // Little endian
-const ET_EXEC: u16 = 2;     // Executable
-const EM_X86_64: u16 = 62;   // x86-64
+const ELFDATA2LSB: u8 = 1; // Little endian
+const ET_EXEC: u16 = 2; // Executable
+const EM_X86_64: u16 = 62; // x86-64
 
-const PT_LOAD:    u32 = 1;
+const PT_LOAD: u32 = 1;
 const PT_DYNAMIC: u32 = 2;
 const PT_INTERP: u32 = 3;
-const PT_NOTE:   u32 = 4;
+const PT_NOTE: u32 = 4;
 
-const PF_X: u32 = 1;  // Execute
-const PF_W: u32 = 2;  // Write
-const PF_R: u32 = 4;  // Read
+const PF_X: u32 = 1; // Execute
+const PF_W: u32 = 2; // Write
+const PF_R: u32 = 4; // Read
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ELF64 Header
@@ -32,16 +32,16 @@ const PF_R: u32 = 4;  // Read
 
 #[derive(Clone, Debug)]
 pub struct Elf64Header {
-    pub e_class:      u8,
-    pub e_data:       u8,
-    pub e_type:       u16,
-    pub e_machine:    u16,
-    pub e_entry:      u64,
-    pub e_phoff:      u64,   // Program header table offset
-    pub e_shoff:      u64,   // Section header table offset
-    pub e_phnum:      u16,   // Number of program headers
-    pub e_shnum:      u16,   // Number of section headers
-    pub e_shstrndx:   u16,
+    pub e_class: u8,
+    pub e_data: u8,
+    pub e_type: u16,
+    pub e_machine: u16,
+    pub e_entry: u64,
+    pub e_phoff: u64, // Program header table offset
+    pub e_shoff: u64, // Section header table offset
+    pub e_phnum: u16, // Number of program headers
+    pub e_shnum: u16, // Number of section headers
+    pub e_shstrndx: u16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -59,14 +59,14 @@ pub enum ElfParseError {
 impl core::fmt::Display for ElfParseError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            ElfParseError::InvalidMagic         => write!(f, "invalid ELF magic"),
-            ElfParseError::InvalidClass          => write!(f, "not ELF64"),
-            ElfParseError::InvalidEndian         => write!(f, "not little-endian"),
-            ElfParseError::InvalidType           => write!(f, "not executable"),
-            ElfParseError::InvalidMachine        => write!(f, "not x86-64"),
-            ElfParseError::Truncated             => write!(f, "file truncated"),
-            ElfParseError::InvalidOffset         => write!(f, "invalid header offset"),
-            ElfParseError::NoLoadableSegments    => write!(f, "no loadable segments"),
+            ElfParseError::InvalidMagic => write!(f, "invalid ELF magic"),
+            ElfParseError::InvalidClass => write!(f, "not ELF64"),
+            ElfParseError::InvalidEndian => write!(f, "not little-endian"),
+            ElfParseError::InvalidType => write!(f, "not executable"),
+            ElfParseError::InvalidMachine => write!(f, "not x86-64"),
+            ElfParseError::Truncated => write!(f, "file truncated"),
+            ElfParseError::InvalidOffset => write!(f, "invalid header offset"),
+            ElfParseError::NoLoadableSegments => write!(f, "no loadable segments"),
         }
     }
 }
@@ -77,23 +77,35 @@ impl core::fmt::Display for ElfParseError {
 
 #[derive(Clone, Debug)]
 pub struct Elf64ProgramHeader {
-    pub p_type:   u32,
-    pub p_flags:  u32,
+    pub p_type: u32,
+    pub p_flags: u32,
     pub p_offset: u64,
-    pub p_vaddr:  u64,
-    pub p_paddr:  u64,
+    pub p_vaddr: u64,
+    pub p_paddr: u64,
     pub p_filesz: u64,
-    pub p_memsz:  u64,
-    pub p_align:  u64,
+    pub p_memsz: u64,
+    pub p_align: u64,
 }
 
 impl Elf64ProgramHeader {
-    pub fn is_loadable(&self) -> bool { self.p_type == PT_LOAD }
-    pub fn is_executable(&self) -> bool { (self.p_flags & PF_X) != 0 }
-    pub fn is_writable(&self) -> bool { (self.p_flags & PF_W) != 0 }
-    pub fn is_readable(&self) -> bool { (self.p_flags & PF_R) != 0 }
-    pub fn needs_bss(&self) -> bool { self.p_memsz > self.p_filesz }
-    pub fn bss_size(&self) -> u64 { self.p_memsz.saturating_sub(self.p_filesz) }
+    pub fn is_loadable(&self) -> bool {
+        self.p_type == PT_LOAD
+    }
+    pub fn is_executable(&self) -> bool {
+        (self.p_flags & PF_X) != 0
+    }
+    pub fn is_writable(&self) -> bool {
+        (self.p_flags & PF_W) != 0
+    }
+    pub fn is_readable(&self) -> bool {
+        (self.p_flags & PF_R) != 0
+    }
+    pub fn needs_bss(&self) -> bool {
+        self.p_memsz > self.p_filesz
+    }
+    pub fn bss_size(&self) -> u64 {
+        self.p_memsz.saturating_sub(self.p_filesz)
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -138,16 +150,24 @@ impl<'a> ElfParser<'a> {
             return Err(ElfParseError::InvalidMachine);
         }
 
-        let e_entry    = u64::from_le_bytes(data[24..32].try_into().unwrap());
-        let e_phoff    = u64::from_le_bytes(data[32..40].try_into().unwrap());
-        let e_shoff    = u64::from_le_bytes(data[40..48].try_into().unwrap());
-        let e_phnum    = u16::from_le_bytes([data[56], data[57]]);
-        let e_shnum    = u16::from_le_bytes([data[60], data[61]]);
+        let e_entry = u64::from_le_bytes(data[24..32].try_into().unwrap());
+        let e_phoff = u64::from_le_bytes(data[32..40].try_into().unwrap());
+        let e_shoff = u64::from_le_bytes(data[40..48].try_into().unwrap());
+        let e_phnum = u16::from_le_bytes([data[56], data[57]]);
+        let e_shnum = u16::from_le_bytes([data[60], data[61]]);
         let e_shstrndx = u16::from_le_bytes([data[62], data[63]]);
 
         let header = Elf64Header {
-            e_class, e_data, e_type, e_machine,
-            e_entry, e_phoff, e_shoff, e_phnum, e_shnum, e_shstrndx,
+            e_class,
+            e_data,
+            e_type,
+            e_machine,
+            e_entry,
+            e_phoff,
+            e_shoff,
+            e_phnum,
+            e_shnum,
+            e_shstrndx,
         };
 
         // Parse program headers
@@ -160,14 +180,14 @@ impl<'a> ElfParser<'a> {
                 return Err(ElfParseError::Truncated);
             }
             let phdr = Elf64ProgramHeader {
-                p_type:   u32::from_le_bytes(data[offset..offset+4].try_into().unwrap()),
-                p_flags:  u32::from_le_bytes(data[offset+4..offset+8].try_into().unwrap()),
-                p_offset: u64::from_le_bytes(data[offset+8..offset+16].try_into().unwrap()),
-                p_vaddr:  u64::from_le_bytes(data[offset+16..offset+24].try_into().unwrap()),
-                p_paddr:  u64::from_le_bytes(data[offset+24..offset+32].try_into().unwrap()),
-                p_filesz: u64::from_le_bytes(data[offset+32..offset+40].try_into().unwrap()),
-                p_memsz:  u64::from_le_bytes(data[offset+40..offset+48].try_into().unwrap()),
-                p_align:  u64::from_le_bytes(data[offset+48..offset+56].try_into().unwrap()),
+                p_type: u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()),
+                p_flags: u32::from_le_bytes(data[offset + 4..offset + 8].try_into().unwrap()),
+                p_offset: u64::from_le_bytes(data[offset + 8..offset + 16].try_into().unwrap()),
+                p_vaddr: u64::from_le_bytes(data[offset + 16..offset + 24].try_into().unwrap()),
+                p_paddr: u64::from_le_bytes(data[offset + 24..offset + 32].try_into().unwrap()),
+                p_filesz: u64::from_le_bytes(data[offset + 32..offset + 40].try_into().unwrap()),
+                p_memsz: u64::from_le_bytes(data[offset + 40..offset + 48].try_into().unwrap()),
+                p_align: u64::from_le_bytes(data[offset + 48..offset + 56].try_into().unwrap()),
             };
             program_headers.push(phdr);
         }
@@ -177,12 +197,22 @@ impl<'a> ElfParser<'a> {
             return Err(ElfParseError::NoLoadableSegments);
         }
 
-        Ok(Self { data, header, program_headers })
+        Ok(Self {
+            data,
+            header,
+            program_headers,
+        })
     }
 
-    pub fn entry_point(&self) -> u64 { self.header.e_entry }
-    pub fn header(&self) -> &Elf64Header { &self.header }
-    pub fn program_headers(&self) -> &[Elf64ProgramHeader] { &self.program_headers }
+    pub fn entry_point(&self) -> u64 {
+        self.header.e_entry
+    }
+    pub fn header(&self) -> &Elf64Header {
+        &self.header
+    }
+    pub fn program_headers(&self) -> &[Elf64ProgramHeader] {
+        &self.program_headers
+    }
     pub fn loadable_segments(&self) -> impl Iterator<Item = &Elf64ProgramHeader> {
         self.program_headers.iter().filter(|p| p.is_loadable())
     }
@@ -193,7 +223,8 @@ impl<'a> ElfParser<'a> {
     }
     /// Extract the data segment (first writable PT_LOAD)
     pub fn data_segment(&self) -> Option<&Elf64ProgramHeader> {
-        self.loadable_segments().find(|p| p.is_writable() && !p.is_executable())
+        self.loadable_segments()
+            .find(|p| p.is_writable() && !p.is_executable())
     }
 
     /// Get raw bytes for a segment
@@ -211,7 +242,7 @@ impl<'a> ElfParser<'a> {
 // ELF Loader (integrates with UserspaceManager)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-use crate::userspace::{UserBinary, UserAddressSpace, UserspaceManager, UserspaceError};
+use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
 
 pub struct ElfLoader;
 
@@ -221,8 +252,7 @@ impl ElfLoader {
         let parser = ElfParser::parse(elf_data)?;
 
         // Extract code segment
-        let code_seg = parser.code_segment()
-            .ok_or(ElfLoadError::NoCodeSegment)?;
+        let code_seg = parser.code_segment().ok_or(ElfLoadError::NoCodeSegment)?;
         let code_bytes = parser.segment_data(code_seg)?;
 
         // Extract data segment (optional)
@@ -233,9 +263,9 @@ impl ElfLoader {
 
         let binary = UserBinary {
             entry_point: parser.entry_point(),
-            code:  code_bytes.to_vec(),
-            data:  data_bytes,
-            name:  "elf".to_string(),
+            code: code_bytes.to_vec(),
+            data: data_bytes,
+            name: "elf".to_string(),
         };
 
         mgr.load_binary(binary).map_err(ElfLoadError::Userspace)
@@ -249,8 +279,8 @@ impl ElfLoader {
         elf[0..4].copy_from_slice(&ELF_MAGIC);
         elf[4] = ELFCLASS64;
         elf[5] = ELFDATA2LSB;
-        elf[6] = 1;  // EI_VERSION
-        elf[7] = 0;  // EI_OSABI = ELFOSABI_NONE
+        elf[6] = 1; // EI_VERSION
+        elf[7] = 0; // EI_OSABI = ELFOSABI_NONE
 
         // e_type = ET_EXEC
         elf[16..18].copy_from_slice(&ET_EXEC.to_le_bytes());
@@ -276,21 +306,21 @@ impl ElfLoader {
         // Program header (PT_LOAD)
         let phdr_off = 64;
         // p_type = PT_LOAD
-        elf[phdr_off..phdr_off+4].copy_from_slice(&PT_LOAD.to_le_bytes());
+        elf[phdr_off..phdr_off + 4].copy_from_slice(&PT_LOAD.to_le_bytes());
         // p_flags = PF_R | PF_X
-        elf[phdr_off+4..phdr_off+8].copy_from_slice(&(PF_R | PF_X).to_le_bytes());
+        elf[phdr_off + 4..phdr_off + 8].copy_from_slice(&(PF_R | PF_X).to_le_bytes());
         // p_offset = 120 (after Ehdr + Phdr)
-        elf[phdr_off+8..phdr_off+16].copy_from_slice(&120u64.to_le_bytes());
+        elf[phdr_off + 8..phdr_off + 16].copy_from_slice(&120u64.to_le_bytes());
         // p_vaddr = entry
-        elf[phdr_off+16..phdr_off+24].copy_from_slice(&entry.to_le_bytes());
+        elf[phdr_off + 16..phdr_off + 24].copy_from_slice(&entry.to_le_bytes());
         // p_paddr = entry
-        elf[phdr_off+24..phdr_off+32].copy_from_slice(&entry.to_le_bytes());
+        elf[phdr_off + 24..phdr_off + 32].copy_from_slice(&entry.to_le_bytes());
         // p_filesz = code.len()
-        elf[phdr_off+32..phdr_off+40].copy_from_slice(&(code.len() as u64).to_le_bytes());
+        elf[phdr_off + 32..phdr_off + 40].copy_from_slice(&(code.len() as u64).to_le_bytes());
         // p_memsz = code.len()
-        elf[phdr_off+40..phdr_off+48].copy_from_slice(&(code.len() as u64).to_le_bytes());
+        elf[phdr_off + 40..phdr_off + 48].copy_from_slice(&(code.len() as u64).to_le_bytes());
         // p_align = 0x1000
-        elf[phdr_off+48..phdr_off+56].copy_from_slice(&0x1000u64.to_le_bytes());
+        elf[phdr_off + 48..phdr_off + 56].copy_from_slice(&0x1000u64.to_le_bytes());
 
         // Append code at offset 120
         elf.extend_from_slice(code);
@@ -306,16 +336,20 @@ pub enum ElfLoadError {
 }
 
 impl From<ElfParseError> for ElfLoadError {
-    fn from(e: ElfParseError) -> Self { ElfLoadError::Parse(e) }
+    fn from(e: ElfParseError) -> Self {
+        ElfLoadError::Parse(e)
+    }
 }
 impl From<UserspaceError> for ElfLoadError {
-    fn from(e: UserspaceError) -> Self { ElfLoadError::Userspace(e) }
+    fn from(e: UserspaceError) -> Self {
+        ElfLoadError::Userspace(e)
+    }
 }
 
 impl core::fmt::Display for ElfLoadError {
     fn fmt(&self, f: &mut core::fmt::Formatter) -> core::fmt::Result {
         match self {
-            ElfLoadError::Parse(e)     => write!(f, "ELF parse error: {}", e),
+            ElfLoadError::Parse(e) => write!(f, "ELF parse error: {}", e),
             ElfLoadError::NoCodeSegment => write!(f, "no executable code segment"),
             ElfLoadError::Userspace(e) => write!(f, "userspace error: {}", e),
         }
@@ -330,25 +364,25 @@ impl core::fmt::Display for ElfLoadError {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum Signal {
-    SigHup   = 1,   // Hangup
-    SigInt   = 2,   // Interrupt (Ctrl+C)
-    SigKill  = 9,   // Kill (unblockable)
-    SigTerm  = 15,  // Termination
-    SigStop  = 19,  // Stop (unblockable)
-    SigCont  = 18,  // Continue
-    SigSegv  = 11,  // Segmentation fault
-    SigAlrm  = 14,  // Alarm clock
-    SigUsr1  = 10,  // User-defined 1
-    SigUsr2  = 12,  // User-defined 2
-    SigChld  = 17,  // Child process stopped/terminated
+    SigHup = 1,   // Hangup
+    SigInt = 2,   // Interrupt (Ctrl+C)
+    SigKill = 9,  // Kill (unblockable)
+    SigTerm = 15, // Termination
+    SigStop = 19, // Stop (unblockable)
+    SigCont = 18, // Continue
+    SigSegv = 11, // Segmentation fault
+    SigAlrm = 14, // Alarm clock
+    SigUsr1 = 10, // User-defined 1
+    SigUsr2 = 12, // User-defined 2
+    SigChld = 17, // Child process stopped/terminated
 }
 
 impl Signal {
     pub fn from_u32(n: u32) -> Option<Self> {
         match n {
-            1  => Some(Signal::SigHup),
-            2  => Some(Signal::SigInt),
-            9  => Some(Signal::SigKill),
+            1 => Some(Signal::SigHup),
+            2 => Some(Signal::SigInt),
+            9 => Some(Signal::SigKill),
             15 => Some(Signal::SigTerm),
             19 => Some(Signal::SigStop),
             18 => Some(Signal::SigCont),
@@ -357,28 +391,31 @@ impl Signal {
             10 => Some(Signal::SigUsr1),
             12 => Some(Signal::SigUsr2),
             17 => Some(Signal::SigChld),
-            _  => None,
+            _ => None,
         }
     }
     pub fn is_unblockable(&self) -> bool {
         matches!(self, Signal::SigKill | Signal::SigStop)
     }
     pub fn is_fatal(&self) -> bool {
-        matches!(self, Signal::SigKill | Signal::SigTerm | Signal::SigSegv | Signal::SigHup | Signal::SigInt)
+        matches!(
+            self,
+            Signal::SigKill | Signal::SigTerm | Signal::SigSegv | Signal::SigHup | Signal::SigInt
+        )
     }
     pub fn name(&self) -> &'static str {
         match self {
-            Signal::SigHup   => "SIGHUP",
-            Signal::SigInt   => "SIGINT",
-            Signal::SigKill  => "SIGKILL",
-            Signal::SigTerm  => "SIGTERM",
-            Signal::SigStop  => "SIGSTOP",
-            Signal::SigCont  => "SIGCONT",
-            Signal::SigSegv  => "SIGSEGV",
-            Signal::SigAlrm  => "SIGALRM",
-            Signal::SigUsr1  => "SIGUSR1",
-            Signal::SigUsr2  => "SIGUSR2",
-            Signal::SigChld  => "SIGCHLD",
+            Signal::SigHup => "SIGHUP",
+            Signal::SigInt => "SIGINT",
+            Signal::SigKill => "SIGKILL",
+            Signal::SigTerm => "SIGTERM",
+            Signal::SigStop => "SIGSTOP",
+            Signal::SigCont => "SIGCONT",
+            Signal::SigSegv => "SIGSEGV",
+            Signal::SigAlrm => "SIGALRM",
+            Signal::SigUsr1 => "SIGUSR1",
+            Signal::SigUsr2 => "SIGUSR2",
+            Signal::SigChld => "SIGCHLD",
         }
     }
 }
@@ -395,14 +432,16 @@ pub enum SignalDisposition {
 }
 
 impl Default for SignalDisposition {
-    fn default() -> Self { SignalDisposition::Default }
+    fn default() -> Self {
+        SignalDisposition::Default
+    }
 }
 
 /// Default action for a signal
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SignalAction {
     Terminate,
-    TerminateCore,  // Terminate + core dump
+    TerminateCore, // Terminate + core dump
     Stop,
     Continue,
     Ignore,
@@ -411,11 +450,15 @@ pub enum SignalAction {
 impl Signal {
     pub fn default_action(&self) -> SignalAction {
         match self {
-            Signal::SigKill | Signal::SigTerm | Signal::SigHup | Signal::SigInt => SignalAction::Terminate,
+            Signal::SigKill | Signal::SigTerm | Signal::SigHup | Signal::SigInt => {
+                SignalAction::Terminate
+            }
             Signal::SigSegv => SignalAction::TerminateCore,
             Signal::SigStop => SignalAction::Stop,
             Signal::SigCont => SignalAction::Continue,
-            Signal::SigChld | Signal::SigUsr1 | Signal::SigUsr2 | Signal::SigAlrm => SignalAction::Ignore,
+            Signal::SigChld | Signal::SigUsr1 | Signal::SigUsr2 | Signal::SigAlrm => {
+                SignalAction::Ignore
+            }
         }
     }
 }
@@ -442,15 +485,17 @@ pub struct SignalManager {
 }
 
 impl Default for SignalManager {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SignalManager {
     pub fn new() -> Self {
         Self {
             handlers: Vec::new(),
-            pending:  Vec::new(),
-            blocked:  Vec::new(),
+            pending: Vec::new(),
+            blocked: Vec::new(),
             signals_sent: 0,
             signals_delivered: 0,
         }
@@ -475,7 +520,7 @@ impl SignalManager {
     /// Set signal disposition (handler)
     pub fn set_handler(&mut self, pid: Pid, signal: Signal, disp: SignalDisposition) -> bool {
         if signal.is_unblockable() {
-            return false;  // Cannot change SIGKILL/SIGSTOP
+            return false; // Cannot change SIGKILL/SIGSTOP
         }
         if let Some((_, handlers)) = self.handlers.iter_mut().find(|(p, _)| *p == pid) {
             handlers[signal as u32 as usize] = disp;
@@ -487,7 +532,8 @@ impl SignalManager {
 
     /// Get signal disposition for a process/signal
     pub fn get_handler(&self, pid: Pid, signal: Signal) -> SignalDisposition {
-        self.handlers.iter()
+        self.handlers
+            .iter()
             .find(|(p, _)| *p == pid)
             .map(|(_, h)| h[signal as u32 as usize])
             .unwrap_or(SignalDisposition::Default)
@@ -495,7 +541,9 @@ impl SignalManager {
 
     /// Block a signal for a process
     pub fn block(&mut self, pid: Pid, signal: Signal) {
-        if signal.is_unblockable() { return; }
+        if signal.is_unblockable() {
+            return;
+        }
         if let Some((_, mask)) = self.blocked.iter_mut().find(|(p, _)| *p == pid) {
             *mask |= 1u32 << (signal as u32 as usize);
         }
@@ -510,8 +558,11 @@ impl SignalManager {
 
     /// Check if a signal is blocked
     pub fn is_blocked(&self, pid: Pid, signal: Signal) -> bool {
-        if signal.is_unblockable() { return false; }
-        self.blocked.iter()
+        if signal.is_unblockable() {
+            return false;
+        }
+        self.blocked
+            .iter()
             .find(|(p, _)| *p == pid)
             .map(|(_, mask)| (*mask & (1u32 << (signal as u32 as usize))) != 0)
             .unwrap_or(false)
@@ -521,17 +572,31 @@ impl SignalManager {
     pub fn send(&mut self, pid: Pid, signal: Signal, sender: Option<Pid>) -> bool {
         self.signals_sent += 1;
         if let Some((_, pending)) = self.pending.iter_mut().find(|(p, _)| *p == pid) {
-            pending.push(PendingSignal { signal, sender, data: 0 });
+            pending.push(PendingSignal {
+                signal,
+                sender,
+                data: 0,
+            });
             return true;
         }
         false
     }
 
     /// Send a signal with data (sigqueue-like)
-    pub fn send_with_data(&mut self, pid: Pid, signal: Signal, sender: Option<Pid>, data: u64) -> bool {
+    pub fn send_with_data(
+        &mut self,
+        pid: Pid,
+        signal: Signal,
+        sender: Option<Pid>,
+        data: u64,
+    ) -> bool {
         self.signals_sent += 1;
         if let Some((_, pending)) = self.pending.iter_mut().find(|(p, _)| *p == pid) {
-            pending.push(PendingSignal { signal, sender, data });
+            pending.push(PendingSignal {
+                signal,
+                sender,
+                data,
+            });
             return true;
         }
         false
@@ -539,7 +604,8 @@ impl SignalManager {
 
     /// Get pending signals for a process (not blocked)
     pub fn pending_signals(&self, pid: Pid) -> Vec<Signal> {
-        self.pending.iter()
+        self.pending
+            .iter()
             .find(|(p, _)| *p == pid)
             .map(|(_, sigs)| {
                 sigs.iter()
@@ -553,27 +619,32 @@ impl SignalManager {
     /// Deliver the next deliverable signal to a process.
     /// Returns the signal and what action to take.
     pub fn deliver(&mut self, pid: Pid) -> Option<(Signal, SignalDisposition)> {
-        let blocked_mask = self.blocked.iter()
+        let blocked_mask = self
+            .blocked
+            .iter()
             .find(|(p, _)| *p == pid)
             .map(|(_, m)| *m)
             .unwrap_or(0);
 
         // Find first non-blocked pending signal
-        let signal_idx = self.pending.iter_mut()
+        let signal_idx = self
+            .pending
+            .iter_mut()
             .find(|(p, _)| *p == pid)
             .and_then(|(_, sigs)| {
                 sigs.iter().position(|s| {
-                    !s.signal.is_unblockable() && (blocked_mask & (1u32 << (s.signal as u32 as usize))) == 0
+                    !s.signal.is_unblockable()
+                        && (blocked_mask & (1u32 << (s.signal as u32 as usize))) == 0
                         || s.signal.is_unblockable()
                 })
             });
 
         if let Some(idx) = signal_idx {
-            let signal = self.pending.iter_mut()
+            let signal = self
+                .pending
+                .iter_mut()
                 .find(|(p, _)| *p == pid)
-                .and_then(|(_, sigs)| {
-                    sigs.remove(idx).map(|ps| ps.signal)
-                })?;
+                .and_then(|(_, sigs)| sigs.remove(idx).map(|ps| ps.signal))?;
             self.signals_delivered += 1;
             let disp = self.get_handler(pid, signal);
             Some((signal, disp))
@@ -586,14 +657,16 @@ impl SignalManager {
     pub fn resolve_action(signal: Signal, disp: SignalDisposition) -> SignalResolution {
         match disp {
             SignalDisposition::Default => match signal.default_action() {
-                SignalAction::Terminate     => SignalResolution::Terminate(0),
+                SignalAction::Terminate => SignalResolution::Terminate(0),
                 SignalAction::TerminateCore => SignalResolution::Terminate(1),
-                SignalAction::Stop           => SignalResolution::Stop,
-                SignalAction::Continue       => SignalResolution::Continue,
-                SignalAction::Ignore          => SignalResolution::Ignore,
+                SignalAction::Stop => SignalResolution::Stop,
+                SignalAction::Continue => SignalResolution::Continue,
+                SignalAction::Ignore => SignalResolution::Ignore,
             },
             SignalDisposition::Ignore => SignalResolution::Ignore,
-            SignalDisposition::Catch { handler_addr } => SignalResolution::CallHandler(handler_addr),
+            SignalDisposition::Catch { handler_addr } => {
+                SignalResolution::CallHandler(handler_addr)
+            }
         }
     }
 
@@ -603,9 +676,15 @@ impl SignalManager {
     }
 
     /// Statistics
-    pub fn signals_sent(&self) -> u64 { self.signals_sent }
-    pub fn signals_delivered(&self) -> u64 { self.signals_delivered }
-    pub fn registered_count(&self) -> usize { self.handlers.len() }
+    pub fn signals_sent(&self) -> u64 {
+        self.signals_sent
+    }
+    pub fn signals_delivered(&self) -> u64 {
+        self.signals_delivered
+    }
+    pub fn registered_count(&self) -> usize {
+        self.handlers.len()
+    }
 
     /// Clear all pending signals for a process
     pub fn clear_pending(&mut self, pid: Pid) {
@@ -731,7 +810,7 @@ mod tests {
         // Set p_memsz > p_filesz to simulate BSS
         let phdr_off = 64;
         let memsz_offset = phdr_off + 40;
-        elf[memsz_offset..memsz_offset+8].copy_from_slice(&100u64.to_le_bytes());
+        elf[memsz_offset..memsz_offset + 8].copy_from_slice(&100u64.to_le_bytes());
         let parser = ElfParser::parse(&elf).unwrap();
         let seg = &parser.program_headers()[0];
         assert!(seg.needs_bss());
@@ -743,8 +822,11 @@ mod tests {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         // Change p_type to PT_NOTE (not PT_LOAD)
         let phdr_off = 64;
-        elf[phdr_off..phdr_off+4].copy_from_slice(&PT_NOTE.to_le_bytes());
-        assert_eq!(ElfParser::parse(&elf), Err(ElfParseError::NoLoadableSegments));
+        elf[phdr_off..phdr_off + 4].copy_from_slice(&PT_NOTE.to_le_bytes());
+        assert_eq!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::NoLoadableSegments)
+        );
     }
 
     // --- ELF Loader tests ---
@@ -817,7 +899,10 @@ mod tests {
     #[test]
     fn test_default_actions() {
         assert_eq!(Signal::SigKill.default_action(), SignalAction::Terminate);
-        assert_eq!(Signal::SigSegv.default_action(), SignalAction::TerminateCore);
+        assert_eq!(
+            Signal::SigSegv.default_action(),
+            SignalAction::TerminateCore
+        );
         assert_eq!(Signal::SigStop.default_action(), SignalAction::Stop);
         assert_eq!(Signal::SigCont.default_action(), SignalAction::Continue);
         assert_eq!(Signal::SigChld.default_action(), SignalAction::Ignore);
@@ -855,9 +940,20 @@ mod tests {
     fn test_set_handler() {
         let mut mgr = SignalManager::new();
         mgr.register(Pid(1000));
-        assert!(mgr.set_handler(Pid(1000), Signal::SigUsr1, SignalDisposition::Catch { handler_addr: 0x400100 }));
+        assert!(mgr.set_handler(
+            Pid(1000),
+            Signal::SigUsr1,
+            SignalDisposition::Catch {
+                handler_addr: 0x400100
+            }
+        ));
         let h = mgr.get_handler(Pid(1000), Signal::SigUsr1);
-        assert_eq!(h, SignalDisposition::Catch { handler_addr: 0x400100 });
+        assert_eq!(
+            h,
+            SignalDisposition::Catch {
+                handler_addr: 0x400100
+            }
+        );
     }
 
     #[test]
@@ -993,14 +1089,25 @@ mod tests {
 
     #[test]
     fn test_resolve_action_catch() {
-        let res = SignalManager::resolve_action(Signal::SigUsr1, SignalDisposition::Catch { handler_addr: 0x400100 });
+        let res = SignalManager::resolve_action(
+            Signal::SigUsr1,
+            SignalDisposition::Catch {
+                handler_addr: 0x400100,
+            },
+        );
         assert_eq!(res, SignalResolution::CallHandler(0x400100));
     }
 
     #[test]
     fn test_resolve_action_stop_continue() {
-        assert_eq!(SignalManager::resolve_action(Signal::SigStop, SignalDisposition::Default), SignalResolution::Stop);
-        assert_eq!(SignalManager::resolve_action(Signal::SigCont, SignalDisposition::Default), SignalResolution::Continue);
+        assert_eq!(
+            SignalManager::resolve_action(Signal::SigStop, SignalDisposition::Default),
+            SignalResolution::Stop
+        );
+        assert_eq!(
+            SignalManager::resolve_action(Signal::SigCont, SignalDisposition::Default),
+            SignalResolution::Continue
+        );
     }
 
     #[test]
@@ -1037,7 +1144,13 @@ mod tests {
         let pid = Pid(1000);
         mgr.register(pid);
         // Set custom handler for SIGUSR1
-        mgr.set_handler(pid, Signal::SigUsr1, SignalDisposition::Catch { handler_addr: 0x500000 });
+        mgr.set_handler(
+            pid,
+            Signal::SigUsr1,
+            SignalDisposition::Catch {
+                handler_addr: 0x500000,
+            },
+        );
         // Send SIGUSR1
         mgr.send(pid, Signal::SigUsr1, Some(Pid(2000)));
         assert!(mgr.has_pending(pid));
@@ -1058,9 +1171,15 @@ mod tests {
 
     #[test]
     fn test_elf_parse_error_display() {
-        assert_eq!(format!("{}", ElfParseError::InvalidMagic), "invalid ELF magic");
+        assert_eq!(
+            format!("{}", ElfParseError::InvalidMagic),
+            "invalid ELF magic"
+        );
         assert_eq!(format!("{}", ElfParseError::Truncated), "file truncated");
-        assert_eq!(format!("{}", ElfParseError::NoLoadableSegments), "no loadable segments");
+        assert_eq!(
+            format!("{}", ElfParseError::NoLoadableSegments),
+            "no loadable segments"
+        );
     }
 
     #[test]
@@ -1075,25 +1194,25 @@ mod tests {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         // Add a second program header for data segment
         let phdr2_off = 64 + 56; // After first Phdr
-        // Extend with data Phdr
+                                 // Extend with data Phdr
         elf.extend_from_slice(&[0u8; 56]);
         // p_type = PT_LOAD
-        elf[phdr2_off..phdr2_off+4].copy_from_slice(&PT_LOAD.to_le_bytes());
+        elf[phdr2_off..phdr2_off + 4].copy_from_slice(&PT_LOAD.to_le_bytes());
         // p_flags = PF_R | PF_W (readable + writable, not executable)
-        elf[phdr2_off+4..phdr2_off+8].copy_from_slice(&(PF_R | PF_W).to_le_bytes());
+        elf[phdr2_off + 4..phdr2_off + 8].copy_from_slice(&(PF_R | PF_W).to_le_bytes());
         // p_vaddr = 0x500000
-        elf[phdr2_off+16..phdr2_off+24].copy_from_slice(&0x500000u64.to_le_bytes());
+        elf[phdr2_off + 16..phdr2_off + 24].copy_from_slice(&0x500000u64.to_le_bytes());
         // p_filesz = 16
-        elf[phdr2_off+32..phdr2_off+40].copy_from_slice(&16u64.to_le_bytes());
+        elf[phdr2_off + 32..phdr2_off + 40].copy_from_slice(&16u64.to_le_bytes());
         // p_memsz = 16
-        elf[phdr2_off+40..phdr2_off+48].copy_from_slice(&16u64.to_le_bytes());
+        elf[phdr2_off + 40..phdr2_off + 48].copy_from_slice(&16u64.to_le_bytes());
         // Update e_phnum = 2
         elf[56..58].copy_from_slice(&2u16.to_le_bytes());
         // Append 16 bytes of data
         elf.extend_from_slice(&[0xAA; 16]);
         // Update p_offset for second segment
         let data_offset = elf.len() - 16;
-        elf[phdr2_off+8..phdr2_off+16].copy_from_slice(&(data_offset as u64).to_le_bytes());
+        elf[phdr2_off + 8..phdr2_off + 16].copy_from_slice(&(data_offset as u64).to_le_bytes());
 
         let parser = ElfParser::parse(&elf).unwrap();
         assert_eq!(parser.program_headers().len(), 2);
