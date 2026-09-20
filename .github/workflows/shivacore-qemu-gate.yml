@@ -1,0 +1,105 @@
+name: ShivaCore Real QEMU Gate
+
+on: [push, pull_request, workflow_dispatch]
+
+permissions:
+  contents: read
+
+jobs:
+  qemu:
+    name: SCHED-001 QEMU (${{ matrix.cpu }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - cpu: intel-skylake
+            qemu_cpu: Skylake-Client-v1
+            expected_vendor: Intel
+          - cpu: amd-epyc
+            qemu_cpu: EPYC
+            expected_vendor: AMD
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: x86_64-unknown-none
+          components: llvm-tools-preview, rust-src
+
+      - name: Build kernel ELF
+        env:
+          RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
+        run: |
+          cargo build -p shivacore --release \
+            --target x86_64-unknown-none \
+            --no-default-features \
+            --features x86-boot
+
+      - name: Build BIOS image
+        run: |
+          mkdir -p target/boot-images
+          cargo run -p boot --release -- \
+            target/x86_64-unknown-none/release/shivacore \
+            target/boot-images
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86
+
+      - name: Run real QEMU and verify ordered scheduler evidence
+        run: |
+          set +e
+          timeout 20s qemu-system-x86_64 \
+            -cpu ${{ matrix.qemu_cpu }} \
+            -drive format=raw,file=target/boot-images/shivacore-bios.img \
+            -serial stdio \
+            -display none \
+            -no-reboot \
+            -no-shutdown 2>&1 | tee target/shivacore-qemu-${{ matrix.cpu }}.log
+          status=${PIPESTATUS[0]}
+
+          grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: CPU HAL compatibility check OK." target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: minimal kernel path ready (CPU/GDT/IDT/Paging/Heap)." target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: active Ring-3 selectors CS=" target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: USER-001 entering PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: scheduler preemption -> context switch to PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log
+          grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log
+
+          python3 - <<'PY'
+          import pathlib
+
+          log = pathlib.Path("target/shivacore-qemu-${{ matrix.cpu }}.log").read_text()
+          markers = [
+              "ShivaCore: Kernel-Einstiegspunkt erreicht.",
+              "ShivaCore: minimal kernel path ready (CPU/GDT/IDT/Paging/Heap).",
+              "ShivaCore: USER-001 entering PID=1000",
+              "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012",
+              "ShivaCore: scheduler preemption -> context switch to PID=1001",
+              "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012",
+              "ShivaCore: scheduler preemption -> context switch to PID=1000",
+              "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012",
+          ]
+          cursor = -1
+          for marker in markers:
+              pos = log.find(marker, cursor + 1)
+              if pos < 0:
+                  raise SystemExit(f"missing ordered marker: {marker}")
+              cursor = pos
+          print("SCHED-001 ordered QEMU sequence verified.")
+          PY
+
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            exit "$status"
+          fi
+
+      - name: Upload QEMU evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shivacore-qemu-${{ matrix.cpu }}
+          path: target/shivacore-qemu-${{ matrix.cpu }}.log

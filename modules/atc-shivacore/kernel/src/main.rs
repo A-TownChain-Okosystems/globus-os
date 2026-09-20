@@ -4,7 +4,8 @@
 // Framebuffer-Textausgabe.
 // K-Sprint 1: GDT + TSS (Double-Fault-Stack), IDT (Breakpoint/Double-Fault/
 // Page-Fault), PIC-Remapping (0x20-0x2F), Timer+Keyboard-Interrupts aktiv.
-// K-Sprint 2: Paging-Mapper (OffsetPageTable), Frame-Allocator, Heap-
+// K-Sprint 2: Paging-Mapper
+// SCHED-001 verification: real QEMU is the authoritative runtime gate. (OffsetPageTable), Frame-Allocator, Heap-
 // Allokator (linked_list_allocator) -- `alloc` (Box/Vec/String) nutzbar.
 // Kein Linux-Unterbau, kein Fremdcode jenseits des minimalen Boot-Protokolls.
 #![no_std]
@@ -67,7 +68,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     interrupts::init_idt();
     x86_64::instructions::interrupts::int3();
     interrupts::init_pics();
-    serial_println!("ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).");
+    serial_println!("ShivaCore: GDT/IDT/PIC initialized (interrupts still disabled).");
 
     let phys_mem_offset = boot_info
         .physical_memory_offset
@@ -97,11 +98,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
 
     println!("K-Sprint 2: Paging/Heap OK (Box+Vec getestet)");
-    // Real kernel integration gate: execute the canonical kernel initialization
-    // from the same UEFI -> kernel_main path after paging/heap are live.
-    let kernel_state = shivacore::kernel_init::KernelState::boot()
-        .expect("ShivaCore: canonical KernelState::boot() failed");
-    serial_println!("ShivaCore: KernelState::boot() -> Done.");
+    // Minimal-kernel gate: CPU/GDT/IDT/Paging/Heap are proven before any
+    // higher-level service stack is constructed. Network, blockchain, VM and
+    // Aurora remain deferred until the userspace/scheduler gates are green.
+    serial_println!("ShivaCore: minimal kernel path ready (CPU/GDT/IDT/Paging/Heap).");
 
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
@@ -128,7 +128,20 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("ShivaCore: USER-001 user page mapping failed");
     }
     let user_pid = ats1000::Pid(1000);
-    let user_ctx = userspace::UserContext::new(user_pid, &user_binary, user_addr_space);
+    let user_cs = gdt::user_code_selector().bits();
+    let user_ss = gdt::user_data_selector().bits();
+    serial_println!(
+        "ShivaCore: active Ring-3 selectors CS={:#x} SS={:#x}",
+        user_cs,
+        user_ss
+    );
+    let user_ctx = userspace::UserContext::new_with_selectors(
+        user_pid,
+        &user_binary,
+        user_addr_space,
+        user_cs,
+        user_ss,
+    );
     serial_println!(
         "ShivaCore: USER-001 mapped PID={} RIP={:#x} RSP={:#x}",
         user_pid.0,
@@ -178,7 +191,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("ShivaCore: second USER-001 user page mapping failed");
     }
     let user_pid_2 = ats1000::Pid(1001);
-    let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
+    let user_ctx_2 = userspace::UserContext::new_with_selectors(
+        user_pid_2,
+        &user_binary_2,
+        user_addr_space_2,
+        user_cs,
+        user_ss,
+    );
 
     interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
     serial_println!(
@@ -186,12 +205,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_pid.0,
         user_pid_2.0
     );
-    unsafe { userspace::enter_ring3(&user_ctx) }
+    // Interrupts remain disabled while the user image is being installed.
+    // Enable them only after the scheduler has a valid current context.
+    interrupts::enable_interrupts();
+    unsafe { userspace::enter_ring3(&user_ctx, user_cs, user_ss) }
 
-    serial_println!("{}", kernel_state.boot_log());
-    serial_println!("ShivaCore: kernel init chain connected to kernel_main.");
-
-    serial_println!("ShivaCore: K-Sprint 2 abgeschlossen. Uebergabe an Idle-Loop.");
+    // enter_ring3 is intentionally non-returning: after IRETQ the CPU runs
+    // Ring-3 code and timer IRQs drive all subsequent scheduler transitions.
+    unreachable!();
 
     loop {
         x86_64::instructions::hlt();
