@@ -4,7 +4,8 @@
 // Framebuffer-Textausgabe.
 // K-Sprint 1: GDT + TSS (Double-Fault-Stack), IDT (Breakpoint/Double-Fault/
 // Page-Fault), PIC-Remapping (0x20-0x2F), Timer+Keyboard-Interrupts aktiv.
-// K-Sprint 2: Paging-Mapper (OffsetPageTable), Frame-Allocator, Heap-
+// K-Sprint 2: Paging-Mapper
+// SCHED-001 verification: real QEMU is the authoritative runtime gate. (OffsetPageTable), Frame-Allocator, Heap-
 // Allokator (linked_list_allocator) -- `alloc` (Box/Vec/String) nutzbar.
 // Kein Linux-Unterbau, kein Fremdcode jenseits des minimalen Boot-Protokolls.
 #![no_std]
