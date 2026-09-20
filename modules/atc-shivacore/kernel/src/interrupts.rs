@@ -93,7 +93,10 @@ extern "x86-interrupt" fn timer_interrupt_handler(_stack_frame: InterruptStackFr
 }
 
 extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
-    serial_println!("ShivaCore: CPL3 syscall gate entered at RIP={:#x}", stack_frame.instruction_pointer().as_u64());
+    serial_println!(
+        "ShivaCore: CPL3 syscall gate entered at RIP={:#x}",
+        stack_frame.instruction_pointer().as_u64()
+    );
     // Return to the interrupted userspace instruction for now. The ABI dispatcher
     // is wired next; this gate is intentionally observable before SCHED-001/SYS-001.
 }

@@ -83,8 +83,13 @@ pub fn init() {
     }
 }
 
-
 /// Selectors used by a real CPL0 <-> CPL3 transition.
-pub fn user_code_selector() -> SegmentSelector { GDT.1.user_code_selector }
-pub fn user_data_selector() -> SegmentSelector { GDT.1.user_data_selector }
-pub fn kernel_code_selector() -> SegmentSelector { GDT.1.code_selector }
+pub fn user_code_selector() -> SegmentSelector {
+    GDT.1.user_code_selector
+}
+pub fn user_data_selector() -> SegmentSelector {
+    GDT.1.user_data_selector
+}
+pub fn kernel_code_selector() -> SegmentSelector {
+    GDT.1.code_selector
+}
