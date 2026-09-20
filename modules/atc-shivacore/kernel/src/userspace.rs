@@ -84,7 +84,13 @@ impl UserAddressSpace {
         addr >= self.data_base && addr < self.data_base + self.data_size
     }
     pub fn in_stack(&self, addr: u64) -> bool {
-        addr > self.stack_base - self.stack_size && addr <= self.stack_base
+        // The mapper installs exactly [stack_base - stack_size, stack_base).
+        // Keep the software validity predicate identical to the hardware PTE range.
+        let bottom = self
+            .stack_base
+            .checked_sub(self.stack_size)
+            .expect("user stack range underflow");
+        addr >= bottom && addr < self.stack_base
     }
     pub fn in_heap(&self, addr: u64) -> bool {
         addr >= self.heap_base && addr < self.heap_base + self.heap_size
