@@ -715,7 +715,8 @@ mod tests {
         assert!(!asp.in_code(0x00500000));
         assert!(asp.in_data(0x00500000));
         assert!(asp.in_stack(0x7FFFEFFF));
-        assert!(asp.in_stack(0x7FFFF000));
+        assert!(!asp.in_stack(0x7FFFF000));
+        assert!(asp.in_stack(0x7FEFF000));
         assert!(asp.in_heap(0x00600000));
         assert!(!asp.in_heap(0x005FFFFF));
     }
@@ -723,7 +724,7 @@ mod tests {
     #[test]
     fn test_initial_rsp() {
         let asp = UserAddressSpace::default();
-        assert_eq!(asp.initial_rsp(), 0x7FFFF000);
+        assert_eq!(asp.initial_rsp(), 0x7FFFEFF8);
     }
 
     #[test]
@@ -740,7 +741,7 @@ mod tests {
     fn test_hello_world_binary() {
         let bin = UserBinary::hello_world();
         assert_eq!(bin.entry_point, 0x00400000);
-        assert_eq!(bin.code, vec![0xF4]);
+        assert_eq!(bin.code, vec![0xEB, 0xFE]);
         assert_eq!(bin.name, "hello");
         assert_eq!(bin.code_len(), 1);
         assert_eq!(bin.data_len(), 0);
