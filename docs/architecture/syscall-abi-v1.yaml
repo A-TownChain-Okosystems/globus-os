@@ -1,0 +1,36 @@
+schema: shivacore-syscall-abi
+version: 1.0.0
+abi:
+  major: 1
+  minor: 0
+  version_u32: 65536
+  max_payload_bytes: 1048576
+errors:
+  InvalidSyscall: 1
+  InvalidHandle: 2
+  PermissionDenied: 3
+  InvalidPayload: 4
+  EndpointUnavailable: 5
+  ResourceExhausted: 6
+  AbiVersionMismatch: 7
+syscalls:
+  - {id: 1, mnemonic: YIELD, status: implemented, blocking: false}
+  - {id: 16, mnemonic: IPC_SEND, status: boundary_implemented, blocking: false, rights: [WRITE]}
+  - {id: 17, mnemonic: IPC_RECEIVE, status: boundary_implemented, blocking: false, rights: [READ]}
+  - {id: 32, mnemonic: CAPABILITY_QUERY, status: implemented, blocking: false, rights: [INSPECT]}
+  - {id: 48, mnemonic: HANDLE_CLOSE, status: boundary_implemented, blocking: false}
+  - {id: 64, mnemonic: MONOTONIC_TIME, status: implemented, blocking: false}
+reserved_ranges:
+  scheduler_process: [0, 15]
+  ipc: [16, 31]
+  capability: [32, 47]
+  handle_object: [48, 63]
+  time_random: [64, 79]
+  memory: [80, 95]
+  process_thread: [96, 111]
+  filesystem: [112, 127]
+  networking: [128, 143]
+  devices: [144, 159]
+  containers: [160, 175]
+  runtime_vm: [176, 191]
+  audit_telemetry: [192, 207]
