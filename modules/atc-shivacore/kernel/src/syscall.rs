@@ -73,8 +73,7 @@ impl SyscallDispatcher {
             return SyscallResponse::err(AbiError::InvalidPayload);
         }
 
-        let syscall =
-            Syscall::from_id(request.syscall_id).ok_or(AbiError::InvalidSyscall);
+        let syscall = Syscall::from_id(request.syscall_id).ok_or(AbiError::InvalidSyscall);
 
         match syscall {
             Ok(Syscall::Yield) => SyscallResponse::ok(0),
