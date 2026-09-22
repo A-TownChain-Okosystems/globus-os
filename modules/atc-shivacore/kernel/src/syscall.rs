@@ -73,19 +73,12 @@ impl SyscallDispatcher {
             return SyscallResponse::err(AbiError::InvalidPayload);
         }
 
-        let syscall = match request.syscall_id {
-            x if x == Syscall::Yield.id() => Syscall::Yield,
-            x if x == Syscall::IpcSend.id() => Syscall::IpcSend,
-            x if x == Syscall::IpcReceive.id() => Syscall::IpcReceive,
-            x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
-            x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
-            x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
-            _ => return SyscallResponse::err(AbiError::InvalidSyscall),
-        };
+        let syscall =
+            Syscall::from_id(request.syscall_id).ok_or(AbiError::InvalidSyscall);
 
         match syscall {
-            Syscall::Yield => SyscallResponse::ok(0),
-            Syscall::IpcSend => {
+            Ok(Syscall::Yield) => SyscallResponse::ok(0),
+            Ok(Syscall::IpcSend) => {
                 if !self.check_capability(
                     pid,
                     request.capability,
@@ -98,7 +91,7 @@ impl SyscallDispatcher {
                 }
                 SyscallResponse::ok(0)
             }
-            Syscall::IpcReceive => {
+            Ok(Syscall::IpcReceive) => {
                 if request.arg1 as usize > MAX_SYSCALL_PAYLOAD {
                     return SyscallResponse::err(AbiError::InvalidPayload);
                 }
@@ -114,7 +107,7 @@ impl SyscallDispatcher {
                 }
                 SyscallResponse::ok(request.arg1)
             }
-            Syscall::CapabilityQuery => {
+            Ok(Syscall::CapabilityQuery) => {
                 let cap = match request.capability {
                     Some(cap) => cap,
                     None => return SyscallResponse::err(AbiError::InvalidHandle),
@@ -124,13 +117,13 @@ impl SyscallDispatcher {
                 }
                 SyscallResponse::ok(1)
             }
-            Syscall::HandleClose => {
+            Ok(Syscall::HandleClose) => {
                 if request.capability.is_none() {
                     return SyscallResponse::err(AbiError::InvalidHandle);
                 }
                 SyscallResponse::ok(0)
             }
-            Syscall::MonotonicTime => {
+            Ok(Syscall::MonotonicTime) => {
                 self.monotonic_ticks = self.monotonic_ticks.wrapping_add(1);
                 SyscallResponse::ok(self.monotonic_ticks)
             }
