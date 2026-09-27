@@ -1,0 +1,2199 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "ATC-CATALOG-OS-UI-001",
+  "status": "audit-baseline",
+  "source_repository": "A-TownChain-Okosystems/globus-os",
+  "source_branch": "main",
+  "generated_date": "2026-09-27",
+  "status_model": [
+    "SPECIFIED",
+    "DOCUMENTED",
+    "IMPLEMENTED",
+    "TESTED",
+    "CI-VERIFIED",
+    "E2E-VERIFIED",
+    "AUDITED",
+    "RELEASE-READY"
+  ],
+  "traceability_states": [
+    "COMPLETE",
+    "PARTIAL",
+    "INCOMPLETE",
+    "BROKEN"
+  ],
+  "evidence_rule": "UI presence, navigation, mock data, or design files do not prove an underlying system function. UI implementation requires an authoritative GlobusOS API/service boundary and exact source-SHA-bound evidence.",
+  "architecture_surfaces": [
+    "DESKTOP",
+    "CONTROL_CENTER",
+    "TRUST_CENTER"
+  ],
+  "security_flow": "UI -> GlobusOS API -> Identity -> Capability -> Policy -> Validation -> Authoritative State -> Audit",
+  "functions": [
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-001",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Overview",
+      "function": "Open/manage Overview",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-002",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Display & Graphics",
+      "function": "Open/manage Display & Graphics",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-003",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Sound",
+      "function": "Open/manage Sound",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-004",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Network",
+      "function": "Open/manage Network",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-005",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Bluetooth",
+      "function": "Open/manage Bluetooth",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-006",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Devices",
+      "function": "Open/manage Devices",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-007",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Storage",
+      "function": "Open/manage Storage",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-008",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Power",
+      "function": "Open/manage Power",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-009",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Time & Region",
+      "function": "Open/manage Time & Region",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SYSTEM-010",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM",
+      "area": "Sensors",
+      "function": "Open/manage Sensors",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-011",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Accounts",
+      "function": "Open/manage Accounts",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-012",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Appearance",
+      "function": "Open/manage Appearance",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-013",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Accessibility",
+      "function": "Open/manage Accessibility",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-014",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Input & Keyboard",
+      "function": "Open/manage Input & Keyboard",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-015",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Notifications",
+      "function": "Open/manage Notifications",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-016",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Privacy",
+      "function": "Open/manage Privacy",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-PERSONAL-017",
+      "surface": "CONTROL_CENTER",
+      "group": "PERSONAL",
+      "area": "Language & Region",
+      "function": "Open/manage Language & Region",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-018",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Security Center",
+      "function": "Open/manage Security Center",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-019",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Identity",
+      "function": "Open/manage Identity",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-020",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Authentication",
+      "function": "Open/manage Authentication",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-021",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Permissions",
+      "function": "Open/manage Permissions",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-022",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Capabilities",
+      "function": "Open/manage Capabilities",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-023",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Credentials / Keys",
+      "function": "Open/manage Credentials / Keys",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-024",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Secure Boot",
+      "function": "Open/manage Secure Boot",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-025",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "TPM / TEE",
+      "function": "Open/manage TPM / TEE",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-026",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Firewall",
+      "function": "Open/manage Firewall",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-027",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Encryption",
+      "function": "Open/manage Encryption",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-028",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Audit",
+      "function": "Open/manage Audit",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-SEC-029",
+      "surface": "CONTROL_CENTER",
+      "group": "SECURITY",
+      "area": "Security Events",
+      "function": "Open/manage Security Events",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-030",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Applications",
+      "function": "Open/manage Applications",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-031",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Services",
+      "function": "Open/manage Services",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-032",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Packages",
+      "function": "Open/manage Packages",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-033",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Drivers",
+      "function": "Open/manage Drivers",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-034",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Updates",
+      "function": "Open/manage Updates",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-035",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Recovery",
+      "function": "Open/manage Recovery",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-036",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Backup",
+      "function": "Open/manage Backup",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-037",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Restore",
+      "function": "Open/manage Restore",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-MGMT-038",
+      "surface": "CONTROL_CENTER",
+      "group": "SYSTEM-MANAGEMENT",
+      "area": "Diagnostics",
+      "function": "Open/manage Diagnostics",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-039",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Aurora Overview",
+      "function": "Open/manage Aurora Overview",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-040",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Models",
+      "function": "Open/manage Models",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-041",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Providers",
+      "function": "Open/manage Providers",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-042",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Conversations",
+      "function": "Open/manage Conversations",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-043",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Memory",
+      "function": "Open/manage Memory",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-044",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "RAG / Knowledge",
+      "function": "Open/manage RAG / Knowledge",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-045",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Agents",
+      "function": "Open/manage Agents",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-046",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Tools",
+      "function": "Open/manage Tools",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-047",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Capabilities",
+      "function": "Open/manage Capabilities",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-048",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Permissions",
+      "function": "Open/manage Permissions",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-049",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Approvals",
+      "function": "Open/manage Approvals",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-050",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "AI Policies",
+      "function": "Open/manage AI Policies",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-051",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "AI Security",
+      "function": "Open/manage AI Security",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-052",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "Provenance",
+      "function": "Open/manage Provenance",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-AI-053",
+      "surface": "CONTROL_CENTER",
+      "group": "AI-AURORA",
+      "area": "AI Audit",
+      "function": "Open/manage AI Audit",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-054",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Blockchain Overview",
+      "function": "Open/manage Blockchain Overview",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-055",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Network",
+      "function": "Open/manage Network",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-056",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Wallet",
+      "function": "Open/manage Wallet",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-057",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Accounts",
+      "function": "Open/manage Accounts",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-058",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Transactions",
+      "function": "Open/manage Transactions",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-059",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Node",
+      "function": "Open/manage Node",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-060",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Mempool",
+      "function": "Open/manage Mempool",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-061",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Consensus",
+      "function": "Open/manage Consensus",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-062",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Staking",
+      "function": "Open/manage Staking",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-063",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Mining",
+      "function": "Open/manage Mining",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-064",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Smart Contracts",
+      "function": "Open/manage Smart Contracts",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-065",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "ATC-VM",
+      "function": "Open/manage ATC-VM",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-066",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "ATCLang",
+      "function": "Open/manage ATCLang",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-067",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Explorer",
+      "function": "Open/manage Explorer",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-068",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Economics",
+      "function": "Open/manage Economics",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ATC-069",
+      "surface": "CONTROL_CENTER",
+      "group": "A-TOWNCHAIN",
+      "area": "Blockchain Security",
+      "function": "Open/manage Blockchain Security",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-070",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "Developer Mode",
+      "function": "Open/manage Developer Mode",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-071",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "SDK",
+      "function": "Open/manage SDK",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-072",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "IDE",
+      "function": "Open/manage IDE",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-073",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "Terminal",
+      "function": "Open/manage Terminal",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-074",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "Debugging",
+      "function": "Open/manage Debugging",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-075",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "Profiling",
+      "function": "Open/manage Profiling",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-076",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "Logs",
+      "function": "Open/manage Logs",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-077",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "APIs",
+      "function": "Open/manage APIs",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-078",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "AI Development",
+      "function": "Open/manage AI Development",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DEV-079",
+      "surface": "CONTROL_CENTER",
+      "group": "DEVELOPER",
+      "area": "Blockchain Development",
+      "function": "Open/manage Blockchain Development",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-080",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Genesis Engine",
+      "function": "Open/manage Genesis Engine",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-081",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Projects",
+      "function": "Open/manage Projects",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-082",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Worlds",
+      "function": "Open/manage Worlds",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-083",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Characters",
+      "function": "Open/manage Characters",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-084",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Creatures",
+      "function": "Open/manage Creatures",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-085",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Quests",
+      "function": "Open/manage Quests",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-086",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Dialogue",
+      "function": "Open/manage Dialogue",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-087",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Mods",
+      "function": "Open/manage Mods",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-088",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Assets",
+      "function": "Open/manage Assets",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-089",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Scripts",
+      "function": "Open/manage Scripts",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-GENESIS-090",
+      "surface": "CONTROL_CENTER",
+      "group": "CREATOR-GENESIS",
+      "area": "Publishing",
+      "function": "Open/manage Publishing",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-091",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "System Policies",
+      "function": "Open/manage System Policies",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-092",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Users & Roles",
+      "function": "Open/manage Users & Roles",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-093",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Services",
+      "function": "Open/manage Services",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-094",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Configuration",
+      "function": "Open/manage Configuration",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-095",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Resource Management",
+      "function": "Open/manage Resource Management",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-096",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Monitoring",
+      "function": "Open/manage Monitoring",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-097",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Compliance",
+      "function": "Open/manage Compliance",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-098",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "Evidence",
+      "function": "Open/manage Evidence",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-ADMIN-099",
+      "surface": "CONTROL_CENTER",
+      "group": "ADMINISTRATION",
+      "area": "System Audit",
+      "function": "Open/manage System Audit",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": false
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-001",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Desktop Shell",
+      "function": "Desktop shell/session surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-002",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Windows",
+      "function": "Window management surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-003",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Launcher",
+      "function": "Application launcher surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-004",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Files",
+      "function": "File management surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-001",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "System Integrity",
+      "function": "System integrity evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-002",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Secure Boot",
+      "function": "Secure boot evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-003",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Kernel Status",
+      "function": "Kernel/TCB status evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-004",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Capability Audit",
+      "function": "Capability audit evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-005",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "AI Audit",
+      "function": "AI audit evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-006",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Blockchain Audit",
+      "function": "Blockchain audit evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-007",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Software Provenance",
+      "function": "Software provenance evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-008",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Update Provenance",
+      "function": "Update provenance evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-009",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Security Events",
+      "function": "Security event evidence surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-010",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Evidence Bundles",
+      "function": "Evidence bundle inspection surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-TRUST-011",
+      "surface": "TRUST_CENTER",
+      "group": "TRUST_CENTER",
+      "area": "Verification Status",
+      "function": "Verification status surface",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true
+    }
+  ]
+}
