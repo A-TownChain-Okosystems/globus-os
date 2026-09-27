@@ -56,7 +56,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CPU-005",
+      "id": "ATC-FUNC-OS-CPU-001",
       "domain": "CPU",
       "function": "CPU/SMP initialization",
       "priority": "P0",
@@ -64,7 +64,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CPU-006",
+      "id": "ATC-FUNC-OS-CPU-002",
       "domain": "CPU",
       "function": "Interrupt/exception dispatch",
       "priority": "P0",
@@ -72,7 +72,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CPU-007",
+      "id": "ATC-FUNC-OS-CPU-003",
       "domain": "CPU",
       "function": "Timer/clock source",
       "priority": "P0",
@@ -80,7 +80,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-MEM-008",
+      "id": "ATC-FUNC-OS-MEM-001",
       "domain": "MEM",
       "function": "Physical memory management",
       "priority": "P0",
@@ -88,7 +88,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-MEM-009",
+      "id": "ATC-FUNC-OS-MEM-002",
       "domain": "MEM",
       "function": "Virtual address-space management",
       "priority": "P0",
@@ -96,7 +96,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-MEM-010",
+      "id": "ATC-FUNC-OS-MEM-003",
       "domain": "MEM",
       "function": "Page-table/protection policy",
       "priority": "P0",
@@ -104,7 +104,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-MEM-011",
+      "id": "ATC-FUNC-OS-MEM-004",
       "domain": "MEM",
       "function": "Memory exhaustion handling",
       "priority": "P0",
@@ -112,7 +112,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PROC-012",
+      "id": "ATC-FUNC-OS-PROC-001",
       "domain": "PROC",
       "function": "Process creation/termination",
       "priority": "P0",
@@ -120,7 +120,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PROC-013",
+      "id": "ATC-FUNC-OS-PROC-002",
       "domain": "PROC",
       "function": "Thread creation/termination",
       "priority": "P0",
@@ -128,7 +128,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PROC-014",
+      "id": "ATC-FUNC-OS-PROC-003",
       "domain": "PROC",
       "function": "Scheduling",
       "priority": "P0",
@@ -136,7 +136,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PROC-015",
+      "id": "ATC-FUNC-OS-PROC-004",
       "domain": "PROC",
       "function": "Synchronization primitives",
       "priority": "P0",
@@ -144,7 +144,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IPC-016",
+      "id": "ATC-FUNC-OS-IPC-001",
       "domain": "IPC",
       "function": "Endpoint creation/destruction",
       "priority": "P0",
@@ -152,7 +152,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IPC-017",
+      "id": "ATC-FUNC-OS-IPC-002",
       "domain": "IPC",
       "function": "Message send/receive",
       "priority": "P0",
@@ -160,7 +160,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IPC-018",
+      "id": "ATC-FUNC-OS-IPC-003",
       "domain": "IPC",
       "function": "Shared-memory transfer",
       "priority": "P0",
@@ -168,7 +168,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IPC-019",
+      "id": "ATC-FUNC-OS-IPC-004",
       "domain": "IPC",
       "function": "Capability transfer",
       "priority": "P0",
@@ -176,7 +176,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CAP-020",
+      "id": "ATC-FUNC-OS-CAP-001",
       "domain": "CAP",
       "function": "Capability issuance",
       "priority": "P0",
@@ -184,7 +184,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CAP-021",
+      "id": "ATC-FUNC-OS-CAP-002",
       "domain": "CAP",
       "function": "Capability enforcement",
       "priority": "P0",
@@ -192,7 +192,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CAP-022",
+      "id": "ATC-FUNC-OS-CAP-003",
       "domain": "CAP",
       "function": "Authorization decision",
       "priority": "P0",
@@ -200,7 +200,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IDENT-023",
+      "id": "ATC-FUNC-OS-IDENT-001",
       "domain": "IDENT",
       "function": "User identity creation",
       "priority": "P0",
@@ -208,7 +208,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IDENT-024",
+      "id": "ATC-FUNC-OS-IDENT-002",
       "domain": "IDENT",
       "function": "Authentication",
       "priority": "P0",
@@ -216,7 +216,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IDENT-025",
+      "id": "ATC-FUNC-OS-IDENT-003",
       "domain": "IDENT",
       "function": "Session lifecycle",
       "priority": "P0",
@@ -224,7 +224,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-IDENT-026",
+      "id": "ATC-FUNC-OS-IDENT-004",
       "domain": "IDENT",
       "function": "Credential/recovery boundary",
       "priority": "P0",
@@ -232,7 +232,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-DEVICE-027",
+      "id": "ATC-FUNC-OS-DEVICE-001",
       "domain": "DEVICE",
       "function": "PCI/PCIe discovery",
       "priority": "P0",
@@ -240,7 +240,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-DEVICE-028",
+      "id": "ATC-FUNC-OS-DEVICE-002",
       "domain": "DEVICE",
       "function": "MMIO mapping",
       "priority": "P0",
@@ -248,7 +248,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-DEVICE-029",
+      "id": "ATC-FUNC-OS-DEVICE-003",
       "domain": "DEVICE",
       "function": "DMA/IOMMU domain setup",
       "priority": "P0",
@@ -256,7 +256,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-DEVICE-030",
+      "id": "ATC-FUNC-OS-DEVICE-004",
       "domain": "DEVICE",
       "function": "Driver/service isolation",
       "priority": "P0",
@@ -264,7 +264,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-STORAGE-031",
+      "id": "ATC-FUNC-OS-STORAGE-001",
       "domain": "STORAGE",
       "function": "VFS namespace",
       "priority": "P0",
@@ -272,7 +272,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-STORAGE-032",
+      "id": "ATC-FUNC-OS-STORAGE-002",
       "domain": "STORAGE",
       "function": "Mount/unmount lifecycle",
       "priority": "P0",
@@ -280,7 +280,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-STORAGE-033",
+      "id": "ATC-FUNC-OS-STORAGE-003",
       "domain": "STORAGE",
       "function": "Block-device boundary",
       "priority": "P0",
@@ -288,7 +288,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-STORAGE-034",
+      "id": "ATC-FUNC-OS-STORAGE-004",
       "domain": "STORAGE",
       "function": "Filesystem boundary",
       "priority": "P0",
@@ -296,7 +296,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-STORAGE-035",
+      "id": "ATC-FUNC-OS-STORAGE-005",
       "domain": "STORAGE",
       "function": "NVMe queue/DMA path",
       "priority": "P0",
@@ -304,7 +304,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-NET-036",
+      "id": "ATC-FUNC-OS-NET-001",
       "domain": "NET",
       "function": "NIC discovery/configuration",
       "priority": "P0",
@@ -312,7 +312,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-NET-037",
+      "id": "ATC-FUNC-OS-NET-002",
       "domain": "NET",
       "function": "Ethernet RX/TX",
       "priority": "P0",
@@ -320,7 +320,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-NET-038",
+      "id": "ATC-FUNC-OS-NET-003",
       "domain": "NET",
       "function": "IPv4/IPv6",
       "priority": "P0",
@@ -328,7 +328,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-NET-039",
+      "id": "ATC-FUNC-OS-NET-004",
       "domain": "NET",
       "function": "TCP/UDP sockets",
       "priority": "P0",
@@ -336,7 +336,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-NET-040",
+      "id": "ATC-FUNC-OS-NET-005",
       "domain": "NET",
       "function": "DNS/routing",
       "priority": "P0",
@@ -344,7 +344,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-SVC-041",
+      "id": "ATC-FUNC-OS-SVC-001",
       "domain": "SVC",
       "function": "Init/service startup",
       "priority": "P0",
@@ -352,7 +352,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-SVC-042",
+      "id": "ATC-FUNC-OS-SVC-002",
       "domain": "SVC",
       "function": "Dependency ordering",
       "priority": "P0",
@@ -360,7 +360,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-SVC-043",
+      "id": "ATC-FUNC-OS-SVC-003",
       "domain": "SVC",
       "function": "Health/failure supervision",
       "priority": "P0",
@@ -368,7 +368,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PKG-044",
+      "id": "ATC-FUNC-OS-PKG-001",
       "domain": "PKG",
       "function": "Package metadata parsing",
       "priority": "P1",
@@ -376,7 +376,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PKG-045",
+      "id": "ATC-FUNC-OS-PKG-002",
       "domain": "PKG",
       "function": "Package signature/integrity verification",
       "priority": "P1",
@@ -384,7 +384,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-PKG-046",
+      "id": "ATC-FUNC-OS-PKG-003",
       "domain": "PKG",
       "function": "Dependency resolution",
       "priority": "P1",
@@ -392,7 +392,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-UPD-047",
+      "id": "ATC-FUNC-OS-UPD-001",
       "domain": "UPD",
       "function": "A/B update state machine",
       "priority": "P1",
@@ -400,7 +400,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-UPD-048",
+      "id": "ATC-FUNC-OS-UPD-002",
       "domain": "UPD",
       "function": "Verified activation",
       "priority": "P1",
@@ -408,7 +408,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-UPD-049",
+      "id": "ATC-FUNC-OS-UPD-003",
       "domain": "UPD",
       "function": "Rollback",
       "priority": "P1",
@@ -416,7 +416,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-REC-050",
+      "id": "ATC-FUNC-OS-REC-001",
       "domain": "REC",
       "function": "Recovery mode",
       "priority": "P1",
@@ -424,7 +424,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-REC-051",
+      "id": "ATC-FUNC-OS-REC-002",
       "domain": "REC",
       "function": "Diagnostic evidence collection",
       "priority": "P1",
@@ -432,7 +432,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-POWER-052",
+      "id": "ATC-FUNC-OS-POWER-001",
       "domain": "POWER",
       "function": "Shutdown/reboot",
       "priority": "P1",
@@ -440,7 +440,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-POWER-053",
+      "id": "ATC-FUNC-OS-POWER-002",
       "domain": "POWER",
       "function": "Suspend/resume",
       "priority": "P1",
@@ -448,7 +448,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-POWER-054",
+      "id": "ATC-FUNC-OS-POWER-003",
       "domain": "POWER",
       "function": "Thermal/power policy",
       "priority": "P1",
@@ -456,7 +456,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-GFX-055",
+      "id": "ATC-FUNC-OS-GFX-001",
       "domain": "GFX",
       "function": "Display/device discovery",
       "priority": "P1",
@@ -464,7 +464,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-GFX-056",
+      "id": "ATC-FUNC-OS-GFX-002",
       "domain": "GFX",
       "function": "Compositor/window surface",
       "priority": "P1",
@@ -472,7 +472,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-GFX-057",
+      "id": "ATC-FUNC-OS-GFX-003",
       "domain": "GFX",
       "function": "GPU boundary",
       "priority": "P1",
@@ -480,7 +480,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-AUDIO-058",
+      "id": "ATC-FUNC-OS-AUDIO-001",
       "domain": "AUDIO",
       "function": "Audio service lifecycle",
       "priority": "P1",
@@ -488,7 +488,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-AUDIO-059",
+      "id": "ATC-FUNC-OS-AUDIO-002",
       "domain": "AUDIO",
       "function": "Playback/record boundary",
       "priority": "P1",
@@ -496,7 +496,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-USER-060",
+      "id": "ATC-FUNC-OS-USER-001",
       "domain": "USER",
       "function": "Shell/CLI",
       "priority": "P1",
@@ -504,7 +504,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-USER-061",
+      "id": "ATC-FUNC-OS-USER-002",
       "domain": "USER",
       "function": "System administration API",
       "priority": "P1",
@@ -512,7 +512,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-OBS-062",
+      "id": "ATC-FUNC-OS-OBS-001",
       "domain": "OBS",
       "function": "Structured logging",
       "priority": "P1",
@@ -520,7 +520,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-OBS-063",
+      "id": "ATC-FUNC-OS-OBS-002",
       "domain": "OBS",
       "function": "Metrics/tracing",
       "priority": "P1",
@@ -528,7 +528,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-OBS-064",
+      "id": "ATC-FUNC-OS-OBS-003",
       "domain": "OBS",
       "function": "Crash evidence",
       "priority": "P1",
@@ -536,7 +536,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-SDK-065",
+      "id": "ATC-FUNC-OS-SDK-001",
       "domain": "SDK",
       "function": "Public API/ABI contract",
       "priority": "P1",
@@ -544,7 +544,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-SDK-066",
+      "id": "ATC-FUNC-OS-SDK-002",
       "domain": "SDK",
       "function": "Developer toolchain",
       "priority": "P1",
@@ -552,7 +552,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-SDK-067",
+      "id": "ATC-FUNC-OS-SDK-003",
       "domain": "SDK",
       "function": "Debug/test interface",
       "priority": "P1",
@@ -560,7 +560,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-AI-068",
+      "id": "ATC-FUNC-OS-AI-001",
       "domain": "AI",
       "function": "Aurora IPC/API boundary",
       "priority": "P1",
@@ -568,7 +568,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-AI-069",
+      "id": "ATC-FUNC-OS-AI-002",
       "domain": "AI",
       "function": "AI capability/policy boundary",
       "priority": "P1",
@@ -576,7 +576,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-AI-070",
+      "id": "ATC-FUNC-OS-AI-003",
       "domain": "AI",
       "function": "AI audit/provenance boundary",
       "priority": "P1",
@@ -584,7 +584,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-WALLET-071",
+      "id": "ATC-FUNC-OS-WALLET-001",
       "domain": "WALLET",
       "function": "Wallet service boundary",
       "priority": "P1",
@@ -592,7 +592,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-WALLET-072",
+      "id": "ATC-FUNC-OS-WALLET-002",
       "domain": "WALLET",
       "function": "Identity-wallet binding",
       "priority": "P1",
@@ -600,7 +600,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-WALLET-073",
+      "id": "ATC-FUNC-OS-WALLET-003",
       "domain": "WALLET",
       "function": "Recovery flow",
       "priority": "P1",
@@ -608,7 +608,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CHAIN-074",
+      "id": "ATC-FUNC-OS-CHAIN-001",
       "domain": "CHAIN",
       "function": "ATC tooling boundary",
       "priority": "P1",
@@ -616,7 +616,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CHAIN-075",
+      "id": "ATC-FUNC-OS-CHAIN-002",
       "domain": "CHAIN",
       "function": "ATC-VM isolation boundary",
       "priority": "P1",
@@ -624,7 +624,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-CHAIN-076",
+      "id": "ATC-FUNC-OS-CHAIN-003",
       "domain": "CHAIN",
       "function": "ATCLang tooling boundary",
       "priority": "P1",
@@ -632,7 +632,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-VIRT-077",
+      "id": "ATC-FUNC-OS-VIRT-001",
       "domain": "VIRT",
       "function": "VM/container isolation",
       "priority": "P2",
@@ -640,7 +640,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-VIRT-078",
+      "id": "ATC-FUNC-OS-VIRT-002",
       "domain": "VIRT",
       "function": "Virtual device boundary",
       "priority": "P2",
@@ -648,7 +648,7 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-ADMIN-079",
+      "id": "ATC-FUNC-OS-ADMIN-001",
       "domain": "ADMIN",
       "function": "OS configuration",
       "priority": "P1",
@@ -656,12 +656,13 @@
       "traceability": "INCOMPLETE"
     },
     {
-      "id": "ATC-FUNC-OS-ADMIN-080",
+      "id": "ATC-FUNC-OS-ADMIN-002",
       "domain": "ADMIN",
       "function": "User/session administration",
       "priority": "P1",
       "status": "UNASSESSED",
       "traceability": "INCOMPLETE"
     }
-  ]
+  ],
+  "canonical_id_source": "docs/OS_FUNCTION_CATALOG.md"
 }
