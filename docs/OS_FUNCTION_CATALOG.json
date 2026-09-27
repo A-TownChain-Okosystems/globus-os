@@ -1,0 +1,667 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "ATC-CATALOG-OS-001",
+  "status": "audit-baseline",
+  "source_repository": "A-TownChain-Okosystems/globus-os",
+  "source_branch": "main",
+  "generated_date": "2026-09-27",
+  "status_model": [
+    "SPECIFIED",
+    "DOCUMENTED",
+    "IMPLEMENTED",
+    "TESTED",
+    "CI-VERIFIED",
+    "E2E-VERIFIED",
+    "AUDITED",
+    "RELEASE-READY"
+  ],
+  "traceability_states": [
+    "COMPLETE",
+    "PARTIAL",
+    "INCOMPLETE",
+    "BROKEN"
+  ],
+  "evidence_rule": "No function may be marked complete without exact source-SHA-bound evidence.",
+  "functions": [
+    {
+      "id": "ATC-FUNC-OS-BOOT-001",
+      "domain": "BOOT",
+      "function": "Firmware/UEFI handoff",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-BOOT-002",
+      "domain": "BOOT",
+      "function": "Bootloader image validation",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-BOOT-003",
+      "domain": "BOOT",
+      "function": "Secure/measured boot state",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-BOOT-004",
+      "domain": "BOOT",
+      "function": "Boot failure/recovery state",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CPU-005",
+      "domain": "CPU",
+      "function": "CPU/SMP initialization",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CPU-006",
+      "domain": "CPU",
+      "function": "Interrupt/exception dispatch",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CPU-007",
+      "domain": "CPU",
+      "function": "Timer/clock source",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-MEM-008",
+      "domain": "MEM",
+      "function": "Physical memory management",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-MEM-009",
+      "domain": "MEM",
+      "function": "Virtual address-space management",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-MEM-010",
+      "domain": "MEM",
+      "function": "Page-table/protection policy",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-MEM-011",
+      "domain": "MEM",
+      "function": "Memory exhaustion handling",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PROC-012",
+      "domain": "PROC",
+      "function": "Process creation/termination",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PROC-013",
+      "domain": "PROC",
+      "function": "Thread creation/termination",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PROC-014",
+      "domain": "PROC",
+      "function": "Scheduling",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PROC-015",
+      "domain": "PROC",
+      "function": "Synchronization primitives",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IPC-016",
+      "domain": "IPC",
+      "function": "Endpoint creation/destruction",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IPC-017",
+      "domain": "IPC",
+      "function": "Message send/receive",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IPC-018",
+      "domain": "IPC",
+      "function": "Shared-memory transfer",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IPC-019",
+      "domain": "IPC",
+      "function": "Capability transfer",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CAP-020",
+      "domain": "CAP",
+      "function": "Capability issuance",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CAP-021",
+      "domain": "CAP",
+      "function": "Capability enforcement",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CAP-022",
+      "domain": "CAP",
+      "function": "Authorization decision",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IDENT-023",
+      "domain": "IDENT",
+      "function": "User identity creation",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IDENT-024",
+      "domain": "IDENT",
+      "function": "Authentication",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IDENT-025",
+      "domain": "IDENT",
+      "function": "Session lifecycle",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-IDENT-026",
+      "domain": "IDENT",
+      "function": "Credential/recovery boundary",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-DEVICE-027",
+      "domain": "DEVICE",
+      "function": "PCI/PCIe discovery",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-DEVICE-028",
+      "domain": "DEVICE",
+      "function": "MMIO mapping",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-DEVICE-029",
+      "domain": "DEVICE",
+      "function": "DMA/IOMMU domain setup",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-DEVICE-030",
+      "domain": "DEVICE",
+      "function": "Driver/service isolation",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-STORAGE-031",
+      "domain": "STORAGE",
+      "function": "VFS namespace",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-STORAGE-032",
+      "domain": "STORAGE",
+      "function": "Mount/unmount lifecycle",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-STORAGE-033",
+      "domain": "STORAGE",
+      "function": "Block-device boundary",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-STORAGE-034",
+      "domain": "STORAGE",
+      "function": "Filesystem boundary",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-STORAGE-035",
+      "domain": "STORAGE",
+      "function": "NVMe queue/DMA path",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-NET-036",
+      "domain": "NET",
+      "function": "NIC discovery/configuration",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-NET-037",
+      "domain": "NET",
+      "function": "Ethernet RX/TX",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-NET-038",
+      "domain": "NET",
+      "function": "IPv4/IPv6",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-NET-039",
+      "domain": "NET",
+      "function": "TCP/UDP sockets",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-NET-040",
+      "domain": "NET",
+      "function": "DNS/routing",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-SVC-041",
+      "domain": "SVC",
+      "function": "Init/service startup",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-SVC-042",
+      "domain": "SVC",
+      "function": "Dependency ordering",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-SVC-043",
+      "domain": "SVC",
+      "function": "Health/failure supervision",
+      "priority": "P0",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PKG-044",
+      "domain": "PKG",
+      "function": "Package metadata parsing",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PKG-045",
+      "domain": "PKG",
+      "function": "Package signature/integrity verification",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-PKG-046",
+      "domain": "PKG",
+      "function": "Dependency resolution",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-UPD-047",
+      "domain": "UPD",
+      "function": "A/B update state machine",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-UPD-048",
+      "domain": "UPD",
+      "function": "Verified activation",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-UPD-049",
+      "domain": "UPD",
+      "function": "Rollback",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-REC-050",
+      "domain": "REC",
+      "function": "Recovery mode",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-REC-051",
+      "domain": "REC",
+      "function": "Diagnostic evidence collection",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-POWER-052",
+      "domain": "POWER",
+      "function": "Shutdown/reboot",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-POWER-053",
+      "domain": "POWER",
+      "function": "Suspend/resume",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-POWER-054",
+      "domain": "POWER",
+      "function": "Thermal/power policy",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-GFX-055",
+      "domain": "GFX",
+      "function": "Display/device discovery",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-GFX-056",
+      "domain": "GFX",
+      "function": "Compositor/window surface",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-GFX-057",
+      "domain": "GFX",
+      "function": "GPU boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-AUDIO-058",
+      "domain": "AUDIO",
+      "function": "Audio service lifecycle",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-AUDIO-059",
+      "domain": "AUDIO",
+      "function": "Playback/record boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-USER-060",
+      "domain": "USER",
+      "function": "Shell/CLI",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-USER-061",
+      "domain": "USER",
+      "function": "System administration API",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-OBS-062",
+      "domain": "OBS",
+      "function": "Structured logging",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-OBS-063",
+      "domain": "OBS",
+      "function": "Metrics/tracing",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-OBS-064",
+      "domain": "OBS",
+      "function": "Crash evidence",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-SDK-065",
+      "domain": "SDK",
+      "function": "Public API/ABI contract",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-SDK-066",
+      "domain": "SDK",
+      "function": "Developer toolchain",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-SDK-067",
+      "domain": "SDK",
+      "function": "Debug/test interface",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-AI-068",
+      "domain": "AI",
+      "function": "Aurora IPC/API boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-AI-069",
+      "domain": "AI",
+      "function": "AI capability/policy boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-AI-070",
+      "domain": "AI",
+      "function": "AI audit/provenance boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-WALLET-071",
+      "domain": "WALLET",
+      "function": "Wallet service boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-WALLET-072",
+      "domain": "WALLET",
+      "function": "Identity-wallet binding",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-WALLET-073",
+      "domain": "WALLET",
+      "function": "Recovery flow",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CHAIN-074",
+      "domain": "CHAIN",
+      "function": "ATC tooling boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CHAIN-075",
+      "domain": "CHAIN",
+      "function": "ATC-VM isolation boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-CHAIN-076",
+      "domain": "CHAIN",
+      "function": "ATCLang tooling boundary",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-VIRT-077",
+      "domain": "VIRT",
+      "function": "VM/container isolation",
+      "priority": "P2",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-VIRT-078",
+      "domain": "VIRT",
+      "function": "Virtual device boundary",
+      "priority": "P2",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-ADMIN-079",
+      "domain": "ADMIN",
+      "function": "OS configuration",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    },
+    {
+      "id": "ATC-FUNC-OS-ADMIN-080",
+      "domain": "ADMIN",
+      "function": "User/session administration",
+      "priority": "P1",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE"
+    }
+  ]
+}
