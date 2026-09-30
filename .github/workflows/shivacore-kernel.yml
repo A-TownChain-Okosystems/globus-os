@@ -49,6 +49,139 @@ jobs:
           }
           echo "Exact-SHA verified: $actual_sha"
 
+      - name: Validate ShivaCore subsystem matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          matrix="docs/architecture/ATC-SHIVACORE-KERNEL-MATRIX-001.yaml"
+          test -f "$matrix"
+          ruby -e '
+            require "yaml"
+            m = YAML.load_file(ARGV[0])
+            abort "matrix_id mismatch" unless m["matrix_id"] == "ATC-SHIVACORE-KERNEL-MATRIX-001"
+            abort "expected exactly 40 entries" unless m["entries"].is_a?(Array) && m["entries"].length == 40
+            ids = m["entries"].map { |e| e["id"] }
+            abort "duplicate or missing IDs" unless ids == (1..40).map { |i| format("KRN-%03d", i) }
+            required = %w[id domain function responsibility security_boundary source test workflow exact_sha run job step exit_code log verification residual]
+            m["entries"].each_with_index do |e, i|
+              missing = required.reject { |k| e.key?(k) }
+              abort "entry #{i} missing: #{missing.join(",")}" unless missing.empty?
+              abort "#{e["id"]}: verification must start UNANALYZED" unless e["verification"] == "UNANALYZED"
+            end
+          ' "$matrix"
+
+          while IFS=
+        env:
+          RUSTFLAGS: '--cfg curve25519_dalek_backend="serial"'
+        run: cargo test -p shivacore
+
+      - name: Build kernel ELF
+        env:
+          RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
+        run: |
+          cargo build -p shivacore --release \
+            --target x86_64-unknown-none \
+            --features x86-boot
+
+      - name: Build BIOS and UEFI images
+        run: |
+          mkdir -p target/boot-images
+          cargo run -p boot --release -- \
+            target/x86_64-unknown-none/release/shivacore \
+            target/boot-images
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y qemu-system-x86
+
+
+      - name: BIOS boot smoke test (${{ matrix.cpu }})
+        run: |
+          set +e
+          timeout 20s qemu-system-x86_64 \
+            -cpu ${{ matrix.qemu_cpu }} \
+            -drive format=raw,file=target/boot-images/shivacore-bios.img \
+            -serial stdio \
+            -display none \
+            -no-reboot \
+            -no-shutdown 2>&1 | tee target/shivacore-qemu-${{ matrix.cpu }}.log
+          status=${PIPESTATUS[0]}
+          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "ShivaCore did not reach kernel_main."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: CPU HAL compatibility check OK." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "CPU HAL compatibility gate did not pass."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "USER-001 did not install the first Ring-3 process."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "SCHED-001 scheduler was not armed with two Ring-3 processes."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: USER-001 entering PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Kernel did not attempt the real Ring-3 IRETQ entry."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1001" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Timer IRQ did not complete the round-trip back to PID=1000."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "PID=1000 register checkpoint was not preserved."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "PID=1001 register checkpoint was not preserved."
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Canonical KernelState::boot() was not reached from kernel_main."
+            exit 1
+          fi
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            echo "QEMU exited unexpectedly with status $status."
+            exit "$status"
+          fi
+
+      - name: Upload boot artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shivacore-boot-images-${{ matrix.cpu }}
+          path: |
+            target/boot-images/shivacore-bios.img
+            target/boot-images/shivacore-uefi.img
+            target/shivacore-qemu-${{ matrix.cpu }}.log
+\t' read -r id source test; do
+            test -f "$source" || { echo "$id: missing source $source"; exit 1; }
+            if [ -n "$test" ]; then
+              symbol="${test##*::}"
+              grep -Eq "(^|[[:space:]])fn[[:space:]]+$symbol[[:space:]]*\\(" "$source" || {
+                echo "$id: test symbol not found: $symbol in $source"
+                exit 1
+              }
+            fi
+          done < <(
+            ruby -e '
+              require "yaml"
+              YAML.load_file(ARGV[0])["entries"].each { |e| puts [e["id"], e["source"], e["test"]].map { |v| v.to_s }.join("\t") }
+            ' "$matrix"
+          )
+
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: x86_64-unknown-none
@@ -79,8 +212,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y qemu-system-x86
 
-      - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu }}([[:space:]]|$)'
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         run: |
