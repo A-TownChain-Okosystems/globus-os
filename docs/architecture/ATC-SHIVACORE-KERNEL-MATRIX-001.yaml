@@ -1,7 +1,7 @@
 matrix_id: ATC-SHIVACORE-KERNEL-MATRIX-001
 schema_version: "1.0"
 title: ShivaCore Kernel Subsystem Matrix
-version: "1.2.1"
+version: "1.2.2"
 canonical_source_of_truth: modules/atc-shivacore/kernel/
 support_repository: A-TownChain-Okosystems/atc-shivacore
 support_repository_kernel_sot: false
@@ -94,7 +94,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-004
     domain: "Boot"
     function: "KernelState::boot()"
@@ -105,7 +105,7 @@ entries:
     capability: null
     security_boundary: "Entry → Kernel Init"
     source: "modules/atc-shivacore/kernel/src/kernel_init.rs"
-    test: null
+    test: "kernel_init::tests::test_kernel_boot"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -114,7 +114,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-005
     domain: "CPU/HAL"
     function: "CPU Detection"
@@ -134,7 +134,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-006
     domain: "CPU/HAL"
     function: "CPU Initialization"
@@ -154,7 +154,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-007
     domain: "CPU/HAL"
     function: "Architecture Context"
@@ -174,7 +174,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-008
     domain: "CPU/HAL"
     function: "Architecture Isolation"
@@ -194,7 +194,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-009
     domain: "Memory"
     function: "Physical Memory Management"
@@ -214,7 +214,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-010
     domain: "Memory"
     function: "Virtual Memory"
@@ -234,7 +234,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-011
     domain: "Memory"
     function: "Page Table Management"
@@ -254,7 +254,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-012
     domain: "Memory"
     function: "Kernel Heap"
@@ -265,7 +265,7 @@ entries:
     capability: null
     security_boundary: "Kernel → Allocator"
     source: "modules/atc-shivacore/kernel/src/allocator.rs"
-    test: null
+    test: "kernel_init::tests::test_smoke_test"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -274,7 +274,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-013
     domain: "Memory"
     function: "User/Kernel Isolation"
@@ -294,7 +294,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-014
     domain: "Capability"
     function: "Capability Object Model"
@@ -314,7 +314,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-015
     domain: "Capability"
     function: "Capability Validation"
@@ -334,7 +334,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-016
     domain: "Capability"
     function: "Handle Validation"
@@ -354,7 +354,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-017
     domain: "Capability"
     function: "Authority Isolation"
@@ -374,7 +374,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-018
     domain: "Scheduler"
     function: "Thread Creation"
@@ -385,7 +385,7 @@ entries:
     capability: null
     security_boundary: "Kernel → Scheduler"
     source: "modules/atc-shivacore/kernel/src/threads.rs"
-    test: null
+    test: "scheduler::tests::test_basic_scheduling"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -394,7 +394,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-019
     domain: "Scheduler"
     function: "Thread State"
@@ -405,7 +405,7 @@ entries:
     capability: null
     security_boundary: "Scheduler → Context"
     source: "modules/atc-shivacore/kernel/src/user_sched.rs"
-    test: null
+    test: "scheduler::tests::test_dependency_ordering"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -414,7 +414,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-020
     domain: "Scheduler"
     function: "Scheduling Queue"
@@ -425,7 +425,7 @@ entries:
     capability: null
     security_boundary: "Scheduler"
     source: "modules/atc-shivacore/kernel/src/scheduler.rs"
-    test: null
+    test: "scheduler::tests::test_basic_scheduling"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -434,7 +434,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-021
     domain: "Scheduler"
     function: "Context Switching"
@@ -445,7 +445,7 @@ entries:
     capability: null
     security_boundary: "CPU → Scheduler"
     source: "modules/atc-shivacore/kernel/src/user_sched.rs"
-    test: null
+    test: "userspace runtime smoke evidence (workflow gate)"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -454,7 +454,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-022
     domain: "Scheduler"
     function: "Preemption"
@@ -465,7 +465,7 @@ entries:
     capability: null
     security_boundary: "Timer → Scheduler"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: null
+    test: "workflow BIOS/QEMU preemption gate"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -474,7 +474,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-023
     domain: "IPC"
     function: "Endpoint Creation"
@@ -485,7 +485,7 @@ entries:
     capability: null
     security_boundary: "Capability → IPC"
     source: "modules/atc-shivacore/kernel/src/ipc.rs"
-    test: null
+    test: "ipc::tests::test_create_channel_and_send_recv"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -494,7 +494,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-024
     domain: "IPC"
     function: "Message Send"
@@ -505,7 +505,7 @@ entries:
     capability: null
     security_boundary: "User → Kernel → IPC"
     source: "modules/atc-shivacore/kernel/src/ipc.rs"
-    test: null
+    test: "ipc::tests::test_create_channel_and_send_recv"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -514,7 +514,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-025
     domain: "IPC"
     function: "Message Receive"
@@ -525,7 +525,7 @@ entries:
     capability: null
     security_boundary: "IPC → User"
     source: "modules/atc-shivacore/kernel/src/ipc.rs"
-    test: null
+    test: "ipc::tests::test_create_channel_and_send_recv"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -534,7 +534,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-026
     domain: "IPC"
     function: "IPC Capability Check"
@@ -545,7 +545,7 @@ entries:
     capability: null
     security_boundary: "IPC → Security"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: null
+    test: "ipc::tests::test_send_without_write_cap_rejected"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -554,7 +554,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-027
     domain: "IPC"
     function: "IPC Isolation"
@@ -565,7 +565,7 @@ entries:
     capability: null
     security_boundary: "IPC → Address Space"
     source: "modules/atc-shivacore/kernel/src/ipc.rs"
-    test: null
+    test: "ipc::tests::test_recv_without_read_cap_rejected"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -574,7 +574,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-028
     domain: "Interrupt"
     function: "Interrupt Entry"
@@ -585,7 +585,7 @@ entries:
     capability: null
     security_boundary: "Hardware → HAL"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: null
+    test: "workflow BIOS/QEMU interrupt entry gate"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -594,7 +594,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-029
     domain: "Interrupt"
     function: "Interrupt Dispatch"
@@ -605,7 +605,7 @@ entries:
     capability: null
     security_boundary: "HAL → Kernel"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: null
+    test: "workflow BIOS/QEMU interrupt dispatch gate"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -614,7 +614,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-030
     domain: "Timer"
     function: "Monotonic Timer"
@@ -634,7 +634,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-031
     domain: "Timer"
     function: "Timer Interrupt"
@@ -645,7 +645,7 @@ entries:
     capability: null
     security_boundary: "Hardware → Scheduler"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: null
+    test: "workflow BIOS/QEMU timer/preemption gate"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -654,7 +654,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-032
     domain: "Fault"
     function: "Trap Handling"
@@ -674,7 +674,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-033
     domain: "Fault"
     function: "Kernel Fault Isolation"
@@ -694,7 +694,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-034
     domain: "Fault"
     function: "Kernel Panic Policy"
@@ -714,7 +714,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-035
     domain: "Userspace"
     function: "User Address Space Creation"
@@ -734,7 +734,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-036
     domain: "Userspace"
     function: "Ring-3 Transition"
@@ -745,7 +745,7 @@ entries:
     capability: null
     security_boundary: "Kernel → User"
     source: "modules/atc-shivacore/kernel/src/userspace.rs"
-    test: null
+    test: "workflow BIOS/QEMU Ring-3 entry gate"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -754,7 +754,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-037
     domain: "ABI"
     function: "Syscall Entry"
@@ -774,7 +774,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-038
     domain: "ABI"
     function: "Syscall Argument Validation"
@@ -794,7 +794,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-039
     domain: "ABI"
     function: "Syscall Result/Error Contract"
@@ -814,7 +814,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-040
     domain: "ABI"
     function: "ABI Version Boundary"
@@ -834,4 +834,4 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
