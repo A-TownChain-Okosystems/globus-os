@@ -125,7 +125,7 @@ entries:
     capability: null
     security_boundary: "HAL → Kernel"
     source: "modules/atc-shivacore/kernel/src/hal/cpu.rs"
-    test: null
+    test: "hal::cpu::tests::vendor_parser_accepts_intel_and_amd"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -165,7 +165,7 @@ entries:
     capability: null
     security_boundary: "HAL → Scheduler"
     source: "modules/atc-shivacore/kernel/src/user_sched.rs"
-    test: null
+    test: "user_sched::tests::test_saved_context_roundtrip"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -205,7 +205,7 @@ entries:
     capability: null
     security_boundary: "Kernel → Memory"
     source: "modules/atc-shivacore/kernel/src/memory_manager.rs"
-    test: null
+    test: "memory_manager::tests::test_heap_allocation_is_real"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -225,7 +225,7 @@ entries:
     capability: null
     security_boundary: "Kernel → Address Space"
     source: "modules/atc-shivacore/kernel/src/userspace.rs"
-    test: null
+    test: "userspace::tests::test_address_space_contains"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -285,7 +285,7 @@ entries:
     capability: null
     security_boundary: "Memory → Security"
     source: "modules/atc-shivacore/kernel/src/userspace.rs"
-    test: null
+    test: "userspace::tests::test_check_memory_access_invalid"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -445,7 +445,7 @@ entries:
     capability: null
     security_boundary: "CPU → Scheduler"
     source: "modules/atc-shivacore/kernel/src/user_sched.rs"
-    test: null
+    test: "user_sched::tests::test_saved_context_roundtrip"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -465,7 +465,7 @@ entries:
     capability: null
     security_boundary: "Timer → Scheduler"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: null
+    test: "user_sched::tests::test_timer_tick_preemption"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
