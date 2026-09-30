@@ -54,6 +54,11 @@ jobs:
           targets: x86_64-unknown-none
           components: llvm-tools-preview, rust-src
 
+      - name: Run kernel unit tests
+        env:
+          RUSTFLAGS: '--cfg curve25519_dalek_backend="serial"'
+        run: cargo test -p shivacore
+
       - name: Build kernel ELF
         env:
           RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
