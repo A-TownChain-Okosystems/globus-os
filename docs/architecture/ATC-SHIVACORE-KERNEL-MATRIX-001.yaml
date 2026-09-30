@@ -13,7 +13,7 @@ workflow:
   path: .github/workflows/shivacore-kernel.yml
   scope: "Build and BIOS/QEMU smoke evidence; not proof of all matrix functions."
   exact_sha_required: true
-  exact_sha_is_evidence_policy_not_workflow_gate: true
+  exact_sha_is_evidence_policy_not_workflow_gate: false
   gates:
     - Rust nightly x86_64 build
     - BIOS and UEFI image build
@@ -30,7 +30,7 @@ workflow:
     - boot artifacts and logs
   limitations:
     - "The current workflow does not execute a dedicated UEFI boot smoke test."
-    - "The current workflow does not contain an explicit Exact-SHA assertion; Exact-SHA remains an evidence acceptance requirement."
+    - "Exact-SHA is now asserted immediately after checkout; a mismatch fails the workflow."
 tcb_domains:
   included: [Boot, CPU/HAL, Memory, Capability, Scheduler, IPC, Interrupt, Timer, Fault, Userspace, ABI]
   excluded: [GlobusOS Services, Aurora AI, Blockchain State, ATC-VM, ATCLang, Network Policy, Filesystem Policy, UI, Application Policy]
@@ -74,7 +74,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
   - id: KRN-003
     domain: "Boot"
     function: "Memory Map Initialization"
