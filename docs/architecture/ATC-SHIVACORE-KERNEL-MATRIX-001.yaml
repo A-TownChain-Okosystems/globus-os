@@ -1,13 +1,13 @@
 matrix_id: ATC-SHIVACORE-KERNEL-MATRIX-001
 schema_version: "1.0"
 title: ShivaCore Kernel Subsystem Matrix
-version: "1.2.0"
+version: "1.2.1"
 canonical_source_of_truth: modules/atc-shivacore/kernel/
 support_repository: A-TownChain-Okosystems/atc-shivacore
 support_repository_kernel_sot: false
 evidence_policy: "Architecture != Implementation != Evidence; source presence alone never proves implementation or verification."
 status_model: [UNANALYZED, ANALYZED, FIXED, RERUNNING, VERIFIED, RESIDUAL]
-source_mapping_status: "CANDIDATE_ONLY"
+source_mapping_status: "EXISTING_FIRST_CANDIDATE_MAPPING"
 evidence_fields: [id, domain, function, responsibility, input, output, state, capability, security_boundary, source, test, workflow, exact_sha, run, job, step, exit_code, log, verification, residual]
 workflow:
   path: .github/workflows/shivacore-kernel.yml
@@ -54,7 +54,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Source candidate mapped by Existing-First discovery; test and Exact-SHA evidence still required."
+    residual: "Source mapped by Existing-First inspection; implementation semantics, test coverage, and Exact-SHA evidence remain to be established."
   - id: KRN-002
     domain: "Boot"
     function: "Boot Handoff Parsing"
@@ -64,7 +64,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Boot → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-bootloader/src/info.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -84,7 +84,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Boot → Memory"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/memory.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -104,7 +104,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Entry → Kernel Init"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/kernel_init.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -124,7 +124,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "HAL → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/hal/cpu.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -144,7 +144,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "HAL → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/hal/cpu.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -164,7 +164,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "HAL → Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/user_sched.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -184,7 +184,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "HAL → TCB"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/memory.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -204,7 +204,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → Memory"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/memory_manager.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -224,7 +224,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → Address Space"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -244,7 +244,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "MMU → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/page_fault.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -264,7 +264,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → Allocator"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/allocator.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -284,7 +284,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Memory → Security"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -304,7 +304,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Caller → TCB"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/capability.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -324,7 +324,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Syscall → TCB"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -344,7 +344,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "ABI → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -364,7 +364,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Capability → Object"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/capability.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -384,7 +384,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/threads.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -404,7 +404,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Scheduler → Context"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/user_sched.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -424,7 +424,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/scheduler.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -444,7 +444,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "CPU → Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/user_sched.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -464,7 +464,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Timer → Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -484,7 +484,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Capability → IPC"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -504,7 +504,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "User → Kernel → IPC"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -524,7 +524,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "IPC → User"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -544,7 +544,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "IPC → Security"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -564,7 +564,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "IPC → Address Space"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -584,7 +584,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Hardware → HAL"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -604,7 +604,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "HAL → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -624,7 +624,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "HAL → Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/timer.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -644,7 +644,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Hardware → Scheduler"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -664,7 +664,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "CPU → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -684,7 +684,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Fault → TCB"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/main.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -704,7 +704,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → Halt/Recovery"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/main.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -724,7 +724,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → User"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -744,7 +744,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → User"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -764,7 +764,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "User → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -784,7 +784,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "ABI → TCB"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -804,7 +804,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel → User"
-    source: "modules/atc-shivacore/kernel/"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -824,7 +824,7 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Kernel ↔ Userspace"
-    source: "modules/atc-shivacore/kernel/"
+    source: "system/shivacore-api/src/lib.rs"
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
