@@ -244,8 +244,8 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "MMU → Kernel"
-    source: "modules/atc-shivacore/kernel/src/page_fault.rs"
-    test: null
+    source: "modules/atc-shivacore/kernel/src/memory.rs"
+    test: "memory::tests::page_alignment_contract_is_4k"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -265,7 +265,7 @@ entries:
     capability: null
     security_boundary: "Kernel → Allocator"
     source: "modules/atc-shivacore/kernel/src/allocator.rs"
-    test: "kernel_init::tests::test_smoke_test"
+    test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -305,7 +305,7 @@ entries:
     capability: null
     security_boundary: "Caller → TCB"
     source: "modules/atc-shivacore/kernel/src/capability.rs"
-    test: null
+    test: "capability::tests::test_create_and_check"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -325,7 +325,7 @@ entries:
     capability: null
     security_boundary: "Syscall → TCB"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: null
+    test: "syscall::tests::ipc_requires_matching_capability_and_right"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -345,7 +345,7 @@ entries:
     capability: null
     security_boundary: "ABI → Kernel"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: null
+    test: "syscall::tests::rejects_unknown_syscall"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -365,7 +365,7 @@ entries:
     capability: null
     security_boundary: "Capability → Object"
     source: "modules/atc-shivacore/kernel/src/capability.rs"
-    test: null
+    test: "capability::tests::test_delegate_rejects_rights_expansion"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -385,7 +385,7 @@ entries:
     capability: null
     security_boundary: "Kernel → Scheduler"
     source: "modules/atc-shivacore/kernel/src/threads.rs"
-    test: "scheduler::tests::test_basic_scheduling"
+    test: "threads::tests::test_tm_create_thread"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -404,8 +404,8 @@ entries:
     state: ANALYZED
     capability: null
     security_boundary: "Scheduler → Context"
-    source: "modules/atc-shivacore/kernel/src/user_sched.rs"
-    test: "scheduler::tests::test_dependency_ordering"
+    source: "modules/atc-shivacore/kernel/src/threads.rs"
+    test: "threads::tests::test_thread_state_transitions"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -445,7 +445,7 @@ entries:
     capability: null
     security_boundary: "CPU → Scheduler"
     source: "modules/atc-shivacore/kernel/src/user_sched.rs"
-    test: "userspace runtime smoke evidence (workflow gate)"
+    test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -465,7 +465,7 @@ entries:
     capability: null
     security_boundary: "Timer → Scheduler"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: "workflow BIOS/QEMU preemption gate"
+    test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -545,7 +545,7 @@ entries:
     capability: null
     security_boundary: "IPC → Security"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: "ipc::tests::test_send_without_write_cap_rejected"
+    test: "syscall::tests::ipc_requires_matching_capability_and_right"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -585,7 +585,7 @@ entries:
     capability: null
     security_boundary: "Hardware → HAL"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: "workflow BIOS/QEMU interrupt entry gate"
+    test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -605,7 +605,7 @@ entries:
     capability: null
     security_boundary: "HAL → Kernel"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: "workflow BIOS/QEMU interrupt dispatch gate"
+    test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -625,7 +625,7 @@ entries:
     capability: null
     security_boundary: "HAL → Scheduler"
     source: "modules/atc-shivacore/kernel/src/timer.rs"
-    test: null
+    test: "timer::tests::test_clock_and_timer_integration"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -645,7 +645,7 @@ entries:
     capability: null
     security_boundary: "Hardware → Scheduler"
     source: "modules/atc-shivacore/kernel/src/interrupts.rs"
-    test: "workflow BIOS/QEMU timer/preemption gate"
+    test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -725,7 +725,7 @@ entries:
     capability: null
     security_boundary: "Kernel → User"
     source: "modules/atc-shivacore/kernel/src/userspace.rs"
-    test: null
+    test: "userspace::tests::test_load_binary_creates_user"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -745,7 +745,7 @@ entries:
     capability: null
     security_boundary: "Kernel → User"
     source: "modules/atc-shivacore/kernel/src/userspace.rs"
-    test: "workflow BIOS/QEMU Ring-3 entry gate"
+    test: "userspace::tests::test_enter_userspace_valid"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -765,7 +765,7 @@ entries:
     capability: null
     security_boundary: "User → Kernel"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: null
+    test: "syscall::tests::rejects_unknown_syscall"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -785,7 +785,7 @@ entries:
     capability: null
     security_boundary: "ABI → TCB"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: null
+    test: "syscall::tests::rejects_oversized_payload"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -805,7 +805,7 @@ entries:
     capability: null
     security_boundary: "Kernel → User"
     source: "modules/atc-shivacore/kernel/src/syscall.rs"
-    test: null
+    test: "syscall::tests::rejects_major_abi_mismatch"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
@@ -825,7 +825,7 @@ entries:
     capability: null
     security_boundary: "Kernel ↔ Userspace"
     source: "system/shivacore-api/src/lib.rs"
-    test: null
+    test: "tests::abi_version_is_stable"
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
     run: null
