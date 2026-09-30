@@ -35,6 +35,19 @@ jobs:
             expected_vendor: AMD
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+
+      - name: Assert exact checked-out SHA
+        env:
+          EXPECTED_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: |
+          actual_sha="$(git rev-parse HEAD)"
+          test "$actual_sha" = "$EXPECTED_SHA" || {
+            echo "Exact-SHA mismatch: expected=$EXPECTED_SHA actual=$actual_sha"
+            exit 1
+          }
+          echo "Exact-SHA verified: $actual_sha"
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
