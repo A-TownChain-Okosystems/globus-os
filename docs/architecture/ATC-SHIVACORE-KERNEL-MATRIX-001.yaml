@@ -1,6 +1,6 @@
 matrix_id: ATC-SHIVACORE-KERNEL-MATRIX-001
 title: ShivaCore Kernel Subsystem Matrix
-version: "1.1.0"
+version: "1.1.1"
 canonical_source_of_truth: globus-os/modules/atc-shivacore/kernel/
 support_repository: A-TownChain-Okosystems/atc-shivacore
 support_repository_kernel_sot: false
@@ -10,8 +10,25 @@ evidence_fields: [id, domain, function, responsibility, input, output, state, ca
 workflow:
   path: .github/workflows/shivacore-kernel.yml
   exact_sha_required: true
-  gates: [Rust nightly x86_64 build, BIOS/UEFI image, QEMU, Intel Skylake, AMD EPYC, CPU/HAL, Ring-3, scheduler preemption, register checkpoints, KernelState::boot, artifacts/logs]
-tc_domains:
+  exact_sha_is_evidence_policy_not_workflow_gate: true
+  gates:
+    - Rust nightly x86_64 build
+    - BIOS and UEFI image build
+    - QEMU CPU model validation
+    - BIOS QEMU smoke test
+    - Intel Skylake matrix leg
+    - AMD EPYC matrix leg
+    - CPU vendor detection
+    - CPU HAL compatibility
+    - Ring-3 process mapping and entry
+    - scheduler preemption and context switching
+    - register checkpoints
+    - KernelState::boot()
+    - boot artifacts and logs
+  limitations:
+    - "The current workflow does not execute a dedicated UEFI boot smoke test."
+    - "The current workflow does not contain an explicit Exact-SHA assertion; Exact-SHA remains an evidence acceptance requirement."
+tcb_domains:
   included: [Boot, CPU/HAL, Memory, Capability, Scheduler, IPC, Interrupt, Timer, Fault, Userspace, ABI]
   excluded: [GlobusOS Services, Aurora AI, Blockchain State, ATC-VM, ATCLang, Network Policy, Filesystem Policy, UI, Application Policy]
 entries:
@@ -34,7 +51,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Function-level evidence mapping pending."
+    residual: "Function-level source/test/Exact-SHA evidence mapping pending."
   - id: KRN-002
     domain: "Boot"
     function: "Boot Handoff Parsing"
