@@ -1,0 +1,33 @@
+{
+  "$schema":"https://json-schema.org/draft/2020-12/schema",
+  "$id":"ATC-SHIVACORE-KERNEL-MATRIX-001",
+  "type":"object",
+  "required":["document_id","status","canonical_source","function_count","functions"],
+  "properties":{
+    "document_id":{"const":"ATC-SHIVACORE-KERNEL-MATRIX-001"},
+    "status":{"const":"ARCHITECTURE CONTRACT"},
+    "canonical_source":{"const":"modules/atc-shivacore/kernel/"},
+    "function_count":{"const":18},
+    "functions":{
+      "type":"array","minItems":18,"maxItems":18,
+      "items":{
+        "type":"object",
+        "required":["id","domain","function","source","verification","residual"],
+        "properties":{
+          "id":{"pattern":"^SHK-[0-9]{3}$"},
+          "domain":{"type":"string"},
+          "function":{"type":"string"},
+          "source":{"type":"string"},
+          "verification":{"enum":["UNANALYZED","ANALYZED","FIXED","RERUNNING","VERIFIED","RESIDUAL"]},
+          "residual":{"type":"string"}
+        }
+      }
+    }
+  }
+}
+
+
+Agent-ID: ATC-AI-ARCH-001
+Task-ID: ATC-TASK-0930
+AI-Role: software-development
+Validation: PENDING
