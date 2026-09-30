@@ -1,0 +1,65 @@
+name: ShivaCore Kernel Matrix — Exact SHA Contract
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'docs/architecture/SHIVACORE-KERNEL-MATRIX.md'
+      - 'schemas/shivacore-kernel-matrix.schema.json'
+      - 'modules/atc-shivacore/kernel/**'
+      - '.github/workflows/shivacore-kernel-matrix-contract.yml'
+  pull_request:
+    paths:
+      - 'docs/architecture/SHIVACORE-KERNEL-MATRIX.md'
+      - 'schemas/shivacore-kernel-matrix.schema.json'
+      - 'modules/atc-shivacore/kernel/**'
+      - '.github/workflows/shivacore-kernel-matrix-contract.yml'
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+      - name: Assert exact SHA
+        run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+      - name: Validate canonical matrix
+        shell: python
+        run: |
+          import re
+          from pathlib import Path
+          p=Path("docs/architecture/SHIVACORE-KERNEL-MATRIX.md").read_text(encoding="utf-8")
+          ids=re.findall(r'^\| (SHK-[0-9]{3}) \|',p,re.M)
+          expected=[f"SHK-{i:03d}" for i in range(1,19)]
+          assert ids==expected,(len(ids),ids)
+          assert "modules/atc-shivacore/kernel/" in p
+          assert "ARCHITECTURE CONTRACT" in p
+          for marker in ["Capability","Memory","Scheduler","IPC","Verification"]:
+              assert marker in p, marker
+          assert p.count("UNANALYZED") >= 18
+          print("ShivaCore Kernel Matrix: 18 canonical functions validated")
+      - name: Validate schema
+        shell: python
+        run: |
+          import json
+          from pathlib import Path
+          s=json.loads(Path("schemas/shivacore-kernel-matrix.schema.json").read_text())
+          assert s["properties"]["function_count"]["const"] == 18
+          assert s["properties"]["canonical_source"]["const"] == "modules/atc-shivacore/kernel/"
+          print("schema contract: OK")
+      - name: Evidence summary
+        run: |
+          {
+            echo "## ShivaCore Kernel Matrix"
+            echo "- Exact SHA: $GITHUB_SHA"
+            echo "- Canonical functions: 18"
+            echo "- Matrix status: ARCHITECTURE CONTRACT"
+            echo "- Implementation verification remains separate."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+
+Agent-ID: ATC-AI-ARCH-001
+Task-ID: ATC-TASK-0930
+AI-Role: software-development
+Validation: PENDING
