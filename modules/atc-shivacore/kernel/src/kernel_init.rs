@@ -5,25 +5,7 @@
 //! blockchain/VM, and Aurora AI) are userspace/service-space responsibilities.
 //! In kernel mode this runs after allocator::init_heap().
 //!
-//! Boot-Reihenfolge:
-//!   L0:  allocator::init_heap()      — Heap bereit (Box/Vec/String)
-//!   L1:  MemorySubsystem::new()      — Prozess-Regionen + Caps
-//!   L2:  CapabilityTable::new()      — System-Capability-Table
-//!   L3:  ProcessManager::new()       — Prozess-Verwaltung
-//!   L4:  Scheduler::new()            — DA-HEFT Scheduler
-//!   L5:  IpcSubsystem::new()        — IPC-Kanäle
-//!   L6:  AtcFileSystem::new()       — Content-Addressed FS
-//!   L6b: Vfs::new(caps)             — Virtual File System
-//!   L7:  P2pNode::new()             — P2P Network
-//!   L8:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
-//!   L9:  ConsensusEngine::new()     — PoH + DAG + Validators
-//!   L9b: MemoryPool::new()          — Transaction Mempool
-//!   L9c: BlockChain::new()          — Blockchain
-//!   L9d: VmEngine::new()            — Contract VM
-//!   L9e: ContractExecutor::new()   — Contract Processing
-//!   L10: AiEngine::new()            — AI Subsystem
-
-extern crate alloc;
+//! Boot-Reihenfolge:\n//!   L0: allocator::init_heap() — Heap bereit\n//!   L1: MemorySubsystem::new() — Speicher/Adressraum\n//!   L2-L3: ProcessManager::new() — Prozesse + Capabilities\n//!   L4: Scheduler::new() — Scheduling\n//!   L5: IpcSubsystem::new() — IPC\n//!   L6: TCB ready\n\nextern crate alloc;
 
 use alloc::format;
 use alloc::string::String;
@@ -178,7 +160,7 @@ impl KernelState {
         out
     }
 
-    /// Smoke-Test: allokiert Speicher, schreibt eine Datei, liest sie zurück
+    /// TCB smoke-test: allocates and releases a kernel memory region
     pub fn smoke_test(&mut self) -> Result<(), BootError> {
         // 1. Memory allocation
         let region = self
@@ -218,7 +200,7 @@ pub fn validate_integration() -> Result<(), String> {
 
 /// Gibt die Kernel-Version und Build-Info zurück
 pub fn kernel_version() -> &'static str {
-    "ShivaCore Kernel v0.0.23 (K-Sprint 23) — 709 tests, 30 modules"
+    "ShivaCore Kernel v0.0.24 — TCB boot boundary"
 }
 
 #[cfg(test)]
@@ -264,7 +246,7 @@ mod tests {
     fn test_kernel_version() {
         let v = kernel_version();
         assert!(v.contains("ShivaCore"));
-        assert!(v.contains("709 tests"));
+        assert!(v.contains("TCB"));
     }
 
     #[test]
@@ -276,40 +258,6 @@ mod tests {
         for (_, status) in &state.init_log {
             assert_ne!(*status, InitStatus::Failed, "Phase failed");
         }
-    }
-
-    #[test]
-    fn test_fs_root_exists_after_boot() {
-        let state = KernelState::boot().unwrap();
-        assert!(state.fs.exists("/"));
-        assert!(state.fs.exists("/atc"));
-    }
-
-    #[test]
-    fn test_p2p_initialized() {
-        let state = KernelState::boot().unwrap();
-        assert_eq!(state.p2p.listen_port(), 4242);
-        assert_eq!(state.p2p.peer_count(), 0);
-    }
-
-    #[test]
-    fn test_contracts_stack_initialized() {
-        let state = KernelState::boot().unwrap();
-        assert_eq!(state.mempool.count(), 0);
-        assert_eq!(state.vm.contract_count(), 0);
-    }
-
-    #[test]
-    fn test_ai_initialized() {
-        let state = KernelState::boot().unwrap();
-        assert_eq!(state.ai.model_count(), 0);
-    }
-
-    #[test]
-    fn test_security_initialized() {
-        let state = KernelState::boot().unwrap();
-        // SecurityManager initialized with MultiSig, AuditLog, Reputation, RateLimiter, SecureChannels
-        // All fields are Arc-wrapped and ready
     }
 
     #[test]
