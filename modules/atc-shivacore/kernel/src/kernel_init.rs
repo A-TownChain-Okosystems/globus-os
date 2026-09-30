@@ -5,13 +5,13 @@
 //! blockchain/VM, and Aurora AI) are userspace/service-space responsibilities.
 //! In kernel mode this runs after allocator::init_heap().
 //!
-//! Boot-Reihenfolge:\n//!   L0: allocator::init_heap() — Heap bereit\n//!   L1: MemorySubsystem::new() — Speicher/Adressraum\n//!   L2-L3: ProcessManager::new() — Prozesse + Capabilities\n//!   L4: Scheduler::new() — Scheduling\n//!   L5: IpcSubsystem::new() — IPC\n//!   L6: TCB ready\n\nextern crate alloc;
+//! Boot-Reihenfolge:
+//!   L0: allocator::init_heap() — Heap bereit\n//!   L1: MemorySubsystem::new() — Speicher/Adressraum\n//!   L2-L3: ProcessManager::new() — Prozesse + Capabilities\n//!   L4: Scheduler::new() — Scheduling\n//!   L5: IpcSubsystem::new() — IPC\n//!   L6: TCB ready\n\nextern crate alloc;
 
 use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::capability::CapabilityTable;
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
@@ -143,19 +143,6 @@ impl KernelState {
             self.memory.stats().active_regions,
             self.memory.stats().total_allocated
         ));
-        out.push_str(&format!("  FS: {} nodes\n", self.fs.ls("/").len()));
-        out.push_str(&format!(
-            "  P2P: port {}, {} peers\n",
-            self.p2p.listen_port(),
-            self.p2p.peer_count()
-        ));
-        out.push_str(&format!(
-            "  Mempool: {}/{} txs\n",
-            self.mempool.count(),
-            10000
-        ));
-        out.push_str(&format!("  VM: {} contracts\n", self.vm.contract_count()));
-        out.push_str(&format!("  AI: {} models\n", self.ai.model_count()));
         out.push_str("=== ShivaCore TCB Boot Complete ===\n");
         out
     }
@@ -222,11 +209,6 @@ mod tests {
         assert!(log.contains("ShivaCore Kernel Boot"));
         assert!(log.contains("Heap"));
         assert!(log.contains("MemorySubsystem"));
-        assert!(log.contains("ATCFS"));
-        assert!(log.contains("P2P"));
-        assert!(log.contains("Mempool"));
-        assert!(log.contains("VM"));
-        assert!(log.contains("AI"));
         assert!(log.contains("TCB Boot Complete"));
     }
 
