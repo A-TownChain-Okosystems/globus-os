@@ -231,6 +231,34 @@ mod tests {
     }
 
     #[test]
+    fn test_boot_is_tcb_only() {
+        let state = KernelState::boot().unwrap();
+        let log = state.boot_log();
+
+        for service in ["ATCFS", "P2P", "Mempool", "VM", "AI", "Blockchain"] {
+            assert!(
+                !log.contains(service),
+                "service-space component leaked into TCB boot: {service}"
+            );
+        }
+
+        let phases: Vec<BootPhase> =
+            state.init_log.iter().map(|(phase, _)| *phase).collect();
+        assert_eq!(
+            phases,
+            vec![
+                BootPhase::Heap,
+                BootPhase::Memory,
+                BootPhase::Capabilities,
+                BootPhase::Processes,
+                BootPhase::Scheduler,
+                BootPhase::Ipc,
+                BootPhase::Done,
+            ]
+        );
+    }
+
+    #[test]
     fn test_smoke_test() {
         let mut state = KernelState::boot().unwrap();
         state.smoke_test().unwrap();
