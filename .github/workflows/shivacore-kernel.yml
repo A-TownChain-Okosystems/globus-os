@@ -6,6 +6,9 @@ on:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
+      - "modules/atc-bootloader/**"
+      - "system/shivacore-api/**"
+      - "docs/architecture/ATC-SHIVACORE-KERNEL-MATRIX-001.yaml"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
   pull_request:
