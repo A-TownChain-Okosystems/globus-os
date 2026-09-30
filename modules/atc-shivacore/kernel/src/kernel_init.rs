@@ -1,9 +1,9 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 //! ShivaCore Kernel — Init-Sequenz (K-Sprint 23)
 //!
-//! Verkettet die Initialisierung aller Kernel-Subsysteme in der
-//! korrekten Boot-Reihenfolge. In Kernel-Mode (no_std) wird dies
-//! nach allocator::init_heap() aufgerufen.
+//! Initializes the ShivaCore TCB only. GlobusOS services (filesystem, network,
+//! blockchain/VM, and Aurora AI) are userspace/service-space responsibilities.
+//! In kernel mode this runs after allocator::init_heap().
 //!
 //! Boot-Reihenfolge:
 //!   L0:  allocator::init_heap()      — Heap bereit (Box/Vec/String)
@@ -27,25 +27,13 @@ extern crate alloc;
 
 use alloc::format;
 use alloc::string::String;
-use alloc::string::ToString;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::ai::AiEngine;
-use crate::atcfs::AtcFileSystem;
-use crate::ats1000::{FileSystem, MemoryManager};
 use crate::capability::CapabilityTable;
-use crate::contract::ContractExecutor;
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
-use crate::mempool::{MemoryPool, NonceTracker, StateDb, TxValidator};
-use crate::p2p::P2pNode;
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
-use crate::security::SecurityManager;
-use crate::timer::{MonotonicClock, SimulatedTimerSource, TimerManager};
-use crate::vfs::Vfs;
-use crate::vm::VmEngine;
 
 /// Kernel-Init-Status für jedes Subsystem
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,11 +53,6 @@ pub enum BootPhase {
     Processes,    // L3: ProcessManager
     Scheduler,    // L4: DA-HEFT Scheduler
     Ipc,          // L5: IPC Channels
-    FileSystem,   // L6: ATCFS + VFS
-    Network,      // L7: P2P Network
-    Security,     // L8: Security/Audit/MultiSig
-    Blockchain,   // L9: Mempool/VM/Contracts (Consensus+Chain -> Service Space)
-    Ai,           // L10: AI Subsystem
     Done,
 }
 
@@ -82,11 +65,6 @@ impl BootPhase {
             BootPhase::Processes => "L3 ProcessManager",
             BootPhase::Scheduler => "L4 DA-HEFT Scheduler",
             BootPhase::Ipc => "L5 IPC Channels",
-            BootPhase::FileSystem => "L6 ATCFS + VFS",
-            BootPhase::Network => "L7 P2P Network (ATCNet)",
-            BootPhase::Security => "L8 Security/Audit/MultiSig",
-            BootPhase::Blockchain => "L9 Mempool + Contract VM",
-            BootPhase::Ai => "L10 AI Subsystem (Aurora AI)",
             BootPhase::Done => "Boot Complete",
         }
     }
@@ -104,28 +82,12 @@ pub struct KernelState {
     pub scheduler: DaHeftScheduler,
     // L5: IPC
     pub ipc: IpcSubsystem,
-    // L6: Filesystems
-    pub fs: AtcFileSystem,
-    pub vfs: Vfs,
-    // L7: Network
-    pub p2p: P2pNode,
-    // L8: Security
-    pub security: SecurityManager,
-    // L9: Contract-Stack (Consensus/Chain -> Service Space, AD-028)
-    pub mempool: Arc<MemoryPool>,
-    pub state_db: Arc<StateDb>,
-    pub tx_validator: Arc<TxValidator>,
-    pub nonces: Arc<NonceTracker>,
-    pub vm: Arc<VmEngine>,
-    pub contracts: ContractExecutor,
-    // L10: AI
-    pub ai: AiEngine,
     // Boot log
     pub init_log: Vec<(BootPhase, InitStatus)>,
 }
 
 impl KernelState {
-    /// Kernel-Init-Sequenz — initialisiert alle Subsysteme in Reihenfolge.
+    /// Kernel-Init-Sequenz — initialisiert ausschließlich TCB-Primitive.
     ///
     /// In Kernel-Mode (no_std):
     ///   1. allocator::init_heap(mapper, frame_alloc)  ← muss VORHER laufen
@@ -165,44 +127,12 @@ impl KernelState {
         let ipc = IpcSubsystem::new();
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
-        // ── L6: ATCFS + VFS ──
-        log.push((BootPhase::FileSystem, InitStatus::Initializing));
-        let fs = AtcFileSystem::new();
-        if !fs.exists("/") {
-            log.push((BootPhase::FileSystem, InitStatus::Failed));
-            return Err(BootError::FsInitFailed);
-        }
-        let caps = Arc::new(spin::Mutex::new(CapabilityTable::new()));
-        let vfs = Vfs::new(caps);
-        log.push((BootPhase::FileSystem, InitStatus::Ready));
 
-        // ── L7: P2P Network ──
-        log.push((BootPhase::Network, InitStatus::Initializing));
-        let our_did = "did:atc:shivacore:bootnode".to_string();
-        let p2p = P2pNode::new(our_did.clone(), 4242, 50);
-        log.push((BootPhase::Network, InitStatus::Ready));
 
-        // ── L8: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
-        log.push((BootPhase::Security, InitStatus::Initializing));
-        let security = SecurityManager::new();
-        log.push((BootPhase::Security, InitStatus::Ready));
 
-        // ── L9: Blockchain Stack (Consensus + Mempool + Chain + VM + Contracts) ──
-        log.push((BootPhase::Blockchain, InitStatus::Initializing));
-        let mempool = Arc::new(MemoryPool::new(10000, 300));
-        let state_db = Arc::new(StateDb::new());
-        let nonces = Arc::new(NonceTracker::new());
-        let tx_validator = Arc::new(TxValidator::new(state_db.clone(), nonces.clone(), 1));
-        let vm = Arc::new(VmEngine::new(1_000_000));
-        let contracts = ContractExecutor::new(vm.clone(), state_db.clone());
-        log.push((BootPhase::Blockchain, InitStatus::Ready));
 
-        // ── L10: AI Subsystem ──
-        log.push((BootPhase::Ai, InitStatus::Initializing));
-        let ai = AiEngine::new();
-        log.push((BootPhase::Ai, InitStatus::Ready));
 
-        // ── Done ──
+        // ── TCB ready ──
         log.push((BootPhase::Done, InitStatus::Ready));
 
         Ok(KernelState {
@@ -210,17 +140,6 @@ impl KernelState {
             processes,
             scheduler,
             ipc,
-            fs,
-            vfs,
-            p2p,
-            security,
-            mempool,
-            state_db,
-            tx_validator,
-            nonces,
-            vm,
-            contracts,
-            ai,
             init_log: log,
         })
     }
@@ -255,7 +174,7 @@ impl KernelState {
         ));
         out.push_str(&format!("  VM: {} contracts\n", self.vm.contract_count()));
         out.push_str(&format!("  AI: {} models\n", self.ai.model_count()));
-        out.push_str("=== Boot Complete ===\n");
+        out.push_str("=== ShivaCore TCB Boot Complete ===\n");
         out
     }
 
@@ -267,25 +186,7 @@ impl KernelState {
             .allocate(crate::ats1000::Pid(1), 1024)
             .map_err(|_| BootError::SmokeTestFailed)?;
 
-        // 2. FS write
-        let caps = &self.memory.caps;
-        self.fs
-            .write_file(
-                caps,
-                "/tmp/smoke_test.txt",
-                b"ShivaCore boot OK",
-                crate::ats1000::Pid(1),
-            )
-            .map_err(|_| BootError::SmokeTestFailed)?;
-
-        // 3. FS read
-        let (_cid, node) = self
-            .fs
-            .read_file(caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
-            .map_err(|_| BootError::SmokeTestFailed)?;
-        assert_eq!(node.size, 17);
-
-        // 4. Memory free
+        // 2. Memory free
         self.memory
             .deallocate(crate::ats1000::Pid(1), region.region_id)
             .map_err(|_| BootError::SmokeTestFailed)?;
@@ -298,7 +199,6 @@ impl KernelState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootError {
     HeapConfigMismatch,
-    FsInitFailed,
     SmokeTestFailed,
 }
 
@@ -345,7 +245,7 @@ mod tests {
         assert!(log.contains("Mempool"));
         assert!(log.contains("VM"));
         assert!(log.contains("AI"));
-        assert!(log.contains("Boot Complete"));
+        assert!(log.contains("TCB Boot Complete"));
     }
 
     #[test]
