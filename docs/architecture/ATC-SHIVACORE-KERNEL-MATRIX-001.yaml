@@ -1,7 +1,8 @@
 matrix_id: ATC-SHIVACORE-KERNEL-MATRIX-001
+schema_version: "1.0"
 title: ShivaCore Kernel Subsystem Matrix
 version: "1.1.1"
-canonical_source_of_truth: globus-os/modules/atc-shivacore/kernel/
+canonical_source_of_truth: modules/atc-shivacore/kernel/
 support_repository: A-TownChain-Okosystems/atc-shivacore
 support_repository_kernel_sot: false
 evidence_policy: "Architecture != Implementation != Evidence; source presence alone never proves implementation or verification."
@@ -9,6 +10,7 @@ status_model: [UNANALYZED, ANALYZED, FIXED, RERUNNING, VERIFIED, RESIDUAL]
 evidence_fields: [id, domain, function, responsibility, input, output, state, capability, security_boundary, source, test, workflow, exact_sha, run, job, step, exit_code, log, verification, residual]
 workflow:
   path: .github/workflows/shivacore-kernel.yml
+  scope: "Build and BIOS/QEMU smoke evidence; not proof of all matrix functions."
   exact_sha_required: true
   exact_sha_is_evidence_policy_not_workflow_gate: true
   gates:
@@ -41,7 +43,7 @@ entries:
     state: UNANALYZED
     capability: null
     security_boundary: "Boot → Kernel"
-    source: "modules/atc-shivacore/kernel/"
+    source: null
     test: null
     workflow: ".github/workflows/shivacore-kernel.yml"
     exact_sha: null
@@ -51,7 +53,7 @@ entries:
     exit_code: null
     log: null
     verification: UNANALYZED
-    residual: "Function-level source/test/Exact-SHA evidence mapping pending."
+    residual: "Function-level source/test/Exact-SHA evidence mapping pending; source path must be populated from Existing-First inspection."
   - id: KRN-002
     domain: "Boot"
     function: "Boot Handoff Parsing"
