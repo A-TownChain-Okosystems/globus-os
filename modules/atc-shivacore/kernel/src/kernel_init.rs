@@ -273,14 +273,13 @@ mod tests {
     #[test]
     fn test_ipc_initialized() {
         let state = KernelState::boot().unwrap();
-        // IPC subsystem exists, no channels yet
-        // Just verify it's part of state
+        assert_eq!(state.ipc.channel_count(), 0);
     }
 
     #[test]
     fn test_scheduler_initialized() {
         let state = KernelState::boot().unwrap();
-        // Scheduler exists with no tasks
+        assert_eq!(state.scheduler.accelerator_count(), 0);
     }
 
 }
