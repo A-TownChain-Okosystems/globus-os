@@ -29,12 +29,12 @@ pub enum InitStatus {
 /// Boot-Phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootPhase {
-    Heap,         // L0: allocator::init_heap
-    Memory,       // L1: MemorySubsystem
-    Capabilities, // L2: CapabilityTable
-    Processes,    // L3: ProcessManager
-    Scheduler,    // L4: DA-HEFT Scheduler
-    Ipc,          // L5: IPC Channels
+    Heap,
+    Memory,
+    Capabilities,
+    Processes,
+    Scheduler,
+    Ipc,
     Done,
 }
 
@@ -47,7 +47,7 @@ impl BootPhase {
             BootPhase::Processes => "L3 ProcessManager",
             BootPhase::Scheduler => "L4 DA-HEFT Scheduler",
             BootPhase::Ipc => "L5 IPC Channels",
-            BootPhase::Done => "Boot Complete",
+            BootPhase::Done => "TCB Boot Complete",
         }
     }
 }
@@ -273,9 +273,4 @@ mod tests {
         // Scheduler exists with no tasks
     }
 
-    #[test]
-    fn test_vfs_initialized() {
-        let state = KernelState::boot().unwrap();
-        // VFS root should exist
-    }
 }
