@@ -14,7 +14,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::net::{Ipv4Address, MacAddress, NetworkError, NetworkStack, ETH_TYPE_IPV4};
+use crate::net::{NetworkError, NetworkStack};
+use shivacore::net::{Ipv4Address, MacAddress, ETH_TYPE_IPV4};
 use crate::tcpip::{
     Ipv4Packet, SocketId, SocketManager, TcpSegment, TcpState, UdpPacket, IP_PROTO_TCP,
     IP_PROTO_UDP,
