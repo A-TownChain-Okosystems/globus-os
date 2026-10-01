@@ -7,7 +7,10 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
-use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, LoopbackDevice, ETH_TYPE_IPV4};
+use shivacore::net::{
+    EthernetFrame, Ipv4Address, LoopbackDevice, MacAddress, NetworkDevice, NetworkError,
+    ETH_TYPE_IPV4,
+};
 
 // ─── ARP (Address Resolution Protocol) ──────────────────────────────────────
 
@@ -276,7 +279,6 @@ pub enum NetworkError {
     UnsupportedProtocol,
 }
 
-
 // ─── NetworkStack (Höchste Ebene — verbindet Device + ARP) ──────────────────
 
 pub struct NetworkStack {
@@ -370,7 +372,6 @@ impl NetworkStack {
         self.device.send_frame(&frame.to_bytes())
     }
 }
-
 
 // ─── Tests ──────────────────────────────────────────────────────────────────
 
