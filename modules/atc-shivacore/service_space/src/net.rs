@@ -218,11 +218,11 @@ where
     T: shivacore::net::NetworkDevice + ?Sized,
 {
     fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError> {
-        self.send_frame(frame).map_err(Into::into)
+        shivacore::net::NetworkDevice::send_frame(self, frame).map_err(Into::into)
     }
 
     fn recv_frame(&self) -> Result<Vec<u8>, NetworkError> {
-        self.recv_frame().map_err(Into::into)
+        shivacore::net::NetworkDevice::recv_frame(self).map_err(Into::into)
     }
 
     fn mac_address(&self) -> MacAddress {
