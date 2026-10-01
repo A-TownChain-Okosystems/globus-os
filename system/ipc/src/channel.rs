@@ -1,7 +1,7 @@
 //! Bounded deterministic IPC channels.
 
-use alloc::collections::{BTreeMap, VecDeque};
 use crate::{Endpoint, MAX_IPC_PAYLOAD, Message, validate_payload};
+use alloc::collections::{BTreeMap, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {
