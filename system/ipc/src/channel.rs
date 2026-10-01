@@ -19,7 +19,7 @@ pub struct ChannelRegistry {
 impl ChannelRegistry {
     pub fn new(capacity: usize) -> Self {
         Self {
-            capacity: capacity.max(1),
+            capacity: if capacity == 0 { 1 } else { capacity },
             queues: BTreeMap::new(),
         }
     }
@@ -69,8 +69,8 @@ mod tests {
         assert_eq!(r.receive(e).unwrap().unwrap().header.opcode, 2);
     }
     #[test]
-    fn capacity_is_enforced() {
-        let mut r = ChannelRegistry::new(1);
+    fn zero_capacity_is_normalized() {
+        let mut r = ChannelRegistry::new(0);
         let e = Endpoint(2);
         r.register(e);
         r.send(Message::new(e, 1, vec![])).unwrap();
