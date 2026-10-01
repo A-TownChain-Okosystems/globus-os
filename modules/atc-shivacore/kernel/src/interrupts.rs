@@ -6,7 +6,6 @@
 
 use crate::gdt;
 use crate::serial_println;
-use shivacore::user_sched::{SavedContext, UserScheduler};
 use crate::userspace::UserContext;
 use core::arch::global_asm;
 use lazy_static::lazy_static;
