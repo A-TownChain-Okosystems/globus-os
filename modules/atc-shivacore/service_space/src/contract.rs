@@ -1,13 +1,16 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // K-Sprint 20 — Contract-Call-Integration
-use crate::vm::{ExecResult, VmEngine, VmError};
+
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+
+use crate::vm::{ExecResult, VmEngine, VmError};
 use shivacore::mempool::{Transaction, TxType};
 use shivacore::security::simple_hash;
+
 pub struct ContractExecutor {
     vm: Arc<VmEngine>,
     state: Arc<shivacore::mempool::StateDb>,
