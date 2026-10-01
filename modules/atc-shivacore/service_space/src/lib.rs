@@ -16,6 +16,7 @@ pub mod atcnet;
 pub mod net;
 pub mod tcpip;
 pub mod p2p;
+pub mod p2p_secure;
 pub mod vm;
 pub mod contract;
 pub mod blockchain;
