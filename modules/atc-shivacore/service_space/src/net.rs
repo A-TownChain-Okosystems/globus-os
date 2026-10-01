@@ -745,4 +745,3 @@ mod tests {
         assert_eq!(result, Err(NetworkError::UnsupportedProtocol));
     }
 }
-
