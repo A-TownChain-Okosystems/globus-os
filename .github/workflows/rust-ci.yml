@@ -16,7 +16,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: x86_64-unknown-uefi
-          components: rustfmt, clippy, rust-src
+          components: rustfmt, clippy, rust-src, llvm-tools-preview
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Build workspace
