@@ -33,7 +33,7 @@ impl Ipv4Address {
         Self([a, b, c, d])
     }
 
-    pub const fn is_broadcast(self) -> bool {
+    pub fn is_broadcast(self) -> bool {
         self.0 == [0xff; 4]
     }
 }
