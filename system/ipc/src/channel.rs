@@ -1,5 +1,6 @@
-use alloc::collections::{BTreeMap, VecDeque};
 //! Bounded deterministic IPC channels.
+
+use alloc::collections::{BTreeMap, VecDeque};
 use crate::{Endpoint, MAX_IPC_PAYLOAD, Message, validate_payload};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
