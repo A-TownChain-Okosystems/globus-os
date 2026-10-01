@@ -365,7 +365,15 @@ mod tests {
     #[test]
     fn test_service_space_boundary() {
         let state = KernelState::boot().unwrap();
-        assert_eq!(state.init_log.iter().find(|(p,_)| *p == BootPhase::Network).unwrap().1, InitStatus::Ready);
+        assert_eq!(
+            state
+                .init_log
+                .iter()
+                .find(|(p, _)| *p == BootPhase::Network)
+                .unwrap()
+                .1,
+            InitStatus::Ready
+        );
     }
 
     #[test]
