@@ -25,7 +25,6 @@ pub mod kernel_init;
 pub mod memory_manager;
 pub mod net;
 pub mod mempool;
-pub mod p2p_secure;
 pub mod process;
 pub mod scheduler;
 pub mod security;
