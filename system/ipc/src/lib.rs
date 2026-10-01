@@ -166,7 +166,7 @@ pub fn validate_payload(payload: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::format;
+    use alloc::format;
 
     #[test]
     fn opcode_values_are_stable() {
