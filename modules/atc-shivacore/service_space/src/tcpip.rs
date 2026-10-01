@@ -13,10 +13,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::net::NetworkStack;
-use shivacore::net::{
-    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, ETH_TYPE_IPV4,
-};
+use crate::net::{NetworkDevice, NetworkError, NetworkStack};
+use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, ETH_TYPE_IPV4};
 
 // ─── Protokoll-Nummern ─────────────────────────────────────────────────────
 
@@ -718,7 +716,7 @@ impl IpStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shivacore::net::{LoopbackDevice, NetworkStack};
+    use crate::net::LoopbackDevice;
 
     // ── IPv4 ────────────────────────────────────────────────────────────────
 
