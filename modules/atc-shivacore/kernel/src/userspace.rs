@@ -6,6 +6,9 @@
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
 use crate::ats1000::{ExitCode, Pid};
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use core::arch::asm;
 use x86_64::{
     structures::paging::OffsetPageTable,
@@ -186,7 +189,7 @@ pub unsafe fn map_user_binary(
                 .map_err(|_| UserspaceError::InvalidAddress)?;
             flush.flush();
             let phys = physical_memory_offset + frame.start_address().as_u64();
-            core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize);
+            core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, 4096usize);
         }
         Ok(())
     }
