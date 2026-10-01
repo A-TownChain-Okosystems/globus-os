@@ -9,7 +9,7 @@ use alloc::vec::Vec;
 pub mod channel;
 pub use channel::{ChannelRegistry, IpcError};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Endpoint(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
