@@ -7,7 +7,7 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
-use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, ETH_TYPE_IPV4};
+use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, LoopbackDevice, ETH_TYPE_IPV4};
 
 // ─── ARP (Address Resolution Protocol) ──────────────────────────────────────
 
