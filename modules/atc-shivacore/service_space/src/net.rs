@@ -7,10 +7,7 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use shivacore::net::{
-    EthernetFrame, Ipv4Address, LoopbackDevice, MacAddress, NetworkDevice, NetworkError,
-    ETH_TYPE_ARP, ETH_TYPE_IPV4,
-};
+use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, ETH_TYPE_ARP, ETH_TYPE_IPV4};
 use spin::Mutex;
 
 // ─── ARP (Address Resolution Protocol) ──────────────────────────────────────
@@ -192,6 +189,105 @@ impl ArpPacket {
             target_mac: MacAddress(target_mac),
             target_ip: Ipv4Address(target_ip),
         })
+    }
+}
+
+// ─── Service-Space NetworkDevice adapter ───────────────────────────────────
+
+pub trait NetworkDevice: Send + Sync {
+    fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError>;
+    fn recv_frame(&self) -> Result<Vec<u8>, NetworkError>;
+    fn mac_address(&self) -> MacAddress;
+
+    fn mtu(&self) -> usize {
+        1500
+    }
+
+    fn is_up(&self) -> bool {
+        true
+    }
+
+    fn name(&self) -> &str {
+        "net-device"
+    }
+}
+
+impl<T> NetworkDevice for T
+where
+    T: shivacore::net::NetworkDevice + ?Sized,
+{
+    fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError> {
+        self.send(frame).map_err(Into::into)
+    }
+
+    fn recv_frame(&self) -> Result<Vec<u8>, NetworkError> {
+        self.receive().map_err(Into::into)
+    }
+
+    fn mac_address(&self) -> MacAddress {
+        shivacore::net::NetworkDevice::mac_address(self)
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum NetworkError {
+    FrameTooShort,
+    PacketTooShort,
+    InvalidChecksum,
+    NoFrameAvailable,
+    DeviceDown,
+    SendFailed(String),
+    RecvFailed(String),
+    ArpResolutionFailed,
+    UnsupportedProtocol,
+}
+
+impl From<shivacore::net::NetworkError> for NetworkError {
+    fn from(error: shivacore::net::NetworkError) -> Self {
+        match error {
+            shivacore::net::NetworkError::DeviceError => Self::DeviceDown,
+            shivacore::net::NetworkError::NoPacket => Self::NoFrameAvailable,
+            shivacore::net::NetworkError::FrameTooShort
+            | shivacore::net::NetworkError::InvalidFrame => Self::FrameTooShort,
+        }
+    }
+}
+
+pub struct LoopbackDevice {
+    mac: MacAddress,
+    queue: Mutex<Vec<Vec<u8>>>,
+    dev_name: String,
+}
+
+impl LoopbackDevice {
+    pub fn new(name: &str) -> Self {
+        Self {
+            mac: MacAddress::new(0x02, 0x00, 0x00, 0x00, 0x00, 0x01),
+            queue: Mutex::new(Vec::new()),
+            dev_name: name.to_string(),
+        }
+    }
+}
+
+impl NetworkDevice for LoopbackDevice {
+    fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError> {
+        self.queue.lock().push(frame.to_vec());
+        Ok(())
+    }
+
+    fn recv_frame(&self) -> Result<Vec<u8>, NetworkError> {
+        self.queue
+            .lock()
+            .pop()
+            .ok_or(NetworkError::NoFrameAvailable)
+    }
+
+    fn mac_address(&self) -> MacAddress {
+        self.mac
+    }
+
+    fn name(&self) -> &str {
+        &self.dev_name
     }
 }
 
