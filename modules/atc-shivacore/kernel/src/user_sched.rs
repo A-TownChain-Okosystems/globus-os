@@ -7,9 +7,9 @@
 // Integration von UserspaceManager + SignalManager + PageFaultHandler.
 
 use crate::ats1000::{ExitCode, Pid};
-use alloc::vec::Vec;
 use crate::elf_loader::SignalManager;
 use crate::userspace::{PrivilegeLevel, UserContext, UserspaceError, UserspaceManager};
+use alloc::vec::Vec;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // IRET Frame (CPU state for ring-0 → ring-3 transition)
@@ -321,7 +321,9 @@ impl UserScheduler {
         if self.current == Some(pid) {
             self.current = None;
         }
-        self.entries.retain(|e| e.pid != pid)
+        let old_len = self.entries.len();
+        self.entries.retain(|e| e.pid != pid);
+        self.entries.len() != old_len
     }
 
     /// Get the currently running process
@@ -470,7 +472,7 @@ impl UserScheduler {
         // Check wake-ups (Sleep entries)
         for entry in &mut self.entries {
             if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= *wake {
+                if self.timer_ticks >= wake {
                     entry.state = SchedState::Ready;
                     entry.wake_tick = None;
                 }
