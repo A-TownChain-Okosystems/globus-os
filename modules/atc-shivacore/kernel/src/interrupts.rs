@@ -6,7 +6,7 @@
 
 use crate::gdt;
 use crate::serial_println;
-use crate::user_sched::{SavedContext, UserScheduler};
+use shivacore::user_sched::{SavedContext, UserScheduler};
 use crate::userspace::UserContext;
 use core::arch::global_asm;
 use lazy_static::lazy_static;
@@ -138,7 +138,7 @@ pub struct UserTrapFrame {
 impl UserTrapFrame {
     fn saved_context(&self) -> SavedContext {
         SavedContext {
-            regs: crate::user_sched::SavedRegisters {
+            regs: shivacore::user_sched::SavedRegisters {
                 rax: self.rax,
                 rbx: self.rbx,
                 rcx: self.rcx,
@@ -156,7 +156,7 @@ impl UserTrapFrame {
                 r14: self.r14,
                 r15: self.r15,
             },
-            iret: crate::user_sched::IretFrame {
+            iret: shivacore::user_sched::IretFrame {
                 rip: self.rip,
                 cs: self.cs as u16,
                 rflags: self.rflags,
@@ -296,7 +296,7 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
 extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
     serial_println!(
         "ShivaCore: CPL3 syscall gate entered at RIP={:#x}",
-        stack_frame.instruction_pointer().as_u64()
+        stack_frame.instruction_pointer.as_u64()
     );
     // Return to the interrupted userspace instruction for now. The ABI dispatcher
     // is wired next; this gate is intentionally observable before SCHED-001/SYS-001.
