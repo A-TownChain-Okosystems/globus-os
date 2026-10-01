@@ -299,7 +299,12 @@ mod tests {
     fn test_security_initialized() {
         let state = KernelState::boot().unwrap();
         assert_eq!(
-            state.init_log.iter().find(|(p, _)| *p == BootPhase::Security).unwrap().1,
+            state
+                .init_log
+                .iter()
+                .find(|(p, _)| *p == BootPhase::Security)
+                .unwrap()
+                .1,
             InitStatus::Ready
         );
     }
@@ -313,12 +318,18 @@ mod tests {
     #[test]
     fn test_scheduler_initialized() {
         let state = KernelState::boot().unwrap();
-        assert!(state.init_log.iter().any(|(p, _)| *p == BootPhase::Scheduler));
+        assert!(state
+            .init_log
+            .iter()
+            .any(|(p, _)| *p == BootPhase::Scheduler));
     }
 
     #[test]
     fn test_vfs_initialized() {
         let state = KernelState::boot().unwrap();
-        assert!(state.init_log.iter().any(|(p, _)| *p == BootPhase::FileSystem));
+        assert!(state
+            .init_log
+            .iter()
+            .any(|(p, _)| *p == BootPhase::FileSystem));
     }
 }
