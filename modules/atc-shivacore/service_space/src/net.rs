@@ -11,6 +11,7 @@ use shivacore::net::{
     EthernetFrame, Ipv4Address, LoopbackDevice, MacAddress, NetworkDevice, NetworkError,
     ETH_TYPE_IPV4,
 };
+use spin::Mutex;
 
 // ─── ARP (Address Resolution Protocol) ──────────────────────────────────────
 
