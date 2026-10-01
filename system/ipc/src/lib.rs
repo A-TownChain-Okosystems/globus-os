@@ -1,8 +1,8 @@
+//! Capability-aware IPC primitives used by GlobusOS.
+
 #![no_std]
 
 extern crate alloc;
-
-//! Capability-aware IPC primitives used by GlobusOS.
 
 pub mod channel;
 
