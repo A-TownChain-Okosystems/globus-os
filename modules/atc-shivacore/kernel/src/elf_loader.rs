@@ -7,7 +7,7 @@
 
 use crate::ats1000::{ExitCode, Pid};
 use alloc::string::ToString;
-use alloc::vec; 
+use alloc::vec;
 use alloc::vec::Vec;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -647,7 +647,7 @@ impl SignalManager {
                 .pending
                 .iter_mut()
                 .find(|(p, _)| *p == pid)
-                .and_then(|(_, sigs)| sigs.remove(idx).map(|ps| ps.signal))?;
+                .and_then(|(_, sigs)| Some(sigs.remove(idx).signal))?;
             self.signals_delivered += 1;
             let disp = self.get_handler(pid, signal);
             Some((signal, disp))
