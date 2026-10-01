@@ -35,17 +35,14 @@ use crate::ai::AiEngine;
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
 use crate::capability::CapabilityTable;
-use crate::contract::ContractExecutor;
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
-use crate::mempool::{MemoryPool, NonceTracker, StateDb, TxValidator};
 use crate::p2p::P2pNode;
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
 use crate::security::SecurityManager;
 use crate::timer::{MonotonicClock, SimulatedTimerSource, TimerManager};
 use crate::vfs::Vfs;
-use crate::vm::VmEngine;
 
 /// Kernel-Init-Status für jedes Subsystem
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,9 +63,8 @@ pub enum BootPhase {
     Scheduler,    // L4: DA-HEFT Scheduler
     Ipc,          // L5: IPC Channels
     FileSystem,   // L6: ATCFS + VFS
-    Network,      // L7: P2P Network
+    Network,      // L7: Network interface
     Security,     // L8: Security/Audit/MultiSig
-    Blockchain,   // L9: Mempool/VM/Contracts (Consensus+Chain -> Service Space)
     Ai,           // L10: AI Subsystem
     Done,
 }
@@ -83,9 +79,8 @@ impl BootPhase {
             BootPhase::Scheduler => "L4 DA-HEFT Scheduler",
             BootPhase::Ipc => "L5 IPC Channels",
             BootPhase::FileSystem => "L6 ATCFS + VFS",
-            BootPhase::Network => "L7 P2P Network (ATCNet)",
+            BootPhase::Network => "L7 Network interface (Service Space)",
             BootPhase::Security => "L8 Security/Audit/MultiSig",
-            BootPhase::Blockchain => "L9 Mempool + Contract VM",
             BootPhase::Ai => "L10 AI Subsystem (Aurora AI)",
             BootPhase::Done => "Boot Complete",
         }
@@ -108,16 +103,8 @@ pub struct KernelState {
     pub fs: AtcFileSystem,
     pub vfs: Vfs,
     // L7: Network
-    pub p2p: P2pNode,
     // L8: Security
     pub security: SecurityManager,
-    // L9: Contract-Stack (Consensus/Chain -> Service Space, AD-028)
-    pub mempool: Arc<MemoryPool>,
-    pub state_db: Arc<StateDb>,
-    pub tx_validator: Arc<TxValidator>,
-    pub nonces: Arc<NonceTracker>,
-    pub vm: Arc<VmEngine>,
-    pub contracts: ContractExecutor,
     // L10: AI
     pub ai: AiEngine,
     // Boot log
@@ -176,26 +163,10 @@ impl KernelState {
         let vfs = Vfs::new(caps);
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
-        // ── L7: P2P Network ──
-        log.push((BootPhase::Network, InitStatus::Initializing));
-        let our_did = "did:atc:shivacore:bootnode".to_string();
-        let p2p = P2pNode::new(our_did.clone(), 4242, 50);
+        // ── L7: Network interface boundary ──
+        // Protocol implementations live in Service Space; the kernel owns only
+        // hardware/link primitives and capability boundaries.
         log.push((BootPhase::Network, InitStatus::Ready));
-
-        // ── L8: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
-        log.push((BootPhase::Security, InitStatus::Initializing));
-        let security = SecurityManager::new();
-        log.push((BootPhase::Security, InitStatus::Ready));
-
-        // ── L9: Blockchain Stack (Consensus + Mempool + Chain + VM + Contracts) ──
-        log.push((BootPhase::Blockchain, InitStatus::Initializing));
-        let mempool = Arc::new(MemoryPool::new(10000, 300));
-        let state_db = Arc::new(StateDb::new());
-        let nonces = Arc::new(NonceTracker::new());
-        let tx_validator = Arc::new(TxValidator::new(state_db.clone(), nonces.clone(), 1));
-        let vm = Arc::new(VmEngine::new(1_000_000));
-        let contracts = ContractExecutor::new(vm.clone(), state_db.clone());
-        log.push((BootPhase::Blockchain, InitStatus::Ready));
 
         // ── L10: AI Subsystem ──
         log.push((BootPhase::Ai, InitStatus::Initializing));
@@ -212,14 +183,7 @@ impl KernelState {
             ipc,
             fs,
             vfs,
-            p2p,
             security,
-            mempool,
-            state_db,
-            tx_validator,
-            nonces,
-            vm,
-            contracts,
             ai,
             init_log: log,
         })
@@ -341,9 +305,8 @@ mod tests {
         assert!(log.contains("Heap"));
         assert!(log.contains("MemorySubsystem"));
         assert!(log.contains("ATCFS"));
-        assert!(log.contains("P2P"));
-        assert!(log.contains("Mempool"));
-        assert!(log.contains("VM"));
+        assert!(log.contains("Network interface"));
+
         assert!(log.contains("AI"));
         assert!(log.contains("Boot Complete"));
     }
@@ -397,6 +360,12 @@ mod tests {
         let state = KernelState::boot().unwrap();
         assert_eq!(state.mempool.count(), 0);
         assert_eq!(state.vm.contract_count(), 0);
+    }
+
+    #[test]
+    fn test_service_space_boundary() {
+        let state = KernelState::boot().unwrap();
+        assert_eq!(state.init_log.iter().find(|(p,_)| *p == BootPhase::Network).unwrap().1, InitStatus::Ready);
     }
 
     #[test]
