@@ -1,6 +1,13 @@
+#![no_std]
+
+extern crate alloc;
+
 //! Capability-aware IPC primitives used by GlobusOS.
 
 pub mod channel;
+
+use alloc::string::String;
+use alloc::vec::Vec;
 pub use channel::{ChannelRegistry, IpcError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
