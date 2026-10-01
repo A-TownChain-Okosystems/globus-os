@@ -80,12 +80,7 @@ pub struct EthernetFrame {
 }
 
 impl EthernetFrame {
-    pub fn new(
-        dst: MacAddress,
-        src: MacAddress,
-        ethertype: u16,
-        payload: Vec<u8>,
-    ) -> Self {
+    pub fn new(dst: MacAddress, src: MacAddress, ethertype: u16, payload: Vec<u8>) -> Self {
         Self {
             dst_mac: dst,
             src_mac: src,
