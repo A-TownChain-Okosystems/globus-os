@@ -13,6 +13,11 @@ extern crate std;
 extern crate alloc;
 
 pub mod atcnet;
+pub mod net;
+pub mod tcpip;
+pub mod p2p;
+pub mod vm;
+pub mod contract;
 pub mod blockchain;
 pub mod consensus;
 pub mod did;
