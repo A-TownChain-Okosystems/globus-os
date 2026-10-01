@@ -179,17 +179,19 @@ pub unsafe fn map_user_binary(
             let frame = frame_allocator
                 .allocate_frame()
                 .ok_or(UserspaceError::InvalidAddress)?;
-            let flush = mapper
-                .map_to(
-                    page,
-                    frame,
-                    flags | PageTableFlags::PRESENT,
-                    frame_allocator,
-                )
-                .map_err(|_| UserspaceError::InvalidAddress)?;
+            let flush = unsafe {
+                mapper
+                    .map_to(
+                        page,
+                        frame,
+                        flags | PageTableFlags::PRESENT,
+                        frame_allocator,
+                    )
+                    .map_err(|_| UserspaceError::InvalidAddress)?
+            };
             flush.flush();
             let phys = physical_memory_offset + frame.start_address().as_u64();
-            core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, 4096usize);
+            unsafe { core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, 4096usize) };
         }
         Ok(())
     }
@@ -267,11 +269,11 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
         "push rdx", // CS
         "push rsi", // RIP
         "iretq",
-        in("rax") ctx.ss as u64,
-        in("rbx") ctx.rsp,
-        in("rcx") ctx.rflags,
-        in("rdx") ctx.cs as u64,
-        in("rsi") ctx.rip,
+        in(reg) ctx.ss as u64,
+        in(reg) ctx.rsp,
+        in(reg) ctx.rflags,
+        in(reg) ctx.cs as u64,
+        in(reg) ctx.rip,
         options(noreturn)
     );
 }
