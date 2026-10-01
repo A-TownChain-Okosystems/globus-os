@@ -218,11 +218,11 @@ where
     T: shivacore::net::NetworkDevice + ?Sized,
 {
     fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError> {
-        self.send(frame).map_err(Into::into)
+        self.send_frame(frame).map_err(Into::into)
     }
 
     fn recv_frame(&self) -> Result<Vec<u8>, NetworkError> {
-        self.receive().map_err(Into::into)
+        self.recv_frame().map_err(Into::into)
     }
 
     fn mac_address(&self) -> MacAddress {
@@ -246,10 +246,15 @@ pub enum NetworkError {
 impl From<shivacore::net::NetworkError> for NetworkError {
     fn from(error: shivacore::net::NetworkError) -> Self {
         match error {
-            shivacore::net::NetworkError::DeviceError => Self::DeviceDown,
-            shivacore::net::NetworkError::NoPacket => Self::NoFrameAvailable,
-            shivacore::net::NetworkError::FrameTooShort
-            | shivacore::net::NetworkError::InvalidFrame => Self::FrameTooShort,
+            shivacore::net::NetworkError::DeviceDown => Self::DeviceDown,
+            shivacore::net::NetworkError::NoFrameAvailable => Self::NoFrameAvailable,
+            shivacore::net::NetworkError::FrameTooShort => Self::FrameTooShort,
+            shivacore::net::NetworkError::PacketTooShort => Self::PacketTooShort,
+            shivacore::net::NetworkError::InvalidChecksum => Self::InvalidChecksum,
+            shivacore::net::NetworkError::SendFailed(message) => Self::SendFailed(message),
+            shivacore::net::NetworkError::RecvFailed(message) => Self::RecvFailed(message),
+            shivacore::net::NetworkError::ArpResolutionFailed => Self::ArpResolutionFailed,
+            shivacore::net::NetworkError::UnsupportedProtocol => Self::UnsupportedProtocol,
         }
     }
 }
