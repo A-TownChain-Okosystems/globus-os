@@ -1,15 +1,15 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ShivaCore Service Space — network protocols above the kernel link boundary.
 
+use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use spin::Mutex;
 use shivacore::net::{
     EthernetFrame, Ipv4Address, LoopbackDevice, MacAddress, NetworkDevice, NetworkError,
-    ETH_TYPE_IPV4,
+    ETH_TYPE_ARP, ETH_TYPE_IPV4,
 };
 use spin::Mutex;
 
@@ -193,91 +193,6 @@ impl ArpPacket {
             target_ip: Ipv4Address(target_ip),
         })
     }
-}
-
-// ─── NetworkDevice Trait ────────────────────────────────────────────────────
-
-pub trait NetworkDevice: Send + Sync {
-    /// Sendet ein Ethernet-Frame.
-    fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError>;
-
-    /// Empfängt ein Frame (blockierend oder nicht, je nach Implementierung).
-    fn recv_frame(&self) -> Result<Vec<u8>, NetworkError>;
-
-    /// MAC-Adresse des Geräts.
-    fn mac_address(&self) -> MacAddress;
-
-    /// MTU (Maximum Transmission Unit) in Bytes.
-    fn mtu(&self) -> usize {
-        1500
-    }
-
-    /// Ob das Gerät "up" ist (verlinkt).
-    fn is_up(&self) -> bool {
-        true
-    }
-
-    /// Gerätename.
-    fn name(&self) -> &str {
-        "net-device"
-    }
-}
-
-// ─── LoopbackDevice (für Tests) ─────────────────────────────────────────────
-
-pub struct LoopbackDevice {
-    mac: MacAddress,
-    queue: Mutex<Vec<Vec<u8>>>,
-    dev_name: String,
-}
-
-impl LoopbackDevice {
-    pub fn new(name: &str) -> Self {
-        LoopbackDevice {
-            mac: MacAddress::new(0x02, 0x00, 0x00, 0x00, 0x00, 0x01),
-            queue: Mutex::new(Vec::new()),
-            dev_name: name.to_string(),
-        }
-    }
-
-    pub fn queue_len(&self) -> usize {
-        self.queue.lock().len()
-    }
-}
-
-impl NetworkDevice for LoopbackDevice {
-    fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError> {
-        // Loopback: Frame wird in die Empfangs-Queue gesteckt
-        self.queue.lock().push(frame.to_vec());
-        Ok(())
-    }
-
-    fn recv_frame(&self) -> Result<Vec<u8>, NetworkError> {
-        let mut queue = self.queue.lock();
-        queue.pop().ok_or(NetworkError::NoFrameAvailable)
-    }
-
-    fn mac_address(&self) -> MacAddress {
-        self.mac
-    }
-    fn name(&self) -> &str {
-        &self.dev_name
-    }
-}
-
-// ─── NetworkError ──────────────────────────────────────────────────────────
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum NetworkError {
-    FrameTooShort,
-    PacketTooShort,
-    InvalidChecksum,
-    NoFrameAvailable,
-    DeviceDown,
-    SendFailed(String),
-    RecvFailed(String),
-    ArpResolutionFailed,
-    UnsupportedProtocol,
 }
 
 // ─── NetworkStack (Höchste Ebene — verbindet Device + ARP) ──────────────────
