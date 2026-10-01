@@ -273,6 +273,10 @@ impl LoopbackDevice {
             dev_name: name.to_string(),
         }
     }
+
+    pub fn queue_len(&self) -> usize {
+        self.queue.lock().len()
+    }
 }
 
 impl NetworkDevice for LoopbackDevice {
