@@ -16,8 +16,6 @@ pub mod atcnet;
 pub mod blockchain;
 pub mod consensus;
 pub mod contract;
-pub mod blockchain;
-pub mod consensus;
 pub mod did;
 pub mod genesis;
 pub mod genesis_bridge;
