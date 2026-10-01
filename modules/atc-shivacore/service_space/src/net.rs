@@ -7,8 +7,11 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, ETH_TYPE_ARP, ETH_TYPE_IPV4};
 use spin::Mutex;
+
+use shivacore::net::{
+    EthernetFrame, Ipv4Address, MacAddress, ETH_TYPE_ARP, ETH_TYPE_IPV4,
+};
 
 // ─── ARP (Address Resolution Protocol) ──────────────────────────────────────
 
