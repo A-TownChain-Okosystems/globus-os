@@ -15,14 +15,23 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
-use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, ETH_TYPE_IPV4};
+use shivacore::net::{
+    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, ETH_TYPE_IPV4,
+};
 
 
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkError {
-    FrameTooShort, PacketTooShort, InvalidChecksum, NoFrameAvailable, DeviceDown,
-    SendFailed(String), RecvFailed(String), ArpResolutionFailed, UnsupportedProtocol,
+    FrameTooShort,
+    PacketTooShort,
+    InvalidChecksum,
+    NoFrameAvailable,
+    DeviceDown,
+    SendFailed(String),
+    RecvFailed(String),
+    ArpResolutionFailed,
+    UnsupportedProtocol,
 }
 
 #[cfg(test)]
