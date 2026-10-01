@@ -11,6 +11,7 @@ use crate::userspace::UserContext;
 use core::arch::global_asm;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
+use shivacore::user_sched::{SavedContext, UserScheduler};
 use spin::Mutex;
 use x86_64::registers::rflags::RFlags;
 use x86_64::structures::idt::{
