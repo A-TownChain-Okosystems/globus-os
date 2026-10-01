@@ -13,10 +13,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::net::{NetworkStack};
+use crate::net::NetworkStack;
 use shivacore::net::{
-    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError,
-    ETH_TYPE_IPV4,
+    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, ETH_TYPE_IPV4,
 };
 
 // ─── Protokoll-Nummern ─────────────────────────────────────────────────────
