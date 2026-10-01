@@ -247,10 +247,15 @@ pub unsafe fn map_user_binary(
     // Code is writable only during image installation. Drop W before Ring-3 entry.
     for page in Page::range_inclusive(
         Page::<Size4KiB>::containing_address(VirtAddr::new(code_base)),
-        Page::<Size4KiB>::containing_address(VirtAddr::new(code_base + code_pages * 0x1000 - 1)),
+        Page::<Size4KiB>::containing_address(VirtAddr::new(
+            code_base + code_pages * 0x1000 - 1,
+        )),
     ) {
         let flush = mapper
-            .update_flags(page, PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE)
+            .update_flags(
+                page,
+                PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+            )
             .map_err(|_| UserspaceError::InvalidAddress)?;
         flush.flush();
     }
