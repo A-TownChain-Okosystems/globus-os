@@ -15,7 +15,6 @@
 extern crate alloc;
 
 mod allocator;
-mod ats1000;
 mod framebuffer;
 mod gdt;
 mod hal;
@@ -127,7 +126,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         )
         .expect("ShivaCore: USER-001 user page mapping failed");
     }
-    let user_pid = ats1000::Pid(1000);
+    let user_pid = shivacore::ats1000::Pid(1000);
     let user_ctx = userspace::UserContext::new(user_pid, &user_binary, user_addr_space);
     serial_println!(
         "ShivaCore: USER-001 mapped PID={} RIP={:#x} RSP={:#x}",
@@ -177,7 +176,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         )
         .expect("ShivaCore: second USER-001 user page mapping failed");
     }
-    let user_pid_2 = ats1000::Pid(1001);
+    let user_pid_2 = shivacore::ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
     interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);

@@ -437,11 +437,11 @@ impl ShivaVM {
                 });
             }
             Opcode::Self_ => {
-                let h = crate::security::simple_hash(self.contract_addr.as_bytes());
+                let h = shivacore::security::simple_hash(self.contract_addr.as_bytes());
                 self.push(u64::from_be_bytes(h[..8].try_into().unwrap()))?;
             }
             Opcode::Caller => {
-                let h = crate::security::simple_hash(self.caller_did.as_bytes());
+                let h = shivacore::security::simple_hash(self.caller_did.as_bytes());
                 self.push(u64::from_be_bytes(h[..8].try_into().unwrap()))?;
             }
             Opcode::Balance => {

@@ -6,6 +6,9 @@
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
 use crate::ats1000::{ExitCode, Pid};
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use core::arch::asm;
 use x86_64::{
     structures::paging::OffsetPageTable,
@@ -176,17 +179,19 @@ pub unsafe fn map_user_binary(
             let frame = frame_allocator
                 .allocate_frame()
                 .ok_or(UserspaceError::InvalidAddress)?;
-            let flush = mapper
-                .map_to(
-                    page,
-                    frame,
-                    flags | PageTableFlags::PRESENT,
-                    frame_allocator,
-                )
-                .map_err(|_| UserspaceError::InvalidAddress)?;
+            let flush = unsafe {
+                mapper
+                    .map_to(
+                        page,
+                        frame,
+                        flags | PageTableFlags::PRESENT,
+                        frame_allocator,
+                    )
+                    .map_err(|_| UserspaceError::InvalidAddress)?
+            };
             flush.flush();
             let phys = physical_memory_offset + frame.start_address().as_u64();
-            core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize);
+            unsafe { core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, 4096usize) };
         }
         Ok(())
     }
@@ -206,7 +211,7 @@ pub unsafe fn map_user_binary(
         physical_memory_offset,
         code_base,
         code_pages * 0x1000,
-        PageTableFlags::USER_ACCESSIBLE,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
     )?;
 
     if !binary.data.is_empty() {
@@ -239,6 +244,22 @@ pub unsafe fn map_user_binary(
         binary.entry_point as *mut u8,
         binary.code.len(),
     );
+    // Code is writable only during image installation. Drop W before Ring-3 entry.
+    for page in Page::range_inclusive(
+        Page::<Size4KiB>::containing_address(VirtAddr::new(code_base)),
+        Page::<Size4KiB>::containing_address(VirtAddr::new(
+            code_base + code_pages * 0x1000 - 1,
+        )),
+    ) {
+        let flush = mapper
+            .update_flags(
+                page,
+                PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+            )
+            .map_err(|_| UserspaceError::InvalidAddress)?;
+        flush.flush();
+    }
+
     if !binary.data.is_empty() {
         core::ptr::copy_nonoverlapping(
             binary.data.as_ptr(),
@@ -258,17 +279,17 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
     debug_assert!(ctx.valid_address(ctx.rsp));
 
     asm!(
-        "push rax", // SS
-        "push rbx", // RSP
-        "push rcx", // RFLAGS
-        "push rdx", // CS
-        "push rsi", // RIP
+        "push {ss}",
+        "push {rsp}",
+        "push {rflags}",
+        "push {cs}",
+        "push {rip}",
         "iretq",
-        in("rax") ctx.ss as u64,
-        in("rbx") ctx.rsp,
-        in("rcx") ctx.rflags,
-        in("rdx") ctx.cs as u64,
-        in("rsi") ctx.rip,
+        ss = in(reg) ctx.ss as u64,
+        rsp = in(reg) ctx.rsp,
+        rflags = in(reg) ctx.rflags,
+        cs = in(reg) ctx.cs as u64,
+        rip = in(reg) ctx.rip,
         options(noreturn)
     );
 }
@@ -1050,11 +1071,12 @@ mod tests {
         // 2. Enter userspace (validate)
         let ctx = mgr.enter_userspace(pid).unwrap();
         assert!(ctx.is_user_mode());
+        let rip = ctx.rip;
         // 3. Handle syscalls
         let rsp = mgr.handle_syscall(pid, 1, &[]).unwrap();
         assert!(rsp > 0);
         // 4. Check memory
-        assert!(mgr.check_memory_access(pid, ctx.rip, 1).is_ok());
+        assert!(mgr.check_memory_access(pid, rip, 1).is_ok());
         // 5. Exit
         assert!(mgr.exit_process(pid, 0));
         assert_eq!(mgr.active_count(), 0);
