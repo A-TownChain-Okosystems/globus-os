@@ -8,6 +8,7 @@ pub enum IpcError {
     PayloadTooLarge,
     QueueFull,
     EndpointNotFound,
+    InvalidProtocolVersion,
 }
 
 #[derive(Debug)]
