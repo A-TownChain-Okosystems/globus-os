@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use alloc::{string::{String, ToString}, vec::Vec};
+use alloc::{string::{String, ToString}, vec, vec::Vec};
 use crate::ats1000::{ExitCode, Pid};
 use core::arch::asm;
 use x86_64::{
