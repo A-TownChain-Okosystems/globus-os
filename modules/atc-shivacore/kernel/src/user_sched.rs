@@ -438,7 +438,7 @@ impl UserScheduler {
 
         for entry in &mut self.entries {
             if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= *wake {
+                if self.timer_ticks >= wake {
                     entry.state = SchedState::Ready;
                     entry.wake_tick = None;
                 }
@@ -720,7 +720,7 @@ impl UserProcessSystem {
         // Normal timer tick → quantum check
         if let Some(pid) = current {
             if let Some(ctx) = self.userspace.get_context(pid) {
-                let ctx_copy = *ctx;
+                let ctx_copy = ctx.clone();
                 return self.scheduler.timer_tick(&ctx_copy);
             }
         }
