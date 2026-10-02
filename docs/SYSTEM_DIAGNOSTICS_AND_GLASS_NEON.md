@@ -99,3 +99,16 @@ cargo check --workspace --all-targets
 cargo test --workspace --all-targets
 cargo clippy --workspace --all-targets -- -D warnings
 \`\`\`
+
+## Authorized repair lifecycle
+
+Repair execution is capability-gated. Diagnostics never performs privileged work directly:
+
+1. diagnostics.propose_repair() creates a typed request.
+2. The OS policy layer evaluates RepairAuthorization against the required repair level.
+3. RepairPolicy derives the exact capability from the requested action.
+4. The injected RepairExecutor performs the privileged operation.
+5. Only an Applied result is accepted for verification.
+6. The diagnostics engine marks the problem resolved only after the verification boundary succeeds.
+
+AI services may supply diagnosis and repair proposals, but they do not receive implicit repair capabilities.
