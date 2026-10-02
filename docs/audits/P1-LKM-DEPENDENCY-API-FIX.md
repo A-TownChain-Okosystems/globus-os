@@ -2,30 +2,28 @@
 
 ## Finding
 
-`modules/atc-shivacore/kernel/src/lkm.rs` contains a placeholder `DependencyGraph::dependencies()` API whose `&[String]` return type is incompatible with the graph's `BTreeSet<String>` storage.
+The historical finding concerned a placeholder `DependencyGraph::dependencies()` API whose `&[String]` return type was incompatible with the graph's `BTreeSet<String>` storage.
 
-## Classification
+## Current source state
 
-- Class: P1
-- Category: correctness / completeness
-- Family: kernel / LKM / dependency-resolution
-- Tags: `P1`, `stub`, `kernel`, `lkm`, `correctness`, `completeness`, `api`
+At source SHA `e28a05542993a9be205a4df9bdd4f56137dbf390`, `modules/atc-shivacore/kernel/src/lkm.rs` uses the owned deterministic `dependencies()` representation and contains regression coverage for lexical ordering and missing-module behavior.
 
-## Required implementation
+The same source snapshot also contains regression coverage for the related LKM findings:
+- dependency-first topological ordering;
+- required unresolved imports failing closed without optional dependencies;
+- exports not being recorded as imports.
 
-Use the owned deterministic representation already provided by `get_dependencies()` as the canonical API. The implementation must:
+## Verification status
 
-1. return `Vec<String>` (or an equivalent lifetime-safe owned representation);
-2. preserve deterministic lexical ordering from `BTreeSet`;
-3. return an empty vector for a missing module unless the surrounding API contract explicitly requires an error;
-4. update every caller and test to the new signature;
-5. remove the placeholder comments and every `unimplemented!()` associated with this API;
-6. add regression tests for ordering, missing-module behavior, and duplicate dependency insertion;
-7. run `cargo fmt --all -- --check`;
-8. run `cargo clippy --workspace --all-targets --all-features -- -D warnings`;
-9. run `cargo test --workspace --all-features`;
-10. re-read the modified source and close GlobusOS #18 only after CI verifies the change.
+- Source implementation: **FIXED / RE-READ**
+- Regression tests: **PRESENT IN SOURCE**
+- `cargo fmt --all -- --check`: **CI VERIFICATION PENDING**
+- `cargo clippy --workspace --all-targets --all-features -- -D warnings`: **CI VERIFICATION PENDING**
+- `cargo test --workspace --all-features`: **CI VERIFICATION PENDING**
+- GitHub Actions evidence for source SHA: **PENDING**
 
-## Verification rule
+This document records the current implementation state; it does not claim CI closure until a workflow run is associated with the exact source SHA.
 
-This document is a repair specification, not evidence that the repair has already been applied. The finding remains OPEN until the source and CI prove otherwise.
+## Closure rule
+
+Issue #18 must remain open until current GitHub Actions evidence verifies the exact source SHA. Historical audit text is not used as verification evidence.
