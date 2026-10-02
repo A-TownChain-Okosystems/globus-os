@@ -1,13 +1,17 @@
-//! Stable, machine-readable system fault reporting shared by ShivaCore and GlobusOS.
+//! GlobusOS System Diagnostics & Recovery Service (GSDS).
+//!
+//! This crate defines the deterministic, machine-readable diagnostics contract.
+//! Hardware probes and repair executors remain outside this crate and must be
+//! injected through explicit traits/capability boundaries.
 
 #![no_std]
 
 extern crate alloc;
 
-use alloc::string::String;
-use alloc::vec::Vec;
+use alloc::{string::String, vec::Vec};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Problem severity used by the diagnostics UI and policy engine.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(u8)]
 pub enum Severity {
     Info = 0,
@@ -16,106 +20,289 @@ pub enum Severity {
     Critical = 3,
 }
 
+/// System area associated with a diagnostic.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-#[repr(u16)]
-pub enum ErrorCode {
-    DriverCrashed = 0x0007,
-    DriverIsolated = 0x0008,
-    DriverRecoveryFailed = 0x0009,
-}
-
-impl ErrorCode {
-    pub const fn as_str(self) -> &'static str {
-        match self {
-            Self::DriverCrashed => "SC-DRV-0007",
-            Self::DriverIsolated => "SC-DRV-0008",
-            Self::DriverRecoveryFailed => "SC-DRV-0009",
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Component {
-    Kernel,
+pub enum Domain {
+    Hardware,
     Driver,
-    Device,
-    Service,
+    Kernel,
+    Memory,
+    Storage,
+    Network,
+    User,
+    Application,
+    Update,
+    Security,
+    AiService,
+    Blockchain,
 }
 
+/// Allowed repair authorization level.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+#[repr(u8)]
+pub enum RepairLevel {
+    Information = 0,
+    AutomaticSafeFix = 1,
+    UserConfirmation = 2,
+    AdministratorConfirmation = 3,
+    RecoveryEnvironment = 4,
+    EmergencyRecovery = 5,
+}
+
+/// Health state for one subsystem.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HealthState {
+    Healthy,
+    Degraded,
+    Faulted,
+    Unknown,
+}
+
+/// A normalized system health entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct HealthEntry {
+    pub domain: Domain,
+    pub state: HealthState,
+    pub score: u8,
+}
+
+impl HealthEntry {
+    pub const fn new(domain: Domain, state: HealthState, score: u8) -> Self {
+        Self { domain, state, score: if score > 100 { 100 } else { score } }
+    }
+}
+
+/// Aggregate health snapshot.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct CrashEvent {
-    pub sequence: u64,
-    pub code: ErrorCode,
+pub struct HealthSnapshot {
+    pub overall: u8,
+    pub entries: Vec<HealthEntry>,
+}
+
+impl HealthSnapshot {
+    pub fn from_entries(entries: Vec<HealthEntry>) -> Self {
+        if entries.is_empty() {
+            return Self { overall: 0, entries };
+        }
+        let total: u32 = entries.iter().map(|entry| u32::from(entry.score)).sum();
+        Self { overall: (total / entries.len() as u32) as u8, entries }
+    }
+
+    pub fn state(&self) -> HealthState {
+        if self.entries.iter().any(|e| e.state == HealthState::Faulted) {
+            return HealthState::Faulted;
+        }
+        if self.entries.iter().any(|e| e.state == HealthState::Degraded) {
+            return HealthState::Degraded;
+        }
+        if self.entries.is_empty() { HealthState::Unknown } else { HealthState::Healthy }
+    }
+}
+
+/// A detected problem with a stable identifier.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Problem {
+    pub id: u64,
+    pub code: String,
+    pub domain: Domain,
     pub severity: Severity,
-    pub component: Component,
-    pub driver: String,
-    pub device_id: u64,
+    pub title: String,
+    pub detail: String,
+    pub repair_level: RepairLevel,
+    pub resolved: bool,
+}
+
+impl Problem {
+    pub fn new(
+        id: u64,
+        code: impl Into<String>,
+        domain: Domain,
+        severity: Severity,
+        title: impl Into<String>,
+        detail: impl Into<String>,
+        repair_level: RepairLevel,
+    ) -> Self {
+        Self {
+            id, code: code.into(), domain, severity, title: title.into(),
+            detail: detail.into(), repair_level, resolved: false,
+        }
+    }
+}
+
+/// Explicit repair actions. Execution belongs to a capability-authorized service.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum RepairAction {
+    RestartService { service: String },
+    RestartApplication { application: String },
+    RollbackUpdate { update_id: String },
+    RestoreConfiguration { snapshot_id: String },
+    RestoreSnapshot { snapshot_id: String },
+    EnterSafeMode,
+    RecoverDriver { driver: String },
+    RepairFilesystem { volume: String },
+    FullSystemRecovery,
+}
+
+/// A repair request. Execution is deliberately separate from diagnosis.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RepairRequest {
+    pub problem_id: u64,
+    pub action: RepairAction,
+    pub required_level: RepairLevel,
+    pub user_approved: bool,
+}
+
+/// Result returned by a repair executor.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RepairResult {
+    Applied,
+    RejectedByPolicy,
+    NotSupported,
+    Failed,
+    VerificationFailed,
+}
+
+/// Crash classification used by Crash Center.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CrashKind {
+    Application,
+    Service,
+    Driver,
+    KernelPanic,
+    GpuTimeout,
+    Hardware,
+}
+
+/// Machine-readable crash evidence.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CrashReport {
+    pub id: u64,
+    pub kind: CrashKind,
     pub timestamp_ns: u64,
-    pub recovered: bool,
+    pub component: String,
+    pub process: Option<String>,
+    pub thread: Option<String>,
+    pub stack_trace: String,
+    pub kernel_version: String,
+    pub driver_version: Option<String>,
+    pub hardware: String,
+    pub recent_changes: Vec<String>,
+    pub logs: Vec<String>,
 }
 
-impl CrashEvent {
-    pub fn driver_crash(sequence: u64, driver: &str, device_id: u64, timestamp_ns: u64) -> Self {
+/// Deterministic, bounded diagnostics state.
+#[derive(Debug)]
+pub struct DiagnosticsEngine {
+    next_problem_id: u64,
+    next_crash_id: u64,
+    problems: Vec<Problem>,
+    crashes: Vec<CrashReport>,
+    health: HealthSnapshot,
+}
+
+impl DiagnosticsEngine {
+    pub const MAX_PROBLEMS: usize = 256;
+    pub const MAX_CRASHES: usize = 64;
+
+    pub fn new() -> Self {
         Self {
-            sequence,
-            code: ErrorCode::DriverCrashed,
-            severity: Severity::Critical,
-            component: Component::Driver,
-            driver: String::from(driver),
-            device_id,
-            timestamp_ns,
-            recovered: false,
+            next_problem_id: 1, next_crash_id: 1,
+            problems: Vec::new(), crashes: Vec::new(),
+            health: HealthSnapshot::from_entries(Vec::new()),
         }
     }
-}
 
-#[derive(Debug, Default)]
-pub struct EventLog {
-    next_sequence: u64,
-    events: Vec<CrashEvent>,
-}
-
-impl EventLog {
-    pub const MAX_EVENTS: usize = 256;
-
-    pub const fn new() -> Self {
-        Self {
-            next_sequence: 1,
-            events: Vec::new(),
-        }
+    /// Runs a supplied set of deterministic observations.
+    pub fn scan(&mut self, entries: Vec<HealthEntry>) -> &HealthSnapshot {
+        self.health = HealthSnapshot::from_entries(entries);
+        &self.health
     }
 
-    pub fn record_driver_crash(&mut self, driver: &str, device_id: u64, timestamp_ns: u64) -> u64 {
-        let sequence = self.next_sequence;
-        self.next_sequence = self.next_sequence.saturating_add(1);
-        if self.events.len() == Self::MAX_EVENTS {
-            self.events.remove(0);
-        }
-        self.events.push(CrashEvent::driver_crash(
-            sequence,
-            driver,
-            device_id,
-            timestamp_ns,
+    pub fn health(&self) -> &HealthSnapshot { &self.health }
+    pub fn problems(&self) -> &[Problem] { &self.problems }
+    pub fn crashes(&self) -> &[CrashReport] { &self.crashes }
+
+    pub fn add_problem(
+        &mut self,
+        code: impl Into<String>,
+        domain: Domain,
+        severity: Severity,
+        title: impl Into<String>,
+        detail: impl Into<String>,
+        repair_level: RepairLevel,
+    ) -> u64 {
+        let id = self.next_problem_id;
+        self.next_problem_id = self.next_problem_id.saturating_add(1);
+        if self.problems.len() == Self::MAX_PROBLEMS { self.problems.remove(0); }
+        self.problems.push(Problem::new(
+            id, code, domain, severity, title, detail, repair_level,
         ));
-        sequence
+        id
     }
 
-    pub fn mark_recovered(&mut self, sequence: u64) -> bool {
-        let Some(event) = self.events.iter_mut().find(|e| e.sequence == sequence) else {
-            return false;
-        };
-        event.recovered = true;
-        event.code = ErrorCode::DriverIsolated;
-        event.severity = Severity::Error;
-        true
+    pub fn explain(&self, problem_id: u64) -> Option<&Problem> {
+        self.problems.iter().find(|problem| problem.id == problem_id)
     }
 
-    pub fn events(&self) -> &[CrashEvent] {
-        &self.events
+    pub fn propose_repair(&self, problem_id: u64, action: RepairAction) -> Option<RepairRequest> {
+        let problem = self.explain(problem_id)?;
+        Some(RepairRequest {
+            problem_id,
+            action,
+            required_level: problem.repair_level,
+            user_approved: false,
+        })
     }
-    pub fn latest(&self) -> Option<&CrashEvent> {
-        self.events.last()
+
+    /// Marks a problem resolved only after an external executor verifies it.
+    pub fn verify_repair(&mut self, problem_id: u64, result: RepairResult) -> bool {
+        if result != RepairResult::Applied { return false; }
+        if let Some(problem) = self.problems.iter_mut().find(|p| p.id == problem_id) {
+            problem.resolved = true;
+            true
+        } else { false }
     }
+
+    pub fn add_crash(
+        &mut self,
+        kind: CrashKind,
+        timestamp_ns: u64,
+        component: impl Into<String>,
+        stack_trace: impl Into<String>,
+        kernel_version: impl Into<String>,
+        hardware: impl Into<String>,
+    ) -> u64 {
+        let id = self.next_crash_id;
+        self.next_crash_id = self.next_crash_id.saturating_add(1);
+        if self.crashes.len() == Self::MAX_CRASHES { self.crashes.remove(0); }
+        self.crashes.push(CrashReport {
+            id, kind, timestamp_ns, component: component.into(),
+            process: None, thread: None, stack_trace: stack_trace.into(),
+            kernel_version: kernel_version.into(), driver_version: None,
+            hardware: hardware.into(), recent_changes: Vec::new(), logs: Vec::new(),
+        });
+        id
+    }
+
+    /// Generates a compact deterministic local report.
+    pub fn report(&self) -> String {
+        use core::fmt::Write;
+        let mut report = String::new();
+        let _ = writeln!(report, "GLOBUS SYSTEM HEALTH {}", self.health.overall);
+        let _ = writeln!(report, "PROBLEMS {}", self.problems.len());
+        let _ = writeln!(report, "CRASHES {}", self.crashes.len());
+        for problem in &self.problems {
+            let _ = writeln!(
+                report, "PROBLEM {} {} {:?} {:?} resolved={}",
+                problem.id, problem.code, problem.domain, problem.severity, problem.resolved
+            );
+        }
+        report
+    }
+}
+
+impl Default for DiagnosticsEngine {
+    fn default() -> Self { Self::new() }
 }
 
 #[cfg(test)]
@@ -123,23 +310,44 @@ mod tests {
     use super::*;
 
     #[test]
-    fn driver_crash_has_stable_code() {
-        let mut log = EventLog::new();
-        let seq = log.record_driver_crash("e1000", 42, 100);
-        assert_eq!(seq, 1);
-        let event = log.latest().unwrap();
-        assert_eq!(event.code.as_str(), "SC-DRV-0007");
-        assert_eq!(event.driver, "e1000");
-        assert!(!event.recovered);
+    fn health_is_deterministic() {
+        let mut engine = DiagnosticsEngine::new();
+        let snapshot = engine.scan(vec![
+            HealthEntry::new(Domain::Hardware, HealthState::Healthy, 100),
+            HealthEntry::new(Domain::Storage, HealthState::Degraded, 60),
+        ]);
+        assert_eq!(snapshot.overall, 80);
+        assert_eq!(snapshot.state(), HealthState::Degraded);
     }
 
     #[test]
-    fn recovery_changes_event_state() {
-        let mut log = EventLog::new();
-        let seq = log.record_driver_crash("nvme", 7, 100);
-        assert!(log.mark_recovered(seq));
-        let event = log.latest().unwrap();
-        assert_eq!(event.code, ErrorCode::DriverIsolated);
-        assert!(event.recovered);
+    fn repair_requires_external_verification() {
+        let mut engine = DiagnosticsEngine::new();
+        let id = engine.add_problem(
+            "NET-0001", Domain::Network, Severity::Error,
+            "Network service stopped",
+            "Network hardware and configuration are available.",
+            RepairLevel::UserConfirmation,
+        );
+        let request = engine.propose_repair(
+            id,
+            RepairAction::RestartService { service: "globus-network".into() },
+        ).unwrap();
+        assert!(!request.user_approved);
+        assert!(!engine.problems()[0].resolved);
+        assert!(engine.verify_repair(id, RepairResult::Applied));
+        assert!(engine.problems()[0].resolved);
+    }
+
+    #[test]
+    fn problem_history_is_bounded() {
+        let mut engine = DiagnosticsEngine::new();
+        for _ in 0..=DiagnosticsEngine::MAX_PROBLEMS {
+            engine.add_problem(
+                "TEST", Domain::Application, Severity::Info,
+                "test", "test", RepairLevel::Information,
+            );
+        }
+        assert_eq!(engine.problems().len(), DiagnosticsEngine::MAX_PROBLEMS);
     }
 }
