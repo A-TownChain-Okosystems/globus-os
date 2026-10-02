@@ -8,6 +8,10 @@
 
 extern crate alloc;
 
+pub mod executor;
+
+pub use executor::{Capability, RepairAuthorization, RepairExecutor, RepairPolicy, RepairReceipt};
+
 use alloc::{string::String, vec::Vec};
 
 /// Problem severity used by the diagnostics UI and policy engine.
