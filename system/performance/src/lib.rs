@@ -204,8 +204,7 @@ pub const fn compare(baseline: u64, current: u64, threshold_pct: u8) -> Regressi
         };
     }
 
-    let delta_pct =
-        ((current as i128 - baseline as i128) * 100 / baseline as i128) as i16;
+    let delta_pct = ((current as i128 - baseline as i128) * 100 / baseline as i128) as i16;
 
     Regression {
         baseline,
@@ -319,9 +318,6 @@ mod tests {
     #[test]
     fn profile_policies_are_stable() {
         assert_eq!(profile_policy(Profile::Battery).max_power_mw, 15_000);
-        assert_eq!(
-            profile_policy(Profile::Gaming).target_latency_ns,
-            5_000_000
-        );
+        assert_eq!(profile_policy(Profile::Gaming).target_latency_ns, 5_000_000);
     }
 }
