@@ -1,9 +1,15 @@
 //! Capability-aware IPC primitives used by GlobusOS.
 
+#![no_std]
+
+extern crate alloc;
+
+use alloc::{string::String, vec::Vec};
+
 pub mod channel;
 pub use channel::{ChannelRegistry, IpcError};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Endpoint(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -147,6 +153,12 @@ pub fn validate_payload(payload: &[u8]) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn endpoint_ordering_is_stable_for_deterministic_ipc_maps() {
+        assert!(Endpoint(1) < Endpoint(2));
+        assert_eq!(Endpoint(7).cmp(&Endpoint(7)), core::cmp::Ordering::Equal);
+    }
+
     #[test]
     fn opcode_values_are_stable() {
         assert_eq!(IdentityOpcode::Register.as_u32(), 0x0900);

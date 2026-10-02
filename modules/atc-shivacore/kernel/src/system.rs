@@ -8,7 +8,7 @@
 use crate::ats1000::{ExitCode, Pid};
 use alloc::collections::BTreeMap;
 use alloc::string::{String, ToString};
-use alloc::vec::Vec;
+use alloc::{format, vec, vec::Vec};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Boot Phases
