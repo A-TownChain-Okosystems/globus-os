@@ -11,6 +11,7 @@ extern crate alloc;
 pub mod executor;
 pub mod evidence;
 
+pub use evidence::{EvidenceLedger, EvidenceRecord, EvidenceStage};
 pub use executor::{Capability, RepairAuthorization, RepairExecutor, RepairPolicy, RepairReceipt};
 
 use alloc::{string::String, vec::Vec};
@@ -229,6 +230,7 @@ pub struct CrashReport {
 /// Deterministic, bounded diagnostics state.
 #[derive(Debug)]
 pub struct DiagnosticsEngine {
+    evidence: EvidenceLedger,
     next_problem_id: u64,
     next_crash_id: u64,
     problems: Vec<Problem>,
@@ -242,6 +244,7 @@ impl DiagnosticsEngine {
 
     pub fn new() -> Self {
         Self {
+            evidence: EvidenceLedger::new(),
             next_problem_id: 1,
             next_crash_id: 1,
             problems: Vec::new(),
@@ -258,6 +261,10 @@ impl DiagnosticsEngine {
 
     pub fn health(&self) -> &HealthSnapshot {
         &self.health
+    }
+
+    pub fn evidence(&self) -> &[EvidenceRecord] {
+        self.evidence.records()
     }
 
     pub fn problems(&self) -> &[Problem] {
