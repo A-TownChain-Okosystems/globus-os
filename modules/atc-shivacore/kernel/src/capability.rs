@@ -38,13 +38,14 @@ impl Rights {
     pub const WRITE: Rights = Rights(2);
     pub const EXEC: Rights = Rights(4);
     pub const DELEGATE: Rights = Rights(8);
-    pub const ALL: Rights = Rights(1 | 2 | 4 | 8);
+    pub const INSPECT: Rights = Rights(16);
+    pub const ALL: Rights = Rights(1 | 2 | 4 | 8 | 16);
 
     pub fn has(self, other: Rights) -> bool {
         (self.0 & other.0) == other.0
     }
     pub fn from_bits_truncate(bits: u8) -> Rights {
-        Rights(bits & 0x0F)
+        Rights(bits & 0x1F)
     }
     pub fn bits(self) -> u8 {
         self.0
