@@ -1,9 +1,13 @@
 //! Capability-aware IPC primitives used by GlobusOS.
 
+extern crate alloc;
+
+use alloc::{string::String, vec::Vec};
+
 pub mod channel;
 pub use channel::{ChannelRegistry, IpcError};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct Endpoint(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -51,9 +55,7 @@ pub enum IdentityOpcode {
     LoadKey = 0x0905,
 }
 impl IdentityOpcode {
-    pub const fn as_u32(self) -> u32 {
-        self as u32
-    }
+    pub const fn as_u32(self) -> u32 { self as u32 }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -114,9 +116,7 @@ pub enum WalletOpcode {
     Delete = 0x1004,
 }
 impl WalletOpcode {
-    pub const fn as_u32(self) -> u32 {
-        self as u32
-    }
+    pub const fn as_u32(self) -> u32 { self as u32 }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WalletIdentityMessage {
@@ -140,9 +140,7 @@ pub struct WalletSignResponse {
 }
 
 pub const MAX_IPC_PAYLOAD: usize = 1024 * 1024;
-pub fn validate_payload(payload: &[u8]) -> bool {
-    payload.len() <= MAX_IPC_PAYLOAD
-}
+pub fn validate_payload(payload: &[u8]) -> bool { payload.len() <= MAX_IPC_PAYLOAD }
 
 #[cfg(test)]
 mod tests {
@@ -155,10 +153,7 @@ mod tests {
     }
     #[test]
     fn key_request_contains_only_opaque_handles() {
-        let r = IdentityKeyLoadRequest {
-            key_handle: IdentityKeyHandle(7),
-            capability_token: 9,
-        };
+        let r = IdentityKeyLoadRequest { key_handle: IdentityKeyHandle(7), capability_token: 9 };
         assert_eq!(r.key_handle, IdentityKeyHandle(7));
         assert_eq!(r.capability_token, 9);
     }
@@ -185,9 +180,6 @@ mod tests {
     }
     #[test]
     fn authentication_handle_debug_is_redacted() {
-        assert_eq!(
-            format!("{:?}", AuthenticationHandle(42)),
-            "AuthenticationHandle(REDACTED)"
-        );
+        assert_eq!(format!("{:?}", AuthenticationHandle(42)), "AuthenticationHandle(REDACTED)");
     }
 }
