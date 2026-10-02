@@ -7,6 +7,7 @@ on:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
       - "Cargo.toml"
+      - "system/ipc/**"
       - ".github/workflows/shivacore-kernel.yml"
       - ".github/scripts/boot-blocker.sh"
       - "docs/BOOT_BLOCKER.md"
@@ -40,7 +41,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
