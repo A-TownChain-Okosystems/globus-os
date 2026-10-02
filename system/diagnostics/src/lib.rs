@@ -68,7 +68,11 @@ pub struct HealthEntry {
 
 impl HealthEntry {
     pub const fn new(domain: Domain, state: HealthState, score: u8) -> Self {
-        Self { domain, state, score: if score > 100 { 100 } else { score } }
+        Self {
+            domain,
+            state,
+            score: if score > 100 { 100 } else { score },
+        }
     }
 }
 
@@ -82,20 +86,41 @@ pub struct HealthSnapshot {
 impl HealthSnapshot {
     pub fn from_entries(entries: Vec<HealthEntry>) -> Self {
         if entries.is_empty() {
-            return Self { overall: 0, entries };
+            return Self {
+                overall: 0,
+                entries,
+            };
         }
-        let total: u32 = entries.iter().map(|entry| u32::from(entry.score)).sum();
-        Self { overall: (total / entries.len() as u32) as u8, entries }
+        let total: u32 = entries
+            .iter()
+            .map(|entry| u32::from(entry.score))
+            .sum();
+        Self {
+            overall: (total / entries.len() as u32) as u8,
+            entries,
+        }
     }
 
     pub fn state(&self) -> HealthState {
-        if self.entries.iter().any(|e| e.state == HealthState::Faulted) {
+        if self
+            .entries
+            .iter()
+            .any(|e| e.state == HealthState::Faulted)
+        {
             return HealthState::Faulted;
         }
-        if self.entries.iter().any(|e| e.state == HealthState::Degraded) {
+        if self
+            .entries
+            .iter()
+            .any(|e| e.state == HealthState::Degraded)
+        {
             return HealthState::Degraded;
         }
-        if self.entries.is_empty() { HealthState::Unknown } else { HealthState::Healthy }
+        if self.entries.is_empty() {
+            HealthState::Unknown
+        } else {
+            HealthState::Healthy
+        }
     }
 }
 
@@ -123,8 +148,14 @@ impl Problem {
         repair_level: RepairLevel,
     ) -> Self {
         Self {
-            id, code: code.into(), domain, severity, title: title.into(),
-            detail: detail.into(), repair_level, resolved: false,
+            id,
+            code: code.into(),
+            domain,
+            severity,
+            title: title.into(),
+            detail: detail.into(),
+            repair_level,
+            resolved: false,
         }
     }
 }
@@ -206,8 +237,10 @@ impl DiagnosticsEngine {
 
     pub fn new() -> Self {
         Self {
-            next_problem_id: 1, next_crash_id: 1,
-            problems: Vec::new(), crashes: Vec::new(),
+            next_problem_id: 1,
+            next_crash_id: 1,
+            problems: Vec::new(),
+            crashes: Vec::new(),
             health: HealthSnapshot::from_entries(Vec::new()),
         }
     }
@@ -218,9 +251,17 @@ impl DiagnosticsEngine {
         &self.health
     }
 
-    pub fn health(&self) -> &HealthSnapshot { &self.health }
-    pub fn problems(&self) -> &[Problem] { &self.problems }
-    pub fn crashes(&self) -> &[CrashReport] { &self.crashes }
+    pub fn health(&self) -> &HealthSnapshot {
+        &self.health
+    }
+
+    pub fn problems(&self) -> &[Problem] {
+        &self.problems
+    }
+
+    pub fn crashes(&self) -> &[CrashReport] {
+        &self.crashes
+    }
 
     pub fn add_problem(
         &mut self,
@@ -233,18 +274,32 @@ impl DiagnosticsEngine {
     ) -> u64 {
         let id = self.next_problem_id;
         self.next_problem_id = self.next_problem_id.saturating_add(1);
-        if self.problems.len() == Self::MAX_PROBLEMS { self.problems.remove(0); }
+        if self.problems.len() == Self::MAX_PROBLEMS {
+            self.problems.remove(0);
+        }
         self.problems.push(Problem::new(
-            id, code, domain, severity, title, detail, repair_level,
+            id,
+            code,
+            domain,
+            severity,
+            title,
+            detail,
+            repair_level,
         ));
         id
     }
 
     pub fn explain(&self, problem_id: u64) -> Option<&Problem> {
-        self.problems.iter().find(|problem| problem.id == problem_id)
+        self.problems
+            .iter()
+            .find(|problem| problem.id == problem_id)
     }
 
-    pub fn propose_repair(&self, problem_id: u64, action: RepairAction) -> Option<RepairRequest> {
+    pub fn propose_repair(
+        &self,
+        problem_id: u64,
+        action: RepairAction,
+    ) -> Option<RepairRequest> {
         let problem = self.explain(problem_id)?;
         Some(RepairRequest {
             problem_id,
@@ -256,11 +311,15 @@ impl DiagnosticsEngine {
 
     /// Marks a problem resolved only after an external executor verifies it.
     pub fn verify_repair(&mut self, problem_id: u64, result: RepairResult) -> bool {
-        if result != RepairResult::Applied { return false; }
+        if result != RepairResult::Applied {
+            return false;
+        }
         if let Some(problem) = self.problems.iter_mut().find(|p| p.id == problem_id) {
             problem.resolved = true;
             true
-        } else { false }
+        } else {
+            false
+        }
     }
 
     pub fn add_crash(
@@ -274,12 +333,22 @@ impl DiagnosticsEngine {
     ) -> u64 {
         let id = self.next_crash_id;
         self.next_crash_id = self.next_crash_id.saturating_add(1);
-        if self.crashes.len() == Self::MAX_CRASHES { self.crashes.remove(0); }
+        if self.crashes.len() == Self::MAX_CRASHES {
+            self.crashes.remove(0);
+        }
         self.crashes.push(CrashReport {
-            id, kind, timestamp_ns, component: component.into(),
-            process: None, thread: None, stack_trace: stack_trace.into(),
-            kernel_version: kernel_version.into(), driver_version: None,
-            hardware: hardware.into(), recent_changes: Vec::new(), logs: Vec::new(),
+            id,
+            kind,
+            timestamp_ns,
+            component: component.into(),
+            process: None,
+            thread: None,
+            stack_trace: stack_trace.into(),
+            kernel_version: kernel_version.into(),
+            driver_version: None,
+            hardware: hardware.into(),
+            recent_changes: Vec::new(),
+            logs: Vec::new(),
         });
         id
     }
@@ -293,7 +362,8 @@ impl DiagnosticsEngine {
         let _ = writeln!(report, "CRASHES {}", self.crashes.len());
         for problem in &self.problems {
             let _ = writeln!(
-                report, "PROBLEM {} {} {:?} {:?} resolved={}",
+                report,
+                "PROBLEM {} {} {:?} {:?} resolved={}",
                 problem.id, problem.code, problem.domain, problem.severity, problem.resolved
             );
         }
@@ -302,7 +372,9 @@ impl DiagnosticsEngine {
 }
 
 impl Default for DiagnosticsEngine {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 #[cfg(test)]
@@ -324,15 +396,21 @@ mod tests {
     fn repair_requires_external_verification() {
         let mut engine = DiagnosticsEngine::new();
         let id = engine.add_problem(
-            "NET-0001", Domain::Network, Severity::Error,
+            "NET-0001",
+            Domain::Network,
+            Severity::Error,
             "Network service stopped",
             "Network hardware and configuration are available.",
             RepairLevel::UserConfirmation,
         );
-        let request = engine.propose_repair(
-            id,
-            RepairAction::RestartService { service: "globus-network".into() },
-        ).unwrap();
+        let request = engine
+            .propose_repair(
+                id,
+                RepairAction::RestartService {
+                    service: "globus-network".into(),
+                },
+            )
+            .unwrap();
         assert!(!request.user_approved);
         assert!(!engine.problems()[0].resolved);
         assert!(engine.verify_repair(id, RepairResult::Applied));
@@ -344,8 +422,12 @@ mod tests {
         let mut engine = DiagnosticsEngine::new();
         for _ in 0..=DiagnosticsEngine::MAX_PROBLEMS {
             engine.add_problem(
-                "TEST", Domain::Application, Severity::Info,
-                "test", "test", RepairLevel::Information,
+                "TEST",
+                Domain::Application,
+                Severity::Info,
+                "test",
+                "test",
+                RepairLevel::Information,
             );
         }
         assert_eq!(engine.problems().len(), DiagnosticsEngine::MAX_PROBLEMS);
