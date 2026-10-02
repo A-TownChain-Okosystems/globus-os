@@ -95,9 +95,6 @@ mod tests {
         let e = Endpoint(2);
         r.register(e);
         r.send(Message::new(e, 1, vec![])).unwrap();
-        assert_eq!(
-            r.send(Message::new(e, 2, vec![])),
-            Err(IpcError::QueueFull)
-        );
+        assert_eq!(r.send(Message::new(e, 2, vec![])), Err(IpcError::QueueFull));
     }
 }
