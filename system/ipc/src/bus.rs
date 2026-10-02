@@ -124,6 +124,7 @@ impl IpcBus {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
     use super::*;
 
     fn policy() -> EndpointPolicy {
