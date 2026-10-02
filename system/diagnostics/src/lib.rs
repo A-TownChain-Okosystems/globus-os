@@ -464,6 +464,53 @@ mod tests {
     }
 
     #[test]
+    fn repair_pipeline_requires_policy_then_verification() {
+        struct Executor;
+        impl crate::executor::RepairExecutor for Executor {
+            fn execute(
+                &mut self,
+                _capability: crate::executor::Capability,
+                _action: &RepairAction,
+            ) -> RepairResult {
+                RepairResult::Applied
+            }
+        }
+
+        let mut engine = DiagnosticsEngine::new();
+        let id = engine.add_problem(
+            "APP-0001",
+            Domain::Application,
+            Severity::Error,
+            "Application stopped",
+            "The process exited unexpectedly.",
+            RepairLevel::UserConfirmation,
+        );
+        let request = engine
+            .propose_repair(
+                id,
+                RepairAction::RestartApplication {
+                    application: "shell".into(),
+                },
+            )
+            .unwrap();
+        let mut executor = Executor;
+        let denied = engine.repair(
+            &request,
+            &crate::executor::RepairAuthorization::new(RepairLevel::UserConfirmation),
+            &mut executor,
+        );
+        assert_eq!(denied.result, RepairResult::RejectedByPolicy);
+        assert!(!engine.problems()[0].resolved);
+
+        let mut authorization =
+            crate::executor::RepairAuthorization::new(RepairLevel::UserConfirmation);
+        authorization.user_approved = true;
+        let applied = engine.repair(&request, &authorization, &mut executor);
+        assert_eq!(applied.result, RepairResult::Applied);
+        assert!(engine.problems()[0].resolved);
+    }
+
+    #[test]
     fn problem_history_is_bounded() {
         let mut engine = DiagnosticsEngine::new();
         for _ in 0..=DiagnosticsEngine::MAX_PROBLEMS {
