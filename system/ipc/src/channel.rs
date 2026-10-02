@@ -1,6 +1,7 @@
 //! Bounded deterministic IPC channels.
-use crate::{Endpoint, MAX_IPC_PAYLOAD, Message, validate_payload};
-use std::collections::{HashMap, VecDeque};
+use alloc::collections::{HashMap, VecDeque};
+
+use crate::{validate_payload, Endpoint, Message, MAX_IPC_PAYLOAD};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {
