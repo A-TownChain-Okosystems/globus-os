@@ -313,6 +313,48 @@ impl DiagnosticsEngine {
         })
     }
 
+    /// Executes an authorized repair through the injected executor and verifies the result.
+    pub fn repair<E: crate::executor::RepairExecutor>(
+        &mut self,
+        request: &crate::executor::RepairRequest,
+        authorization: &crate::executor::RepairAuthorization,
+        executor: &mut E,
+    ) -> crate::executor::RepairReceipt {
+        let capability = match crate::executor::RepairPolicy::authorize(request, authorization) {
+            Ok(capability) => capability,
+            Err(result) => {
+                return crate::executor::RepairReceipt {
+                    problem_id: request.problem_id,
+                    capability: crate::executor::Capability::ObserveDiagnostics,
+                    result,
+                };
+            }
+        };
+        if self.explain(request.problem_id).is_none() {
+            return crate::executor::RepairReceipt {
+                problem_id: request.problem_id,
+                capability,
+                result: crate::executor::RepairResult::Failed,
+            };
+        }
+        let result = executor.execute(capability, &request.action);
+        if result == crate::executor::RepairResult::Applied {
+            let verified = self.verify_repair(request.problem_id, result);
+            if !verified {
+                return crate::executor::RepairReceipt {
+                    problem_id: request.problem_id,
+                    capability,
+                    result: crate::executor::RepairResult::VerificationFailed,
+                };
+            }
+        }
+        crate::executor::RepairReceipt {
+            problem_id: request.problem_id,
+            capability,
+            result,
+        }
+    }
+
     /// Marks a problem resolved only after an external executor verifies it.
     pub fn verify_repair(&mut self, problem_id: u64, result: RepairResult) -> bool {
         if result != RepairResult::Applied {
