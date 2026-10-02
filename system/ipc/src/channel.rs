@@ -59,8 +59,9 @@ impl ChannelRegistry {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
     use super::*;
+    use alloc::vec;
+
     #[test]
     fn fifo_is_deterministic() {
         let mut r = ChannelRegistry::new(2);
@@ -71,6 +72,7 @@ mod tests {
         assert_eq!(r.receive(e).unwrap().unwrap().header.opcode, 1);
         assert_eq!(r.receive(e).unwrap().unwrap().header.opcode, 2);
     }
+
     #[test]
     fn invalid_message_metadata_is_rejected() {
         let mut r = ChannelRegistry::new(1);
@@ -93,6 +95,9 @@ mod tests {
         let e = Endpoint(2);
         r.register(e);
         r.send(Message::new(e, 1, vec![])).unwrap();
-        assert_eq!(r.send(Message::new(e, 2, vec![])), Err(IpcError::QueueFull));
+        assert_eq!(
+            r.send(Message::new(e, 2, vec![])),
+            Err(IpcError::QueueFull)
+        );
     }
 }
