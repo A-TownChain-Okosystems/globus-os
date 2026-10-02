@@ -38,6 +38,7 @@ pub enum IpcBusError {
     EndpointAlreadyRegistered,
     EndpointNotRegistered,
     Unauthorized(IpcOperation),
+    ProtocolVersionMismatch,
     Channel(IpcError),
 }
 
@@ -100,7 +101,7 @@ impl IpcBus {
             return Err(IpcBusError::Unauthorized(IpcOperation::Send));
         }
         if message.header.protocol_version != self.protocol_version {
-            return Err(IpcBusError::Unauthorized(IpcOperation::Send));
+            return Err(IpcBusError::ProtocolVersionMismatch);
         }
         message.validate()?;
         self.channels.send(message)?;
