@@ -1,8 +1,8 @@
-//! Capability-aware IPC primitives used by GlobusOS.
+#![no_std]\n\nextern crate alloc;\n\nuse alloc::{string::String, vec::Vec};\n\n//! Capability-aware IPC primitives used by GlobusOS.
 
 pub mod bus;
 pub mod channel;
-pub use bus::{EndpointPolicy, IpcAccess, IpcBus, IpcBusError, IpcCapability, IpcOperation, IpcPrincipal};
+pub use bus::{\n    EndpointPolicy, IpcAccess, IpcBus, IpcBusError, IpcCapability, IpcOperation, IpcPrincipal,\n};
 pub use channel::{ChannelRegistry, IpcError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -28,7 +28,7 @@ impl Message {
         Self::with_protocol(endpoint, 1, opcode, payload)
     }
 
-    pub fn with_protocol(endpoint: Endpoint, protocol_version: u16, opcode: u32, payload: Vec<u8>) -> Self {
+    pub fn with_protocol(\n        endpoint: Endpoint,\n        protocol_version: u16,\n        opcode: u32,\n        payload: Vec<u8>,\n    ) -> Self {
         Self {
             header: MessageHeader {
                 endpoint,
