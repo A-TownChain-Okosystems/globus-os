@@ -9,6 +9,7 @@
 extern crate alloc;
 
 pub mod executor;
+pub mod evidence;
 
 pub use executor::{Capability, RepairAuthorization, RepairExecutor, RepairPolicy, RepairReceipt};
 
