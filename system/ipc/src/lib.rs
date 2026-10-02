@@ -44,7 +44,7 @@ impl Message {
         if self.header.protocol_version == 0 || self.payload.len() > MAX_IPC_PAYLOAD
             || self.header.payload_len as usize != self.payload.len()
         {
-            return Err(IpcError::PayloadTooLarge);
+            return Err(IpcError::InvalidProtocolVersion);
         }
         Ok(())
     }
