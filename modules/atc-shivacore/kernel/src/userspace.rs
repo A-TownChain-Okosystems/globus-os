@@ -6,10 +6,14 @@
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
 use crate::ats1000::{ExitCode, Pid};
+extern crate alloc;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use core::arch::asm;
 use x86_64::{
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
+    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
     VirtAddr,
 };
 
