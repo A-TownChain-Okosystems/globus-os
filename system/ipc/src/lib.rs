@@ -146,6 +146,12 @@ pub fn validate_payload(payload: &[u8]) -> bool { payload.len() <= MAX_IPC_PAYLO
 mod tests {
     use super::*;
     #[test]
+    fn endpoint_ordering_is_stable_for_deterministic_ipc_maps() {
+        assert!(Endpoint(1) < Endpoint(2));
+        assert_eq!(Endpoint(7).cmp(&Endpoint(7)), core::cmp::Ordering::Equal);
+    }
+
+    #[test]
     fn opcode_values_are_stable() {
         assert_eq!(IdentityOpcode::Register.as_u32(), 0x0900);
         assert_eq!(IdentityOpcode::LoadKey.as_u32(), 0x0905);
