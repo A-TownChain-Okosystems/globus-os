@@ -35,7 +35,11 @@ impl DisplayMode {
         if width == 0 || height == 0 || refresh_hz == 0 {
             None
         } else {
-            Some(Self { width, height, refresh_hz })
+            Some(Self {
+                width,
+                height,
+                refresh_hz,
+            })
         }
     }
 }
