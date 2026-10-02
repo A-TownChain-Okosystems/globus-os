@@ -5,11 +5,14 @@
 // User-Level Prozesse (Ring 3): Privilege-Level-Wechsel, User-Address-Spaces,
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
+extern crate alloc;
+
+use alloc::{string::{String, ToString}, vec::Vec};
 use crate::ats1000::{ExitCode, Pid};
 use core::arch::asm;
 use x86_64::{
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
+    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
     VirtAddr,
 };
 
@@ -265,7 +268,7 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
         "push rsi", // RIP
         "iretq",
         in("rax") ctx.ss as u64,
-        in("rbx") ctx.rsp,
+        in("rdi") ctx.rsp,
         in("rcx") ctx.rflags,
         in("rdx") ctx.cs as u64,
         in("rsi") ctx.rip,
