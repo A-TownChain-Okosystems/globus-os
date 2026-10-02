@@ -16,6 +16,7 @@ on:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
       - "Cargo.toml"
+      - "system/ipc/**"
       - ".github/workflows/shivacore-kernel.yml"
       - ".github/scripts/boot-blocker.sh"
       - "docs/BOOT_BLOCKER.md"
