@@ -8,12 +8,16 @@ on:
       - "modules/atc-shivacore/boot/**"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
+      - ".github/scripts/boot-blocker.sh"
+      - "docs/BOOT_BLOCKER.md"
   pull_request:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
+      - ".github/scripts/boot-blocker.sh"
+      - "docs/BOOT_BLOCKER.md"
   workflow_dispatch:
 
 permissions:
@@ -124,6 +128,10 @@ jobs:
             echo "QEMU exited unexpectedly with status $status."
             exit "$status"
           fi
+
+      - name: BOOT-BLOCKER — mandatory exact boot evidence gate
+        run: |
+          bash .github/scripts/boot-blocker.sh target/shivacore-qemu-${{ matrix.cpu }}.log
 
       - name: Upload boot artifacts
         if: always()
