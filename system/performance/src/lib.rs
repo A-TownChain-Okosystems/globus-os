@@ -99,7 +99,7 @@ pub const fn analyze(sample: &Sample) -> Analysis {
     let bottleneck = if sample.latency_ns > 10_000_000 {
         Bottleneck::Latency
     } else if sample.power_mw > 0
-        && sample.score.saturating_mul(1000) / sample.power_mw as u64 < 10
+        && sample.score.saturating_mul(1000) / (sample.power_mw as u64) < 10
     {
         Bottleneck::Power
     } else if sample.utilization_pct >= 90 {
