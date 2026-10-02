@@ -5,7 +5,7 @@
 //! assigned to the endpoint for the requested operation. Missing or
 //! mismatched credentials fail closed.
 
-use std::collections::BTreeMap;
+use alloc::collections::BTreeMap;
 
 use crate::{ChannelRegistry, Endpoint, IpcError, Message};
 
@@ -202,8 +202,8 @@ mod tests {
         let p = policy();
         bus.register_endpoint(endpoint, p).unwrap();
 
-        bus.send(p.sender, Message::new(endpoint, 1, vec![])).unwrap();
-        bus.send(p.sender, Message::new(endpoint, 2, vec![])).unwrap();
+        bus.send(p.sender, Message::new(endpoint, 1, vec![]))\n            .unwrap();
+        bus.send(p.sender, Message::new(endpoint, 2, vec![]))\n            .unwrap();
 
         assert_eq!(
             bus.receive(p.receiver, endpoint)
