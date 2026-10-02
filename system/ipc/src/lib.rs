@@ -191,7 +191,7 @@ mod tests {
         assert!(!validate_payload(&vec![0; MAX_IPC_PAYLOAD + 1]));
     }
     #[test]
-    fn message_header_cannot_lie_about_payload_size() {
+    fn invalid_protocol_version_is_rejected() {\n        let m = Message::with_protocol(Endpoint(1), 0, 7, vec![]);\n        assert_eq!(m.validate(), Err(IpcError::InvalidProtocolVersion));\n    }\n    #[test]\n    fn message_header_cannot_lie_about_payload_size() {
         let mut m = Message::new(Endpoint(1), 7, vec![1, 2, 3]);
         m.header.payload_len = 2;
         assert_eq!(m.validate(), Err(IpcError::PayloadTooLarge));
