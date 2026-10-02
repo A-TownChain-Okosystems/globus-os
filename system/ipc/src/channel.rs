@@ -1,5 +1,5 @@
 //! Bounded deterministic IPC channels.
-use alloc::collections::{HashMap, VecDeque};
+use alloc::collections::{BTreeMap, VecDeque};
 
 use crate::{validate_payload, Endpoint, Message, MAX_IPC_PAYLOAD};
 
@@ -13,14 +13,14 @@ pub enum IpcError {
 #[derive(Debug)]
 pub struct ChannelRegistry {
     capacity: usize,
-    queues: HashMap<Endpoint, VecDeque<Message>>,
+    queues: BTreeMap<Endpoint, VecDeque<Message>>,
 }
 
 impl ChannelRegistry {
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity: capacity.max(1),
-            queues: HashMap::new(),
+            queues: BTreeMap::new(),
         }
     }
     pub fn register(&mut self, endpoint: Endpoint) -> bool {
