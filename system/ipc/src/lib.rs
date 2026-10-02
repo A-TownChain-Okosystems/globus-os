@@ -1,8 +1,16 @@
-#![no_std]\n\nextern crate alloc;\n\nuse alloc::{string::String, vec::Vec};\n\n//! Capability-aware IPC primitives used by GlobusOS.
+#![no_std]
+
+extern crate alloc;
+
+use alloc::{string::String, vec::Vec};
+
+//! Capability-aware IPC primitives used by GlobusOS.
 
 pub mod bus;
 pub mod channel;
-pub use bus::{\n    EndpointPolicy, IpcAccess, IpcBus, IpcBusError, IpcCapability, IpcOperation, IpcPrincipal,\n};
+pub use bus::{
+    EndpointPolicy, IpcAccess, IpcBus, IpcBusError, IpcCapability, IpcOperation, IpcPrincipal,
+};
 pub use channel::{ChannelRegistry, IpcError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -28,7 +36,12 @@ impl Message {
         Self::with_protocol(endpoint, 1, opcode, payload)
     }
 
-    pub fn with_protocol(\n        endpoint: Endpoint,\n        protocol_version: u16,\n        opcode: u32,\n        payload: Vec<u8>,\n    ) -> Self {
+    pub fn with_protocol(
+        endpoint: Endpoint,
+        protocol_version: u16,
+        opcode: u32,
+        payload: Vec<u8>,
+    ) -> Self {
         Self {
             header: MessageHeader {
                 endpoint,
@@ -191,7 +204,12 @@ mod tests {
         assert!(!validate_payload(&vec![0; MAX_IPC_PAYLOAD + 1]));
     }
     #[test]
-    fn invalid_protocol_version_is_rejected() {\n        let m = Message::with_protocol(Endpoint(1), 0, 7, vec![]);\n        assert_eq!(m.validate(), Err(IpcError::InvalidProtocolVersion));\n    }\n    #[test]\n    fn message_header_cannot_lie_about_payload_size() {
+    fn invalid_protocol_version_is_rejected() {
+        let m = Message::with_protocol(Endpoint(1), 0, 7, vec![]);
+        assert_eq!(m.validate(), Err(IpcError::InvalidProtocolVersion));
+    }
+    #[test]
+    fn message_header_cannot_lie_about_payload_size() {
         let mut m = Message::new(Endpoint(1), 7, vec![1, 2, 3]);
         m.header.payload_len = 2;
         assert_eq!(m.validate(), Err(IpcError::PayloadTooLarge));
