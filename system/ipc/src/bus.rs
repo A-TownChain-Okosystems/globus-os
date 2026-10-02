@@ -90,11 +90,7 @@ impl IpcBus {
             .ok_or(IpcBusError::EndpointNotRegistered)
     }
 
-    pub fn send(
-        &mut self,
-        access: IpcAccess,
-        message: Message,
-    ) -> Result<(), IpcBusError> {
+    pub fn send(&mut self, access: IpcAccess, message: Message) -> Result<(), IpcBusError> {
         let endpoint = message.header.endpoint;
         let policy = self.policy(endpoint)?;
         if policy.sender != access {
@@ -153,10 +149,7 @@ mod tests {
         bus.send(p.sender, Message::new(endpoint, 1, vec![9]))
             .unwrap();
         assert_eq!(
-            bus.receive(p.receiver, endpoint)
-                .unwrap()
-                .unwrap()
-                .payload,
+            bus.receive(p.receiver, endpoint).unwrap().unwrap().payload,
             vec![9]
         );
     }
@@ -232,7 +225,8 @@ mod tests {
         let p = policy();
         bus.register_endpoint(endpoint, p).unwrap();
 
-        bus.send(p.sender, Message::new(endpoint, 1, vec![])).unwrap();
+        bus.send(p.sender, Message::new(endpoint, 1, vec![]))
+            .unwrap();
         assert_eq!(
             bus.send(p.sender, Message::new(endpoint, 2, vec![])),
             Err(IpcBusError::Channel(IpcError::QueueFull))
