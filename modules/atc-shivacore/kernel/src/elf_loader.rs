@@ -7,7 +7,7 @@
 
 extern crate alloc;
 
-use alloc::string::ToString;
+use alloc::{string::ToString, vec, vec::Vec};
 use crate::ats1000::{ExitCode, Pid};
 
 // ═══════════════════════════════════════════════════════════════════════════════
