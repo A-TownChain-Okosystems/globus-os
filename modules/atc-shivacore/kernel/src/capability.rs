@@ -38,7 +38,8 @@ impl Rights {
     pub const WRITE: Rights = Rights(2);
     pub const EXEC: Rights = Rights(4);
     pub const DELEGATE: Rights = Rights(8);
-    pub const ALL: Rights = Rights(1 | 2 | 4 | 8);
+    pub const INSPECT: Rights = Rights(16);
+    pub const ALL: Rights = Rights(1 | 2 | 4 | 8 | 16);
 
     pub fn has(self, other: Rights) -> bool {
         (self.0 & other.0) == other.0
