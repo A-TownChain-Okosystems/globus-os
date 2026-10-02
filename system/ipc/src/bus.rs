@@ -52,13 +52,20 @@ impl From<IpcError> for IpcBusError {
 pub struct IpcBus {
     channels: ChannelRegistry,
     policies: BTreeMap<Endpoint, EndpointPolicy>,
+    protocol_version: u16,
 }
 
 impl IpcBus {
     pub fn new(capacity: usize) -> Self {
+        Self::new_with_protocol_version(capacity, 1)
+    }
+
+    pub fn new_with_protocol_version(capacity: usize, protocol_version: u16) -> Self {
+        assert!(protocol_version != 0);
         Self {
             channels: ChannelRegistry::new(capacity),
             policies: BTreeMap::new(),
+            protocol_version,
         }
     }
 
@@ -90,6 +97,9 @@ impl IpcBus {
         let endpoint = message.header.endpoint;
         let policy = self.policy(endpoint)?;
         if policy.sender != access {
+            return Err(IpcBusError::Unauthorized(IpcOperation::Send));
+        }
+        if message.header.protocol_version != self.protocol_version {
             return Err(IpcBusError::Unauthorized(IpcOperation::Send));
         }
         message.validate()?;
