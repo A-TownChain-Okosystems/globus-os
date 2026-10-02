@@ -262,17 +262,17 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
     debug_assert!(ctx.valid_address(ctx.rsp));
 
     asm!(
-        "push rax", // SS
-        "push rbx", // RSP
-        "push rcx", // RFLAGS
-        "push rdx", // CS
-        "push rsi", // RIP
+        "push {ss}",
+        "push {rsp}",
+        "push {rflags}",
+        "push {cs}",
+        "push {rip}",
         "iretq",
-        in("rax") ctx.ss as u64,
-        in("rbx") ctx.rsp,
-        in("rcx") ctx.rflags,
-        in("rdx") ctx.cs as u64,
-        in("rsi") ctx.rip,
+        ss = in(reg) ctx.ss as u64,
+        rsp = in(reg) ctx.rsp,
+        rflags = in(reg) ctx.rflags,
+        cs = in(reg) ctx.cs as u64,
+        rip = in(reg) ctx.rip,
         options(noreturn)
     );
 }
