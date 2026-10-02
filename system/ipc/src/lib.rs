@@ -41,10 +41,13 @@ impl Message {
         }
     }
     pub fn validate(&self) -> Result<(), IpcError> {
-        if self.header.protocol_version == 0 || self.payload.len() > MAX_IPC_PAYLOAD
+        if self.header.protocol_version == 0 {
+            return Err(IpcError::InvalidProtocolVersion);
+        }
+        if self.payload.len() > MAX_IPC_PAYLOAD
             || self.header.payload_len as usize != self.payload.len()
         {
-            return Err(IpcError::InvalidProtocolVersion);
+            return Err(IpcError::PayloadTooLarge);
         }
         Ok(())
     }
