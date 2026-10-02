@@ -6,6 +6,9 @@
 // Context Switch (IRET-Frame), Timer-Driven Preemption, Quantum-Based Scheduling,
 // Integration von UserspaceManager + SignalManager + PageFaultHandler.
 
+extern crate alloc;
+
+use alloc::vec::Vec;
 use crate::ats1000::{ExitCode, Pid};
 use crate::elf_loader::SignalManager;
 use crate::userspace::{PrivilegeLevel, UserContext, UserspaceError, UserspaceManager};
