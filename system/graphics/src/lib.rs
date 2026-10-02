@@ -5,9 +5,13 @@ pub mod desktop;
 pub mod input;
 pub mod media_surface;
 pub mod shell;
+pub mod taskbar;
 pub mod wm;
 
 pub use media_surface::{MediaSurface, MediaSurfaceError, MediaSurfaceRegistry};
+pub use taskbar::{
+    ActivityState, GlassStyle, GlowState, TaskbarGeometry, TaskbarItem, TaskbarMode, TaskbarState,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicsBackend {
@@ -31,11 +35,7 @@ impl DisplayMode {
         if width == 0 || height == 0 || refresh_hz == 0 {
             None
         } else {
-            Some(Self {
-                width,
-                height,
-                refresh_hz,
-            })
+            Some(Self { width, height, refresh_hz })
         }
     }
 }
@@ -43,6 +43,7 @@ impl DisplayMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn rejects_invalid_display_mode() {
         assert!(DisplayMode::new(0, 1080, 60).is_none());
