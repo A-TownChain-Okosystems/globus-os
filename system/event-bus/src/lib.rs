@@ -22,7 +22,11 @@ pub struct SchemaVersion {
 
 impl SchemaVersion {
     pub const fn new(major: u16, minor: u16, patch: u16) -> Self {
-        Self { major, minor, patch }
+        Self {
+            major,
+            minor,
+            patch,
+        }
     }
 }
 
@@ -184,10 +188,7 @@ impl EventBus {
         Ok(id)
     }
 
-    pub fn receive(
-        &mut self,
-        id: SubscriptionId,
-    ) -> Result<Option<EventEnvelope>, EventError> {
+    pub fn receive(&mut self, id: SubscriptionId) -> Result<Option<EventEnvelope>, EventError> {
         self.subscribers
             .get_mut(&id)
             .map(|subscriber| subscriber.queue.pop_front())
