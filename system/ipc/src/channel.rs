@@ -1,25 +1,27 @@
 //! Bounded deterministic IPC channels.
+use alloc::collections::{BTreeMap, VecDeque};
+
 use crate::{Endpoint, MAX_IPC_PAYLOAD, Message, validate_payload};
-use std::collections::{HashMap, VecDeque};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {
     PayloadTooLarge,
     QueueFull,
     EndpointNotFound,
+    InvalidProtocolVersion,
 }
 
 #[derive(Debug)]
 pub struct ChannelRegistry {
     capacity: usize,
-    queues: HashMap<Endpoint, VecDeque<Message>>,
+    queues: BTreeMap<Endpoint, VecDeque<Message>>,
 }
 
 impl ChannelRegistry {
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity: capacity.max(1),
-            queues: HashMap::new(),
+            queues: BTreeMap::new(),
         }
     }
     pub fn register(&mut self, endpoint: Endpoint) -> bool {
@@ -27,6 +29,7 @@ impl ChannelRegistry {
         true
     }
     pub fn send(&mut self, message: Message) -> Result<(), IpcError> {
+        message.validate()?;
         if message.payload.len() > MAX_IPC_PAYLOAD || !validate_payload(&message.payload) {
             return Err(IpcError::PayloadTooLarge);
         }
@@ -57,6 +60,8 @@ impl ChannelRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use alloc::vec;
+
     #[test]
     fn fifo_is_deterministic() {
         let mut r = ChannelRegistry::new(2);
@@ -67,6 +72,23 @@ mod tests {
         assert_eq!(r.receive(e).unwrap().unwrap().header.opcode, 1);
         assert_eq!(r.receive(e).unwrap().unwrap().header.opcode, 2);
     }
+
+    #[test]
+    fn invalid_message_metadata_is_rejected() {
+        let mut r = ChannelRegistry::new(1);
+        let e = Endpoint(3);
+        r.register(e);
+        let mut message = Message::new(e, 1, vec![1]);
+        message.header.payload_len = 0;
+        assert_eq!(r.send(message), Err(IpcError::PayloadTooLarge));
+
+        let invalid_protocol = Message::with_protocol(e, 0, 1, vec![]);
+        assert_eq!(
+            r.send(invalid_protocol),
+            Err(IpcError::InvalidProtocolVersion)
+        );
+    }
+
     #[test]
     fn capacity_is_enforced() {
         let mut r = ChannelRegistry::new(1);

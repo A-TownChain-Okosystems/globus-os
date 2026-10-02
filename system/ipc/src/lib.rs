@@ -1,16 +1,28 @@
 //! Capability-aware IPC primitives used by GlobusOS.
 
+#![no_std]
+
+extern crate alloc;
+
+use alloc::{string::String, vec::Vec};
+
+pub mod bus;
 pub mod channel;
+pub use bus::{
+    EndpointPolicy, IpcAccess, IpcBus, IpcBusError, IpcCapability, IpcOperation, IpcPrincipal,
+};
 pub use channel::{ChannelRegistry, IpcError};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Endpoint(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MessageHeader {
     pub endpoint: Endpoint,
+    pub protocol_version: u16,
     pub opcode: u32,
     pub payload_len: u32,
+    pub correlation_id: Option<u64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,16 +33,30 @@ pub struct Message {
 
 impl Message {
     pub fn new(endpoint: Endpoint, opcode: u32, payload: Vec<u8>) -> Self {
+        Self::with_protocol(endpoint, 1, opcode, payload)
+    }
+
+    pub fn with_protocol(
+        endpoint: Endpoint,
+        protocol_version: u16,
+        opcode: u32,
+        payload: Vec<u8>,
+    ) -> Self {
         Self {
             header: MessageHeader {
                 endpoint,
+                protocol_version,
                 opcode,
                 payload_len: payload.len() as u32,
+                correlation_id: None,
             },
             payload,
         }
     }
     pub fn validate(&self) -> Result<(), IpcError> {
+        if self.header.protocol_version == 0 {
+            return Err(IpcError::InvalidProtocolVersion);
+        }
         if self.payload.len() > MAX_IPC_PAYLOAD
             || self.header.payload_len as usize != self.payload.len()
         {
@@ -176,6 +202,11 @@ mod tests {
     #[test]
     fn oversized_ipc_is_rejected() {
         assert!(!validate_payload(&vec![0; MAX_IPC_PAYLOAD + 1]));
+    }
+    #[test]
+    fn invalid_protocol_version_is_rejected() {
+        let m = Message::with_protocol(Endpoint(1), 0, 7, vec![]);
+        assert_eq!(m.validate(), Err(IpcError::InvalidProtocolVersion));
     }
     #[test]
     fn message_header_cannot_lie_about_payload_size() {
