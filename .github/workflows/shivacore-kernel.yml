@@ -39,6 +39,8 @@ jobs:
             expected_vendor: AMD
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
