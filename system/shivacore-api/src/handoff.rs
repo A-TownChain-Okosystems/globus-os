@@ -51,6 +51,7 @@ pub struct KernelBootHandoff {
     pub initial_task: InitialTaskAuthorization,
     pub capabilities: CapabilityHandoff,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ValidatedHandoff {
     pub abi_version: u32,
