@@ -192,6 +192,24 @@ mod tests {
     }
 
     #[test]
+    fn zero_initial_task_identity_fails_closed() {
+        let mut handoff = valid_handoff();
+        handoff.initial_task.image_id = [0; 32];
+        assert_eq!(
+            accept_kernel_handoff(handoff),
+            Err(HandoffError::InvalidInitialTaskAuthorization)
+        );
+    }
+
+    #[test]
+    fn initial_task_identity_is_preserved() {
+        let handoff = valid_handoff();
+        let accepted = accept_kernel_handoff(handoff).unwrap();
+        assert_eq!(accepted.initial_task.role, InitialTaskRole::RootServer);
+        assert_eq!(accepted.initial_task.image_id, [0x47; 32]);
+    }
+
+    #[test]
     fn major_version_mismatch_fails_closed() {
         let mut handoff = valid_handoff();
         handoff.abi = AbiHandshake { major: 2, minor: 0 };
