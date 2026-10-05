@@ -4,7 +4,7 @@
 //! ABI and the GlobusOS service runtime. It does not grant authority by
 //! default: every capability is explicitly declared and validated.
 
-use crate::{AbiError, AbiHandshake, CapabilityHandle, CapabilityRight, ABI_VERSION};
+use crate::{ABI_VERSION, AbiError, AbiHandshake, CapabilityHandle, CapabilityRight};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
@@ -109,7 +109,10 @@ pub const fn accept_kernel_handoff(
 
         // Bootstrap authority is intentionally bounded. No service receives
         // Grant/Revoke/Admin-like authority through this handoff.
-        if matches!(grant.right, CapabilityRight::Grant | CapabilityRight::Revoke) {
+        if matches!(
+            grant.right,
+            CapabilityRight::Grant | CapabilityRight::Revoke
+        ) {
             return Err(HandoffError::InvalidCapabilityRight(grant.bootstrap));
         }
 
@@ -246,7 +249,9 @@ mod tests {
         handoff.capabilities.grants[0].right = CapabilityRight::Grant;
         assert_eq!(
             accept_kernel_handoff(handoff),
-            Err(HandoffError::InvalidCapabilityRight(BootstrapCapability::Ipc))
+            Err(HandoffError::InvalidCapabilityRight(
+                BootstrapCapability::Ipc
+            ))
         );
     }
 }
