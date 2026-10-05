@@ -2,6 +2,11 @@
 //!
 //! This crate contains only wire-safe identifiers and request/response types.
 //! Kernel implementations remain private to ShivaCore.
+//!
+//! Capability semantics are owned by the normative ShivaCore architecture/spec
+//! documents. This crate may encode those semantics in ABI representation, but
+//! must not originate new authorization, CSpace, derivation, generation, or
+//! bootstrap-policy semantics.
 
 #![no_std]
 
