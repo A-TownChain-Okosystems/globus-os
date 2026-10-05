@@ -35,14 +35,26 @@ pub struct CapabilityHandoff {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct KernelBootHandoff {
-    pub abi: AbiHandshake,
-    pub capabilities: CapabilityHandoff,
+pub enum InitialTaskRole {
+    RootServer = 0,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct InitialTaskAuthorization {
+    pub role: InitialTaskRole,
+    pub image_id: [u8; 32],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct KernelBootHandoff {
+    pub abi: AbiHandshake,
+    pub initial_task: InitialTaskAuthorization,
+    pub capabilities: CapabilityHandoff,
+}
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ValidatedHandoff {
     pub abi_version: u32,
+    pub initial_task: InitialTaskAuthorization,
     pub capabilities: CapabilityHandoff,
 }
 
@@ -53,6 +65,7 @@ pub enum HandoffError {
     DuplicateCapability(BootstrapCapability),
     InvalidHandle,
     InvalidCapabilityRight(BootstrapCapability),
+    InvalidInitialTaskAuthorization,
 }
 
 impl From<AbiError> for HandoffError {
@@ -71,6 +84,10 @@ pub const fn accept_kernel_handoff(
 ) -> Result<ValidatedHandoff, HandoffError> {
     if !handoff.abi.compatible() {
         return Err(HandoffError::Abi(AbiError::AbiVersionMismatch));
+    }
+
+    if handoff.initial_task.image_id == [0; 32] {
+        return Err(HandoffError::InvalidInitialTaskAuthorization);
     }
 
     let grants = handoff.capabilities.grants;
@@ -116,6 +133,7 @@ pub const fn accept_kernel_handoff(
 
     Ok(ValidatedHandoff {
         abi_version: ABI_VERSION,
+        initial_task: handoff.initial_task,
         capabilities: handoff.capabilities,
     })
 }
@@ -154,6 +172,10 @@ mod tests {
 
         KernelBootHandoff {
             abi: AbiHandshake::CURRENT,
+            initial_task: InitialTaskAuthorization {
+                role: InitialTaskRole::RootServer,
+                image_id: [0x47; 32],
+            },
             capabilities: CapabilityHandoff {
                 ipc: CapabilityHandle(1),
                 process: CapabilityHandle(2),
