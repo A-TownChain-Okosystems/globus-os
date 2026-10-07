@@ -7,13 +7,19 @@ on:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
       - "Cargo.toml"
+      - "system/ipc/**"
       - ".github/workflows/shivacore-kernel.yml"
+      - ".github/scripts/boot-blocker.sh"
+      - "docs/BOOT_BLOCKER.md"
   pull_request:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
       - "Cargo.toml"
+      - "system/ipc/**"
       - ".github/workflows/shivacore-kernel.yml"
+      - ".github/scripts/boot-blocker.sh"
+      - "docs/BOOT_BLOCKER.md"
   workflow_dispatch:
 
 permissions:
@@ -35,6 +41,8 @@ jobs:
             expected_vendor: AMD
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
 
       - uses: dtolnay/rust-toolchain@nightly
         with:
@@ -124,6 +132,10 @@ jobs:
             echo "QEMU exited unexpectedly with status $status."
             exit "$status"
           fi
+
+      - name: BOOT-BLOCKER — mandatory exact boot evidence gate
+        run: |
+          bash .github/scripts/boot-blocker.sh target/shivacore-qemu-${{ matrix.cpu }}.log
 
       - name: Upload boot artifacts
         if: always()

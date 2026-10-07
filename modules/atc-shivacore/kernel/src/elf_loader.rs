@@ -5,6 +5,9 @@
 // ELF64-Parser und -Loader für User-Prozesse (Ring 3).
 // Signal-Handling für Userspace-Prozesse (POSIX-ähnlich).
 
+extern crate alloc;
+
+use alloc::{string::ToString, vec, vec::Vec};
 use crate::ats1000::{ExitCode, Pid};
 
 // ═══════════════════════════════════════════════════════════════════════════════
