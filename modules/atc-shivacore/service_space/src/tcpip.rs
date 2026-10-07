@@ -13,10 +13,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::net::{
-    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, NetworkStack,
-    ETH_TYPE_IPV4,
-};
+use crate::net::{NetworkDevice, NetworkError, NetworkStack};
+use shivacore::net::{EthernetFrame, Ipv4Address, MacAddress, ETH_TYPE_IPV4};
 
 // ─── Protokoll-Nummern ─────────────────────────────────────────────────────
 
@@ -692,7 +690,7 @@ impl IpStack {
     pub fn handle_frame(&self, data: &[u8], timestamp: u64) -> Result<(), NetworkError> {
         let frame = EthernetFrame::from_bytes(data)?;
         match frame.ethertype {
-            crate::net::ETH_TYPE_ARP => self.net.handle_frame(data, timestamp),
+            shivacore::net::ETH_TYPE_ARP => self.net.handle_frame(data, timestamp),
             ETH_TYPE_IPV4 => {
                 let packet = Ipv4Packet::from_bytes(&frame.payload)?;
                 self.handle_ipv4(&packet);
@@ -718,7 +716,7 @@ impl IpStack {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::net::{LoopbackDevice, NetworkStack};
+    use crate::net::LoopbackDevice;
 
     // ── IPv4 ────────────────────────────────────────────────────────────────
 

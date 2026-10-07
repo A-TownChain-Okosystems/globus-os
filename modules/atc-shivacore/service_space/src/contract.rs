@@ -1,19 +1,22 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // K-Sprint 20 — Contract-Call-Integration
-use crate::mempool::{Transaction, TxType};
-use crate::security::simple_hash;
-use crate::vm::{ExecResult, VmEngine, VmError};
+
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
+
+use crate::vm::{ExecResult, VmEngine, VmError};
+use shivacore::mempool::{Transaction, TxType};
+use shivacore::security::simple_hash;
+
 pub struct ContractExecutor {
     vm: Arc<VmEngine>,
-    state: Arc<crate::mempool::StateDb>,
+    state: Arc<shivacore::mempool::StateDb>,
 }
 impl ContractExecutor {
-    pub fn new(vm: Arc<VmEngine>, state: Arc<crate::mempool::StateDb>) -> Self {
+    pub fn new(vm: Arc<VmEngine>, state: Arc<shivacore::mempool::StateDb>) -> Self {
         ContractExecutor { vm, state }
     }
     pub fn process_deploy(&self, tx: &Transaction) -> Result<String, ContractError> {
@@ -125,7 +128,7 @@ mod tests {
     use crate::vm::{build_bytecode, Opcode};
     fn setup() -> ContractExecutor {
         let vm = Arc::new(VmEngine::new(1_000_000));
-        let state = Arc::new(crate::mempool::StateDb::new());
+        let state = Arc::new(shivacore::mempool::StateDb::new());
         state.deposit("did:alice", 10_000_000);
         ContractExecutor::new(vm, state)
     }

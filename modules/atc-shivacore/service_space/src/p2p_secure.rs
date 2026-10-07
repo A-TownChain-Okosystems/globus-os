@@ -30,7 +30,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::p2p::{MessageType, P2pMessage, P2pNode, CHAIN_ID};
-use crate::security::TokenBucket;
+use shivacore::security::TokenBucket;
 
 // ─── Protokoll-Konstanten (ATC-PROTO-P2P-001 §1/§3/§11/§18) ──────────────────
 
@@ -1508,7 +1508,7 @@ mod tests {
         assert_eq!(parsed.msg_type as u8, 4); // HandshakeAck
     }
 
-    use crate::net::Ipv4Address;
+    use shivacore::net::Ipv4Address;
     fn Ipv4Addr(a: u8, b: u8, c: u8, d: u8) -> Ipv4Address {
         Ipv4Address::new(a, b, c, d)
     }

@@ -16,7 +16,7 @@ jobs:
         with:
           toolchain: nightly
           targets: x86_64-unknown-uefi
-          components: rustfmt, clippy, rust-src
+          components: rustfmt, clippy, rust-src, llvm-tools-preview
       - name: Format
         run: cargo fmt --all -- --check
       - name: Check

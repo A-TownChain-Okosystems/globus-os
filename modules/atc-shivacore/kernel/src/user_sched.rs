@@ -9,6 +9,7 @@
 use crate::ats1000::{ExitCode, Pid};
 use crate::elf_loader::SignalManager;
 use crate::userspace::{PrivilegeLevel, UserContext, UserspaceError, UserspaceManager};
+use alloc::vec::Vec;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // IRET Frame (CPU state for ring-0 → ring-3 transition)
@@ -320,7 +321,9 @@ impl UserScheduler {
         if self.current == Some(pid) {
             self.current = None;
         }
-        self.entries.retain(|e| e.pid != pid)
+        let old_len = self.entries.len();
+        self.entries.retain(|e| e.pid != pid);
+        self.entries.len() != old_len
     }
 
     /// Get the currently running process
@@ -438,7 +441,7 @@ impl UserScheduler {
 
         for entry in &mut self.entries {
             if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= *wake {
+                if self.timer_ticks >= wake {
                     entry.state = SchedState::Ready;
                     entry.wake_tick = None;
                 }
@@ -469,7 +472,7 @@ impl UserScheduler {
         // Check wake-ups (Sleep entries)
         for entry in &mut self.entries {
             if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= *wake {
+                if self.timer_ticks >= wake {
                     entry.state = SchedState::Ready;
                     entry.wake_tick = None;
                 }
@@ -720,7 +723,7 @@ impl UserProcessSystem {
         // Normal timer tick → quantum check
         if let Some(pid) = current {
             if let Some(ctx) = self.userspace.get_context(pid) {
-                let ctx_copy = *ctx;
+                let ctx_copy = ctx.clone();
                 return self.scheduler.timer_tick(&ctx_copy);
             }
         }

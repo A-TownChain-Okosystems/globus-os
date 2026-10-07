@@ -19,13 +19,13 @@ crate-type = ["lib"]
 
 [features]
 default = []
-x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:pc-keyboard", "dep:volatile", "dep:noto-sans-mono-bitmap"]
+x86-boot = ["dep:bootloader_api", "dep:uart_16550", "dep:pic8259", "dep:pc-keyboard", "dep:volatile", "dep:noto-sans-mono-bitmap"]
 
 [dependencies]
 bootloader_api = { version = "0.11", optional = true }
 volatile = { version = "0.6.1", optional = true }
 spin = "0.12"
-x86_64 = { version = "0.15", optional = true }
+x86_64 = "0.15"
 uart_16550 = { version = "0.8", optional = true }
 pic8259 = { version = "0.11", optional = true }
 pc-keyboard = { version = "0.9", optional = true }
