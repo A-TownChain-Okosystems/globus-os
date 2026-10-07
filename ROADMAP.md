@@ -16,6 +16,7 @@
 - [x] A/B update and rollback state machine
 - [x] integrated runtime status
 - [x] CI compile/test/format/Clippy gates
+- [x] deterministic Performance Center planning primitives
 
 ## P1 — hardware and platform implementation
 
@@ -30,6 +31,10 @@
 - [ ] display/GPU service
 - [ ] persistent VFS backend
 - [ ] cryptographic package/update verification
+- [ ] Performance Center hardware benchmark adapters
+- [ ] privileged tuning service with capability-gated mutation
+- [ ] stress-test and rollback orchestration
+- [ ] persistent benchmark evidence store
 
 ## P2 — desktop and AI platform
 
@@ -40,6 +45,7 @@
 - [ ] AI sandbox/tool permission broker
 - [ ] model/runtime resource broker
 - [ ] system settings and identity UI
+- [ ] Aurora Performance AI recommendation layer
 
 ## P3 — ecosystem integration
 

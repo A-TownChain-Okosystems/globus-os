@@ -6,6 +6,10 @@
 // Signal-Handling für Userspace-Prozesse (POSIX-ähnlich).
 
 use crate::ats1000::{ExitCode, Pid};
+extern crate alloc;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // ELF64 Constants
