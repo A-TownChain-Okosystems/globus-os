@@ -30,11 +30,17 @@
 - [ ] display/GPU service
 - [ ] persistent VFS backend
 - [ ] cryptographic package/update verification
+- [x] system diagnostics & recovery contract
+- [x] crash evidence contract
+- [x] deterministic system health model
 
 ## P2 — desktop and AI platform
 
 - [ ] compositor and window manager
-- [ ] desktop shell
+- [x] desktop shell foundation
+- [x] Glass / Glass Neon / HUD taskbar state model
+- [x] dynamic taskbar glow state model
+- [x] Aurora/ShivaCore activity indicator contract
 - [ ] audio backend
 - [ ] Aurora IPC bridge
 - [ ] AI sandbox/tool permission broker
