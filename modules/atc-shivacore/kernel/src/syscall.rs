@@ -119,7 +119,7 @@ impl SyscallDispatcher {
                     Some(cap) => cap,
                     None => return SyscallResponse::err(AbiError::InvalidHandle),
                 };
-                if !capabilities.check_any(pid, cap.0, Rights::INSPECT) {
+                if !capabilities.check_any(pid, cap.0, Rights::READ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
                 SyscallResponse::ok(1)

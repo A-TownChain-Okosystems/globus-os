@@ -18,83 +18,49 @@ Audit mode: CI-independent source audit plus GitHub workflow enforcement review.
 - Languages: Rust canonical for system implementation; YAML for CI/governance; Markdown for normative documentation
 - Readiness: development / NOT_READY for production hardware claims
 
-## Findings
+## Findings — current state
 
-### F-GLOBUS-001 — P1 — STUB — LKM dependency API
-- Category: correctness / completeness
-- Family: kernel / LKM / dependency-resolution
-- Tags: `P1`, `stub`, `kernel`, `lkm`, `correctness`, `completeness`, `api`
-- `DependencyGraph::dependencies()` is an `unimplemented!()` placeholder with an impossible `&[String]` API over `BTreeSet<String>`.
-- Existing issue: #18.
-- Closure requires replacement with a lifetime-safe deterministic API, caller/test updates, fmt, clippy, workspace tests and CI.
+### F-GLOBUS-001 — P1 — LKM dependency API
 
-### F-GLOBUS-002 — P1 — LOGIC — dependency ordering
-- Category: correctness / determinism
-- Family: kernel / LKM / dependency-resolution
-- Tags: `P1`, `lkm`, `topological-sort`, `determinism`
-- `topological_sort()` currently increments the in-degree of dependency nodes for `module -> dependency` edges, while the required load contract is dependency-first. `load_order()` already expresses the correct direction.
-- Tracked in issue #20.
+**SOURCE FIXED.** The current canonical `lkm.rs` uses an owned deterministic dependency API and has regression coverage for ordering and missing-module behavior.
 
-### F-GLOBUS-003 — P1 — SECURITY — unresolved imports not fail-closed
-- Category: security / symbol resolution
-- Family: kernel / LKM / symbol-resolution
-- Tags: `P1`, `security`, `fail-closed`, `imports`
-- `load()` only enters unresolved-symbol rejection when optional dependencies are present. Required unresolved imports must be rejected independently of optional dependency configuration.
-- Tracked in issue #20.
+### F-GLOBUS-002 — P1 — dependency ordering
 
-### F-GLOBUS-004 — P1 — CONSISTENCY — exports are also recorded as imports
-- Category: correctness / accounting
-- Family: kernel / LKM / symbol-table
-- Tags: `P1`, `symbols`, `exports`, `imports`, `consistency`
-- `ModuleDescriptor::with_export()` and `ModuleBuilder::export()` add exported symbols to `imports`, contaminating import accounting and symbol-direction semantics.
-- Tracked in issue #20.
+**SOURCE FIXED.** The current source has a regression test asserting dependency-first deterministic topological ordering.
 
-### F-GLOBUS-005 — P1 — CI ENFORCEMENT
-- Category: governance / CI
-- Family: CI / test enforcement
-- Tags: `P1`, `CI`, `pull-request`, `enforcement`
-- The main test suite was previously configured for manual dispatch and pushes to `main`, but not pull requests. This allowed the primary test suite not to be an enforced PR gate.
-- Correction implemented on audit branch: `pull_request:` trigger added.
-- Closure requires a fresh GitHub Actions run on the corrected branch.
+### F-GLOBUS-003 — P1 — unresolved imports
 
-## Security / malware evidence
+**SOURCE FIXED.** The current source has a regression test asserting required unresolved imports fail closed even when no optional dependencies are present.
 
-The repository has RustSec dependency auditing and additional security workflow coverage. The test suite and governance workflow use read-only permissions except the evidence-writing job. This is evidence against specific classes of supply-chain and regression failures, not proof of universal malware immunity.
+### F-GLOBUS-004 — P1 — export/import semantics
 
-No claim of absolute protection against hacking or viruses is made. Stronger assurance requires current CI evidence, dependency vulnerability results, secret scanning, immutable/reproducible build evidence, signed provenance, SBOM validation, fuzz/property testing and hardware/QEMU execution where applicable.
+**SOURCE FIXED.** The current source has regression coverage asserting exported-only modules have no imports.
 
-## Architecture and integration
+### F-GLOBUS-005 — P1 — CI enforcement
 
-Canonical boundaries are:
-
-`ATCLang → ATC-VM → A-TownChain`
-
-`Aurora → GlobusOS IPC/API → ShivaCore`
-
-`GlobusOS Identity → atc-wallet integration → A-TownChain identity`
-
-Hardware-facing P1 work remains separate from production readiness. UEFI, PCIe/IOMMU, NVMe, Ethernet DMA, persistent filesystem and measured/cryptographic boot require execution evidence before being promoted to production status.
-
-## File/language assessment
-
-- Rust source: correct canonical implementation language for kernel/system components.
-- YAML: appropriate for GitHub Actions and machine-readable governance metadata.
-- Markdown: appropriate for human/normative audit and architecture documentation.
-- No automatic file-format migration is justified without a concrete semantic benefit.
+The audit branch correction adding the pull-request trigger remains subject to a fresh workflow run. CI enforcement is therefore **PENDING VERIFICATION**.
 
 ## Verification state
 
 | Area | State |
 |---|---|
 | Architecture | REVIEWED |
-| Syntax | SOURCE REVIEWED; CI RECHECK REQUIRED |
-| Logic | P1 findings OPEN |
-| Security | P1 finding OPEN |
-| CI enforcement | CORRECTED ON AUDIT BRANCH; RUN REQUIRED |
-| Stubs | P1 `unimplemented!()` OPEN |
-| Completeness | NOT COMPLETE |
+| LKM source | FIXED / RE-READ |
+| LKM regression coverage | PRESENT |
+| Syntax / formatting | CI RECHECK REQUIRED |
+| Logic | SOURCE FIXED / CI RECHECK REQUIRED |
+| Security | SOURCE FIXED / CI RECHECK REQUIRED |
+| CI enforcement | CORRECTED / RUN REQUIRED |
+| Stubs | SOURCE NO LONGER MATCHES HISTORICAL P1 STUB |
+| Completeness | CI VERIFICATION PENDING |
 | Production readiness | NOT READY |
 
-## Closure rule
+## Exact-SHA evidence rule
 
-A finding becomes CLOSED only after source change, source re-read, targeted regression test, applicable static/security checks, and current CI evidence. Historical evidence is never treated as current verification.
+Current source SHA: `e28a05542993a9be205a4df9bdd4f56137dbf390`.
+
+No finding is marked VERIFIED or CLOSED until evidence follows:
+
+**SOURCE SHA → Workflow Run ID → Job → Step → exit code/log → Result**
+
+Historical audit snapshots are not substituted for current verification.
