@@ -5,6 +5,7 @@ pub mod desktop;
 pub mod input;
 pub mod media_surface;
 pub mod shell;
+pub mod taskbar;
 pub mod wm;
 
 pub use media_surface::{MediaSurface, MediaSurfaceError, MediaSurfaceRegistry};
