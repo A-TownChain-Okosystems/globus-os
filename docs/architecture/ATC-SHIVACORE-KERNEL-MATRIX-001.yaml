@@ -1,0 +1,837 @@
+matrix_id: ATC-SHIVACORE-KERNEL-MATRIX-001
+schema_version: "1.0"
+title: ShivaCore Kernel Subsystem Matrix
+version: "1.2.2"
+canonical_source_of_truth: modules/atc-shivacore/kernel/
+support_repository: A-TownChain-Okosystems/atc-shivacore
+support_repository_kernel_sot: false
+evidence_policy: "Architecture != Implementation != Evidence; source presence alone never proves implementation or verification."
+status_model: [UNANALYZED, ANALYZED, FIXED, RERUNNING, VERIFIED, RESIDUAL]
+source_mapping_status: "EXISTING_FIRST_CANDIDATE_MAPPING"
+evidence_fields: [id, domain, function, responsibility, input, output, state, capability, security_boundary, source, test, workflow, exact_sha, run, job, step, exit_code, log, verification, residual]
+workflow:
+  path: .github/workflows/shivacore-kernel.yml
+  scope: "Build and BIOS/QEMU smoke evidence; not proof of all matrix functions."
+  exact_sha_required: true
+  exact_sha_is_evidence_policy_not_workflow_gate: false
+  gates:
+    - Rust nightly x86_64 build
+    - BIOS and UEFI image build
+    - QEMU CPU model validation
+    - BIOS QEMU smoke test
+    - Intel Skylake matrix leg
+    - AMD EPYC matrix leg
+    - CPU vendor detection
+    - CPU HAL compatibility
+    - Ring-3 process mapping and entry
+    - scheduler preemption and context switching
+    - register checkpoints
+    - KernelState::boot()
+    - boot artifacts and logs
+  limitations:
+    - "The current workflow does not execute a dedicated UEFI boot smoke test."
+    - "Exact-SHA is now asserted immediately after checkout; a mismatch fails the workflow."
+tcb_domains:
+  included: [Boot, CPU/HAL, Memory, Capability, Scheduler, IPC, Interrupt, Timer, Fault, Userspace, ABI]
+  excluded: [GlobusOS Services, Aurora AI, Blockchain State, ATC-VM, ATCLang, Network Policy, Filesystem Policy, UI, Application Policy]
+entries:
+  - id: KRN-001
+    domain: "Boot"
+    function: "Kernel Entry"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Boot → Kernel"
+    source: "modules/atc-shivacore/kernel/src/main.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source mapped by Existing-First inspection; implementation semantics, test coverage, and Exact-SHA evidence remain to be established."
+  - id: KRN-002
+    domain: "Boot"
+    function: "Boot Handoff Parsing"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Boot → Kernel"
+    source: "modules/atc-bootloader/src/info.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-003
+    domain: "Boot"
+    function: "Memory Map Initialization"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Boot → Memory"
+    source: "modules/atc-shivacore/kernel/src/memory.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-004
+    domain: "Boot"
+    function: "KernelState::boot()"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Entry → Kernel Init"
+    source: "modules/atc-shivacore/kernel/src/kernel_init.rs"
+    test: "kernel_init::tests::test_kernel_boot"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-005
+    domain: "CPU/HAL"
+    function: "CPU Detection"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "HAL → Kernel"
+    source: "modules/atc-shivacore/kernel/src/hal/cpu.rs"
+    test: "hal::cpu::tests::vendor_parser_accepts_intel_and_amd"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-006
+    domain: "CPU/HAL"
+    function: "CPU Initialization"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "HAL → Kernel"
+    source: "modules/atc-shivacore/kernel/src/hal/cpu.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-007
+    domain: "CPU/HAL"
+    function: "Architecture Context"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "HAL → Scheduler"
+    source: "modules/atc-shivacore/kernel/src/user_sched.rs"
+    test: "user_sched::tests::test_saved_context_roundtrip"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-008
+    domain: "CPU/HAL"
+    function: "Architecture Isolation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "HAL → TCB"
+    source: "modules/atc-shivacore/kernel/src/memory.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-009
+    domain: "Memory"
+    function: "Physical Memory Management"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → Memory"
+    source: "modules/atc-shivacore/kernel/src/memory_manager.rs"
+    test: "memory_manager::tests::test_heap_allocation_is_real"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-010
+    domain: "Memory"
+    function: "Virtual Memory"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → Address Space"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
+    test: "userspace::tests::test_address_space_contains"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-011
+    domain: "Memory"
+    function: "Page Table Management"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "MMU → Kernel"
+    source: "modules/atc-shivacore/kernel/src/memory.rs"
+    test: "memory::tests::page_alignment_contract_is_4k"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-012
+    domain: "Memory"
+    function: "Kernel Heap"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → Allocator"
+    source: "modules/atc-shivacore/kernel/src/allocator.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-013
+    domain: "Memory"
+    function: "User/Kernel Isolation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Memory → Security"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
+    test: "userspace::tests::test_check_memory_access_invalid"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-014
+    domain: "Capability"
+    function: "Capability Object Model"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Caller → TCB"
+    source: "modules/atc-shivacore/kernel/src/capability.rs"
+    test: "capability::tests::test_create_and_check"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-015
+    domain: "Capability"
+    function: "Capability Validation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Syscall → TCB"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
+    test: "syscall::tests::ipc_requires_matching_capability_and_right"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-016
+    domain: "Capability"
+    function: "Handle Validation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "ABI → Kernel"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
+    test: "syscall::tests::rejects_unknown_syscall"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-017
+    domain: "Capability"
+    function: "Authority Isolation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Capability → Object"
+    source: "modules/atc-shivacore/kernel/src/capability.rs"
+    test: "capability::tests::test_delegate_rejects_rights_expansion"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-018
+    domain: "Scheduler"
+    function: "Thread Creation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → Scheduler"
+    source: "modules/atc-shivacore/kernel/src/threads.rs"
+    test: "threads::tests::test_tm_create_thread"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-019
+    domain: "Scheduler"
+    function: "Thread State"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Scheduler → Context"
+    source: "modules/atc-shivacore/kernel/src/threads.rs"
+    test: "threads::tests::test_thread_state_transitions"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-020
+    domain: "Scheduler"
+    function: "Scheduling Queue"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Scheduler"
+    source: "modules/atc-shivacore/kernel/src/scheduler.rs"
+    test: "scheduler::tests::test_basic_scheduling"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-021
+    domain: "Scheduler"
+    function: "Context Switching"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "CPU → Scheduler"
+    source: "modules/atc-shivacore/kernel/src/user_sched.rs"
+    test: "user_sched::tests::test_saved_context_roundtrip"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-022
+    domain: "Scheduler"
+    function: "Preemption"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Timer → Scheduler"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
+    test: "user_sched::tests::test_timer_tick_preemption"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-023
+    domain: "IPC"
+    function: "Endpoint Creation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Capability → IPC"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
+    test: "ipc::tests::test_create_channel_and_send_recv"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-024
+    domain: "IPC"
+    function: "Message Send"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "User → Kernel → IPC"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
+    test: "ipc::tests::test_create_channel_and_send_recv"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-025
+    domain: "IPC"
+    function: "Message Receive"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "IPC → User"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
+    test: "ipc::tests::test_create_channel_and_send_recv"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-026
+    domain: "IPC"
+    function: "IPC Capability Check"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "IPC → Security"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
+    test: "syscall::tests::ipc_requires_matching_capability_and_right"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-027
+    domain: "IPC"
+    function: "IPC Isolation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "IPC → Address Space"
+    source: "modules/atc-shivacore/kernel/src/ipc.rs"
+    test: "ipc::tests::test_recv_without_read_cap_rejected"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-028
+    domain: "Interrupt"
+    function: "Interrupt Entry"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Hardware → HAL"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-029
+    domain: "Interrupt"
+    function: "Interrupt Dispatch"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "HAL → Kernel"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-030
+    domain: "Timer"
+    function: "Monotonic Timer"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "HAL → Scheduler"
+    source: "modules/atc-shivacore/kernel/src/timer.rs"
+    test: "timer::tests::test_clock_and_timer_integration"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-031
+    domain: "Timer"
+    function: "Timer Interrupt"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Hardware → Scheduler"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-032
+    domain: "Fault"
+    function: "Trap Handling"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "CPU → Kernel"
+    source: "modules/atc-shivacore/kernel/src/interrupts.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-033
+    domain: "Fault"
+    function: "Kernel Fault Isolation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Fault → TCB"
+    source: "modules/atc-shivacore/kernel/src/main.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-034
+    domain: "Fault"
+    function: "Kernel Panic Policy"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → Halt/Recovery"
+    source: "modules/atc-shivacore/kernel/src/main.rs"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-035
+    domain: "Userspace"
+    function: "User Address Space Creation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → User"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
+    test: "userspace::tests::test_load_binary_creates_user"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-036
+    domain: "Userspace"
+    function: "Ring-3 Transition"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → User"
+    source: "modules/atc-shivacore/kernel/src/userspace.rs"
+    test: "userspace::tests::test_enter_userspace_valid"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-037
+    domain: "ABI"
+    function: "Syscall Entry"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "User → Kernel"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
+    test: "syscall::tests::rejects_unknown_syscall"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-038
+    domain: "ABI"
+    function: "Syscall Argument Validation"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "ABI → TCB"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
+    test: "syscall::tests::rejects_oversized_payload"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-039
+    domain: "ABI"
+    function: "Syscall Result/Error Contract"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel → User"
+    source: "modules/atc-shivacore/kernel/src/syscall.rs"
+    test: "syscall::tests::rejects_major_abi_mismatch"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
+  - id: KRN-040
+    domain: "ABI"
+    function: "ABI Version Boundary"
+    responsibility: "ShivaCore kernel / TCB"
+    input: null
+    output: null
+    state: ANALYZED
+    capability: null
+    security_boundary: "Kernel ↔ Userspace"
+    source: "system/shivacore-api/src/lib.rs"
+    test: "tests::abi_version_is_stable"
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Source candidate mapped by Existing-First inspection; function-level tests and runtime evidence remain to be mapped."
