@@ -1,6 +1,6 @@
 # 📊 Status — atc-shivacore
 
-> **Stand:** 2026-09-17  
+> **Stand:** 2026-10-08  
 > **Version:** v1.0.0  
 > **Milestone:** ShivaCore M1.2 VMM
 
@@ -20,8 +20,8 @@
 | HHDM supervisor/RW/NX policy | IMPLEMENTED |
 | Bootstrap mapping containment | IMPLEMENTED |
 | Regression tests | IMPLEMENTED |
-| Hardware page-table mutation | FOLLOW-UP |
-| Transactional intermediate-table rollback | FOLLOW-UP |
+| Hardware page-table mutation | IMPLEMENTED (deterministisch evidenzgetestet; Boot-Wiring folgt in der Hardware-Kette) |
+| Transactional intermediate-table rollback | IMPLEMENTED |
 | M1.3 object/mapping lifetime integration | FOLLOW-UP |
 | Final M1.2 conformance freeze | NOT YET |
 
@@ -55,3 +55,19 @@ Planungsmarker für die Hardware-Kette (PCIe/HPET/virtio, siehe README).
 Hygiene: `scheduler_ready_queue_contract.tmp` entfernt;
 `FILE_REGISTER.md` regeneriert (nur getrackte Quell-Dateien, kein
 `target/`-Müll mehr, reflektiert den Service-Space-Move).
+
+## M1.2 Hardware-Mutationspfad (2026-10-08)
+
+`kernel/src/vmm.rs` enthält jetzt neben dem Validierungskern den
+`HardwareMapper`: echten PML4 → PDPT → PD → PT Walk mit Entry-Programmierung
+und transaktionalem Rollback. Validierung (W^X, User-Intervall, Kanonizität,
+HHDM-Supervisor/RW/NX, PS-Level-Semantik) läuft fail-closed VOR der ersten
+Allokation. Schlägt der Walk mitten in der Hierarchie fehl (Frame-Erschöpfung
+usw.), werden alle neu allokierten InterTables freigegeben und alle
+Entry-Schreibungen auf den alten Wert zurückgerollt. 8 neue Regressionstests
+(u.a. Mid-Walk-Rollback, Hierarchie-Wiederverwendung, Huge-Page-Ablehnung,
+Leak-Freiheit). Evidenz: `cargo test -p shivacore vmm` 17/17.
+
+Das physische Backend ist über `FrameBackend` abstrahiert; die Verdrahtung
+mit HHDM-Translation + BootInfoFrameAllocator (x86-boot) folgt in der
+Hardware-Kette der P0-Abnahmekette.
