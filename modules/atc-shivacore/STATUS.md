@@ -38,3 +38,20 @@ The M1.2 validation core is located at:
 The implementation is enabled from the kernel library and contains deterministic unit tests for the security and boundary invariants.
 
 See `docs/M1.2_VMM_IMPLEMENTATION.md` for the normative implementation boundary and remaining work.
+
+## Architecture Delta — P0 #45 Cleanup Stufe 2 (2026-10-08)
+
+Reverse-Dependency-Audit: Der Kernel-Crate hat **0 Referenzen** auf Service-Space-
+Subsysteme (ai, mempool, contract, vm, net, tcpip, p2p, p2p_secure, sockets,
+container_net wurden in Stufe 1 nach `service_space/` verschoben).
+
+Verbleibende, in `lib.rs`/`main.rs` nicht registrierte Kernel-Dateien sind
+**geplante Kernel-Arbeit** (COMPONENT_PLAN.md, K-Sprints 32–46), keine
+Service-Space-Reste: block, container, cow, devfs, fs_journal, page_fault,
+power, signals, smp, threads, tracing, user_io. Ihre Aktivierung folgt der
+P0-Abnahmekette (VMM M1.2/M1.3 → Hardware-Kette). `hw_drivers.rs` ist der
+Planungsmarker für die Hardware-Kette (PCIe/HPET/virtio, siehe README).
+
+Hygiene: `scheduler_ready_queue_contract.tmp` entfernt;
+`FILE_REGISTER.md` regeneriert (nur getrackte Quell-Dateien, kein
+`target/`-Müll mehr, reflektiert den Service-Space-Move).
