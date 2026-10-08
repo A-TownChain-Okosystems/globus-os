@@ -6,7 +6,12 @@
 // Binary-Loader, User-Context-Verwaltung, Syscall-Entry aus Ring 3.
 
 use crate::ats1000::{ExitCode, Pid};
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use core::arch::asm;
+#[cfg(feature = "x86-boot")]
 use x86_64::{
     structures::paging::OffsetPageTable,
     structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
@@ -1050,7 +1055,8 @@ mod tests {
         // 2. Enter userspace (validate)
         let ctx = mgr.enter_userspace(pid).unwrap();
         assert!(ctx.is_user_mode());
-        // 3. Handle syscalls
+        let ctx = ctx.clone(); // Borrow-Ende: handle_syscall nimmt &mut self
+                               // 3. Handle syscalls
         let rsp = mgr.handle_syscall(pid, 1, &[]).unwrap();
         assert!(rsp > 0);
         // 4. Check memory

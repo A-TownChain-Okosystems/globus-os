@@ -182,13 +182,16 @@ pub const fn validate_user_range(ptr: u64, len: u64) -> Result<(), VmmError> {
 /// User mappings are allowed only inside the exact userspace interval;
 /// merely being below HHDM is not sufficient.
 pub fn validate_mapping_target(virt: u64, flags: MappingFlags) -> Result<(), VmmError> {
-    VirtAddr::new(virt)?;
     flags.validate()?;
 
+    // A user-accessible mapping outside the user range is a privilege
+    // violation even if the address is also non-canonical: the security
+    // rule must dominate the address-form check.
     if flags.user_accessible && !(virt >= USER_SPACE_BASE && virt < USER_SPACE_TOP_EXCLUSIVE) {
         return Err(VmmError::PrivilegeViolation);
     }
 
+    VirtAddr::new(virt)?;
     Ok(())
 }
 

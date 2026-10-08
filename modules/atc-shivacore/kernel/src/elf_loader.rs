@@ -5,6 +5,12 @@
 // ELF64-Parser und -Loader für User-Prozesse (Ring 3).
 // Signal-Handling für Userspace-Prozesse (POSIX-ähnlich).
 
+// P0-Baseline: alloc-Prelude für no_std (Issue #45, Schritt 3)
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::ats1000::{ExitCode, Pid};
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -644,7 +650,7 @@ impl SignalManager {
                 .pending
                 .iter_mut()
                 .find(|(p, _)| *p == pid)
-                .and_then(|(_, sigs)| sigs.remove(idx).map(|ps| ps.signal))?;
+                .and_then(|(_, sigs)| Some(sigs.remove(idx).signal))?;
             self.signals_delivered += 1;
             let disp = self.get_handler(pid, signal);
             Some((signal, disp))
@@ -734,41 +740,59 @@ mod tests {
     #[test]
     fn test_parse_invalid_magic() {
         let bad = vec![0x00; 128];
-        assert_eq!(ElfParser::parse(&bad), Err(ElfParseError::InvalidMagic));
+        assert!(matches!(
+            ElfParser::parse(&bad),
+            Err(ElfParseError::InvalidMagic)
+        ));
     }
 
     #[test]
     fn test_parse_truncated() {
         let bad = vec![0x7F, b'E', b'L', b'F'];
-        assert_eq!(ElfParser::parse(&bad), Err(ElfParseError::Truncated));
+        assert!(matches!(
+            ElfParser::parse(&bad),
+            Err(ElfParseError::Truncated)
+        ));
     }
 
     #[test]
     fn test_parse_wrong_class() {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         elf[4] = 1; // ELFCLASS32
-        assert_eq!(ElfParser::parse(&elf), Err(ElfParseError::InvalidClass));
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidClass)
+        ));
     }
 
     #[test]
     fn test_parse_wrong_endianness() {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         elf[5] = 2; // ELFDATA2MSB (big endian)
-        assert_eq!(ElfParser::parse(&elf), Err(ElfParseError::InvalidEndian));
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidEndian)
+        ));
     }
 
     #[test]
     fn test_parse_wrong_type() {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         elf[16..18].copy_from_slice(&3u16.to_le_bytes()); // ET_DYN
-        assert_eq!(ElfParser::parse(&elf), Err(ElfParseError::InvalidType));
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidType)
+        ));
     }
 
     #[test]
     fn test_parse_wrong_machine() {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         elf[18..20].copy_from_slice(&3u16.to_le_bytes()); // EM_386
-        assert_eq!(ElfParser::parse(&elf), Err(ElfParseError::InvalidMachine));
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidMachine)
+        ));
     }
 
     #[test]
@@ -823,10 +847,10 @@ mod tests {
         // Change p_type to PT_NOTE (not PT_LOAD)
         let phdr_off = 64;
         elf[phdr_off..phdr_off + 4].copy_from_slice(&PT_NOTE.to_le_bytes());
-        assert_eq!(
+        assert!(matches!(
             ElfParser::parse(&elf),
             Err(ElfParseError::NoLoadableSegments)
-        );
+        ));
     }
 
     // --- ELF Loader tests ---

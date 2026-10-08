@@ -5,10 +5,14 @@
 // Boot-Sequence, Init-Prozess (PID 1), Prozessgruppen/Sessions,
 // User/Group IDs, SystemManager (Top-Level Integration aller Subsysteme).
 
+// P0-Baseline: alloc-Prelude für no_std (Issue #45, Schritt 3)
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::ats1000::{ExitCode, Pid};
 use alloc::collections::BTreeMap;
-use alloc::string::{String, ToString};
-use alloc::vec::Vec;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Boot Phases
@@ -185,8 +189,14 @@ impl BootSequence {
     }
 
     pub fn set_boot_complete(&mut self, timestamp_ns: u64) {
-        self.boot_time_ns = timestamp_ns;
+        // Close the Init phase and record Running as reached so the boot
+        // progress reflects a fully completed phase chain.
+        self.completed_phases.push(self.current_phase);
         self.current_phase = BootPhase::Running;
+        self.phase_timestamps
+            .insert(BootPhase::Running as u8, timestamp_ns);
+        self.completed_phases.push(BootPhase::Running);
+        self.boot_time_ns = timestamp_ns;
         self.log(&format!("boot complete in {}ns", timestamp_ns));
     }
 

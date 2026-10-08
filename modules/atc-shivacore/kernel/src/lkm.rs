@@ -586,6 +586,10 @@ impl ModuleEventType {
 #[derive(Clone, Debug)]
 pub struct DependencyGraph {
     nodes: BTreeSet<String>,
+    /// Nodes the graph vouches for: explicitly added via add_node or
+    /// introduced as the SOURCE of an edge. Pure edge targets are reachable
+    /// transitively but are not resolvable modules on their own.
+    declared: BTreeSet<String>,
     edges: HashMap<String, BTreeSet<String>>, // module -> set of dependencies
     reverse_edges: HashMap<String, BTreeSet<String>>, // module -> set of dependents
 }
@@ -594,6 +598,7 @@ impl Default for DependencyGraph {
     fn default() -> Self {
         DependencyGraph {
             nodes: BTreeSet::new(),
+            declared: BTreeSet::new(),
             edges: HashMap::new(),
             reverse_edges: HashMap::new(),
         }
@@ -607,6 +612,7 @@ impl DependencyGraph {
 
     pub fn add_node(&mut self, name: &str) {
         self.nodes.insert(name.to_string());
+        self.declared.insert(name.to_string());
         self.edges.entry(name.to_string()).or_default();
         self.reverse_edges.entry(name.to_string()).or_default();
     }
@@ -614,6 +620,9 @@ impl DependencyGraph {
     pub fn add_edge(&mut self, from: &str, to: &str) {
         self.nodes.insert(from.to_string());
         self.nodes.insert(to.to_string());
+        // The edge source is a resolvable module; the target is only
+        // vouched for when it is itself added or used as a source.
+        self.declared.insert(from.to_string());
         self.edges
             .entry(from.to_string())
             .or_default()
@@ -763,6 +772,21 @@ impl DependencyGraph {
 
     pub fn load_order(&self, target: &str) -> Result<Vec<String>, String> {
         // Get the load order for a specific module (all its transitive deps first)
+        // Every DIRECT dependency of the requested module must be a declared
+        // node (registered or itself a dependent). A dangling target that was
+        // never vouched for cannot be resolved and fails the whole order.
+        if let Some(deps) = self.edges.get(target) {
+            let mut sorted: Vec<&String> = deps.iter().collect();
+            sorted.sort();
+            for dep in sorted {
+                if !self.declared.contains(dep) {
+                    return Err(format!(
+                        "Dependency '{}' not found (required by '{}')",
+                        dep, target
+                    ));
+                }
+            }
+        }
         let mut order = Vec::new();
         let mut visited = BTreeSet::new();
         self.dfs_load_order(target, &mut visited, &mut order)?;
@@ -1136,6 +1160,29 @@ impl ModuleRegistry {
             }
         }
 
+        // A module may never become active while one of its declared
+        // conflicts is active (mirrors the register-time check).
+        {
+            let module = self.modules.get(name).unwrap();
+            for conflict in &module.conflicts {
+                if let Some(other) = self.modules.get(conflict) {
+                    if other.state.is_active() {
+                        let msg = format!(
+                            "Module '{}' conflicts with active module '{}'",
+                            module_name, conflict
+                        );
+                        self.log_event(
+                            ModuleEventType::ConflictDetected,
+                            &module_name,
+                            module_id,
+                            &msg,
+                        );
+                        return Err(msg);
+                    }
+                }
+            }
+        }
+
         self.modules.get_mut(name).unwrap().state = ModuleState::Loading;
         self.log_event(
             ModuleEventType::LoadStarted,
@@ -1328,7 +1375,20 @@ impl ModuleRegistry {
 
         sorted
             .into_iter()
-            .map(|(name, _)| self.load(&name))
+            .map(|(name, _)| {
+                // An earlier module in this pass may already have pulled this
+                // module in as one of its dependencies. That is success, not
+                // a failure, so treat it as already satisfied.
+                if self
+                    .modules
+                    .get(&name)
+                    .map(|m| m.state.is_active())
+                    .unwrap_or(false)
+                {
+                    return Ok(0);
+                }
+                self.load(&name)
+            })
             .collect()
     }
 

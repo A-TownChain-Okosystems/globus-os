@@ -6,6 +6,12 @@
 // Context Switch (IRET-Frame), Timer-Driven Preemption, Quantum-Based Scheduling,
 // Integration von UserspaceManager + SignalManager + PageFaultHandler.
 
+// P0-Baseline: alloc-Prelude für no_std (Issue #45, Schritt 3)
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+
 use crate::ats1000::{ExitCode, Pid};
 use crate::elf_loader::SignalManager;
 use crate::userspace::{PrivilegeLevel, UserContext, UserspaceError, UserspaceManager};
@@ -320,7 +326,9 @@ impl UserScheduler {
         if self.current == Some(pid) {
             self.current = None;
         }
-        self.entries.retain(|e| e.pid != pid)
+        let before = self.entries.len();
+        self.entries.retain(|e| e.pid != pid);
+        self.entries.len() != before
     }
 
     /// Get the currently running process
@@ -438,7 +446,7 @@ impl UserScheduler {
 
         for entry in &mut self.entries {
             if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= *wake {
+                if self.timer_ticks >= wake {
                     entry.state = SchedState::Ready;
                     entry.wake_tick = None;
                 }
@@ -469,7 +477,7 @@ impl UserScheduler {
         // Check wake-ups (Sleep entries)
         for entry in &mut self.entries {
             if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= *wake {
+                if self.timer_ticks >= wake {
                     entry.state = SchedState::Ready;
                     entry.wake_tick = None;
                 }
@@ -506,11 +514,12 @@ impl UserScheduler {
         reason: BlockReason,
         current_ctx: &UserContext,
     ) -> Option<(Pid, SavedContext)> {
-        if let Some(pid) = self.current {
-            if let Some(entry) = self.get_entry_mut(pid) {
-                entry.save_context(current_ctx);
-                entry.state = SchedState::Blocked(reason);
-            }
+        // If the scheduler has no current pid yet (freshly seeded queue),
+        // the caller-provided context identifies the process to block.
+        let target = self.current.unwrap_or(current_ctx.pid);
+        if let Some(entry) = self.get_entry_mut(target) {
+            entry.save_context(current_ctx);
+            entry.state = SchedState::Blocked(reason);
         }
         self.current = None;
         self.schedule(None)
@@ -720,7 +729,7 @@ impl UserProcessSystem {
         // Normal timer tick → quantum check
         if let Some(pid) = current {
             if let Some(ctx) = self.userspace.get_context(pid) {
-                let ctx_copy = *ctx;
+                let ctx_copy = ctx.clone();
                 return self.scheduler.timer_tick(&ctx_copy);
             }
         }
