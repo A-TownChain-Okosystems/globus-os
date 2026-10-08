@@ -36,6 +36,7 @@ pub enum VmmError {
     FrameAllocationFailed,
     AlreadyMapped,
     NotMapped,
+    AddressMisaligned,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -460,6 +461,11 @@ impl<'a> HardwareMapper<'a> {
     /// HHDM-Mappings sind zwingend Supervisor/RW/NX.
     fn validate_target_policy(&mut self, virt: u64, flags: MappingFlags) -> Result<(), VmmError> {
         validate_mapping_target(virt, flags)?;
+        // Mappings sind seitenscharf: eine unaligned virt-Adresse würde
+        // eine andere Seite mappen als die Registry bucht (Divergenz).
+        if virt & PAGE_MASK != 0 {
+            return Err(VmmError::AddressMisaligned);
+        }
         if VirtAddr::new(virt)?.is_hhdm() && (!flags.writable || flags.executable) {
             return Err(VmmError::PrivilegeViolation);
         }
@@ -493,16 +499,27 @@ impl<'a> HardwareMapper<'a> {
     /// auf einen freigegebenen Frame).
     pub fn unmap_page(&mut self, virt: u64) -> Result<PhysFrame, VmmError> {
         VirtAddr::new(virt)?;
+        if virt & PAGE_MASK != 0 {
+            return Err(VmmError::AddressMisaligned);
+        }
 
         // Pfad sammeln: je Ebene (Parent-Entry-Adresse, Tabellen-Frame).
+        // Level-spezifische PS-Prüfung wie bei translate(): ein Huge-Page-
+        // Entry ist KEINE Tabelle — descendieren würde einen beliebigen
+        // Frame als Tabelle interpretieren und später freigeben.
         let mut path: alloc::vec::Vec<(u64, PhysFrame)> = alloc::vec::Vec::new();
         let mut table = self.pml4;
-        for shift in [39u32, 30, 21] {
+        for (shift, level) in [
+            (39u32, PageTableLevel::Pml4),
+            (30, PageTableLevel::Pdpt),
+            (21, PageTableLevel::Pd),
+        ] {
             let entry_addr = table.0 + (table_index(virt, shift) * 8) as u64;
             let entry = self.backend.read_phys_u64(entry_addr)?;
             if entry & 1 == 0 {
                 return Err(VmmError::NotMapped);
             }
+            level.reject_huge_page(entry)?;
             let next = PhysFrame::new(entry & PHYS_ADDR_MASK)?;
             path.push((entry_addr, next));
             table = next;
@@ -586,6 +603,9 @@ impl Vmm {
         backend: &mut dyn FrameBackend,
         virt: u64,
     ) -> Result<PhysFrame, VmmError> {
+        if virt & PAGE_MASK != 0 {
+            return Err(VmmError::AddressMisaligned);
+        }
         let frame = match self.registry.get(&virt) {
             Some(f) => *f,
             None => return Err(VmmError::NotMapped),
@@ -1333,6 +1353,119 @@ mod tests {
         assert_eq!(
             vmm.translate(&mut backend, USER_SPACE_BASE).unwrap().0,
             frame2.0
+        );
+    }
+
+    // ── M1.2 Security-Audit-Regressionen ────────────────────────────────
+
+    #[test]
+    fn unmap_rejects_huge_page_entry() {
+        // Finding: unmap_page descendiert PS-Entries nicht als Tabelle —
+        // ein Huge-Page-Entry darf beim Walk nicht als Tabellen-Frame
+        // interpretiert (und später freigegeben) werden.
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+
+        let pdpt_frame = PhysFrame::new(0x9000).unwrap();
+        backend
+            .write_phys_u64(
+                pml4.0 + (table_index(USER_SPACE_BASE, 39) * 8) as u64,
+                pdpt_frame.0 | 1,
+            )
+            .unwrap();
+        backend
+            .write_phys_u64(
+                pdpt_frame.0 + (table_index(USER_SPACE_BASE, 30) * 8) as u64,
+                0x1000 | 1 | (1 << 7), // Present + PS (1-GiB-Huge-Page)
+            )
+            .unwrap();
+
+        let mut mapper = HardwareMapper::new(pml4, &mut backend);
+        assert_eq!(
+            mapper.unmap_page(USER_SPACE_BASE),
+            Err(VmmError::HugePageNotSupported)
+        );
+        drop(mapper);
+        assert_eq!(
+            backend.outstanding, 0,
+            "kein Frame darf freigegeben worden sein"
+        );
+        // Der Huge-Page-Entry ist unangetastet.
+        let entry = backend
+            .read_phys_u64(pdpt_frame.0 + (table_index(USER_SPACE_BASE, 30) * 8) as u64)
+            .unwrap();
+        assert_eq!(entry, 0x1000 | 1 | (1 << 7));
+    }
+
+    #[test]
+    fn map_rejects_misaligned_virt() {
+        // Finding: unaligned virt würde eine andere Seite mappen als die
+        // Registry bucht — seitenverschränkte Buchung ist verboten.
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        assert_eq!(
+            vmm.map_owned(
+                &mut backend,
+                USER_SPACE_BASE + 1,
+                PhysFrame::new(0x9000).unwrap(),
+                MappingFlags::user_read_write()
+            ),
+            Err(VmmError::AddressMisaligned)
+        );
+        assert_eq!(vmm.mapping_count(), 0);
+        drop(vmm);
+        assert_eq!(
+            backend.outstanding, 0,
+            "Alignment-Fehler darf keine Frames verbrauchen"
+        );
+    }
+
+    #[test]
+    fn unmap_rejects_misaligned_virt() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+        vmm.map_owned(
+            &mut backend,
+            USER_SPACE_BASE,
+            PhysFrame::new(0x9000).unwrap(),
+            MappingFlags::user_read_write(),
+        )
+        .unwrap();
+
+        assert_eq!(
+            vmm.unmap(&mut backend, USER_SPACE_BASE + 0x800),
+            Err(VmmError::AddressMisaligned)
+        );
+        // Das echte Mapping ist unangetastet.
+        assert_eq!(
+            vmm.translate(&mut backend, USER_SPACE_BASE).unwrap().0,
+            0x9000
+        );
+        assert_eq!(vmm.mapping_count(), 1);
+    }
+
+    #[test]
+    fn hhdm_read_only_is_rejected() {
+        // Ergänzung: HHDM muss RW sein — read-only ist ein Policy-Verstoß.
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let ro = MappingFlags {
+            writable: false,
+            user_accessible: false,
+            executable: false,
+            global: true,
+            cache_disable: false,
+        };
+        assert_eq!(
+            HardwareMapper::new(pml4, &mut backend).map_page(
+                HHDM_BASE,
+                PhysFrame::new(0x9000).unwrap(),
+                ro
+            ),
+            Err(VmmError::PrivilegeViolation)
         );
     }
 }

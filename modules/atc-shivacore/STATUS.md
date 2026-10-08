@@ -88,3 +88,15 @@ Hardware-Kette der P0-Abnahmekette.
   Tabellen bleiben, Shared-Frame-Outlive, Phantom-Registry-Freiheit,
   Remap nach Kollaps, NotMapped-Konsistenz). Test-Backend detektiert
   Frame-Doppelvergabe und Double-Free.
+
+## M1.2 Security-Review (2026-10-08)
+
+Systematischer Invarianten-Audit nach der Freeze-Regel (Implementierung,
+CI-Evidenz, Security-Audit, Conformance, Doku): **PASS mit 2 korrigierten
+Findings**. F-1: unmap_page descendierte ohne PS-Pruefung (Frame-Confusion
+bei Huge-Page-Entries) — fix mit level-spezifischer reject_huge_page im
+Walk. F-2: unaligned virt-Adressen fuehrten zu Registry-Divergenz — fix mit
+AddressMisaligned-Gate in map/unmap. 4 neue Audit-Regressionen, vmm 27/27.
+Details: docs/M1.2_VMM_SECURITY_REVIEW.md (inkl. dokumentierter Residuals
+R-1 bis R-4: Rollback-Write-Fehler, TLB, Kernel-Image-Policy, Frame 0 —
+alles Hardware-Kette bzw. by design).
