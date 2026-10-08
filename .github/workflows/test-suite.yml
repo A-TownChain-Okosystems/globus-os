@@ -97,6 +97,16 @@ jobs:
               text = text.rstrip() + "\n" + block
           open(path, "w", encoding="utf-8").write(text)
           PY
+      - name: Upload immutable evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: globus-os-evidence-${{ github.sha }}
+          path: .atc/evidence/evidence.yaml
+          if-no-files-found: error
+
+      - name: Persist evidence on default-branch push
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
           git config user.name "Aurora-Bot"
           git config user.email "aurora@base44.ai"
           git add .atc/evidence/evidence.yaml
