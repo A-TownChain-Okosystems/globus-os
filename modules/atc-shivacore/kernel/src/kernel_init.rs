@@ -14,14 +14,11 @@
 //!   L5:  IpcSubsystem::new()        — IPC-Kanäle
 //!   L6:  AtcFileSystem::new()       — Content-Addressed FS
 //!   L6b: Vfs::new(caps)             — Virtual File System
-//!   L7:  P2pNode::new()             — P2P Network
-//!   L8:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
-//!   L9:  ConsensusEngine::new()     — PoH + DAG + Validators
-//!   L9b: MemoryPool::new()          — Transaction Mempool
-//!   L9c: BlockChain::new()          — Blockchain
-//!   L9d: VmEngine::new()            — Contract VM
-//!   L9e: ContractExecutor::new()   — Contract Processing
-//!   L10: AiEngine::new()            — AI Subsystem
+//!   L7:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
+//!
+//! Nicht-TCB-Subsysteme (P2P-Netz, Mempool, Contract-VM/Executor, AI) sind
+//! in den Service Space (shivacore-service-space) ausgelagert (AD-012/AD-028)
+//! und werden dort über shivacore_service_space::service_init initialisiert.
 
 extern crate alloc;
 
@@ -31,21 +28,16 @@ use alloc::string::ToString;
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::ai::AiEngine;
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
 use crate::capability::CapabilityTable;
-use crate::contract::ContractExecutor;
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
-use crate::mempool::{MemoryPool, NonceTracker, StateDb, TxValidator};
-use crate::p2p::P2pNode;
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
 use crate::security::SecurityManager;
 use crate::timer::{MonotonicClock, SimulatedTimerSource, TimerManager};
 use crate::vfs::Vfs;
-use crate::vm::VmEngine;
 
 /// Kernel-Init-Status für jedes Subsystem
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -66,10 +58,7 @@ pub enum BootPhase {
     Scheduler,    // L4: DA-HEFT Scheduler
     Ipc,          // L5: IPC Channels
     FileSystem,   // L6: ATCFS + VFS
-    Network,      // L7: P2P Network
-    Security,     // L8: Security/Audit/MultiSig
-    Blockchain,   // L9: Mempool/VM/Contracts (Consensus+Chain -> Service Space)
-    Ai,           // L10: AI Subsystem
+    Security,     // L7: Security/Audit/MultiSig
     Done,
 }
 
@@ -83,10 +72,7 @@ impl BootPhase {
             BootPhase::Scheduler => "L4 DA-HEFT Scheduler",
             BootPhase::Ipc => "L5 IPC Channels",
             BootPhase::FileSystem => "L6 ATCFS + VFS",
-            BootPhase::Network => "L7 P2P Network (ATCNet)",
-            BootPhase::Security => "L8 Security/Audit/MultiSig",
-            BootPhase::Blockchain => "L9 Mempool + Contract VM",
-            BootPhase::Ai => "L10 AI Subsystem (Aurora AI)",
+            BootPhase::Security => "L7 Security/Audit/MultiSig",
             BootPhase::Done => "Boot Complete",
         }
     }
@@ -107,19 +93,8 @@ pub struct KernelState {
     // L6: Filesystems
     pub fs: AtcFileSystem,
     pub vfs: Vfs,
-    // L7: Network
-    pub p2p: P2pNode,
-    // L8: Security
+    // L7: Security
     pub security: SecurityManager,
-    // L9: Contract-Stack (Consensus/Chain -> Service Space, AD-028)
-    pub mempool: Arc<MemoryPool>,
-    pub state_db: Arc<StateDb>,
-    pub tx_validator: Arc<TxValidator>,
-    pub nonces: Arc<NonceTracker>,
-    pub vm: Arc<VmEngine>,
-    pub contracts: ContractExecutor,
-    // L10: AI
-    pub ai: AiEngine,
     // Boot log
     pub init_log: Vec<(BootPhase, InitStatus)>,
 }
@@ -176,31 +151,10 @@ impl KernelState {
         let vfs = Vfs::new(caps);
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
-        // ── L7: P2P Network ──
-        log.push((BootPhase::Network, InitStatus::Initializing));
-        let our_did = "did:atc:shivacore:bootnode".to_string();
-        let p2p = P2pNode::new(our_did.clone(), 4242, 50);
-        log.push((BootPhase::Network, InitStatus::Ready));
-
-        // ── L8: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
+        // ── L7: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
         log.push((BootPhase::Security, InitStatus::Initializing));
         let security = SecurityManager::new();
         log.push((BootPhase::Security, InitStatus::Ready));
-
-        // ── L9: Blockchain Stack (Consensus + Mempool + Chain + VM + Contracts) ──
-        log.push((BootPhase::Blockchain, InitStatus::Initializing));
-        let mempool = Arc::new(MemoryPool::new(10000, 300));
-        let state_db = Arc::new(StateDb::new());
-        let nonces = Arc::new(NonceTracker::new());
-        let tx_validator = Arc::new(TxValidator::new(state_db.clone(), nonces.clone(), 1));
-        let vm = Arc::new(VmEngine::new(1_000_000));
-        let contracts = ContractExecutor::new(vm.clone(), state_db.clone());
-        log.push((BootPhase::Blockchain, InitStatus::Ready));
-
-        // ── L10: AI Subsystem ──
-        log.push((BootPhase::Ai, InitStatus::Initializing));
-        let ai = AiEngine::new();
-        log.push((BootPhase::Ai, InitStatus::Ready));
 
         // ── Done ──
         log.push((BootPhase::Done, InitStatus::Ready));
@@ -212,15 +166,7 @@ impl KernelState {
             ipc,
             fs,
             vfs,
-            p2p,
             security,
-            mempool,
-            state_db,
-            tx_validator,
-            nonces,
-            vm,
-            contracts,
-            ai,
             init_log: log,
         })
     }
@@ -243,18 +189,7 @@ impl KernelState {
             self.memory.stats().total_allocated
         ));
         out.push_str(&format!("  FS: {} nodes\n", self.fs.ls("/").len()));
-        out.push_str(&format!(
-            "  P2P: port {}, {} peers\n",
-            self.p2p.listen_port(),
-            self.p2p.peer_count()
-        ));
-        out.push_str(&format!(
-            "  Mempool: {}/{} txs\n",
-            self.mempool.count(),
-            10000
-        ));
-        out.push_str(&format!("  VM: {} contracts\n", self.vm.contract_count()));
-        out.push_str(&format!("  AI: {} models\n", self.ai.model_count()));
+        out.push_str("  Services: non-TCB subsystems in shivacore-service-space\n");
         out.push_str("=== Boot Complete ===\n");
         out
     }
@@ -318,7 +253,7 @@ pub fn validate_integration() -> Result<(), String> {
 
 /// Gibt die Kernel-Version und Build-Info zurück
 pub fn kernel_version() -> &'static str {
-    "ShivaCore Kernel v0.0.23 (K-Sprint 23) — 709 tests, 30 modules"
+    "ShivaCore Kernel v0.0.24 (K-Sprint 24) — TCB-only, services in service-space"
 }
 
 #[cfg(test)]
@@ -341,10 +276,8 @@ mod tests {
         assert!(log.contains("Heap"));
         assert!(log.contains("MemorySubsystem"));
         assert!(log.contains("ATCFS"));
-        assert!(log.contains("P2P"));
-        assert!(log.contains("Mempool"));
-        assert!(log.contains("VM"));
-        assert!(log.contains("AI"));
+        assert!(log.contains("Security"));
+        assert!(log.contains("service-space"));
         assert!(log.contains("Boot Complete"));
     }
 
@@ -364,7 +297,7 @@ mod tests {
     fn test_kernel_version() {
         let v = kernel_version();
         assert!(v.contains("ShivaCore"));
-        assert!(v.contains("709 tests"));
+        assert!(v.contains("TCB-only"));
     }
 
     #[test]
@@ -383,26 +316,6 @@ mod tests {
         let state = KernelState::boot().unwrap();
         assert!(state.fs.exists("/"));
         assert!(state.fs.exists("/atc"));
-    }
-
-    #[test]
-    fn test_p2p_initialized() {
-        let state = KernelState::boot().unwrap();
-        assert_eq!(state.p2p.listen_port(), 4242);
-        assert_eq!(state.p2p.peer_count(), 0);
-    }
-
-    #[test]
-    fn test_contracts_stack_initialized() {
-        let state = KernelState::boot().unwrap();
-        assert_eq!(state.mempool.count(), 0);
-        assert_eq!(state.vm.contract_count(), 0);
-    }
-
-    #[test]
-    fn test_ai_initialized() {
-        let state = KernelState::boot().unwrap();
-        assert_eq!(state.ai.model_count(), 0);
     }
 
     #[test]

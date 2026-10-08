@@ -10,13 +10,11 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-pub mod ai;
 #[cfg(test)]
 pub mod allocator;
 pub mod atcfs;
 pub mod ats1000;
 pub mod capability;
-pub mod contract;
 pub mod cross_subsystem;
 pub mod diagnostics;
 pub mod elf_loader;
@@ -24,21 +22,15 @@ pub mod hal;
 pub mod ipc;
 pub mod kernel_init;
 pub mod memory_manager;
-pub mod mempool;
-pub mod net;
-pub mod p2p;
-pub mod p2p_secure;
 pub mod process;
 pub mod scheduler;
 pub mod security;
 pub mod syscall;
 pub mod system;
-pub mod tcpip;
 pub mod timer;
 pub mod user_sched;
 pub mod userspace;
 pub mod vfs;
-pub mod vm;
 pub mod vmm;
 
 #[cfg(test)]
