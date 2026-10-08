@@ -22,7 +22,7 @@
 | Regression tests | IMPLEMENTED |
 | Hardware page-table mutation | IMPLEMENTED (deterministisch evidenzgetestet; Boot-Wiring folgt in der Hardware-Kette) |
 | Transactional intermediate-table rollback | IMPLEMENTED |
-| M1.3 object/mapping lifetime integration | FOLLOW-UP |
+| M1.3 object/mapping lifetime integration | IMPLEMENTED (Unmap, InterTable-Kollaps, Frame-Refcounting; TLB-Invalidierung folgt in der Hardware-Kette) |
 | Final M1.2 conformance freeze | NOT YET |
 
 ## Engineering rule
@@ -71,3 +71,20 @@ Leak-Freiheit). Evidenz: `cargo test -p shivacore vmm` 17/17.
 Das physische Backend ist über `FrameBackend` abstrahiert; die Verdrahtung
 mit HHDM-Translation + BootInfoFrameAllocator (x86-boot) folgt in der
 Hardware-Kette der P0-Abnahmekette.
+
+## M1.3 Lifetime-Integration (2026-10-08)
+
+`vmm.rs` ergänzt den M1.2-Mutationspfad um das Mapping-Lifetime-Modell:
+
+- `HardwareMapper::unmap_page`: Leaf löschen, danach bottom-up leere
+  InterTables freigeben (Entry im Parent clearen, Frame zurückgeben).
+  Reihenfolge: Leaf VOR Frame-Freigabe — kein Present-Eintrag zeigt je auf
+  einen freigegebenen Frame. Die PML4 selbst wird nie freigegeben.
+- `Vmm`-Registry: `map_owned` hält eine Referenz pro Mapping; fällt der
+  Refcount eines Frames auf 0, wird er an das Backend zurückgegeben.
+  Shared Frames (mehrere virtuelle Seiten → ein Frame) überleben partielle
+  Unmaps referenzgenau. Raw-Mappings ohne Ownership bleiben `map_page`.
+- Evidenz: 6 neue Tests (Kollaps kompletter Hierarchien, Nicht-leere
+  Tabellen bleiben, Shared-Frame-Outlive, Phantom-Registry-Freiheit,
+  Remap nach Kollaps, NotMapped-Konsistenz). Test-Backend detektiert
+  Frame-Doppelvergabe und Double-Free.

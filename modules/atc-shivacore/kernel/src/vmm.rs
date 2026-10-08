@@ -479,6 +479,153 @@ impl<'a> HardwareMapper<'a> {
     }
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// M1.3: Mapping-Lifetime — Unmap, InterTable-Kollaps, Frame-Refcounting
+// ═══════════════════════════════════════════════════════════════════════════
+
+impl<'a> HardwareMapper<'a> {
+    /// Eine Seite unmappen: Leaf-Entry löschen und anschließend —
+    /// bottom-up — leere InterTables freigeben (Entry im Parent clearen,
+    /// Frame zurückgeben). Die PML4 selbst wird nie freigegeben.
+    /// Reale TLB-Invalidierung folgt in der Hardware-Kette; hier bleibt
+    /// die Mutation rein tabellarisch und deterministisch.
+    /// Reihenfolge: Leaf VOR Frame-Freigabe (kein Present-Eintrag zeigt je
+    /// auf einen freigegebenen Frame).
+    pub fn unmap_page(&mut self, virt: u64) -> Result<PhysFrame, VmmError> {
+        VirtAddr::new(virt)?;
+
+        // Pfad sammeln: je Ebene (Parent-Entry-Adresse, Tabellen-Frame).
+        let mut path: alloc::vec::Vec<(u64, PhysFrame)> = alloc::vec::Vec::new();
+        let mut table = self.pml4;
+        for shift in [39u32, 30, 21] {
+            let entry_addr = table.0 + (table_index(virt, shift) * 8) as u64;
+            let entry = self.backend.read_phys_u64(entry_addr)?;
+            if entry & 1 == 0 {
+                return Err(VmmError::NotMapped);
+            }
+            let next = PhysFrame::new(entry & PHYS_ADDR_MASK)?;
+            path.push((entry_addr, next));
+            table = next;
+        }
+        let leaf_addr = table.0 + (table_index(virt, 12) * 8) as u64;
+        let leaf = self.backend.read_phys_u64(leaf_addr)?;
+        if leaf & 1 == 0 {
+            return Err(VmmError::NotMapped);
+        }
+        let frame = PhysFrame::new(leaf & PHYS_ADDR_MASK)?;
+
+        // 1) Leaf löschen.
+        self.backend.write_phys_u64(leaf_addr, 0)?;
+
+        // 2) Bottom-up InterTable-Kollaps: leere Tabellen freigeben.
+        for (parent_entry_addr, child_table) in path.into_iter().rev() {
+            if self.table_has_present_entries(child_table)? {
+                break;
+            }
+            self.backend.write_phys_u64(parent_entry_addr, 0)?;
+            self.backend.free_frame(child_table);
+        }
+        Ok(frame)
+    }
+
+    fn table_has_present_entries(&mut self, table: PhysFrame) -> Result<bool, VmmError> {
+        for i in 0..512u64 {
+            if self.backend.read_phys_u64(table.0 + i * 8)? & 1 != 0 {
+                return Ok(true);
+            }
+        }
+        Ok(false)
+    }
+}
+
+/// VMM mit Mapping-Lifetime-Modell: jede `map_owned`-Seite hält eine
+/// Referenz auf ihren Frame; fällt der letzte Reference-Count auf 0, wird
+/// der Frame an das Backend zurückgegeben. Raw-Mappings ohne Ownership
+/// (MMIO, Kernel-Statisches) bleiben `map_page`-Mechanik ohne Registry.
+pub struct Vmm {
+    pml4: PhysFrame,
+    registry: alloc::collections::BTreeMap<u64, PhysFrame>,
+    frame_refs: alloc::collections::BTreeMap<u64, usize>,
+}
+
+impl Vmm {
+    pub fn new(pml4: PhysFrame) -> Self {
+        Self {
+            pml4,
+            registry: alloc::collections::BTreeMap::new(),
+            frame_refs: alloc::collections::BTreeMap::new(),
+        }
+    }
+
+    /// Seite mit Frame-Ownership mappen. Der Frame wird erst beim letzten
+    /// Unmap freigegeben (Referenzmodell).
+    pub fn map_owned(
+        &mut self,
+        backend: &mut dyn FrameBackend,
+        virt: u64,
+        frame: PhysFrame,
+        flags: MappingFlags,
+    ) -> Result<(), VmmError> {
+        HardwareMapper::new(self.pml4, backend).map_page(virt, frame, flags)?;
+        // map_page hat AlreadyMapped abgelehnt — Registry-Insert ist sicher.
+        if self.registry.insert(virt, frame).is_some() {
+            // Kann nach AlreadyMapped-Gate nicht eintreten; fail-closed
+            // trotzdem zurückrollen, damit Registry nie Phantom-Einträge hat.
+            HardwareMapper::new(self.pml4, backend).unmap_page(virt)?;
+            return Err(VmmError::AlreadyMapped);
+        }
+        *self.frame_refs.entry(frame.0).or_insert(0) += 1;
+        Ok(())
+    }
+
+    /// Seite unmappen und Referenz abgeben. Liefert den Frame zurück;
+    /// der Aufrufer sieht an `refcount`, ob der Frame physisch freigegeben
+    /// wurde (0 = freigegeben).
+    pub fn unmap(
+        &mut self,
+        backend: &mut dyn FrameBackend,
+        virt: u64,
+    ) -> Result<PhysFrame, VmmError> {
+        let frame = match self.registry.get(&virt) {
+            Some(f) => *f,
+            None => return Err(VmmError::NotMapped),
+        };
+
+        let freed = HardwareMapper::new(self.pml4, backend).unmap_page(virt)?;
+        assert_eq!(freed.0, frame.0, "Registry/PT-Divergenz: Buchungsfehler");
+
+        self.registry.remove(&virt);
+        let refs = self
+            .frame_refs
+            .get_mut(&frame.0)
+            .expect("Refcount fehlt — Registry/Refcount-Divergenz");
+        *refs -= 1;
+        if *refs == 0 {
+            self.frame_refs.remove(&frame.0);
+            backend.free_frame(frame);
+        }
+        Ok(frame)
+    }
+
+    /// Aktueller Referenz-Count eines Frames (0 = nicht im VMM registriert).
+    pub fn refcount(&self, frame: PhysFrame) -> usize {
+        self.frame_refs.get(&frame.0).copied().unwrap_or(0)
+    }
+
+    /// Anzahl registrierter Owned-Mappings (Diagnose/Invariante).
+    pub fn mapping_count(&self) -> usize {
+        self.registry.len()
+    }
+
+    pub fn translate(
+        &mut self,
+        backend: &mut dyn FrameBackend,
+        virt: u64,
+    ) -> Result<PhysFrame, VmmError> {
+        HardwareMapper::new(self.pml4, backend).translate(virt)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -618,12 +765,13 @@ mod tests {
     }
 
     // ── HardwareMapper: deterministisches Backend ─────────────────────────
-    use alloc::collections::BTreeMap;
+    use alloc::collections::{BTreeMap, BTreeSet};
 
     struct TestBackend {
         next_frame: u64,
         outstanding: usize,         // aktuell vergebene Frames (Leak-Detektor)
         alloc_quota: Option<usize>, // Some(n): nur noch n Frames, dann None
+        outstanding_addrs: BTreeSet<u64>, // Frame-Identität (Double-Free-Detektor)
         memory: BTreeMap<u64, u64>,
     }
 
@@ -633,6 +781,7 @@ mod tests {
                 next_frame: 0x1000,
                 outstanding: 0,
                 alloc_quota: None,
+                outstanding_addrs: BTreeSet::new(),
                 memory: BTreeMap::new(),
             }
         }
@@ -649,11 +798,21 @@ mod tests {
             let f = PhysFrame::new(self.next_frame).ok()?;
             self.next_frame += PAGE_SIZE;
             self.outstanding += 1;
+            assert!(
+                self.outstanding_addrs.insert(f.0),
+                "Frame doppelt vergeben: {:#x}",
+                f.0
+            );
             Some(f)
         }
 
         fn free_frame(&mut self, frame: PhysFrame) {
             assert!(self.outstanding > 0, "free ohne alloc (double free)");
+            assert!(
+                self.outstanding_addrs.remove(&frame.0),
+                "Frame {:#x} doppelt freigegeben (Double-Free)",
+                frame.0
+            );
             self.outstanding -= 1;
         }
 
@@ -963,5 +1122,217 @@ mod tests {
             Err(VmmError::HugePageNotSupported)
         );
         assert_eq!(backend.outstanding, 0);
+    }
+
+    // ── M1.3: Lifetime-/Referenzmodell ───────────────────────────────────
+
+    #[test]
+    fn unmap_collapses_empty_hierarchy() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        let frame = backend.alloc_frame().unwrap();
+        vmm.map_owned(
+            &mut backend,
+            USER_SPACE_BASE,
+            frame,
+            MappingFlags::user_read_write(),
+        )
+        .unwrap();
+        // 3 InterTables + 1 gemapter Frame.
+        assert_eq!(backend.outstanding, 4);
+
+        // Unmap: Leaf gelöscht, PT/PD/PDPT leer → Kollaps + Frame-Freigabe.
+        let freed = vmm.unmap(&mut backend, USER_SPACE_BASE).unwrap();
+        assert_eq!(freed.0, frame.0);
+        assert_eq!(
+            backend.outstanding, 0,
+            "Leere Hierarchie muss vollständig kollabieren"
+        );
+        assert_eq!(
+            vmm.translate(&mut backend, USER_SPACE_BASE),
+            Err(VmmError::NotMapped)
+        );
+        assert_eq!(vmm.mapping_count(), 0);
+        assert_eq!(vmm.refcount(frame), 0);
+    }
+
+    #[test]
+    fn unmap_keeps_nonempty_tables() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        let f1 = backend.alloc_frame().unwrap();
+        let f2 = backend.alloc_frame().unwrap();
+        vmm.map_owned(
+            &mut backend,
+            USER_SPACE_BASE,
+            f1,
+            MappingFlags::user_read_write(),
+        )
+        .unwrap();
+        vmm.map_owned(
+            &mut backend,
+            USER_SPACE_BASE + PAGE_SIZE,
+            f2,
+            MappingFlags::user_read_write(),
+        )
+        .unwrap();
+        assert_eq!(backend.outstanding, 5); // 3 Tabellen + 2 Frames
+
+        // Erste Seite unmapen: PT ist noch nicht leer (2. Seite aktiv).
+        vmm.unmap(&mut backend, USER_SPACE_BASE).unwrap();
+        assert_eq!(
+            backend.outstanding, 4,
+            "Nicht-leere Tabellen müssen bleiben"
+        );
+        assert_eq!(
+            vmm.translate(&mut backend, USER_SPACE_BASE + PAGE_SIZE)
+                .unwrap()
+                .0,
+            f2.0
+        );
+
+        // Zweite Seite: jetzt kollabiert die komplette Hierarchie.
+        vmm.unmap(&mut backend, USER_SPACE_BASE + PAGE_SIZE)
+            .unwrap();
+        assert_eq!(backend.outstanding, 0);
+    }
+
+    #[test]
+    fn shared_frame_outlives_partial_unmap() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        // Ein physikalischer Frame, zwei virtuelle Seiten in verschiedenen
+        // 2-MiB-Regionen (shared page, z.B. fork/CoW-Vorbereitung).
+        let frame = backend.alloc_frame().unwrap();
+        let v1 = USER_SPACE_BASE;
+        let v2 = USER_SPACE_BASE + 0x200000; // gleiche PD-Region, neuer PT
+        vmm.map_owned(&mut backend, v1, frame, MappingFlags::user_read_write())
+            .unwrap();
+        vmm.map_owned(&mut backend, v2, frame, MappingFlags::user_read_only())
+            .unwrap();
+        assert_eq!(vmm.refcount(frame), 2);
+        // 3 InterTables + 1 zusätzlicher PT + 1 Frame.
+        assert_eq!(backend.outstanding, 5);
+
+        // Unmap v1: Frame bleibt (Refcount 2→1), PT1 kollabiert.
+        vmm.unmap(&mut backend, v1).unwrap();
+        assert_eq!(vmm.refcount(frame), 1);
+        assert_eq!(
+            backend.outstanding, 4,
+            "Shared-Frame darf nicht freigegeben werden"
+        );
+        assert_eq!(vmm.translate(&mut backend, v2).unwrap().0, frame.0);
+        assert_eq!(vmm.translate(&mut backend, v1), Err(VmmError::NotMapped));
+
+        // Unmap v2: letzter Referenz-Count → Frame + Kaskade frei.
+        vmm.unmap(&mut backend, v2).unwrap();
+        assert_eq!(vmm.refcount(frame), 0);
+        assert_eq!(backend.outstanding, 0);
+    }
+
+    #[test]
+    fn unmap_unmapped_is_rejected() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        assert_eq!(
+            vmm.unmap(&mut backend, USER_SPACE_BASE),
+            Err(VmmError::NotMapped)
+        );
+        assert_eq!(backend.outstanding, 0);
+
+        // Registry-lose Adresse (raw map ohne Ownership): unmap über Vmm
+        // muss trotzdem als NotMapped abgelehnt werden — Vmm verwalten nur
+        // registrierte Mappings.
+        HardwareMapper::new(pml4, &mut backend)
+            .map_page(
+                USER_SPACE_BASE + 0x400000,
+                PhysFrame::new(0x9000).unwrap(),
+                MappingFlags::user_read_write(),
+            )
+            .unwrap();
+        assert_eq!(
+            vmm.unmap(&mut backend, USER_SPACE_BASE + 0x400000),
+            Err(VmmError::NotMapped)
+        );
+    }
+
+    #[test]
+    fn map_owned_validation_leaves_no_phantom_registry() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        // W^X wird vor der Allokation abgelehnt — keine Registry-Einträge.
+        let wx = MappingFlags {
+            writable: true,
+            user_accessible: true,
+            executable: true,
+            global: false,
+            cache_disable: false,
+        };
+        assert!(vmm
+            .map_owned(
+                &mut backend,
+                USER_SPACE_BASE,
+                PhysFrame::new(0x9000).unwrap(),
+                wx
+            )
+            .is_err());
+        assert_eq!(vmm.mapping_count(), 0);
+        assert_eq!(backend.outstanding, 0);
+
+        // Kernel-Adresse mit User-Flags: likewise.
+        assert!(vmm
+            .map_owned(
+                &mut backend,
+                HHDM_BASE,
+                PhysFrame::new(0x9000).unwrap(),
+                MappingFlags::user_read_only()
+            )
+            .is_err());
+        assert_eq!(vmm.mapping_count(), 0);
+        assert_eq!(backend.outstanding, 0);
+    }
+
+    #[test]
+    fn remap_after_collapse_reallocates_tables() {
+        let mut backend = TestBackend::new();
+        let pml4 = PhysFrame::new(0).unwrap();
+        let mut vmm = Vmm::new(pml4);
+
+        let frame = backend.alloc_frame().unwrap();
+        vmm.map_owned(
+            &mut backend,
+            USER_SPACE_BASE,
+            frame,
+            MappingFlags::user_read_write(),
+        )
+        .unwrap();
+        vmm.unmap(&mut backend, USER_SPACE_BASE).unwrap();
+        assert_eq!(backend.outstanding, 0);
+
+        // Erneutes Mappen derselben Region muss die Hierarchie NEU anlegen —
+        // ein vergessener Entry-Rest würde sofort AlreadyMapped schmeißen.
+        let frame2 = backend.alloc_frame().unwrap();
+        vmm.map_owned(
+            &mut backend,
+            USER_SPACE_BASE,
+            frame2,
+            MappingFlags::user_read_write(),
+        )
+        .unwrap();
+        assert_eq!(backend.outstanding, 4);
+        assert_eq!(
+            vmm.translate(&mut backend, USER_SPACE_BASE).unwrap().0,
+            frame2.0
+        );
     }
 }
