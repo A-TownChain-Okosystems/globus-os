@@ -215,7 +215,7 @@ pub unsafe fn map_user_binary(
         physical_memory_offset,
         code_base,
         code_pages * 0x1000,
-        PageTableFlags::USER_ACCESSIBLE,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
     )?;
 
     if !binary.data.is_empty() {
@@ -254,6 +254,22 @@ pub unsafe fn map_user_binary(
             addr_space.data_base as *mut u8,
             binary.data.len(),
         );
+    }
+
+    // Code is writable only during image installation. Drop W before
+    // Ring-3 entry, so user code pages are strictly read-only+user (W^X).
+    for page in Page::range_inclusive(
+        Page::<Size4KiB>::containing_address(VirtAddr::new(code_base)),
+        Page::<Size4KiB>::containing_address(VirtAddr::new(code_base + code_pages * 0x1000 - 1)),
+    ) {
+        let flush = unsafe {
+            mapper.update_flags(
+                page,
+                PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE,
+            )
+        }
+        .map_err(|_| UserspaceError::InvalidAddress)?;
+        unsafe { flush.flush() };
     }
 
     Ok(())
