@@ -26,10 +26,16 @@ impl FreeSpaceBitmap {
             .ok_or(BitmapError::InvalidGeometry)?
             / 8;
         let bytes = usize::try_from(bytes).map_err(|_| BitmapError::InvalidGeometry)?;
-        Ok(Self {
-            total_blocks,
-            bits: vec![0xff; bytes],
-        })
+        let mut bits = vec![0xff; bytes];
+        // Kanonische Form: ungültige Tail-Bits (jenseits total_blocks) sind
+        // immer 0 — identisch zur Maskierung in `decode`. Ohne diese
+        // Normalisierung wäre ein encode/decode-Roundtrip nicht gleich.
+        if total_blocks % 8 != 0 {
+            let valid = (total_blocks % 8) as u8;
+            let last = bytes - 1;
+            bits[last] &= (1u8 << valid) - 1;
+        }
+        Ok(Self { total_blocks, bits })
     }
 
     pub fn len(&self) -> u64 {

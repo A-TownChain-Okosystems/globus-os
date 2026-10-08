@@ -43,7 +43,7 @@ impl JournalRecord {
         };
         let mut bytes = [0u8; JOURNAL_RECORD_SIZE];
         record.encode_unchecked(&mut bytes);
-        record.checksum = checksum(&bytes[..24]);
+        record.checksum = checksum(&bytes[..20]);
         record
     }
 

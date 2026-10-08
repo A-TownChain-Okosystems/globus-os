@@ -95,10 +95,10 @@ impl NvmeQueue {
         if command.command_id == u16::MAX {
             return Err(NvmeError::SubmissionFailed);
         }
-        if let Some(buffer) = command.data {
-            if !buffer.valid() {
-                return Err(NvmeError::InvalidBuffer);
-            }
+        if let Some(buffer) = command.data
+            && !buffer.valid()
+        {
+            return Err(NvmeError::InvalidBuffer);
         }
         self.submissions.push(command);
         Ok(())

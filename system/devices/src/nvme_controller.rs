@@ -93,8 +93,12 @@ impl NvmeController {
         if self.state == ControllerState::Fatal {
             return Err(NvmeControllerError::ControllerFatal);
         }
-        if addresses.submission % self.config.page_size as u64 != 0
-            || addresses.completion % self.config.page_size as u64 != 0
+        if !addresses
+            .submission
+            .is_multiple_of(self.config.page_size as u64)
+            || !addresses
+                .completion
+                .is_multiple_of(self.config.page_size as u64)
         {
             return Err(NvmeControllerError::QueueSetupFailed);
         }

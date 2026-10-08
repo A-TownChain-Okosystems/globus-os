@@ -14,7 +14,7 @@ use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB},
+    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
     VirtAddr,
 };
 
@@ -181,17 +181,21 @@ pub unsafe fn map_user_binary(
             let frame = frame_allocator
                 .allocate_frame()
                 .ok_or(UserspaceError::InvalidAddress)?;
-            let flush = mapper
-                .map_to(
+            // Edition 2024: unsichere Operationen explizit markieren.
+            // map_to programmiert die Seitentabelle; flush invalidiert den
+            // TLB-Eintrag; write_bytes nullt den neuen Frame.
+            let flush = unsafe {
+                mapper.map_to(
                     page,
                     frame,
                     flags | PageTableFlags::PRESENT,
                     frame_allocator,
                 )
-                .map_err(|_| UserspaceError::InvalidAddress)?;
-            flush.flush();
+            }
+            .map_err(|_| UserspaceError::InvalidAddress)?;
+            unsafe { flush.flush() };
             let phys = physical_memory_offset + frame.start_address().as_u64();
-            core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize);
+            unsafe { core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize) };
         }
         Ok(())
     }
@@ -264,13 +268,13 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
 
     asm!(
         "push rax", // SS
-        "push rbx", // RSP
+        "push r10", // RSP
         "push rcx", // RFLAGS
         "push rdx", // CS
         "push rsi", // RIP
         "iretq",
         in("rax") ctx.ss as u64,
-        in("rbx") ctx.rsp,
+        in("r10") ctx.rsp,
         in("rcx") ctx.rflags,
         in("rdx") ctx.cs as u64,
         in("rsi") ctx.rip,

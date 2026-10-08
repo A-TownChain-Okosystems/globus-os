@@ -98,7 +98,12 @@ impl InodeTree {
         }
         let mut parts = normalized.rsplitn(2, '/');
         let name = parts.next().ok_or(FsError::InvalidPath)?.to_owned();
-        let parent = parts.next().unwrap_or("/");
+        // Bei Ein-Komponenten-Pfaden ("/home") liefert rsplitn als Rest einen
+        // leeren String — das ist der Wurzel-Parent "/", nicht "".
+        let parent = match parts.next() {
+            None | Some("") => "/",
+            Some(remainder) => remainder,
+        };
         Ok((self.lookup(parent)?, name))
     }
 

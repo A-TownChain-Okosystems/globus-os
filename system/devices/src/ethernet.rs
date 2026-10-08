@@ -78,6 +78,9 @@ impl TxRing {
     pub fn len(&self) -> usize {
         self.count
     }
+    pub fn is_empty(&self) -> bool {
+        self.count == 0
+    }
     pub fn capacity(&self) -> usize {
         self.entries.len()
     }

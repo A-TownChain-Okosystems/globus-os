@@ -15,7 +15,6 @@
 extern crate alloc;
 
 mod allocator;
-mod ats1000;
 mod framebuffer;
 mod gdt;
 mod hal;
@@ -29,6 +28,7 @@ use bootloader_api::{
     entry_point, BootInfo,
 };
 use core::panic::PanicInfo;
+use shivacore::ats1000;
 use shivacore::userspace;
 
 // Bootloader anweisen, das gesamte physische RAM linear ins virtuelle
