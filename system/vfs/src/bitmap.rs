@@ -26,10 +26,12 @@ impl FreeSpaceBitmap {
             .ok_or(BitmapError::InvalidGeometry)?
             / 8;
         let bytes = usize::try_from(bytes).map_err(|_| BitmapError::InvalidGeometry)?;
-        Ok(Self {
-            total_blocks,
-            bits: vec![0xff; bytes],
-        })
+        let mut bits = vec![0xff; bytes];
+        let remainder = (total_blocks % 8) as u8;
+        if remainder != 0 {
+            bits[bytes - 1] &= (1u8 << remainder) - 1;
+        }
+        Ok(Self { total_blocks, bits })
     }
 
     pub fn len(&self) -> u64 {
