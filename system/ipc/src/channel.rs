@@ -57,6 +57,7 @@ impl ChannelRegistry {
 
 #[cfg(test)]
 mod tests {
+    use alloc::vec;
     use super::*;
     #[test]
     fn fifo_is_deterministic() {
