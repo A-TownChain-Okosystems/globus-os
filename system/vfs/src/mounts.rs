@@ -32,7 +32,9 @@ impl MountTable {
     pub fn resolve(&self, path: &str) -> Option<&Mount> {
         let normalized = path::normalize(path).ok()?;
         self.mounts.iter().find(|m| {
-            normalized == m.mountpoint || normalized.starts_with(&(m.mountpoint.clone() + "/"))
+            m.mountpoint == "/"
+                || normalized == m.mountpoint
+                || normalized.starts_with(&(m.mountpoint.clone() + "/"))
         })
     }
     pub fn mounts(&self) -> &[Mount] {
