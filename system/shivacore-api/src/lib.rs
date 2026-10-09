@@ -2,10 +2,18 @@
 //!
 //! This crate contains only wire-safe identifiers and request/response types.
 //! Kernel implementations remain private to ShivaCore.
+//!
+//! Capability semantics are owned by the normative ShivaCore architecture/spec
+//! documents. This crate may encode those semantics in ABI representation, but
+//! must not originate new authorization, CSpace, derivation, generation, or
+//! bootstrap-policy semantics.
 
 #![no_std]
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
+
+pub mod handoff;
+pub use handoff::{accept_kernel_handoff, BootstrapCapability, CapabilityGrant, CapabilityHandoff, HandoffError, KernelBootHandoff, ValidatedHandoff};
 
 pub const ABI_MAJOR: u16 = 1;
 pub const ABI_MINOR: u16 = 0;

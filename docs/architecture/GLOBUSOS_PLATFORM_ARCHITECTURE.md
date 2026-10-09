@@ -227,3 +227,14 @@ kein EVM/Solidity) gelten hier unverändert.
 
 > Ehrlichkeitsregel: Dieses Dokument beschreibt ZIELARCHITEKTUR. Kein Satz hier ist als
 > implementiert zitierbar — der Implementierungsstand folgt ausschließlich evidence.yaml + CI.
+
+
+## Initial-Task Authorization Boundary
+
+The concrete Initial Task is selected by the boot configuration and identified to ShivaCore through an immutable 32-byte image identity carried in BootInfo. The bootloader may select and measure the image, but it does not create or delegate kernel capabilities.
+
+ShivaCore is the final authority for the privileged transition: it accepts the Root Server role only when the supplied Initial-Task identity is non-zero and matches the authorized boot configuration. ShivaCore creates the Initial Task, its initial capability space and bootstrap capabilities, then validates the handoff before transferring control.
+
+`globus-init` therefore cannot self-authorize as Root Server and cannot obtain ambient authority. The concrete image identity is boot-policy input; capability authority remains a ShivaCore decision.
+
+This establishes the trust boundary for G-BOOT-005b without selecting a mutable filesystem path or allowing userspace to choose its own privileged identity.
