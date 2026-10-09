@@ -1121,6 +1121,6 @@ mod tests {
 
     #[test]
     fn test_chain_id_constant() {
-        assert_eq!(shivacore::p2p::CHAIN_ID, 658467);
+        assert_eq!(crate::p2p::CHAIN_ID, 658467);
     }
 }
