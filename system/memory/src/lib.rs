@@ -1,8 +1,17 @@
 //! Virtual-memory abstractions above the ShivaCore address-space primitives.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub mod allocator;
+pub mod fault;
+pub mod frames;
+pub mod paging;
+pub use allocator::{PageAllocator, PageRange};
+pub use fault::{FaultAccess, FaultAction, PageFault, authorize_fault, classify};
+pub use frames::{FrameAllocator, FrameError, FrameRange};
+pub use paging::{MapError, Mapping, PageTable, PhysicalAddress};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct AddressSpace(pub u64);
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct VirtualAddress(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PageFlags {

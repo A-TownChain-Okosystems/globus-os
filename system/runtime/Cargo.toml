@@ -7,6 +7,7 @@ license.workspace = true
 workspace = true
 
 [dependencies]
+aurora-core = { path = "../aurora-core" }
 globus-system-core = { path = "../core" }
 globus-services = { path = "../services" }
 globus-vfs = { path = "../vfs" }
@@ -16,3 +17,9 @@ globus-graphics = { path = "../graphics" }
 globus-audio = { path = "../audio" }
 globus-package = { path = "../package" }
 globus-update = { path = "../update" }
+globus-identity = { path = "../identity" }
+globus-wallet-service = { path = "../wallet-service" }
+globus-diagnostics = { path = "../diagnostics" }
+libshivacore = { path = "../shivacore-api" }
+
+shivacore-service-space = { path = "../../modules/atc-shivacore/service_space" }

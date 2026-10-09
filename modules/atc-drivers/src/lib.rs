@@ -5,10 +5,10 @@
 
 #![no_std]
 
-pub mod usb;
-pub mod gpu;
 pub mod audio;
-pub mod storage;
+pub mod driver_framework;
+pub mod gpu;
 pub mod hid;
 pub mod net;
-pub mod driver_framework;
+pub mod storage;
+pub mod usb;

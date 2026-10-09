@@ -1,9 +1,13 @@
 //! GlobusOS system integration boundary.
 
+pub mod boot;
+
 use globus_ipc::Endpoint;
 use globus_memory::AddressSpace;
 use globus_process::ProcessId;
 use globus_security::Capability;
+
+pub use boot::{BOOT_PLAN, BootService, BootStep, validate_boot_plan};
 
 /// Kernel-facing identity of a GlobusOS service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
