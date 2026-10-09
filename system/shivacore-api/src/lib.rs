@@ -26,7 +26,79 @@ impl Syscall {
     pub const fn id(self) -> u16 {
         self as u16
     }
+
+    pub const fn from_id(id: u16) -> Option<Self> {
+        match id {
+            0x0001 => Some(Self::Yield),
+            0x0010 => Some(Self::IpcSend),
+            0x0011 => Some(Self::IpcReceive),
+            0x0020 => Some(Self::CapabilityQuery),
+            0x0030 => Some(Self::HandleClose),
+            0x0040 => Some(Self::MonotonicTime),
+            _ => None,
+        }
+    }
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyscallSpec {
+    pub syscall: Syscall,
+    pub blocking: bool,
+    pub required_right: Option<CapabilityRight>,
+}
+
+impl SyscallSpec {
+    pub const fn for_syscall(syscall: Syscall) -> Self {
+        match syscall {
+            Syscall::Yield => Self {
+                syscall,
+                blocking: false,
+                required_right: None,
+            },
+            Syscall::IpcSend => Self {
+                syscall,
+                blocking: false,
+                required_right: Some(CapabilityRight::Write),
+            },
+            Syscall::IpcReceive => Self {
+                syscall,
+                blocking: false,
+                required_right: Some(CapabilityRight::Read),
+            },
+            Syscall::CapabilityQuery => Self {
+                syscall,
+                blocking: false,
+                required_right: Some(CapabilityRight::Inspect),
+            },
+            Syscall::HandleClose => Self {
+                syscall,
+                blocking: false,
+                required_right: None,
+            },
+            Syscall::MonotonicTime => Self {
+                syscall,
+                blocking: false,
+                required_right: None,
+            },
+        }
+    }
+}
+
+pub const SYSCALL_RESERVED_RANGES: &[(u16, u16)] = &[
+    (0x0000, 0x000f),
+    (0x0010, 0x001f),
+    (0x0020, 0x002f),
+    (0x0030, 0x003f),
+    (0x0040, 0x004f),
+    (0x0050, 0x005f),
+    (0x0060, 0x006f),
+    (0x0070, 0x007f),
+    (0x0080, 0x008f),
+    (0x0090, 0x009f),
+    (0x00a0, 0x00af),
+    (0x00b0, 0x00bf),
+    (0x00c0, 0x00cf),
+];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
@@ -109,6 +181,20 @@ mod tests {
     fn syscall_ids_are_stable() {
         assert_eq!(Syscall::IpcSend.id(), 0x0010);
         assert_eq!(Syscall::MonotonicTime.id(), 0x0040);
+        assert_eq!(Syscall::from_id(0x0011), Some(Syscall::IpcReceive));
+        assert_eq!(Syscall::from_id(0xffff), None);
+    }
+
+    #[test]
+    fn syscall_specs_expose_authority_contract() {
+        assert_eq!(
+            SyscallSpec::for_syscall(Syscall::IpcSend).required_right,
+            Some(CapabilityRight::Write)
+        );
+        assert_eq!(
+            SyscallSpec::for_syscall(Syscall::CapabilityQuery).required_right,
+            Some(CapabilityRight::Inspect)
+        );
     }
 
     #[test]
