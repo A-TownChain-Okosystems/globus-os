@@ -487,7 +487,7 @@ mod tests {
         let data = [0u8; 10]; // < 14
         assert_eq!(
             EthernetFrame::from_bytes(&data),
-            Err(NetworkError::FrameTooShort)
+            Err(shivacore::net::NetworkError::FrameTooShort)
         );
     }
 
