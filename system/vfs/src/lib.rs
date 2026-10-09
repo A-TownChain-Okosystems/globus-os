@@ -35,6 +35,9 @@ pub use recovery::{RecoveryError, ReplayWrite, replay_pending};
 pub use transaction::{PendingWrite, Transaction, TransactionError};
 pub use tree::{DirectoryEntry, FsError, InodeTree};
 
+pub mod globus_state;
+pub mod persistence;
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Mount {
     pub mountpoint: String,

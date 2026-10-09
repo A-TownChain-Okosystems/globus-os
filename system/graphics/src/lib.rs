@@ -1,17 +1,8 @@
-//! Display, compositor, desktop shell and GPU policy boundary.
-
-pub mod compositor;
-pub mod desktop;
-pub mod input;
-pub mod media_surface;
-pub mod shell;
-pub mod wm;
-
-pub use media_surface::{MediaSurface, MediaSurfaceError, MediaSurfaceRegistry};
+//! Graphics surface and windowing contracts.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphicsBackend {
-    Framebuffer,
+    Software,
     Vulkan,
     WebGpu,
 }
@@ -43,6 +34,7 @@ impl DisplayMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn rejects_invalid_display_mode() {
         assert!(DisplayMode::new(0, 1080, 60).is_none());

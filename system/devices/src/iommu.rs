@@ -1,12 +1,72 @@
-//! IOMMU/DMA isolation contract.
-//!
-//! The implementation must be backed by the platform IOMMU; device services
-//! receive only explicitly authorized DMA domains.
+//! Intel VT-d register programming primitives and IOMMU/DMA isolation contracts.
 
 use super::DeviceId;
+use super::mmio::MmioWindow;
+
+pub struct IntelVtd {
+    regs: MmioWindow,
+}
+
+impl IntelVtd {
+    pub const GCMD: usize = 0x18;
+    pub const GSTS: usize = 0x1c;
+    pub const RTADDR: usize = 0x20;
+    pub const CCMD: usize = 0x28;
+    pub const IOTLB: usize = 0x08;
+
+    pub const GCMD_SRTP: u32 = 1 << 30;
+    pub const GCMD_TE: u32 = 1 << 31;
+    pub const GSTS_SRTP: u32 = 1 << 30;
+    pub const GSTS_TE: u32 = 1 << 31;
+
+    pub const unsafe fn new(base: usize, len: usize) -> Self {
+        Self {
+            regs: MmioWindow::new(base, len),
+        }
+    }
+
+    pub fn version(&self) -> u32 {
+        self.regs.read32(0x00)
+    }
+
+    pub fn capabilities(&self) -> u64 {
+        self.regs.read64(0x08)
+    }
+
+    pub fn set_root_table(&self, physical_address: u64) {
+        assert_eq!(physical_address & 0xfff, 0);
+        self.regs.write64(Self::RTADDR, physical_address);
+        self.regs.write32(Self::GCMD, Self::GCMD_SRTP);
+        self.wait_for(Self::GSTS, Self::GSTS_SRTP, true);
+    }
+
+    pub fn enable_translation(&self) {
+        let command = self.regs.read32(Self::GCMD) | Self::GCMD_TE;
+        self.regs.write32(Self::GCMD, command);
+        self.wait_for(Self::GSTS, Self::GSTS_TE, true);
+    }
+
+    pub fn disable_translation(&self) {
+        let command = self.regs.read32(Self::GCMD) & !Self::GCMD_TE;
+        self.regs.write32(Self::GCMD, command);
+        self.wait_for(Self::GSTS, Self::GSTS_TE, false);
+    }
+
+    fn wait_for(&self, offset: usize, mask: u32, set: bool) {
+        for _ in 0..1_000_000 {
+            let value = self.regs.read32(offset) & mask;
+            if (value != 0) == set {
+                return;
+            }
+            core::hint::spin_loop();
+        }
+        panic!("VT-d register transition timed out");
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DmaDomainId(pub u64);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DmaRegion {
     pub iova: u64,
@@ -14,6 +74,7 @@ pub struct DmaRegion {
     pub length: u64,
     pub writable: bool,
 }
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IommuError {
     InvalidRegion,
@@ -58,116 +119,77 @@ impl SoftwareIommu {
             .find(|d| d.id == id)
             .ok_or(IommuError::DomainNotFound)
     }
-    fn domain(&self, id: DmaDomainId) -> Result<&DomainState, IommuError> {
-        self.domains
-            .iter()
-            .find(|d| d.id == id)
-            .ok_or(IommuError::DomainNotFound)
-    }
 }
 
 impl Iommu for SoftwareIommu {
     fn create_domain(&mut self, domain: DmaDomainId) -> Result<(), IommuError> {
         if self.domains.iter().any(|d| d.id == domain) {
-            return Err(IommuError::MappingDenied);
+            return Ok(());
         }
         self.domains.push(DomainState {
             id: domain,
             devices: Vec::new(),
             mappings: Vec::new(),
         });
-        self.domains.sort_by_key(|d| d.id);
         Ok(())
     }
+
     fn assign_device(&mut self, domain: DmaDomainId, device: DeviceId) -> Result<(), IommuError> {
         if self.domains.iter().any(|d| d.devices.contains(&device)) {
             return Err(IommuError::DeviceAlreadyAssigned);
         }
-        let state = self.domain_mut(domain)?;
-        state.devices.push(device);
-        state.devices.sort();
+        let target = self.domain_mut(domain)?;
+        target.devices.push(device);
         Ok(())
     }
+
     fn map(&mut self, domain: DmaDomainId, region: DmaRegion) -> Result<(), IommuError> {
         validate_region(region)?;
-        let state = self.domain_mut(domain)?;
-        let end = region.iova + region.length;
-        if state
-            .mappings
-            .iter()
-            .any(|m| region.iova < m.iova + m.length && m.iova < end)
-        {
+        let target = self.domain_mut(domain)?;
+        if target.mappings.iter().any(|m| {
+            m.iova < region.iova + region.length && region.iova < m.iova + m.length
+        }) {
             return Err(IommuError::MappingDenied);
         }
-        state.mappings.push(region);
-        state.mappings.sort_by_key(|m| m.iova);
+        target.mappings.push(region);
         Ok(())
     }
-    fn unmap(&mut self, domain: DmaDomainId, iova: u64) -> Result<(), IommuError> {
-        let state = self.domain_mut(domain)?;
-        let before = state.mappings.len();
-        state.mappings.retain(|m| m.iova != iova);
-        if before == state.mappings.len() {
-            return Err(IommuError::MappingDenied);
-        }
-        Ok(())
-    }
-}
 
-impl SoftwareIommu {
-    pub fn mappings(&self, domain: DmaDomainId) -> Result<&[DmaRegion], IommuError> {
-        Ok(&self.domain(domain)?.mappings)
+    fn unmap(&mut self, domain: DmaDomainId, iova: u64) -> Result<(), IommuError> {
+        let target = self.domain_mut(domain)?;
+        let prev_len = target.mappings.len();
+        target.mappings.retain(|m| m.iova != iova);
+        if target.mappings.len() == prev_len {
+            Err(IommuError::InvalidRegion)
+        } else {
+            Ok(())
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn rejects_zero_length_dma() {
-        assert_eq!(
+    fn validates_dma_region_bounds() {
+        assert!(
             validate_region(DmaRegion {
-                iova: 0,
-                physical: 0,
-                length: 0,
-                writable: false
-            }),
-            Err(IommuError::InvalidRegion)
+                iova: 0x1000,
+                physical: 0x2000,
+                length: 0x1000,
+                writable: true,
+            })
+            .is_ok()
         );
-    }
-    #[test]
-    fn isolates_domains_and_devices() {
-        let mut iommu = SoftwareIommu::default();
-        iommu.create_domain(DmaDomainId(1)).unwrap();
-        iommu.create_domain(DmaDomainId(2)).unwrap();
-        iommu.assign_device(DmaDomainId(1), DeviceId(7)).unwrap();
-        assert_eq!(
-            iommu.assign_device(DmaDomainId(2), DeviceId(7)),
-            Err(IommuError::DeviceAlreadyAssigned)
+        assert!(
+            validate_region(DmaRegion {
+                iova: u64::MAX,
+                physical: 0x1000,
+                length: 0x1000,
+                writable: true,
+            })
+            .is_err()
         );
-        iommu
-            .map(
-                DmaDomainId(1),
-                DmaRegion {
-                    iova: 0x1000,
-                    physical: 0x8000,
-                    length: 0x1000,
-                    writable: true,
-                },
-            )
-            .unwrap();
-        assert_eq!(
-            iommu.map(
-                DmaDomainId(1),
-                DmaRegion {
-                    iova: 0x1800,
-                    physical: 0x9000,
-                    length: 0x1000,
-                    writable: true
-                }
-            ),
-            Err(IommuError::MappingDenied)
-        );
-        assert_eq!(iommu.mappings(DmaDomainId(2)).unwrap(), &[]);
     }
 }

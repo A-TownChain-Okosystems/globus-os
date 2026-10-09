@@ -1,5 +1,35 @@
 //! NVMe controller contracts and deterministic queue runtime.
 
+use super::pci::{DmaPolicy, PciAddress};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NvmeController {
+    pub pci: PciAddress,
+    pub namespace_count: u32,
+    pub dma: DmaPolicy,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NvmeNamespace {
+    pub controller: PciAddress,
+    pub namespace_id: u32,
+    pub block_size: u32,
+    pub block_count: u64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct NvmeQueueConfig {
+    pub submission_depth: u16,
+    pub completion_depth: u16,
+}
+
+impl NvmeQueueConfig {
+    pub const DEFAULT: Self = Self {
+        submission_depth: 64,
+        completion_depth: 64,
+    };
+}
+
 pub const NVME_ADMIN_QUEUE_DEPTH: u16 = 32;
 pub const NVME_DEFAULT_IO_QUEUE_DEPTH: u16 = 256;
 
@@ -68,15 +98,19 @@ impl NvmeQueue {
             completions: Vec::with_capacity(depth as usize),
         })
     }
+
     pub fn id(&self) -> NvmeQueueId {
         self.id
     }
+
     pub fn depth(&self) -> u16 {
         self.depth
     }
+
     pub fn pending(&self) -> usize {
         self.submissions.len()
     }
+
     pub fn submit(&mut self, command: NvmeCommand) -> Result<(), NvmeError> {
         if self.submissions.len() >= self.depth as usize {
             return Err(NvmeError::QueueFull);
@@ -103,6 +137,7 @@ impl NvmeQueue {
         self.submissions.push(command);
         Ok(())
     }
+
     pub fn take_submission(&mut self) -> Option<NvmeCommand> {
         if self.submissions.is_empty() {
             None
@@ -110,6 +145,7 @@ impl NvmeQueue {
             Some(self.submissions.remove(0))
         }
     }
+
     pub fn complete(&mut self, completion: NvmeCompletion) -> Result<(), NvmeError> {
         if !self
             .submissions
@@ -123,6 +159,7 @@ impl NvmeQueue {
         self.completions.push(completion);
         Ok(())
     }
+
     pub fn poll_completion(&mut self) -> Option<NvmeCompletion> {
         if self.completions.is_empty() {
             None
@@ -135,6 +172,7 @@ impl NvmeQueue {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn command(id: u16) -> NvmeCommand {
         NvmeCommand {
             opcode: 1,
@@ -146,6 +184,7 @@ mod tests {
             command_id: id,
         }
     }
+
     #[test]
     fn queue_round_trip() {
         let mut q = NvmeQueue::new(NvmeQueueId(1), 4).unwrap();
@@ -154,6 +193,7 @@ mod tests {
         let c = q.take_submission().unwrap();
         assert_eq!(c.command_id, 1);
     }
+
     #[test]
     fn completion_requires_pending_command() {
         let mut q = NvmeQueue::new(NvmeQueueId(1), 4).unwrap();
@@ -166,6 +206,7 @@ mod tests {
             Err(NvmeError::SubmissionFailed)
         );
     }
+
     #[test]
     fn rejects_invalid_dma() {
         let mut q = NvmeQueue::new(NvmeQueueId(1), 4).unwrap();

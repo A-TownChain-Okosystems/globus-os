@@ -1,21 +1,17 @@
-//! Integrated GlobusOS userspace runtime.
+//! Deterministic init and orchestration runtime.
 
-mod core_api;
-mod error_reporting;
-pub use core_api::{ProcessHandle, RuntimeCore, RuntimeError};
-pub use error_reporting::{SystemErrorView, latest_error, present};
-
-use aurora_core::{AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine};
-use globus_diagnostics::EventLog;
 use globus_identity::{IdentitySession, LoginState, UserId, WalletAddress};
-use globus_services::ServiceState;
-use globus_system_core::{BOOT_PLAN, BootStep, SystemState, validate_boot_plan};
 use shivacore_service_space::genesis::{
     GENESIS_CHAIN_ID, GenesisAllocation, GenesisConfig, GenesisValidator, LockType,
 };
 use shivacore_service_space::genesis_bridge::GenesisBridge;
+use system_aurora_core::{
+    AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine,
+};
+use system_core::{BOOT_PLAN, BootStep, RuntimeCore, ServiceState, SystemState, validate_boot_plan};
+use system_diagnostics::EventLog;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RuntimeStatus {
     pub system: SystemState,
     pub services: ServiceState,
@@ -47,6 +43,7 @@ impl LoginContext {
     pub fn active(&self, now_unix: u64) -> bool {
         self.session.is_active(now_unix)
     }
+
     pub fn lock(&mut self) {
         self.session.lock();
     }
@@ -64,7 +61,7 @@ pub struct BootedRuntime {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RuntimeBootError {
     InvalidBootPlan,
-    Genesis(aurora_core::AuroraError),
+    Genesis(system_aurora_core::AuroraError),
 }
 
 pub fn devnet_genesis_config() -> GenesisConfig {
