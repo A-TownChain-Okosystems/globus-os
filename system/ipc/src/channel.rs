@@ -57,8 +57,8 @@ impl ChannelRegistry {
 
 #[cfg(test)]
 mod tests {
-    use alloc::vec;
     use super::*;
+    use alloc::vec;
     #[test]
     fn fifo_is_deterministic() {
         let mut r = ChannelRegistry::new(2);
