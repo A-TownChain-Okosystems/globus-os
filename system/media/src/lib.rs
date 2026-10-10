@@ -202,10 +202,10 @@ impl Timeline {
         self.duration_ms
     }
     pub fn seek(&mut self, p: u64) -> Result<(), MediaError> {
-        if let Some(d) = self.duration_ms {
-            if p > d {
-                return Err(MediaError::InvalidPosition);
-            }
+        if let Some(d) = self.duration_ms
+            && p > d
+        {
+            return Err(MediaError::InvalidPosition);
         }
         self.position_ms = p;
         Ok(())

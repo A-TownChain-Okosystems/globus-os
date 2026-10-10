@@ -427,20 +427,15 @@ impl Signal {
 }
 
 /// Signal disposition (what happens when a signal is received)
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub enum SignalDisposition {
     /// Default action (terminate, stop, continue, ignore)
+    #[default]
     Default,
     /// Ignore the signal
     Ignore,
     /// Catch the signal (invoke a handler in user space)
     Catch { handler_addr: u64 },
-}
-
-impl Default for SignalDisposition {
-    fn default() -> Self {
-        SignalDisposition::Default
-    }
 }
 
 /// Default action for a signal
@@ -650,7 +645,7 @@ impl SignalManager {
                 .pending
                 .iter_mut()
                 .find(|(p, _)| *p == pid)
-                .and_then(|(_, sigs)| Some(sigs.remove(idx).signal))?;
+                .map(|(_, sigs)| sigs.remove(idx).signal)?;
             self.signals_delivered += 1;
             let disp = self.get_handler(pid, signal);
             Some((signal, disp))

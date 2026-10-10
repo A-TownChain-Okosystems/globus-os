@@ -92,6 +92,12 @@ pub struct KernelMemoryManager {
     heap_threshold: u64,
 }
 
+impl Default for KernelMemoryManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KernelMemoryManager {
     pub fn new() -> Self {
         Self {
@@ -312,12 +318,12 @@ impl KernelMemoryManager {
 
     /// Prueft, ob eine Adresse im Kernel-Heap-Bereich liegt
     pub fn is_heap_address(addr: u64) -> bool {
-        addr >= HEAP_START && addr < HEAP_END
+        (HEAP_START..HEAP_END).contains(&addr)
     }
 
     /// Prueft, ob eine Adresse im Userspace-Bereich liegt
     pub fn is_userspace_address(addr: u64) -> bool {
-        addr >= USERSPACE_BASE && addr < USERSPACE_BASE + USERSPACE_MAX
+        (USERSPACE_BASE..USERSPACE_BASE + USERSPACE_MAX).contains(&addr)
     }
 }
 
@@ -341,6 +347,12 @@ pub struct MemStats {
 pub struct MemorySubsystem {
     pub manager: KernelMemoryManager,
     pub caps: CapabilityTable,
+}
+
+impl Default for MemorySubsystem {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MemorySubsystem {

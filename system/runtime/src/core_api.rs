@@ -17,6 +17,12 @@ pub struct RuntimeCore {
     next_process: u64,
 }
 
+impl Default for RuntimeCore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RuntimeCore {
     pub const fn new() -> Self {
         Self {

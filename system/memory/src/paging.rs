@@ -31,7 +31,9 @@ impl PageTable {
     }
 
     pub fn map(&mut self, space: AddressSpace, mapping: Mapping) -> Result<(), MapError> {
-        if mapping.virtual_address.0 % 4096 != 0 || mapping.physical_address.0 % 4096 != 0 {
+        if !mapping.virtual_address.0.is_multiple_of(4096)
+            || !mapping.physical_address.0.is_multiple_of(4096)
+        {
             return Err(MapError::Unaligned);
         }
         let key = (space, mapping.virtual_address);

@@ -197,6 +197,12 @@ pub struct Dag {
     genesis_id: Mutex<Option<[u8; 32]>>,
 }
 
+impl Default for Dag {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Dag {
     pub fn new() -> Self {
         Dag {
@@ -335,6 +341,12 @@ pub struct ValidatorRegistry {
     total_stake: Mutex<u64>,
 }
 
+impl Default for ValidatorRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ValidatorRegistry {
     pub fn new() -> Self {
         ValidatorRegistry {
@@ -463,7 +475,7 @@ impl VotePool {
         self.votes
             .lock()
             .entry(vote.vertex_id)
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(vote);
     }
 

@@ -1,12 +1,17 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // Shell — main command processor
 use crate::CommandRegistry;
-use std::collections::HashMap;
 
 pub struct Shell {
     pub registry: CommandRegistry,
     pub running: bool,
     pub cwd: String,
+}
+
+impl Default for Shell {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl Shell {
@@ -26,7 +31,7 @@ impl Shell {
     }
 
     pub fn execute(&mut self, input: &str) -> String {
-        let parts: Vec<&str> = input.trim().split_whitespace().collect();
+        let parts: Vec<&str> = input.split_whitespace().collect();
         if parts.is_empty() {
             return String::new();
         }

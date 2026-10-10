@@ -546,6 +546,12 @@ pub struct InitProcess {
     pub start_time_ns: u64,
 }
 
+impl Default for InitProcess {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl InitProcess {
     pub fn new() -> Self {
         Self {

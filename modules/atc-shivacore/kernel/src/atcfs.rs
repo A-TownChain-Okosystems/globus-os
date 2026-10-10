@@ -93,6 +93,12 @@ pub fn atc_content_id(data: &[u8]) -> Cid {
     format!("atc1{}", sha3_256(&prefixed))
 }
 
+impl Default for AtcFileSystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AtcFileSystem {
     pub fn new() -> Self {
         let mut fs = Self {

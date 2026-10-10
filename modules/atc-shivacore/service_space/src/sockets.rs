@@ -8,8 +8,6 @@
 //
 // Teil der Userspace-Pipeline (K30-K36): baut auf user_io.rs (K34) und tcpip.rs (K13) auf.
 
-#![cfg_attr(not(test), no_std)]
-
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -203,11 +201,7 @@ impl SocketAddr {
                     if i > 0 && i % 2 == 0 {
                         s.push(':');
                     }
-                    if i % 2 == 0 {
-                        s.push_str(&format!("{:02x}", b));
-                    } else {
-                        s.push_str(&format!("{:02x}", b));
-                    }
+                    s.push_str(&format!("{:02x}", b));
                 }
                 s.push_str(&format!("]:{}", port));
                 s
@@ -531,6 +525,12 @@ pub struct SocketManager {
     total_bytes_recv: u64,
 }
 
+impl Default for SocketManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SocketManager {
     pub fn new() -> Self {
         Self {
@@ -604,12 +604,12 @@ impl SocketManager {
                     return Err(SocketError::AddrInUse);
                 }
             }
-            SocketAddr::Inet { port, .. } => {
-                if self.inet_listeners.contains_key(port) {
-                    if !sock.options.reuseaddr && !sock.options.reuseport {
-                        return Err(SocketError::AddrInUse);
-                    }
-                }
+            SocketAddr::Inet { port, .. }
+                if self.inet_listeners.contains_key(port)
+                    && !sock.options.reuseaddr
+                    && !sock.options.reuseport =>
+            {
+                return Err(SocketError::AddrInUse);
             }
             _ => {}
         }
@@ -644,7 +644,7 @@ impl SocketManager {
             return Err(SocketError::AddrNotAvailable);
         }
 
-        sock.max_backlog = backlog.max(1).min(4096);
+        sock.max_backlog = backlog.clamp(1, 4096);
         sock.state = SocketState::Listening;
 
         // In Listener-Registry eintragen
@@ -869,15 +869,11 @@ impl SocketManager {
         // vom Socket-State)
         if let Some(ref addr) = sock.local_addr {
             match addr {
-                SocketAddr::Unix(path) => {
-                    if self.unix_listeners.get(path) == Some(&sid) {
-                        self.unix_listeners.remove(path);
-                    }
+                SocketAddr::Unix(path) if self.unix_listeners.get(path) == Some(&sid) => {
+                    self.unix_listeners.remove(path);
                 }
-                SocketAddr::Inet { port, .. } => {
-                    if self.inet_listeners.get(port) == Some(&sid) {
-                        self.inet_listeners.remove(port);
-                    }
+                SocketAddr::Inet { port, .. } if self.inet_listeners.get(port) == Some(&sid) => {
+                    self.inet_listeners.remove(port);
                 }
                 _ => {}
             }

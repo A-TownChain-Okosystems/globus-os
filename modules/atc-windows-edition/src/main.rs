@@ -19,6 +19,6 @@ fn main() -> eframe::Result<()> {
     eframe::run_native(
         "ATC Windows Edition",
         options,
-        Box::new(|_cc| Ok(Box::new(Sprint0App::default()))),
+        Box::new(|_cc| Ok(Box::new(Sprint0App))),
     )
 }

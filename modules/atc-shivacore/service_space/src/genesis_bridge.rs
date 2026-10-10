@@ -159,6 +159,12 @@ pub struct BridgeValidatorRegistry {
     total_stake: u64,
 }
 
+impl Default for BridgeValidatorRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BridgeValidatorRegistry {
     pub fn new() -> Self {
         BridgeValidatorRegistry {
@@ -260,6 +266,12 @@ pub struct BridgeBlockChain {
     current_height: u64,
     genesis_hash: Option<[u8; 32]>,
     chain_id: u32,
+}
+
+impl Default for BridgeBlockChain {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BridgeBlockChain {
@@ -904,7 +916,7 @@ mod tests {
         let bridge = GenesisBridge::init_from_config(&config).unwrap();
 
         // PoH should be seeded with genesis hash
-        assert_eq!(bridge.poh.current_hash() != genesis_hash, true); // Advanced by init tick
+        assert!(bridge.poh.current_hash() != genesis_hash); // Advanced by init tick
         assert_eq!(bridge.poh.tick_count(), 1); // One tick from init
     }
 
@@ -934,7 +946,7 @@ mod tests {
             let block = bridge
                 .propose_block(&proposer, 2000 + i * 100, [0xAB; 32])
                 .unwrap();
-            assert_eq!(block.height, i as u64);
+            assert_eq!(block.height, i);
         }
 
         assert_eq!(bridge.height(), 5);
@@ -1017,7 +1029,7 @@ mod tests {
         let bridge = GenesisBridge::init_from_config(&config).unwrap();
 
         assert_eq!(bridge.state.balances.len(), 4);
-        for (_, balance) in &bridge.state.balances {
+        for balance in bridge.state.balances.values() {
             assert_eq!(*balance, 1_000_000_000);
         }
     }
@@ -1028,7 +1040,7 @@ mod tests {
         let bridge = GenesisBridge::init_from_config(&config).unwrap();
 
         assert_eq!(bridge.state.validators.len(), 4);
-        for (_, stake) in &bridge.state.validators {
+        for stake in bridge.state.validators.values() {
             assert_eq!(*stake, 10000);
         }
     }

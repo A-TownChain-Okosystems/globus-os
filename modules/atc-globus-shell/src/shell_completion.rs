@@ -3,10 +3,16 @@
 pub struct AutoComplete {
     commands: Vec<String>,
 }
+impl Default for AutoComplete {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AutoComplete {
     pub fn new() -> Self {
         Self {
-            commands: vec!["echo", "help", "ls", "pwd", "whoami", "clear", "version"]
+            commands: ["echo", "help", "ls", "pwd", "whoami", "clear", "version"]
                 .iter()
                 .map(|s| s.to_string())
                 .collect(),

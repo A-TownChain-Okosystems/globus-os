@@ -30,7 +30,7 @@ impl FreeSpaceBitmap {
         // Kanonische Form: ungültige Tail-Bits (jenseits total_blocks) sind
         // immer 0 — identisch zur Maskierung in `decode`. Ohne diese
         // Normalisierung wäre ein encode/decode-Roundtrip nicht gleich.
-        if total_blocks % 8 != 0 {
+        if !total_blocks.is_multiple_of(8) {
             let valid = (total_blocks % 8) as u8;
             let last = bytes - 1;
             bits[last] &= (1u8 << valid) - 1;
@@ -40,6 +40,11 @@ impl FreeSpaceBitmap {
 
     pub fn len(&self) -> u64 {
         self.total_blocks
+    }
+
+    /// Counterpart to `len`.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
     }
 
     pub fn total_blocks(&self) -> u64 {
@@ -140,7 +145,7 @@ impl FreeSpaceBitmap {
         }
         let len = bitmap.bits.len();
         bitmap.bits.copy_from_slice(&input[..len]);
-        if total_blocks % 8 != 0 {
+        if !total_blocks.is_multiple_of(8) {
             let valid = (total_blocks % 8) as u8;
             let last = bitmap.bits.len() - 1;
             bitmap.bits[last] &= (1u8 << valid) - 1;

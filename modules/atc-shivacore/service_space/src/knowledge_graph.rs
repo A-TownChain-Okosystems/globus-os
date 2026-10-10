@@ -92,6 +92,12 @@ pub struct QueryPattern {
     pub object: Option<ObjectValue>,
 }
 
+impl Default for KnowledgeGraph {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl KnowledgeGraph {
     pub fn new() -> Self {
         Self {
@@ -265,8 +271,7 @@ impl KnowledgeGraph {
         max_depth: usize,
     ) -> Vec<EntityId> {
         let mut visited = alloc::collections::BTreeSet::new();
-        let mut frontier = Vec::new();
-        frontier.push(start);
+        let mut frontier = alloc::vec![start];
         let mut result = Vec::new();
 
         for _ in 0..max_depth {

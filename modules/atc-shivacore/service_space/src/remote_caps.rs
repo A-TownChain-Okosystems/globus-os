@@ -112,7 +112,7 @@ pub fn issue_ticket<C: CryptoProvider>(
         constraints: constraints.clone(),
         nonce: nonce.clone(),
         issuer_signature: Vec::new(),
-        parent_ticket_nonce: parent_ticket_nonce,
+        parent_ticket_nonce,
     };
     let signature = issuer.sign(&unsigned.signing_payload());
     RemoteCapabilityTicket {
@@ -171,6 +171,12 @@ impl LocalCap {
 /// Replay-Schutz: Nonce-Store
 pub struct NonceStore {
     seen: BTreeSet<String>,
+}
+
+impl Default for NonceStore {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl NonceStore {
@@ -242,7 +248,7 @@ impl RemoteCapabilityResolver {
         }
 
         Ok(LocalCap::new(
-            format!("rct-{}", &ticket.nonce),
+            format!("rct-{}", ticket.nonce),
             ticket.resource.clone(),
             ticket.constraints.clone(),
             ticket.issuer_did.clone(),

@@ -6,6 +6,12 @@ pub struct CommandRegistry {
     commands: HashMap<String, fn(&[&str]) -> String>,
 }
 
+impl Default for CommandRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CommandRegistry {
     pub fn new() -> Self {
         let mut reg = Self {

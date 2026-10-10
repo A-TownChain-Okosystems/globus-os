@@ -25,10 +25,10 @@ pub fn replay_pending(journal: &Journal) -> Result<Vec<ReplayWrite>, RecoveryErr
     let mut last = None;
     let mut out = Vec::with_capacity(records.len());
     for record in records {
-        if let Some(previous) = last {
-            if record.sequence <= previous {
-                return Err(RecoveryError::InvalidSequence);
-            }
+        if let Some(previous) = last
+            && record.sequence <= previous
+        {
+            return Err(RecoveryError::InvalidSequence);
         }
         last = Some(record.sequence);
         match record.op {

@@ -38,7 +38,7 @@ pub struct PcmFrame {
 impl PcmFrame {
     pub fn new(spec: AudioSpec, samples: Vec<f32>) -> Result<Self, CodecError> {
         spec.validate()?;
-        if samples.len() % spec.channels as usize != 0 {
+        if !samples.len().is_multiple_of(spec.channels as usize) {
             return Err(CodecError::InvalidSampleCount);
         }
         Ok(Self { spec, samples })

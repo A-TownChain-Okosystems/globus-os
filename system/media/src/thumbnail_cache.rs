@@ -53,6 +53,11 @@ impl ThumbnailCache {
     pub fn len(&self) -> usize {
         self.map.len()
     }
+
+    /// Counterpart to `len`.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
     pub fn bytes(&self) -> usize {
         self.bytes
     }

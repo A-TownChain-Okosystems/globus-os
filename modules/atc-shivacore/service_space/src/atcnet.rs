@@ -1233,7 +1233,7 @@ mod tests {
     fn test_tx_broadcast_too_large() {
         let mut data = vec![0xCC; 32];
         data.extend_from_slice(&(MAX_MESSAGE_SIZE as u32 + 1).to_le_bytes());
-        data.extend_from_slice(&vec![0; 100]);
+        data.extend_from_slice(&[0; 100]);
         let result = deserialize_tx_broadcast(&data);
         assert_eq!(result, Err(AtcNetError::InvalidMessage));
     }

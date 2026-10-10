@@ -30,12 +30,11 @@ impl Scheduler {
         true
     }
 
-    pub fn next(&mut self) -> Option<ProcessId> {
+    pub fn next_process(&mut self) -> Option<ProcessId> {
         let next = self
             .processes
             .iter()
-            .filter(|p| matches!(p.state, ProcessState::Ready | ProcessState::Running))
-            .next()
+            .find(|p| matches!(p.state, ProcessState::Ready | ProcessState::Running))
             .map(|p| p.id);
         self.current = next;
         if let Some(id) = next {
@@ -74,6 +73,6 @@ mod tests {
             state: ProcessState::Ready,
             priority: 10,
         });
-        assert_eq!(s.next(), Some(ProcessId(1)));
+        assert_eq!(s.next_process(), Some(ProcessId(1)));
     }
 }

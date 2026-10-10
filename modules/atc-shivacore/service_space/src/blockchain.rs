@@ -78,6 +78,12 @@ pub struct BlockChain {
     current_height: Mutex<u64>,
     genesis_hash: Mutex<Option<[u8; 32]>>,
 }
+impl Default for BlockChain {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BlockChain {
     pub fn new() -> Self {
         BlockChain {
@@ -443,7 +449,7 @@ mod tests {
             let tid = t.id;
             p.mempool().add(t, 1000).unwrap();
             p.mempool().validate_tx(&tid, 1000).unwrap();
-            p.propose_block(10, 2000 + i as u64).unwrap();
+            p.propose_block(10, 2000 + i).unwrap();
         }
         assert_eq!(p.current_height(), 2);
         assert_eq!(p.chain().block_count(), 3);

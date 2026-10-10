@@ -397,7 +397,7 @@ impl SecurityAuditor {
 
             // Check 2.5: Validator count in valid range (4-100)
             let vc = genesis.validator_set.len();
-            if vc >= 4 && vc <= 100 {
+            if (4..=100).contains(&vc) {
                 report.add(AuditFinding::pass(
                     "GEN-005",
                     "Genesis",
@@ -502,11 +502,7 @@ impl SecurityAuditor {
                 .map(|(_, s)| *s)
                 .max()
                 .unwrap_or(0);
-            let max_pct = if total > 0 {
-                (max_stake * 100) / total
-            } else {
-                0
-            };
+            let max_pct = (max_stake * 100).checked_div(total).unwrap_or(0);
             if max_pct <= 33 {
                 report.add(AuditFinding::pass(
                     "VAL-005",

@@ -136,6 +136,12 @@ pub struct Contract {
 pub struct ContractStorage {
     data: Mutex<BTreeMap<(String, u64), u64>>,
 }
+impl Default for ContractStorage {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContractStorage {
     pub fn new() -> Self {
         ContractStorage {
@@ -159,6 +165,12 @@ impl ContractStorage {
 pub struct ContractRegistry {
     pub contracts: Mutex<BTreeMap<String, Contract>>,
 }
+impl Default for ContractRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ContractRegistry {
     pub fn new() -> Self {
         ContractRegistry {

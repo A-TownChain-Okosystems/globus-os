@@ -55,6 +55,12 @@ pub struct SyscallDispatcher {
     monotonic_ticks: u64,
 }
 
+impl Default for SyscallDispatcher {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl SyscallDispatcher {
     pub const fn new() -> Self {
         Self { monotonic_ticks: 0 }

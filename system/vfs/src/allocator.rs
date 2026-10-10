@@ -63,7 +63,7 @@ impl BlockAllocator {
         }
         let count = blocks;
         let total = self.bitmap.len();
-        if blocks > total as u64 {
+        if blocks > total {
             return Err(AllocationError::OutOfSpace);
         }
         for start in 0..=total - count {
@@ -84,7 +84,7 @@ impl BlockAllocator {
                         .set_free(start + i, false)
                         .map_err(AllocationError::Bitmap)?;
                 }
-                return Ok(start as u64);
+                return Ok(start);
             }
         }
         Err(AllocationError::OutOfSpace)

@@ -106,6 +106,12 @@ pub struct CapabilityTable {
     next_id: u64,
 }
 
+impl Default for CapabilityTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl CapabilityTable {
     pub const fn new() -> Self {
         Self {

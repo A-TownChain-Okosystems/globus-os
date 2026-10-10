@@ -98,7 +98,7 @@ fn encrypt<K: IdentityKeyProvider>(
     header.extend_from_slice(&nonce);
     let ciphertext = cipher
         .encrypt(
-            (&nonce).into(),
+            &nonce,
             chacha20poly1305::aead::Payload {
                 msg: plaintext,
                 aad: &header,

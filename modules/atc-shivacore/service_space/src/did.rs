@@ -126,6 +126,12 @@ pub struct Ed25519Signer {
     signing_key: SigningKey,
 }
 
+impl Default for Ed25519Signer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Ed25519Signer {
     /// Erzeugt eine neue Ed25519-Identitaet mit frischem Schluesselpaar (deterministic seed)
     pub fn new() -> Self {
@@ -209,7 +215,7 @@ fn hex_encode(data: &[u8]) -> String {
 }
 
 fn hex_decode(hex: &str) -> Option<Vec<u8>> {
-    if hex.len() % 2 != 0 {
+    if !hex.len().is_multiple_of(2) {
         return None;
     }
     let mut result = Vec::new();

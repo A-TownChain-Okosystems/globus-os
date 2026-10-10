@@ -58,6 +58,9 @@ pub struct Transaction {
     pub poh_hash: [u8; 32],
 }
 impl Transaction {
+    // A full transaction spec; grouping the 11 fields into a params struct
+    // is tracked design debt.
+    #[allow(clippy::too_many_arguments)]
     pub fn new(
         tx_type: TxType,
         sender_did: String,
@@ -166,7 +169,7 @@ impl MemoryPool {
         self.by_sender
             .lock()
             .entry(tx.sender_did.clone())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(tx.id);
         Ok(())
     }
@@ -198,7 +201,7 @@ impl MemoryPool {
             .values()
             .filter(|x| x.status == TxStatus::Validated)
             .collect();
-        v.sort_by(|a, b| b.priority.cmp(&a.priority));
+        v.sort_by_key(|x| core::cmp::Reverse(x.priority));
         v.into_iter()
             .take(max_count)
             .map(|x| x.tx.clone())
@@ -296,6 +299,12 @@ impl MemoryPool {
 pub struct NonceTracker {
     nonces: Mutex<BTreeMap<String, u64>>,
 }
+impl Default for NonceTracker {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NonceTracker {
     pub fn new() -> Self {
         NonceTracker {
@@ -332,6 +341,12 @@ pub struct Account {
 pub struct StateDb {
     accounts: Mutex<BTreeMap<String, Account>>,
 }
+impl Default for StateDb {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl StateDb {
     pub fn new() -> Self {
         StateDb {

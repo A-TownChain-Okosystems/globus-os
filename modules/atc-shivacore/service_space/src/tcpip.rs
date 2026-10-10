@@ -258,7 +258,7 @@ impl TcpSegment {
         buf.extend_from_slice(&self.dst_port.to_be_bytes());
         buf.extend_from_slice(&self.seq_num.to_be_bytes());
         buf.extend_from_slice(&self.ack_num.to_be_bytes());
-        buf.push((self.data_offset << 4) | 0);
+        buf.push(self.data_offset << 4);
         buf.push(self.flags);
         buf.extend_from_slice(&self.window_size.to_be_bytes());
         buf.extend_from_slice(&self.checksum.to_be_bytes());
@@ -323,6 +323,12 @@ pub struct RoutingTable {
     routes: Mutex<Vec<Route>>,
 }
 
+impl Default for RoutingTable {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl RoutingTable {
     pub fn new() -> Self {
         RoutingTable {
@@ -341,11 +347,9 @@ impl RoutingTable {
         let mut best: Option<&Route> = None;
         let mut best_len: u8 = 0;
         for route in routes.iter() {
-            if Self::matches(dst, route.network, route.prefix_len) {
-                if route.prefix_len >= best_len {
-                    best = Some(route);
-                    best_len = route.prefix_len;
-                }
+            if Self::matches(dst, route.network, route.prefix_len) && route.prefix_len >= best_len {
+                best = Some(route);
+                best_len = route.prefix_len;
             }
         }
         best.cloned()
@@ -424,6 +428,12 @@ pub struct SocketManager {
     udp_sockets: Mutex<BTreeMap<SocketId, UdpSocket>>,
     tcp_sockets: Mutex<BTreeMap<SocketId, TcpSocket>>,
     next_id: Mutex<SocketId>,
+}
+
+impl Default for SocketManager {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl SocketManager {
@@ -615,10 +625,8 @@ impl SocketManager {
                         socket.state = TcpState::TimeWait;
                     }
                 }
-                TcpState::LastAck => {
-                    if seg.is_ack() {
-                        socket.state = TcpState::Closed;
-                    }
+                TcpState::LastAck if seg.is_ack() => {
+                    socket.state = TcpState::Closed;
                 }
                 _ => {}
             }

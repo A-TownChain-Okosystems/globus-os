@@ -30,6 +30,12 @@ pub struct TestHarness {
     pub ipc: IpcSubsystem,
 }
 
+impl Default for TestHarness {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl TestHarness {
     pub fn new() -> Self {
         Self {

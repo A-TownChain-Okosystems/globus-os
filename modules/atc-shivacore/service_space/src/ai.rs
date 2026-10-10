@@ -354,6 +354,12 @@ pub struct ModelRegistry {
     models: Mutex<BTreeMap<String, Model>>,
     next_id: Mutex<u64>,
 }
+impl Default for ModelRegistry {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ModelRegistry {
     pub fn new() -> Self {
         ModelRegistry {
@@ -424,6 +430,12 @@ impl AiCapability {
 pub struct AiCapabilityGuard {
     granted: Mutex<BTreeMap<String, Vec<AiCapability>>>,
 }
+impl Default for AiCapabilityGuard {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AiCapabilityGuard {
     pub fn new() -> Self {
         AiCapabilityGuard {
@@ -434,7 +446,7 @@ impl AiCapabilityGuard {
         self.granted
             .lock()
             .entry(did.to_string())
-            .or_insert_with(Vec::new)
+            .or_default()
             .push(c);
     }
     pub fn check(&self, did: &str, c: AiCapability) -> bool {
@@ -472,6 +484,12 @@ pub struct NeuralContextStore {
     by_key: Mutex<BTreeMap<String, u64>>,
     next_id: Mutex<u64>,
 }
+impl Default for NeuralContextStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl NeuralContextStore {
     pub fn new() -> Self {
         NeuralContextStore {
@@ -596,6 +614,12 @@ pub struct AiEngine {
     pub capabilities: Arc<AiCapabilityGuard>,
     pub llm_router: Arc<LlmRouter>,
 }
+impl Default for AiEngine {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AiEngine {
     pub fn new() -> Self {
         let models = Arc::new(ModelRegistry::new());

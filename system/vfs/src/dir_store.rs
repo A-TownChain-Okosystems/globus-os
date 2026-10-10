@@ -1,6 +1,6 @@
 //! Persistent root-directory store with deterministic entry encoding.
 
-use crate::{DirectoryRecord, DirectoryType, Extent, ExtentError, ExtentMap};
+use crate::{DirectoryRecord, Extent, ExtentError, ExtentMap};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirStoreError {
@@ -128,6 +128,7 @@ impl DirectoryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::DirectoryType;
     #[test]
     fn deterministic_insert_lookup() {
         let mut d = DirectoryStore::new(4).unwrap();
