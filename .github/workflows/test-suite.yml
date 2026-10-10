@@ -65,23 +65,30 @@ jobs:
     needs: [cargo-tests, npm-tests]
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
     steps:
       - uses: actions/checkout@v4
-      - name: Evidence-Bindung (SCR-0086)
+      - name: Generate exact-SHA test evidence
+        env:
+          EVIDENCE_SHA: ${{ github.sha }}
+          EVIDENCE_RUN_ID: ${{ github.run_id }}
+          EVIDENCE_WORKFLOW: ${{ github.workflow }}
+          EVIDENCE_OUTPUT: ${{ runner.temp }}/atc-test-evidence.yaml
         run: |
           python3 - <<'PY'
           import datetime
           import os
           import re
 
-          sha = os.environ["GITHUB_SHA"]
-          rid = os.environ["GITHUB_RUN_ID"]
-          wf = os.environ.get("GITHUB_WORKFLOW", "ATC Test Suite")
+          sha = os.environ["EVIDENCE_SHA"]
+          rid = os.environ["EVIDENCE_RUN_ID"]
+          wf = os.environ.get("EVIDENCE_WORKFLOW", "ATC Test Suite")
           ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
-          path = ".atc/evidence/evidence.yaml"
-          text = open(path, encoding="utf-8").read()
-          text = re.sub(r"bound_commit: [^\n]*", "bound_commit: " + sha, text)
+          source = ".atc/evidence/evidence.yaml"
+          text = open(source, encoding="utf-8").read()
+          text, count = re.subn(r"(?m)^bound_commit: [^\n]*", "bound_commit: " + sha, text, count=1)
+          if count != 1:
+              raise SystemExit("Expected exactly one top-level bound_commit field")
           block = (
               "test_run:\n"
               "  workflow: " + wf + "\n"
@@ -92,13 +99,17 @@ jobs:
               "  runner: github-actions\n"
           )
           if re.search(r"(?m)^test_run:\n(?:  [^\n]*\n)+", text):
-              text = re.sub(r"(?m)^test_run:\n(?:  [^\n]*\n)+", block, text)
+              text = re.sub(r"(?m)^test_run:\n(?:  [^\n]*\n)+", lambda _: block, text, count=1)
           else:
               text = text.rstrip() + "\n" + block
-          open(path, "w", encoding="utf-8").write(text)
+          with open(os.environ["EVIDENCE_OUTPUT"], "w", encoding="utf-8") as output:
+              output.write(text)
+          print(f"Generated test evidence for SHA {sha}, run {rid}")
           PY
-          git config user.name "Aurora-Bot"
-          git config user.email "aurora@base44.ai"
-          git add .atc/evidence/evidence.yaml
-          git commit -m "chore(evidence): bind passing test run (SCR-0086) [skip ci]" || echo "nothing to commit"
-          git push
+      - name: Upload evidence bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: atc-test-evidence-${{ github.run_id }}
+          path: ${{ runner.temp }}/atc-test-evidence.yaml
+          if-no-files-found: error
+          retention-days: 90
