@@ -79,20 +79,20 @@ jobs:
           ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
           path = ".atc/evidence/evidence.yaml"
           text = open(path, encoding="utf-8").read()
-          text = re.sub(r"bound_commit: [^\\n]*", "bound_commit: " + sha, text)
+          text = re.sub(r"bound_commit: [^\n]*", "bound_commit: " + sha, text)
           block = (
-              "test_run:\\n"
-              "  workflow: " + wf + "\\n"
-              "  run_id: " + rid + "\\n"
-              "  commit: " + sha + "\\n"
-              "  timestamp: " + ts + "\\n"
-              "  result: PASS\\n"
-              "  runner: github-actions\\n"
+              "test_run:\n"
+              "  workflow: " + wf + "\n"
+              "  run_id: " + rid + "\n"
+              "  commit: " + sha + "\n"
+              "  timestamp: " + ts + "\n"
+              "  result: PASS\n"
+              "  runner: github-actions\n"
           )
-          if re.search(r"(?m)^test_run:\\n(?:  [^\\n]*\\n)+", text):
-              text = re.sub(r"(?m)^test_run:\\n(?:  [^\\n]*\\n)+", block, text)
+          if re.search(r"(?m)^test_run:\n(?:  [^\n]*\n)+", text):
+              text = re.sub(r"(?m)^test_run:\n(?:  [^\n]*\n)+", block, text)
           else:
-              text = text.rstrip() + "\\n" + block
+              text = text.rstrip() + "\n" + block
           open(path, "w", encoding="utf-8").write(text)
           PY
       - name: Publish SHA-bound evidence artifact
