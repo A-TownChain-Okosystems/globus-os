@@ -64,8 +64,6 @@ jobs:
     if: ${{ success() }}
     needs: [cargo-tests, npm-tests]
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Evidence-Bindung (SCR-0086)
@@ -97,8 +95,10 @@ jobs:
               text = text.rstrip() + "\n" + block
           open(path, "w", encoding="utf-8").write(text)
           PY
-          git config user.name "Aurora-Bot"
-          git config user.email "aurora@base44.ai"
-          git add .atc/evidence/evidence.yaml
-          git commit -m "chore(evidence): bind passing test run (SCR-0086) [skip ci]" || echo "nothing to commit"
-          git push
+      - name: Publish SHA-bound evidence artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: scr-0086-evidence-${{ github.run_id }}
+          path: .atc/evidence/evidence.yaml
+          if-no-files-found: error
+          retention-days: 90

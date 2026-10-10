@@ -4,6 +4,12 @@ pub struct BootSequence {
     stage: u8,
 }
 
+impl Default for BootSequence {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BootSequence {
     pub fn new() -> Self {
         Self { stage: 0 }

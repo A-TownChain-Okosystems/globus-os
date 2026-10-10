@@ -818,7 +818,7 @@ mod tests {
         assert_eq!(HEAP_SIZE, 100 * 1024);
         assert_eq!(HEAP_END, HEAP_START + HEAP_SIZE);
         // Userspace muss ausserhalb des Kernel-Heaps liegen
-        assert!(USERSPACE_BASE > HEAP_END);
+        const { assert!(USERSPACE_BASE > HEAP_END) };
     }
 
     #[test]

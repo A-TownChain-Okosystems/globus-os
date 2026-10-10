@@ -6,6 +6,12 @@ pub struct BootInfo {
     pub initrd_addr: Option<u64>,
 }
 
+impl Default for BootInfo {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl BootInfo {
     pub fn new() -> Self {
         Self {

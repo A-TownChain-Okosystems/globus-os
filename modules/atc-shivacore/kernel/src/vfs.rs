@@ -721,7 +721,7 @@ mod tests {
     #[test]
     fn test_root_exists() {
         let vfs = setup_vfs();
-        let meta = vfs.stat("/", 1, 0).unwrap_or_else(|_| FileMetadata {
+        let meta = vfs.stat("/", 1, 0).unwrap_or(FileMetadata {
             file_type: FileType::Directory,
             size: 0,
             created_at: 0,
