@@ -71,7 +71,8 @@ jobs:
         with:
           python-version: "3.x"
       - name: Regression-test fail-closed validator
-        run: python3 -m unittest tools/ci/test_fail_closed_evidence.py -v
+        working-directory: tools/ci
+        run: python3 -m unittest test_fail_closed_evidence -v
       - name: Validate evidence contract before writing PASS (SCR-0086)
         env:
           CARGO_RESULT: ${{ needs.cargo-tests.result }}
