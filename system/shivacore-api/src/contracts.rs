@@ -19,6 +19,7 @@ pub enum CapabilityResourceType {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CapabilityCheckRequest {
     pub handle: CapabilityHandle,
+    /// Rights requested by the already-authenticated syscall caller.
     pub required: CapabilityRights,
 }
 
@@ -29,7 +30,10 @@ pub struct CapabilityCheckResult {
     pub effective_rights: CapabilityRights,
 }
 
-/// Service-facing capability authority. Implementations must fail closed.
+/// Service-facing capability authority. The implementation must bind this check to
+/// the caller identity authenticated by the syscall/IPC boundary; a request payload
+/// must never be allowed to choose or impersonate its caller.
+/// Implementations must fail closed.
 pub trait CapabilityAuthority {
     fn check(
         &self,
