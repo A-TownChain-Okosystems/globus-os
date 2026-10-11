@@ -35,10 +35,7 @@ pub struct CapabilityCheckResult {
 /// must never be allowed to choose or impersonate its caller.
 /// Implementations must fail closed.
 pub trait CapabilityAuthority {
-    fn check(
-        &self,
-        request: CapabilityCheckRequest,
-    ) -> Result<CapabilityCheckResult, AbiError>;
+    fn check(&self, request: CapabilityCheckRequest) -> Result<CapabilityCheckResult, AbiError>;
 }
 
 /// Stable, bounded network boundary. recv returns the number of bytes written.
@@ -139,7 +136,10 @@ mod tests {
     #[test]
     fn token_bucket_consumes_and_refills_deterministically() {
         let mut bucket = TokenBucket::new(
-            TokenBucketConfig { capacity: 5, refill_per_tick: 2 },
+            TokenBucketConfig {
+                capacity: 5,
+                refill_per_tick: 2,
+            },
             10,
         );
         assert_eq!(bucket.try_consume(4, 10), Ok(()));
@@ -151,7 +151,10 @@ mod tests {
     #[test]
     fn token_bucket_fails_closed_and_caps_refill() {
         let mut bucket = TokenBucket::new(
-            TokenBucketConfig { capacity: 3, refill_per_tick: 1 },
+            TokenBucketConfig {
+                capacity: 3,
+                refill_per_tick: 1,
+            },
             5,
         );
         assert_eq!(bucket.try_consume(4, 5), Err(AbiError::ResourceExhausted));
@@ -163,7 +166,10 @@ mod tests {
     #[test]
     fn backwards_time_does_not_refill() {
         let mut bucket = TokenBucket::new(
-            TokenBucketConfig { capacity: 4, refill_per_tick: 1 },
+            TokenBucketConfig {
+                capacity: 4,
+                refill_per_tick: 1,
+            },
             10,
         );
         bucket.try_consume(3, 10).unwrap();
