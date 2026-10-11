@@ -416,17 +416,22 @@ impl TokenBucket {
         }
     }
 
+    /// Consume tokens using a monotonic nanosecond timestamp.
+    ///
+    /// Refill arithmetic is saturating and fractional seconds are retained by
+    /// advancing the reference time only by whole seconds actually accounted.
     pub fn try_consume(&self, now: u64, count: u32) -> bool {
         let mut tokens = self.tokens.lock();
         let mut last = self.last_refill.lock();
 
-        // Refill based on elapsed time
+        // saturating_sub makes a backwards clock add no tokens.
         let elapsed_ns = now.saturating_sub(*last);
         let elapsed_secs = elapsed_ns / 1_000_000_000;
-        let refill = (elapsed_secs as u32) * self.refill_rate;
-        if refill > 0 {
-            *tokens = (*tokens + refill).min(self.capacity);
-            *last = now;
+        let refill = (elapsed_secs.saturating_mul(self.refill_rate as u64))
+            .min(u32::MAX as u64) as u32;
+        if elapsed_secs > 0 {
+            *tokens = tokens.saturating_add(refill).min(self.capacity);
+            *last = last.saturating_add(elapsed_secs.saturating_mul(1_000_000_000));
         }
 
         if *tokens >= count {
@@ -437,13 +442,15 @@ impl TokenBucket {
         }
     }
 
+    /// Returns the effective token count at `now` without mutating bucket state.
     pub fn available(&self, now: u64) -> u32 {
-        let mut tokens = self.tokens.lock();
-        let mut last = self.last_refill.lock();
+        let tokens = self.tokens.lock();
+        let last = self.last_refill.lock();
         let elapsed_ns = now.saturating_sub(*last);
         let elapsed_secs = elapsed_ns / 1_000_000_000;
-        let refill = (elapsed_secs as u32) * self.refill_rate;
-        (*tokens + refill).min(self.capacity)
+        let refill = (elapsed_secs.saturating_mul(self.refill_rate as u64))
+            .min(u32::MAX as u64) as u32;
+        tokens.saturating_add(refill).min(self.capacity)
     }
 }
 
