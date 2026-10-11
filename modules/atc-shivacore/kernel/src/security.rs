@@ -427,8 +427,8 @@ impl TokenBucket {
         // saturating_sub makes a backwards clock add no tokens.
         let elapsed_ns = now.saturating_sub(*last);
         let elapsed_secs = elapsed_ns / 1_000_000_000;
-        let refill = (elapsed_secs.saturating_mul(self.refill_rate as u64))
-            .min(u32::MAX as u64) as u32;
+        let refill =
+            (elapsed_secs.saturating_mul(self.refill_rate as u64)).min(u32::MAX as u64) as u32;
         if elapsed_secs > 0 {
             *tokens = tokens.saturating_add(refill).min(self.capacity);
             *last = last.saturating_add(elapsed_secs.saturating_mul(1_000_000_000));
