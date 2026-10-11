@@ -71,10 +71,9 @@ results and test logs are inspected.
   with revoked/unknown-handle and rights-attenuation tests.
 - Integrate the new ATS-1000-to-ABI `NetworkStack` adapter with the service-space transport owner; the adapter normalizes failures and enforces the ABI payload ceiling, but does not implement transport.
 - The existing `security::TokenBucket` remains a separate legacy API. Its refill arithmetic is now overflow-safe and preserves fractional-second remainder; it has edge-case tests, but no ABI migration or full call-site parity claim is made.
-- Implement a read-only `KernelBootStatusProvider` adapter that maps internal boot states
-  without exposing `KernelState`.
-- Run formatting, workspace checks, targeted tests, and all required PR gates against the
-  exact final head. Until then, status remains **VERIFICATION PENDING**.
+- Preserve typed boot failures in a future lifecycle-state owner; current `KernelState::boot` returns `Err` before a failed `KernelState` exists, so the status adapter cannot report the original `BootError`.
+- Bind the network adapter to the actual service-space transport owner; no concrete transport is claimed here.
+- Run formatting, workspace checks, targeted tests, and all required PR gates against the exact final head. Until then, status remains **VERIFICATION PENDING**.
 
 ## Kernel adapter implemented in this phase
 
@@ -109,3 +108,18 @@ Remaining integration blockers are still real: the adapter must be wired to the 
 service-space transport owner, the read-only boot-status provider is not yet backed by
 kernel lifecycle state, capability checks are not yet routed through all syscall entry
 points, and final-head CI logs have not been verified.
+
+
+## Syscall and boot-status integration update
+
+The syscall dispatcher now routes both capability-rights checks and
+`CapabilityQuery` through `KernelCapabilityAuthority`. The dispatcher-supplied PID
+remains trusted context; the request cannot choose its caller. IPC checks additionally
+bind the handle to the requested resource type and resource ID.
+
+`KernelBootStatusAdapter` now reads the existing kernel initialization log without
+exposing or mutating `KernelState`. The stable phase enum adds `Memory = 8` without
+renumbering existing phase IDs, and `ABI_MINOR` is now 1 to mark the additive contract
+surface. Because legacy boot failures return `Err(BootError)` before constructing a
+`KernelState`, the adapter cannot yet expose the original typed boot error; this remains
+an explicit lifecycle-state residual.
