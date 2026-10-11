@@ -32,6 +32,7 @@ class EvidenceResult:
     data: Any = None
     pages: int = 0
     http_status: int | None = None
+    next_url: str | None = None
 
     @property
     def verified(self) -> bool:
@@ -135,6 +136,7 @@ def fetch_json(
             with opener(request, timeout=20) as response:
                 status = getattr(response, "status", 200)
                 raw = response.read()
+                link_header = response.headers.get("Link") if getattr(response, "headers", None) else None
             if status < 200 or status >= 300:
                 last_error = f"unexpected HTTP status {status}"
                 if status not in TRANSIENT_STATUSES or attempt == retries:
@@ -144,7 +146,7 @@ def fetch_json(
                     decoded = json.loads(raw.decode("utf-8"))
                 except (UnicodeDecodeError, json.JSONDecodeError) as exc:
                     return EvidenceResult(State.ERROR, f"malformed JSON response: {exc}", http_status=status)
-                return EvidenceResult(State.SUCCESS, "HTTP response decoded; caller must validate its contract", decoded, http_status=status)
+                return EvidenceResult(State.SUCCESS, "HTTP response decoded; caller must validate its contract", decoded, http_status=status, next_url=_parse_link_next(link_header))
         except urllib.error.HTTPError as exc:
             last_error = f"HTTP {exc.code}: {exc.reason}"
             if exc.code not in TRANSIENT_STATUSES or attempt == retries:
