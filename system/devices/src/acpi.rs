@@ -296,7 +296,8 @@ mod tests {
     fn mcfg_rejects_nonzero_header_reserved_bytes_with_valid_checksum() {
         let mut bytes = valid_mcfg_with_window(0xE000_0000, 0, 0);
         bytes[36] = 1;
-        fix_checksum(&mut bytes, 9, bytes.len());
+        let length = bytes.len();
+        fix_checksum(&mut bytes, 9, length);
         assert_eq!(validate_mcfg_table(&bytes), Err(AcpiError::InvalidLength));
     }
 
@@ -304,7 +305,8 @@ mod tests {
     fn mcfg_rejects_nonzero_allocation_reserved_bytes_with_valid_checksum() {
         let mut bytes = valid_mcfg_with_window(0xE000_0000, 0, 0);
         bytes[56] = 1; // entry-relative byte 12 (absolute table offset 56)
-        fix_checksum(&mut bytes, 9, bytes.len());
+        let length = bytes.len();
+        fix_checksum(&mut bytes, 9, length);
         assert_eq!(validate_mcfg_table(&bytes), Err(AcpiError::InvalidLength));
     }
 
