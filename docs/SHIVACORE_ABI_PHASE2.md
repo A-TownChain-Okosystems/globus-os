@@ -69,10 +69,8 @@ results and test logs are inspected.
 
 - Implement a kernel-owned adapter from `CapabilityTable` to `CapabilityAuthority`
   with revoked/unknown-handle and rights-attenuation tests.
-- Implement a service-space adapter for `NetworkStack` and reconcile its behavior with
-  ATS-1000; do not move transport implementation into the ABI crate.
-- Replace or wrap the existing `security::TokenBucket` only after matching its actual
-  semantics and call sites with compatibility tests.
+- Integrate the new ATS-1000-to-ABI `NetworkStack` adapter with the service-space transport owner; the adapter normalizes failures and enforces the ABI payload ceiling, but does not implement transport.
+- The existing `security::TokenBucket` remains a separate legacy API. Its refill arithmetic is now overflow-safe and preserves fractional-second remainder; it has edge-case tests, but no ABI migration or full call-site parity claim is made.
 - Implement a read-only `KernelBootStatusProvider` adapter that maps internal boot states
   without exposing `KernelState`.
 - Run formatting, workspace checks, targeted tests, and all required PR gates against the
@@ -89,3 +87,25 @@ foreign-owner denial, unknown handles, and invalid rights bits.
 This adapter does not make caller identity a request field: caller identity is trusted
 context, not data supplied by an untrusted service. Integration into each syscall path
 must preserve that invariant.
+
+
+## Network adapter and rate-limiter hardening update
+
+The kernel adapter module now includes `KernelNetworkAdapter`, which translates the
+legacy ATS-1000 `Option`/`bool` results into explicit `AbiError` values, applies
+`MAX_SYSCALL_PAYLOAD` (or a stricter configured ceiling) before dispatch, and rejects
+transport-reported receive lengths larger than the destination buffer. Tests cover
+legacy failure mapping, successful connect/send/receive, pre-dispatch size rejection,
+and an invalid transport length. This is an adapter over an injected stack, not proof
+that a real network transport exists.
+
+The existing security rate limiter was hardened separately: refill multiplication and
+token addition saturate, backwards time does not refill, and elapsed whole seconds are
+accounted without discarding a fractional-second remainder. New tests cover overflow,
+fractional refill, and backwards-clock behavior. It is deliberately not described as
+migrated to the stable ABI.
+
+Remaining integration blockers are still real: the adapter must be wired to the actual
+service-space transport owner, the read-only boot-status provider is not yet backed by
+kernel lifecycle state, capability checks are not yet routed through all syscall entry
+points, and final-head CI logs have not been verified.
