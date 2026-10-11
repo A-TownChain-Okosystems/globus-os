@@ -79,9 +79,7 @@ impl McfgWindow {
             return Err(AcpiError::InvalidAddress);
         }
         let bus_count = u64::from(self.end_bus) - u64::from(self.start_bus) + 1;
-        let region_size = bus_count
-            .checked_shl(20)
-            .ok_or(AcpiError::InvalidAddress)?;
+        let region_size = bus_count.checked_shl(20).ok_or(AcpiError::InvalidAddress)?;
         self.base_address
             .checked_add(region_size - 1)
             .ok_or(AcpiError::InvalidAddress)?;
@@ -159,7 +157,6 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
     Ok(())
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -203,10 +200,16 @@ mod tests {
     fn rsdp_rejects_bad_signature_and_truncated_input() {
         let mut bad_signature = valid_rsdp_v1();
         bad_signature[0] = b'X';
-        assert_eq!(validate_rsdp(&bad_signature), Err(AcpiError::InvalidSignature));
+        assert_eq!(
+            validate_rsdp(&bad_signature),
+            Err(AcpiError::InvalidSignature)
+        );
         assert_eq!(validate_rsdp(&[]), Err(AcpiError::InvalidLength));
         assert_eq!(validate_rsdp(b"RSD PTR "), Err(AcpiError::InvalidLength));
-        assert_eq!(validate_rsdp(&valid_rsdp_v1()[..19]), Err(AcpiError::InvalidLength));
+        assert_eq!(
+            validate_rsdp(&valid_rsdp_v1()[..19]),
+            Err(AcpiError::InvalidLength)
+        );
     }
 
     #[test]
@@ -228,7 +231,10 @@ mod tests {
         let mut invalid_length = valid_rsdp_v2(36);
         invalid_length[20..24].copy_from_slice(&35u32.to_le_bytes());
         fix_checksum(&mut invalid_length, 32);
-        assert_eq!(validate_rsdp(&invalid_length), Err(AcpiError::InvalidLength));
+        assert_eq!(
+            validate_rsdp(&invalid_length),
+            Err(AcpiError::InvalidLength)
+        );
         let mut bad_extended_checksum = valid_rsdp_v2(36);
         bad_extended_checksum[35] ^= 1;
         assert_eq!(
