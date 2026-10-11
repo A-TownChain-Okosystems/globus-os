@@ -134,6 +134,13 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
     if !(length - MCFG_FIXED_LEN).is_multiple_of(MCFG_ENTRY_LEN) {
         return Err(AcpiError::InvalidLength);
     }
+    // ACPI MCFG reserves bytes 36..44 of the table header; they must be zero.
+    if bytes[ACPI_HEADER_LEN..MCFG_FIXED_LEN]
+        .iter()
+        .any(|byte| *byte != 0)
+    {
+        return Err(AcpiError::InvalidLength);
+    }
     if !checksum_valid(&bytes[..length]) {
         return Err(AcpiError::InvalidChecksum);
     }
@@ -143,6 +150,10 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
         return Err(AcpiError::InvalidLength);
     }
     for entry in entries {
+        // Each MCFG allocation structure reserves bytes 12..16; they must be zero.
+        if entry[12..16].iter().any(|byte| *byte != 0) {
+            return Err(AcpiError::InvalidLength);
+        }
         let base = u64::from_le_bytes(
             entry[0..8]
                 .try_into()
@@ -279,6 +290,22 @@ mod tests {
             validate_mcfg_table(&empty_table),
             Err(AcpiError::InvalidLength)
         );
+    }
+
+    #[test]
+    fn mcfg_rejects_nonzero_header_reserved_bytes_with_valid_checksum() {
+        let mut bytes = valid_mcfg_with_window(0xE000_0000, 0, 0);
+        bytes[36] = 1;
+        fix_checksum(&mut bytes, 9, bytes.len());
+        assert_eq!(validate_mcfg_table(&bytes), Err(AcpiError::InvalidLength));
+    }
+
+    #[test]
+    fn mcfg_rejects_nonzero_allocation_reserved_bytes_with_valid_checksum() {
+        let mut bytes = valid_mcfg_with_window(0xE000_0000, 0, 0);
+        bytes[56] = 1; // entry-relative byte 12 (absolute table offset 56)
+        fix_checksum(&mut bytes, 9, bytes.len());
+        assert_eq!(validate_mcfg_table(&bytes), Err(AcpiError::InvalidLength));
     }
 
     #[test]
