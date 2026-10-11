@@ -7,8 +7,11 @@
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
 
+/// Stable service-facing contract interfaces for the versioned ABI.
+pub mod contracts;
+
 pub const ABI_MAJOR: u16 = 1;
-pub const ABI_MINOR: u16 = 0;
+pub const ABI_MINOR: u16 = 1;
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -145,6 +148,8 @@ pub enum KernelBootPhase {
     FileSystem = 5,
     Security = 6,
     Ready = 7,
+    /// Additive phase identifier for the kernel memory subsystem (ABI minor 1).
+    Memory = 8,
 }
 
 pub const MAX_SYSCALL_PAYLOAD: usize = 1024 * 1024;
@@ -159,7 +164,7 @@ mod tests {
 
     #[test]
     fn abi_version_is_stable() {
-        assert_eq!(ABI_VERSION, 0x0001_0000);
+        assert_eq!(ABI_VERSION, 0x0001_0001);
         assert!(validate_abi_version(0x0001_ffff));
         assert!(!validate_abi_version(0x0002_0000));
     }

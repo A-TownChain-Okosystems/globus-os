@@ -10,6 +10,7 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
+pub mod abi_adapter;
 #[cfg(test)]
 pub mod allocator;
 pub mod atcfs;
