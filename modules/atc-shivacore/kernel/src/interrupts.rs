@@ -85,7 +85,11 @@ pub fn init_pics() {
     unsafe {
         PICS.lock().initialize();
 
-        // UEFI firmware may leave the legacy PIT at an unspecified state.
+        // UEFI firmware may leave IRQ0 masked in the legacy PIC. Make the
+        // timer IRQ unmasked explicitly; keep all other legacy PIC IRQs masked
+        // until their handlers and device initialization are ready.
+        PICS.lock().write_masks(0xFE, 0xFF);
+
         // Program channel 0 explicitly so IRQ0 drives scheduler preemption
         // consistently in both BIOS and UEFI boots (100 Hz).
         const PIT_INPUT_HZ: u32 = 1_193_182;
