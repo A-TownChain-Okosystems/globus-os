@@ -94,3 +94,35 @@ The evidence supports the following precise claim:
 2. Replace direct Service-Space imports of `security`, `capability`, `ats1000`, and `kernel_init` with that contract.
 3. Keep the classified planned kernel files until their owner and acceptance tests are explicit.
 4. Re-run this audit and bind the result to the exact commit after the boundary change.
+
+## Frozen implementation plan
+
+This section fixes the current boundary plan for follow-up work. It is not a claim that the final ABI separation is already complete.
+
+### Phase 1: preserve the verified split
+
+- Keep the extracted domain modules in `service_space/`.
+- Do not delete the classified planned kernel files without an owner decision and an acceptance test.
+- Keep the reverse-dependency invariant: the kernel must not import Service-Space.
+- Keep both local test suites and their exact commit binding in the evidence bundle.
+
+### Phase 2: define the boundary
+
+- Define the minimum public kernel contract required by Service-Space.
+- Separate boot, capability, hashing and network primitives from internal kernel implementation modules.
+- Specify ownership, allowed direction of dependencies and failure semantics.
+
+### Phase 3: migrate direct imports
+
+Replace direct Service-Space imports of `security`, `capability`, `ats1000` and `kernel_init` with the approved public contract. Each migration must include a focused test and a before/after dependency check.
+
+### Phase 4: freeze and verify
+
+The boundary can be marked frozen only when all of the following are true:
+
+- Service-Space no longer imports internal kernel modules.
+- The kernel has no Service-Space references.
+- No unclassified kernel source file remains.
+- Kernel and Service-Space tests pass on the same commit.
+- CI evidence is bound to that commit.
+- The architecture and repository status documents point to the same evidence record.
