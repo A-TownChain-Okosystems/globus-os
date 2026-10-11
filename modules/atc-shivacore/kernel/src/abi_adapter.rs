@@ -4,8 +4,10 @@
 //! concrete kernel data structures through the ABI crate.
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable};
+use crate::kernel_init::{BootPhase, InitStatus, KernelState};
 use libshivacore::contracts::{
-    CapabilityAuthority, CapabilityCheckRequest, CapabilityCheckResult,
+    CapabilityAuthority, CapabilityCheckRequest, CapabilityCheckResult, KernelBootStatus,
+    KernelBootStatusProvider, KernelBootState,
 };
 use libshivacore::{AbiError, CapabilityRights};
 
@@ -257,6 +259,88 @@ mod network_adapter_tests {
         assert_eq!(
             libshivacore::contracts::NetworkStack::recv(&mut adapter, 17, &mut buffer),
             Err(AbiError::InvalidPayload)
+        );
+    }
+}
+
+
+/// Read-only view of the lifecycle log. It cannot start, stop, or mutate boot.
+pub struct KernelBootStatusAdapter<'a> {
+    state: &'a KernelState,
+}
+
+impl<'a> KernelBootStatusAdapter<'a> {
+    pub const fn new(state: &'a KernelState) -> Self {
+        Self { state }
+    }
+}
+
+fn abi_boot_phase(phase: BootPhase) -> libshivacore::KernelBootPhase {
+    match phase {
+        BootPhase::Heap => libshivacore::KernelBootPhase::Heap,
+        BootPhase::Memory => libshivacore::KernelBootPhase::Memory,
+        BootPhase::Capabilities => libshivacore::KernelBootPhase::Capabilities,
+        BootPhase::Processes => libshivacore::KernelBootPhase::Processes,
+        BootPhase::Scheduler => libshivacore::KernelBootPhase::Scheduler,
+        BootPhase::Ipc => libshivacore::KernelBootPhase::Ipc,
+        BootPhase::FileSystem => libshivacore::KernelBootPhase::FileSystem,
+        BootPhase::Security => libshivacore::KernelBootPhase::Security,
+        BootPhase::Done => libshivacore::KernelBootPhase::Ready,
+    }
+}
+
+fn abi_boot_state(phase: BootPhase, status: InitStatus) -> KernelBootState {
+    match status {
+        InitStatus::Failed => KernelBootState::Failed,
+        InitStatus::Ready if phase == BootPhase::Done => KernelBootState::Ready,
+        InitStatus::NotStarted | InitStatus::Initializing | InitStatus::Ready => {
+            KernelBootState::Initializing
+        }
+    }
+}
+
+impl KernelBootStatusProvider for KernelBootStatusAdapter<'_> {
+    fn status(&self) -> KernelBootStatus {
+        match self.state.init_log.last().copied() {
+            Some((phase, state)) => KernelBootStatus {
+                phase: abi_boot_phase(phase),
+                state: abi_boot_state(phase, state),
+                // KernelState::boot returns Err instead of a KernelState on failure,
+                // and the legacy init log does not retain a typed BootError.
+                error: None,
+            },
+            None => KernelBootStatus {
+                phase: libshivacore::KernelBootPhase::Heap,
+                state: KernelBootState::Initializing,
+                error: None,
+            },
+        }
+    }
+}
+
+#[cfg(test)]
+mod boot_status_adapter_tests {
+    use super::*;
+
+    #[test]
+    fn boot_phase_mapping_preserves_memory_and_done_semantics() {
+        assert_eq!(abi_boot_phase(BootPhase::Memory) as u8, 8);
+        assert_eq!(abi_boot_phase(BootPhase::Done), libshivacore::KernelBootPhase::Ready);
+    }
+
+    #[test]
+    fn failed_boot_phase_is_not_reported_as_ready() {
+        assert_eq!(
+            abi_boot_state(BootPhase::FileSystem, InitStatus::Failed),
+            KernelBootState::Failed
+        );
+        assert_eq!(
+            abi_boot_state(BootPhase::Security, InitStatus::Initializing),
+            KernelBootState::Initializing
+        );
+        assert_eq!(
+            abi_boot_state(BootPhase::Done, InitStatus::Ready),
+            KernelBootState::Ready
         );
     }
 }
