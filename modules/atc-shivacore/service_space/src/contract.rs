@@ -7,7 +7,7 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
-use shivacore::security::simple_hash;
+use libshivacore::simple_hash;
 pub struct ContractExecutor {
     vm: Arc<VmEngine>,
     state: Arc<crate::mempool::StateDb>,
