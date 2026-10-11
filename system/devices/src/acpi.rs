@@ -131,14 +131,18 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
     if length <= MCFG_FIXED_LEN || length > bytes.len() {
         return Err(AcpiError::InvalidLength);
     }
-    if (length - MCFG_FIXED_LEN) % MCFG_ENTRY_LEN != 0 {
+    if !(length - MCFG_FIXED_LEN).is_multiple_of(MCFG_ENTRY_LEN) {
         return Err(AcpiError::InvalidLength);
     }
     if !checksum_valid(&bytes[..length]) {
         return Err(AcpiError::InvalidChecksum);
     }
 
-    for entry in bytes[MCFG_FIXED_LEN..length].chunks_exact(MCFG_ENTRY_LEN) {
+    let (entries, remainder) = bytes[MCFG_FIXED_LEN..length].as_chunks::<MCFG_ENTRY_LEN>();
+    if !remainder.is_empty() {
+        return Err(AcpiError::InvalidLength);
+    }
+    for entry in entries {
         let base = u64::from_le_bytes(
             entry[0..8]
                 .try_into()
