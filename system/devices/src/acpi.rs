@@ -182,7 +182,7 @@ mod tests {
         bytes[0..8].copy_from_slice(b"RSD PTR ");
         bytes[15] = 2;
         bytes[20..24].copy_from_slice(&(length as u32).to_le_bytes());
-        fix_checksum(&mut bytes, 8);
+        fix_checksum(&mut bytes, 8, 20);
         fix_checksum(&mut bytes, 32, length);
         bytes
     }
