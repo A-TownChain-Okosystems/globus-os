@@ -306,7 +306,7 @@ mod tests {
             Err(AcpiError::InvalidLength)
         );
         assert_eq!(
-            validate_mcfg_table(&valid_mcfg_with_window(u64::MAX & !0xF_FFFF, 0, 1)),
+            validate_mcfg_table(&valid_mcfg_with_window(!0xF_FFFF, 0, 1)),
             Err(AcpiError::InvalidAddress)
         );
     }
@@ -345,7 +345,7 @@ mod tests {
         };
         assert_eq!(reversed.validate(), Err(AcpiError::InvalidLength));
         let overflow = McfgWindow {
-            base_address: u64::MAX & !0xF_FFFF,
+            base_address: !0xF_FFFF,
             segment: 0,
             start_bus: 0,
             end_bus: 1,
