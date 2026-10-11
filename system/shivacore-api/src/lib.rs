@@ -145,6 +145,8 @@ pub enum KernelBootPhase {
     FileSystem = 5,
     Security = 6,
     Ready = 7,
+    /// Additive phase identifier for the kernel memory subsystem (ABI minor 1).
+    Memory = 8,
 }
 
 pub const MAX_SYSCALL_PAYLOAD: usize = 1024 * 1024;
