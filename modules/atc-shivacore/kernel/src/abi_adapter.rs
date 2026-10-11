@@ -281,7 +281,6 @@ mod network_adapter_tests {
     }
 }
 
-
 /// Read-only view of the lifecycle log. It cannot start, stop, or mutate boot.
 pub struct KernelBootStatusAdapter<'a> {
     state: &'a KernelState,
