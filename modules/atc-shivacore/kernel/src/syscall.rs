@@ -172,7 +172,11 @@ impl SyscallDispatcher {
             handle,
             required: CapabilityRights(rights.0),
         };
-        if !authority.check(check).map(|result| result.granted).unwrap_or(false) {
+        if !authority
+            .check(check)
+            .map(|result| result.granted)
+            .unwrap_or(false)
+        {
             return false;
         }
 
@@ -180,9 +184,7 @@ impl SyscallDispatcher {
         // check additionally binds the capability to the requested resource.
         capabilities
             .get(CapId(handle.0))
-            .map(|cap| {
-                cap.resource_type == resource_type && cap.resource_id == resource_id
-            })
+            .map(|cap| cap.resource_type == resource_type && cap.resource_id == resource_id)
             .unwrap_or(false)
     }
 }
