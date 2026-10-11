@@ -76,10 +76,12 @@ impl RecoveryConfirmation {
                 }
             }
         }
-        let expected = std::array::from_fn(|index| {
-            Zeroizing::new(words[positions[index]].to_owned())
-        });
-        Ok(Self { positions, expected })
+        let expected =
+            std::array::from_fn(|index| Zeroizing::new(words[positions[index]].to_owned()));
+        Ok(Self {
+            positions,
+            expected,
+        })
     }
 
     /// Zero-based word positions. UI should display these as one-based positions.
@@ -91,7 +93,9 @@ impl RecoveryConfirmation {
     /// case-insensitive; surrounding whitespace is ignored.
     pub fn verify(&self, answers: [&str; 3]) -> Result<(), AccountLifecycleError> {
         let valid = answers.iter().enumerate().all(|(index, answer)| {
-            answer.trim().eq_ignore_ascii_case(self.expected[index].as_str())
+            answer
+                .trim()
+                .eq_ignore_ascii_case(self.expected[index].as_str())
         });
         if valid {
             Ok(())
@@ -120,7 +124,16 @@ mod tests {
     #[test]
     fn username_rejects_ambiguous_or_invalid_values() {
         let too_long = "a".repeat(33);
-        for value in ["", "ab", " leading", "a b c", "-alice", "alice-", "älice", too_long.as_str()] {
+        for value in [
+            "",
+            "ab",
+            " leading",
+            "a b c",
+            "-alice",
+            "alice-",
+            "älice",
+            too_long.as_str(),
+        ] {
             assert_eq!(
                 AccountUsername::parse(value),
                 Err(AccountLifecycleError::InvalidUsername)
