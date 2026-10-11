@@ -146,8 +146,8 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
                 .try_into()
                 .map_err(|_| AcpiError::InvalidLength)?,
         );
-        let start_bus = entry[_bus_range_index(8)];
-        let end_bus = entry[_bus_range_index(9)];
+        let start_bus = entry[8];
+        let end_bus = entry[9];
         McfgWindow {
             base_address: base,
             segment: u16::from_le_bytes([entry[10], entry[11]]),
@@ -159,10 +159,6 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
     Ok(())
 }
 
-#[inline]
-fn _bus_range_index(index: usize) -> usize {
-    index
-}
 
 #[cfg(test)]
 mod tests {
@@ -228,7 +224,7 @@ mod tests {
     #[test]
     fn rsdp_v2_rejects_short_data_invalid_length_and_bad_extended_checksum() {
         let bytes = valid_rsdp_v2(36);
-        assert_eq!(validate_rsdp(&bytes[..35]), Err(AcpiError::InvalidChecksum));
+        assert_eq!(validate_rsdp(&bytes[..35]), Err(AcpiError::InvalidLength));
         let mut invalid_length = valid_rsdp_v2(36);
         invalid_length[20..24].copy_from_slice(&35u32.to_le_bytes());
         fix_checksum(&mut invalid_length, 32);
