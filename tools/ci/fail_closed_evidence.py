@@ -121,7 +121,7 @@ def _parse_link_next(link_header: str | None) -> str | None:
     # segments rather than guessing a next page.
     for part in link_header.split(","):
         segments = [segment.strip() for segment in part.split(";")]
-        if len(segments) > 1 and any(segment.strip('"') == "rel=next" for segment in segments[1:]):
+        if len(segments) > 1 and any('rel="next"' in segment for segment in segments[1:]):
             target = segments[0]
             if target.startswith("<") and target.endswith(">"):
                 return target[1:-1]
