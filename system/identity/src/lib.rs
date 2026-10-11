@@ -9,8 +9,8 @@ mod persistence;
 mod secure_store;
 mod service;
 
-use bip39::{Language, Mnemonic};
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
+use bip39::{Language, Mnemonic};
 pub use file_store::FileBlobStore;
 use hmac::{Hmac, Mac};
 pub use ipc_key_provider::{IdentityKeyIpcTransport, IpcIdentityKeyService};
