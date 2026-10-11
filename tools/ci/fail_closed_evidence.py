@@ -164,6 +164,7 @@ def fetch_all_pages(
     *,
     token: str | None = None,
     max_pages: int = 100,
+    allow_empty: bool = False,
     fetch: Callable[..., EvidenceResult] = fetch_json,
 ) -> EvidenceResult:
     """Follow GitHub Link pagination; fail closed if page shape or page bound is invalid."""
@@ -184,10 +185,14 @@ def fetch_all_pages(
             return EvidenceResult(State.ERROR, f"page {pages + 1} root must be an array", result.data, pages + 1)
         combined.extend(result.data)
         pages += 1
-        current = None
-    return EvidenceResult(State.SUCCESS if combined else State.EMPTY,
-                          "all pages retrieved" if combined else "all pages retrieved but result is empty",
-                          combined, pages)
+        current = result.next_url
+        if current:
+            next_parsed = urllib.parse.urlparse(current)
+            if next_parsed.scheme != "https" or next_parsed.hostname != "api.github.com":
+                return EvidenceResult(State.ERROR, "pagination link escaped the GitHub API host", combined, pages)
+    if not combined and not allow_empty:
+        return EvidenceResult(State.EMPTY, "all pages retrieved but result is empty", combined, pages)
+    return EvidenceResult(State.SUCCESS, "all pages retrieved", combined, pages)
 
 
 def validate_check_runs(payload: Any, *, expected_sha: str, expected_repo: str) -> EvidenceResult:
