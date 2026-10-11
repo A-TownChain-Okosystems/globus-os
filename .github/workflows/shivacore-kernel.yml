@@ -146,7 +146,7 @@ jobs:
           set +e
           timeout 20s qemu-system-x86_64 \
             -cpu ${{ matrix.qemu_cpu }} \
-            -bios "$OVMF_CODE" \
+            -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
             -drive format=raw,file=target/boot-images/shivacore-uefi.img \
             -serial stdio \
             -display none \
