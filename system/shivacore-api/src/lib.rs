@@ -171,7 +171,6 @@ mod tests {
     }
 
     #[test]
-    #[test]
     fn simple_hash_is_stable() {
         assert_eq!(simple_hash(b"abc"), simple_hash(b"abc"));
         assert_ne!(simple_hash(b"abc"), simple_hash(b"abd"));
@@ -184,6 +183,7 @@ mod tests {
         assert!(!rights.contains(CapabilityRights::WRITE));
     }
 
+    #[test]
     fn handshake_accepts_minor_changes() {
         assert!(
             AbiHandshake {
