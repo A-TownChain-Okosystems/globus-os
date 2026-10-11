@@ -84,6 +84,20 @@ pub fn init_idt() {
 pub fn init_pics() {
     unsafe {
         PICS.lock().initialize();
+
+        // UEFI firmware may leave the legacy PIT at an unspecified state.
+        // Program channel 0 explicitly so IRQ0 drives scheduler preemption
+        // consistently in both BIOS and UEFI boots (100 Hz).
+        const PIT_INPUT_HZ: u32 = 1_193_182;
+        const PIT_HZ: u32 = 100;
+        let divisor = (PIT_INPUT_HZ / PIT_HZ) as u16;
+        let mut command: x86_64::instructions::port::Port<u8> =
+            x86_64::instructions::port::Port::new(0x43);
+        let mut channel0: x86_64::instructions::port::Port<u8> =
+            x86_64::instructions::port::Port::new(0x40);
+        command.write(0x36); // channel 0, lobyte/hibyte, mode 3, binary
+        channel0.write((divisor & 0x00ff) as u8);
+        channel0.write((divisor >> 8) as u8);
     }
     x86_64::instructions::interrupts::enable();
 }
