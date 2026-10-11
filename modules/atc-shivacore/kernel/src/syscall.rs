@@ -5,10 +5,13 @@
 //! versioned libshivacore ABI; unknown syscall IDs and malformed requests
 //! fail closed before any kernel operation is reached.
 
+use crate::abi_adapter::KernelCapabilityAuthority;
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use libshivacore::contracts::{CapabilityAuthority, CapabilityCheckRequest};
 use libshivacore::{
-    validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
+    validate_abi_version, AbiError, CapabilityHandle, CapabilityRights, Syscall,
+    MAX_SYSCALL_PAYLOAD,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -125,7 +128,15 @@ impl SyscallDispatcher {
                     Some(cap) => cap,
                     None => return SyscallResponse::err(AbiError::InvalidHandle),
                 };
-                if !capabilities.check_any(pid, cap.0, Rights::INSPECT) {
+                let authority = KernelCapabilityAuthority::new(capabilities, pid);
+                let result = match authority.check(CapabilityCheckRequest {
+                    handle: cap,
+                    required: CapabilityRights::INSPECT,
+                }) {
+                    Ok(result) => result,
+                    Err(error) => return SyscallResponse::err(error),
+                };
+                if !result.granted {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
                 SyscallResponse::ok(1)
@@ -153,13 +164,24 @@ impl SyscallDispatcher {
         rights: Rights,
     ) -> bool {
         let Some(handle) = handle else { return false };
+
+        // Every syscall capability check passes through the stable ABI adapter.
+        // The trusted PID comes from dispatch, never from the request payload.
+        let authority = KernelCapabilityAuthority::new(capabilities, pid);
+        let check = CapabilityCheckRequest {
+            handle,
+            required: CapabilityRights(rights.0),
+        };
+        if !authority.check(check).map(|result| result.granted).unwrap_or(false) {
+            return false;
+        }
+
+        // The ABI adapter establishes ownership and rights; this syscall-specific
+        // check additionally binds the capability to the requested resource.
         capabilities
             .get(CapId(handle.0))
             .map(|cap| {
-                cap.owner == pid
-                    && cap.resource_type == resource_type
-                    && cap.resource_id == resource_id
-                    && cap.rights.has(rights)
+                cap.resource_type == resource_type && cap.resource_id == resource_id
             })
             .unwrap_or(false)
     }
