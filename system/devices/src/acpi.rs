@@ -161,9 +161,11 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
 mod tests {
     use super::*;
 
-    fn fix_checksum(bytes: &mut [u8], index: usize) {
+    fn fix_checksum(bytes: &mut [u8], index: usize, covered_len: usize) {
         bytes[index] = 0;
-        let sum = bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte));
+        let sum = bytes[..covered_len]
+            .iter()
+            .fold(0u8, |sum, byte| sum.wrapping_add(*byte));
         bytes[index] = 0u8.wrapping_sub(sum);
     }
 
@@ -171,7 +173,7 @@ mod tests {
         let mut bytes = vec![0u8; 20];
         bytes[0..8].copy_from_slice(b"RSD PTR ");
         bytes[15] = 0;
-        fix_checksum(&mut bytes, 8);
+        fix_checksum(&mut bytes, 8, 20);
         bytes
     }
 
@@ -181,7 +183,7 @@ mod tests {
         bytes[15] = 2;
         bytes[20..24].copy_from_slice(&(length as u32).to_le_bytes());
         fix_checksum(&mut bytes, 8);
-        fix_checksum(&mut bytes, 32);
+        fix_checksum(&mut bytes, 32, length);
         bytes
     }
 
@@ -192,7 +194,7 @@ mod tests {
         bytes[44..52].copy_from_slice(&base.to_le_bytes());
         bytes[52] = start_bus;
         bytes[53] = end_bus;
-        fix_checksum(&mut bytes, 9);
+        fix_checksum(&mut bytes, 9, 60);
         bytes
     }
 
@@ -230,7 +232,7 @@ mod tests {
         assert_eq!(validate_rsdp(&bytes[..35]), Err(AcpiError::InvalidLength));
         let mut invalid_length = valid_rsdp_v2(36);
         invalid_length[20..24].copy_from_slice(&35u32.to_le_bytes());
-        fix_checksum(&mut invalid_length, 32);
+        fix_checksum(&mut invalid_length, 32, 36);
         assert_eq!(
             validate_rsdp(&invalid_length),
             Err(AcpiError::InvalidLength)
@@ -251,7 +253,7 @@ mod tests {
     #[test]
     fn mcfg_rejects_empty_short_wrong_signature_and_invalid_table_length() {
         assert_eq!(validate_mcfg_table(&[]), Err(AcpiError::InvalidLength));
-        assert_eq!(validate_mcfg_table(&[0; 43]), Err(AcpiError::InvalidLength));
+        assert_eq!(validate_mcfg_table(&[0; 35]), Err(AcpiError::InvalidLength));
         let mut wrong_signature = vec![0u8; 44];
         wrong_signature[0..4].copy_from_slice(b"BAD!");
         assert_eq!(
@@ -268,7 +270,7 @@ mod tests {
         let mut empty_table = vec![0u8; 44];
         empty_table[0..4].copy_from_slice(b"MCFG");
         empty_table[4..8].copy_from_slice(&44u32.to_le_bytes());
-        fix_checksum(&mut empty_table, 9);
+        fix_checksum(&mut empty_table, 9, 44);
         assert_eq!(
             validate_mcfg_table(&empty_table),
             Err(AcpiError::InvalidLength)
@@ -286,7 +288,7 @@ mod tests {
         let mut bad_layout = vec![0u8; 61];
         bad_layout[0..4].copy_from_slice(b"MCFG");
         bad_layout[4..8].copy_from_slice(&61u32.to_le_bytes());
-        fix_checksum(&mut bad_layout, 9);
+        fix_checksum(&mut bad_layout, 9, 61);
         assert_eq!(
             validate_mcfg_table(&bad_layout),
             Err(AcpiError::InvalidLength)
