@@ -105,11 +105,11 @@ jobs:
                   with urllib.request.urlopen(request, timeout=20) as response:
                       if response.status != 200:
                           raise RuntimeError("unexpected HTTP status " + str(response.status))
-                      return json.load(response)
+                      return json.load(response), response.headers.get("Link", "")
               except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
                   raise RuntimeError("GitHub API request failed: " + str(exc)) from exc
 
-          run = get_json("/actions/runs/" + run_id)
+          run, _ = get_json("/actions/runs/" + run_id)
           if run.get("id") != int(run_id):
               sys.exit("FAIL-CLOSED: GitHub API run ID mismatch")
           repository = run.get("repository") or {}
@@ -120,13 +120,12 @@ jobs:
           if not isinstance(run.get("run_attempt"), int) or run["run_attempt"] <= 0:
               sys.exit("FAIL-CLOSED: run attempt missing from GitHub API run metadata")
 
-          jobs_response = get_json("/actions/runs/" + run_id + "/jobs?per_page=100")
+          jobs_response, jobs_link = get_json("/actions/runs/" + run_id + "/jobs?per_page=100")
           jobs = jobs_response.get("jobs")
           if not isinstance(jobs, list) or not jobs:
               sys.exit("FAIL-CLOSED: GitHub API jobs response missing jobs array")
           # Fail closed if a second page exists; don't silently certify a partial job list.
-          links = jobs_response.get("next") or jobs_response.get("next_url")
-          if links:
+          if 'rel="next"' in jobs_link:
               sys.exit("FAIL-CLOSED: jobs response pagination requires full-page retrieval")
           by_name = {job.get("name"): job for job in jobs if isinstance(job, dict)}
           for required in ("cargo-tests", "npm-tests"):
