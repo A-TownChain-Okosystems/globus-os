@@ -111,7 +111,6 @@ mod tests {
             Err(AbiError::InvalidPayload)
         );
     }
-
 }
 
 /// Adapter from the legacy ATS-1000 network boundary to the stable ABI.
