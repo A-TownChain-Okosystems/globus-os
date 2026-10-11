@@ -7,6 +7,9 @@
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
 
+/// Stable service-facing contract interfaces for the versioned ABI.
+pub mod contracts;
+
 pub const ABI_MAJOR: u16 = 1;
 pub const ABI_MINOR: u16 = 1;
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
