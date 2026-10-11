@@ -11,7 +11,9 @@ mod secure_store;
 mod service;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
-pub use account_registry::{AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory};
+pub use account_registry::{
+    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
+};
 use bip39::{Language, Mnemonic};
 pub use file_store::FileBlobStore;
 use hmac::{Hmac, Mac};
