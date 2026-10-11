@@ -130,7 +130,7 @@ pub fn validate_mcfg_table(bytes: &[u8]) -> Result<(), AcpiError> {
             .try_into()
             .map_err(|_| AcpiError::InvalidLength)?,
     ) as usize;
-    if length < MCFG_FIXED_LEN || length > bytes.len() {
+    if length <= MCFG_FIXED_LEN || length > bytes.len() {
         return Err(AcpiError::InvalidLength);
     }
     if (length - MCFG_FIXED_LEN) % MCFG_ENTRY_LEN != 0 {
@@ -257,6 +257,14 @@ mod tests {
         malformed_length[4..8].copy_from_slice(&43u32.to_le_bytes());
         assert_eq!(
             validate_mcfg_table(&malformed_length),
+            Err(AcpiError::InvalidLength)
+        );
+        let mut empty_table = vec![0u8; 44];
+        empty_table[0..4].copy_from_slice(b"MCFG");
+        empty_table[4..8].copy_from_slice(&44u32.to_le_bytes());
+        fix_checksum(&mut empty_table, 9);
+        assert_eq!(
+            validate_mcfg_table(&empty_table),
             Err(AcpiError::InvalidLength)
         );
     }
