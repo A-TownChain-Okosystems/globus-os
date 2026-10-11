@@ -56,9 +56,194 @@ The repository now contains a Rust workspace under `system/` with explicit subsy
 - `globus-security` — deny-by-default capability authorization.
 - `globus-process` — process/thread lifecycle.
 - `globus-memory` — address-space and page policy.
-- `globus-vfs` — filesystem interfaces.
-- `globus-net` — networking abstractions.
+- `globus-vfs` — filesystem namespace and mount contract.
+- `globus-net` — network policy/socket boundary.
+- `globus-devices` — isolated device/driver registry.
+- `globus-services` — service lifecycle and dependency ordering.
+- `globus-graphics` — display/compositor/GPU boundary.
+- `globus-audio` — audio service boundary.
+- `globus-package` — signed package metadata verification.
+- `globus-update` — atomic A/B update and rollback state machine.
 - `globus-runtime` — integrated userspace runtime.
-- `aurora-core` — dependency-free Aurora control-plane contracts and state model.
+- `system/identity/` — identity, authentication, wallet-binding and recovery integration contract.
 
-See the documentation directory for subsystem specifications, implementation status and verification evidence.
+These are the canonical foundations. Hardware-specific implementations and production cryptography remain separate, evidence-driven milestones.
+
+## Standard OS component coverage
+
+GlobusOS tracks the standard operating-system domains as an explicit implementation matrix:
+
+- Boot, UEFI, Secure Boot and TPM
+- CPU/SMP, interrupts, timers and memory management
+- PCI/PCIe, MMIO, DMA and IOMMU
+- NVMe/storage, VFS and filesystems
+- Ethernet/network stack
+- capabilities, authorization, audit and key management
+- identity, authentication and sessions
+- init/service management and power management
+- graphics, GPU and audio
+- packages, updates and recovery
+- shell/userland and developer SDK
+- observability and diagnostics
+- Aurora AI integration outside the kernel TCB
+- A-TownChain/ATC-VM/ATCLang integration outside the kernel TCB
+
+See [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md) for ownership, priority, trust boundaries, hardware dependency chains and readiness criteria.
+
+## Boot path
+
+```text
+UEFI / firmware
+ → bootloader
+ → ShivaCore
+ → capability + IPC initialization
+ → GlobusOS init/service manager
+ → identity / security / devices / storage / network
+ → wallet integration boundary
+ → runtime / graphics / audio
+ → Aurora / desktop / applications
+```
+
+## Development
+
+```bash
+cargo fmt --all -- --check
+cargo check --workspace --all-targets
+cargo test --workspace --all-targets
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+CI runs the same validation gates on pushes and pull requests.
+
+## Architecture and governance
+
+See [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) for the normative system decomposition and trust boundaries and [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md) for complete OS component coverage. Development follows `ATC-STD-000` and the applicable organization standards. `APPROVED`, `IMPLEMENTED`, `AUDITED` and `PRODUCTION_READY` remain independent states.
+
+## Ecosystem boundaries
+
+```text
+ATCLang → ATC-VM → A-TownChain
+
+Aurora → GlobusOS IPC/API → ShivaCore
+
+GlobusOS Identity → atc-wallet integration → A-TownChain identity
+```
+
+The VM remains the boundary between chain execution and the Rust system/network track. GlobusOS does not embed chain semantics into the kernel.
+
+## Security
+
+Security-sensitive issues must not be disclosed through public GitHub Issues. Follow `SECURITY.md` and the organization disclosure process.
+
+## License
+
+Apache License 2.0. See [`LICENSE`](LICENSE).
+
+## Installation
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Usage
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Configuration
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Testing
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Governance
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Contributing
+
+See the canonical repository documentation and applicable ATC standards.
+
+## Support
+
+See the canonical repository documentation and applicable ATC standards.
+
+
+## Overview
+GlobusOS is the operating-system userspace layer built on ShivaCore.
+
+## Purpose
+Provides the user-facing OS services, identity, wallet, applications and system integration required by the A-TownChain ecosystem.
+
+## Status
+**Status:** `development`  
+**Version:** `0.1.0`
+
+## Architecture
+Components include the system services, ShivaCore integration modules and SDK. Data flow and dependencies are defined by the workspace manifests and canonical architecture documentation.
+
+## Features
+- Identity and wallet integration
+- System services and media
+- ShivaCore integration
+- Application SDK
+
+## Repository Structure
+```text
+├── system
+├── modules
+├── sdk
+├── docs
+└── tests
+```
+
+## Requirements
+Rust stable and the repository's workspace toolchain are required.
+
+## Installation
+```bash
+git clone https://github.com/A-TownChain-Okosystems/globus-os.git
+cd globus-os
+cargo check --workspace
+```
+
+## Configuration
+Configuration is defined by the workspace manifests and system-specific configuration files.
+
+## Usage
+Build and test the workspace with Cargo commands documented by the repository workflows.
+
+## Development
+Use the repository workflow and ATC engineering standards for changes.
+
+## Testing
+```bash
+cargo test --workspace --all-targets
+```
+Expected result: all applicable workspace tests pass.
+
+## Security
+Security issues must not be disclosed publicly; use the repository's official security reporting process and ATC-STD-203.
+
+## Documentation
+Canonical documentation is maintained in `docs/` and the repository's governance files.
+
+## Governance
+Changes follow ATC governance, evidence and review requirements.
+
+## Standards & Compliance
+Applicable standards include ATC-STD-000, ATC-STD-201, ATC-STD-202 and ATC-STD-203.
+
+## Roadmap
+See `ROADMAP.md` for the canonical development roadmap.
+
+## Contributing
+Contributions must pass the applicable CI and governance gates.
+
+## License
+Apache-2.0.
+
+## Maintainers
+A-TownChain-Okosystems / ShivaCoreDev.
+
+## Repository Metadata
+Canonical repository: `A-TownChain-Okosystems/globus-os`.
