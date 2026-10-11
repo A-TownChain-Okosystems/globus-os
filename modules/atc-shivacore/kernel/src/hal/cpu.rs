@@ -79,15 +79,7 @@ impl CpuInfo {
             stepping,
             max_basic_leaf,
             max_extended_leaf,
-            features: CpuFeatures {
-                sse2: (leaf1.edx & (1 << 26)) != 0,
-                apic: (leaf1.edx & (1 << 9)) != 0,
-                x2apic: (leaf1.ecx & (1 << 21)) != 0,
-                nx: (ext1.edx & (1 << 20)) != 0,
-                syscall: (ext1.edx & (1 << 11)) != 0,
-                one_gib_pages: (ext1.edx & (1 << 26)) != 0,
-                invariant_tsc: (ext7.edx & (1 << 8)) != 0,
-            },
+            features: features_from_leaves(leaf1, ext1, ext7),
         }
     }
 
@@ -101,6 +93,22 @@ impl CpuInfo {
 
     pub const fn boot_compatible(&self) -> bool {
         self.features.sse2 && self.features.nx && self.features.apic
+    }
+}
+
+fn features_from_leaves(
+    leaf1: core::arch::x86_64::CpuidResult,
+    ext1: core::arch::x86_64::CpuidResult,
+    ext7: core::arch::x86_64::CpuidResult,
+) -> CpuFeatures {
+    CpuFeatures {
+        sse2: (leaf1.edx & (1 << 26)) != 0,
+        apic: (leaf1.edx & (1 << 9)) != 0,
+        x2apic: (leaf1.ecx & (1 << 21)) != 0,
+        nx: (ext1.edx & (1 << 20)) != 0,
+        syscall: (ext1.edx & (1 << 11)) != 0,
+        one_gib_pages: (ext1.edx & (1 << 26)) != 0,
+        invariant_tsc: (ext7.edx & (1 << 8)) != 0,
     }
 }
 
@@ -144,6 +152,58 @@ mod tests {
         assert_eq!(
             vendor_from_regs(0x68747541, 0x444d4163, 0x69746e65),
             CpuVendor::Amd
+        );
+    }
+
+    #[test]
+    fn absent_feature_leaves_decode_as_unsupported() {
+        let features = features_from_leaves(zero_cpuid(), zero_cpuid(), zero_cpuid());
+        assert_eq!(
+            features,
+            CpuFeatures {
+                sse2: false,
+                nx: false,
+                apic: false,
+                x2apic: false,
+                syscall: false,
+                one_gib_pages: false,
+                invariant_tsc: false,
+            }
+        );
+    }
+
+    #[test]
+    fn feature_bits_are_decoded_from_their_defined_leaves() {
+        let leaf1 = core::arch::x86_64::CpuidResult {
+            eax: 0,
+            ebx: 0,
+            ecx: 1 << 21,
+            edx: (1 << 26) | (1 << 9),
+        };
+        let ext1 = core::arch::x86_64::CpuidResult {
+            eax: 0,
+            ebx: 0,
+            ecx: 0,
+            edx: (1 << 20) | (1 << 11) | (1 << 26),
+        };
+        let ext7 = core::arch::x86_64::CpuidResult {
+            eax: 0,
+            ebx: 0,
+            ecx: 0,
+            edx: 1 << 8,
+        };
+
+        assert_eq!(
+            features_from_leaves(leaf1, ext1, ext7),
+            CpuFeatures {
+                sse2: true,
+                nx: true,
+                apic: true,
+                x2apic: true,
+                syscall: true,
+                one_gib_pages: true,
+                invariant_tsc: true,
+            }
         );
     }
 }
