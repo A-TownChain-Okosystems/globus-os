@@ -54,3 +54,14 @@
 ## Release gates
 
 `IMPLEMENTED` does not imply `AUDITED` or `PRODUCTION_READY`. A release requires passing the applicable architecture, security, integration, reproducibility and recovery gates with recorded evidence.
+
+## Documentation and evidence checkpoints
+
+- [ ] **D0 — Inventory reconciliation:** reconcile component/function rows against current Cargo workspace manifests, source paths, and public APIs.
+- [ ] **D1 — Status synchronization:** update [implementation status](docs/IMPLEMENTATION_STATUS.md) only from evidence tied to the exact current SHA.
+- [ ] **D2 — Milestone traceability:** link each roadmap item to an owning component, acceptance test, and evidence record.
+- [ ] **D3 — CI failure lifecycle:** retain the exact-SHA findings for PRs #33, #34, #36, and #37 in [documentation PR #52](https://github.com/A-TownChain-Okosystems/globus-os/pull/52); after fixes, append new evidence rather than overwriting historical failure records.
+- [ ] **D4 — Release gate review:** verify build, tests, lint, security, boot, integration, reproducibility, and recovery gates on the same release candidate SHA.
+
+The [component/function catalog](docs/COMPONENT_FUNCTION_CATALOG.md) is a structured ownership baseline. Its entries must be reconciled against the source census before they are treated as an exhaustive machine-verified inventory. Do not mark these documentation checkpoints complete merely because the pages exist.
+
