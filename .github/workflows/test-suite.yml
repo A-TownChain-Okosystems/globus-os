@@ -139,8 +139,13 @@ jobs:
                   sys.exit("FAIL-CLOSED: step evidence missing for " + required)
               if any(not isinstance(step, dict) for step in steps):
                   sys.exit("FAIL-CLOSED: malformed step evidence for " + required)
-              if any(step.get("status") != "completed" or step.get("conclusion") != "success"
-                     for step in steps if step.get("name") not in ("Post Run actions/checkout@v4", "Post Run Swatinem/rust-cache@v2", "Post Run actions/setup-node@v4", "Complete job")):
+              allowed_skips = ("Post Run actions/checkout@v4", "Post Run Swatinem/rust-cache@v2", "Post Run actions/setup-node@v4")
+              if any(
+                  step.get("status") != "completed"
+                  or (step.get("conclusion") != "success"
+                      and not (step.get("conclusion") == "skipped" and step.get("name") in allowed_skips))
+                  for step in steps
+              ):
                   sys.exit("FAIL-CLOSED: non-success step found in " + required)
           print(json.dumps({
               "verified": True,
