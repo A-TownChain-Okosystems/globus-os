@@ -4,6 +4,7 @@
 //! or OS authorization. Those remain separate integration boundaries.
 
 use argon2::password_hash::rand_core::{OsRng, RngCore};
+use bip39::{Language, Mnemonic};
 use zeroize::Zeroizing;
 
 /// Canonical local username: 3..=32 ASCII characters, case-insensitive, [a-z0-9_.-].
@@ -56,7 +57,10 @@ pub struct RecoveryConfirmation {
 impl RecoveryConfirmation {
     pub fn new(phrase: &str) -> Result<Self, AccountLifecycleError> {
         let words: Vec<&str> = phrase.split_whitespace().collect();
-        if words.len() != 24 || words.iter().any(|word| word.is_empty()) {
+        if words.len() != 24
+            || words.iter().any(|word| word.is_empty())
+            || Mnemonic::parse_in_normalized(Language::English, phrase).is_err()
+        {
             return Err(AccountLifecycleError::InvalidRecoveryPhrase);
         }
 
@@ -143,8 +147,7 @@ mod tests {
 
     #[test]
     fn recovery_confirmation_accepts_only_selected_words() {
-        let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-        let phrase = format!("{phrase} {phrase}");
+        let phrase = format!("{} art", vec!["abandon"; 23].join(" "));
         let challenge = RecoveryConfirmation::new(&phrase).unwrap();
         let positions = challenge.positions();
         assert!(positions.iter().all(|position| *position < 24));
