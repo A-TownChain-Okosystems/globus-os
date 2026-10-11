@@ -265,6 +265,43 @@ mod tests {
     }
 
     #[test]
+    fn concurrent_registration_cannot_create_duplicate_username() {
+        use std::sync::{Arc, Barrier};
+        use std::{thread, time::Duration};
+
+        let path = temp_path();
+        let barrier = Arc::new(Barrier::new(2));
+        let mut workers = Vec::new();
+        for suffix in ["one", "two"] {
+            let worker_path = path.clone();
+            let worker_barrier = Arc::clone(&barrier);
+            workers.push(thread::spawn(move || {
+                let username = AccountUsername::parse("ConcurrentUser").unwrap();
+                let user_id = UserId::new(format!("user-{suffix}")).unwrap();
+                let mut directory = FileAccountDirectory::open(worker_path);
+                worker_barrier.wait();
+                for _ in 0..200 {
+                    match directory.insert_if_absent(username.clone(), user_id.clone()) {
+                        Ok(()) => return true,
+                        Err(AccountDirectoryError::Busy) => thread::sleep(Duration::from_millis(1)),
+                        Err(AccountDirectoryError::AlreadyExists) => return false,
+                        Err(error) => panic!("unexpected directory error: {error:?}"),
+                    }
+                }
+                panic!("directory lock did not become available");
+            }));
+        }
+        let winners = workers.into_iter().filter(|worker| worker.join().unwrap()).count();
+        assert_eq!(winners, 1);
+        let directory = FileAccountDirectory::open(&path);
+        assert_eq!(directory.entries().unwrap().len(), 1);
+        let _ = fs::remove_file(&path);
+        let mut lock = path.as_os_str().to_os_string();
+        lock.push(".lock");
+        let _ = fs::remove_file(PathBuf::from(lock));
+    }
+
+    #[test]
     fn corrupt_file_fails_closed() {
         let path = temp_path();
         fs::write(&path, b"not-an-account-index").unwrap();
