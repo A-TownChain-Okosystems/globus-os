@@ -62,9 +62,14 @@ impl RecoveryConfirmation {
 
         // Rejection sampling avoids modulo bias and guarantees three distinct positions.
         let mut positions = [0usize; 3];
+        let zone = u32::MAX - (u32::MAX % words.len() as u32);
         for index in 0..positions.len() {
             loop {
-                let candidate = (OsRng.next_u32() as usize) % words.len();
+                let random = OsRng.next_u32();
+                if random >= zone {
+                    continue;
+                }
+                let candidate = (random % words.len() as u32) as usize;
                 if !positions[..index].contains(&candidate) {
                     positions[index] = candidate;
                     break;
@@ -138,9 +143,9 @@ mod tests {
 
     #[test]
     fn recovery_confirmation_rejects_non_24_word_phrase() {
-        assert_eq!(
+        assert!(matches!(
             RecoveryConfirmation::new("abandon abandon"),
             Err(AccountLifecycleError::InvalidRecoveryPhrase)
-        );
+        ));
     }
 }
