@@ -291,7 +291,7 @@ mod tests {
                 panic!("directory lock did not become available");
             }));
         }
-        let winners = workers.into_iter().filter(|worker| worker.join().unwrap()).count();
+        let winners = workers.into_iter().map(|worker| worker.join().unwrap()).filter(|won| *won).count();
         assert_eq!(winners, 1);
         let directory = FileAccountDirectory::open(&path);
         assert_eq!(directory.entries().unwrap().len(), 1);
