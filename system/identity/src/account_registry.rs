@@ -59,7 +59,10 @@ impl FileAccountDirectory {
         let path = path.into();
         let mut lock_name = path.as_os_str().to_os_string();
         lock_name.push(".lock");
-        Self { path, lock_path: PathBuf::from(lock_name) }
+        Self {
+            path,
+            lock_path: PathBuf::from(lock_name),
+        }
     }
 
     pub fn path(&self) -> &Path {
@@ -67,12 +70,18 @@ impl FileAccountDirectory {
     }
 
     fn acquire_lock(&self) -> Result<DirectoryLock, AccountDirectoryError> {
-        match OpenOptions::new().write(true).create_new(true).open(&self.lock_path) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&self.lock_path)
+        {
             Ok(mut file) => {
                 // A diagnostic marker only; lock ownership is established by create_new.
                 let _ = writeln!(file, "pid={}", std::process::id());
                 let _ = file.sync_all();
-                Ok(DirectoryLock { path: self.lock_path.clone() })
+                Ok(DirectoryLock {
+                    path: self.lock_path.clone(),
+                })
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
                 Err(AccountDirectoryError::Busy)
@@ -88,12 +97,20 @@ impl FileAccountDirectory {
             Err(_) => return Err(AccountDirectoryError::Io),
         };
         let mut bytes = Vec::new();
-        file.read_to_end(&mut bytes).map_err(|_| AccountDirectoryError::Io)?;
+        file.read_to_end(&mut bytes)
+            .map_err(|_| AccountDirectoryError::Io)?;
         decode_entries(&bytes)
     }
 
-    fn write_entries(&self, entries: &[AccountDirectoryEntry]) -> Result<(), AccountDirectoryError> {
-        let parent = self.path.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    fn write_entries(
+        &self,
+        entries: &[AccountDirectoryEntry],
+    ) -> Result<(), AccountDirectoryError> {
+        let parent = self
+            .path
+            .parent()
+            .filter(|p| !p.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
         fs::create_dir_all(parent).map_err(|_| AccountDirectoryError::Io)?;
         let bytes = encode_entries(entries)?;
         let mut tmp_name = self.path.as_os_str().to_os_string();
@@ -101,13 +118,19 @@ impl FileAccountDirectory {
         let tmp_path = PathBuf::from(tmp_name);
 
         // Never follow or overwrite a pre-existing temporary path.
-        let mut file = OpenOptions::new().write(true).create_new(true).open(&tmp_path)
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&tmp_path)
             .map_err(|_| AccountDirectoryError::Io)?;
         let write_result = (|| {
-            file.write_all(&bytes).map_err(|_| AccountDirectoryError::Io)?;
+            file.write_all(&bytes)
+                .map_err(|_| AccountDirectoryError::Io)?;
             file.sync_all().map_err(|_| AccountDirectoryError::Io)?;
             fs::rename(&tmp_path, &self.path).map_err(|_| AccountDirectoryError::Io)?;
-            File::open(parent).and_then(|dir| dir.sync_all()).map_err(|_| AccountDirectoryError::Io)?;
+            File::open(parent)
+                .and_then(|dir| dir.sync_all())
+                .map_err(|_| AccountDirectoryError::Io)?;
             Ok(())
         })();
         if write_result.is_err() {
@@ -132,7 +155,8 @@ impl AccountDirectoryStore for FileAccountDirectory {
         username: AccountUsername,
         user_id: UserId,
     ) -> Result<(), AccountDirectoryError> {
-        if user_id.as_str().is_empty() || user_id.as_str().len() > MAX_FIELD
+        if user_id.as_str().is_empty()
+            || user_id.as_str().len() > MAX_FIELD
             || user_id.as_str().as_bytes().contains(&0)
         {
             return Err(AccountDirectoryError::InvalidAccountId);
@@ -151,7 +175,8 @@ impl AccountDirectoryStore for FileAccountDirectory {
     }
 
     fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
-        self.read_entries()?.into_iter()
+        self.read_entries()?
+            .into_iter()
             .find(|entry| &entry.username == username)
             .map(|entry| entry.user_id)
             .ok_or(AccountDirectoryError::NotFound)
@@ -173,7 +198,9 @@ fn encode_entries(entries: &[AccountDirectoryEntry]) -> Result<Vec<u8>, AccountD
     for entry in entries {
         let username = entry.username.as_str().as_bytes();
         let user_id = entry.user_id.as_str().as_bytes();
-        if username.len() > 32 || user_id.is_empty() || user_id.len() > MAX_FIELD
+        if username.len() > 32
+            || user_id.is_empty()
+            || user_id.len() > MAX_FIELD
             || username.len() > u8::MAX as usize
         {
             return Err(AccountDirectoryError::Corrupt);
@@ -190,7 +217,11 @@ fn decode_entries(bytes: &[u8]) -> Result<Vec<AccountDirectoryEntry>, AccountDir
     if bytes.len() < 9 || &bytes[..4] != MAGIC || bytes[4] != VERSION {
         return Err(AccountDirectoryError::Corrupt);
     }
-    let count = u32::from_be_bytes(bytes[5..9].try_into().map_err(|_| AccountDirectoryError::Corrupt)?) as usize;
+    let count = u32::from_be_bytes(
+        bytes[5..9]
+            .try_into()
+            .map_err(|_| AccountDirectoryError::Corrupt)?,
+    ) as usize;
     if count > MAX_ENTRIES {
         return Err(AccountDirectoryError::Corrupt);
     }
@@ -199,27 +230,49 @@ fn decode_entries(bytes: &[u8]) -> Result<Vec<AccountDirectoryEntry>, AccountDir
     for _ in 0..count {
         let name_len = *bytes.get(cursor).ok_or(AccountDirectoryError::Corrupt)? as usize;
         cursor += 1;
-        let name_end = cursor.checked_add(name_len).ok_or(AccountDirectoryError::Corrupt)?;
-        let name = std::str::from_utf8(bytes.get(cursor..name_end).ok_or(AccountDirectoryError::Corrupt)?)
-            .map_err(|_| AccountDirectoryError::Corrupt)?;
+        let name_end = cursor
+            .checked_add(name_len)
+            .ok_or(AccountDirectoryError::Corrupt)?;
+        let name = std::str::from_utf8(
+            bytes
+                .get(cursor..name_end)
+                .ok_or(AccountDirectoryError::Corrupt)?,
+        )
+        .map_err(|_| AccountDirectoryError::Corrupt)?;
         cursor = name_end;
-        let id_len_end = cursor.checked_add(2).ok_or(AccountDirectoryError::Corrupt)?;
-        let id_len = u16::from_be_bytes(bytes.get(cursor..id_len_end).ok_or(AccountDirectoryError::Corrupt)?
-            .try_into().map_err(|_| AccountDirectoryError::Corrupt)?) as usize;
+        let id_len_end = cursor
+            .checked_add(2)
+            .ok_or(AccountDirectoryError::Corrupt)?;
+        let id_len = u16::from_be_bytes(
+            bytes
+                .get(cursor..id_len_end)
+                .ok_or(AccountDirectoryError::Corrupt)?
+                .try_into()
+                .map_err(|_| AccountDirectoryError::Corrupt)?,
+        ) as usize;
         cursor = id_len_end;
         if id_len == 0 || id_len > MAX_FIELD {
             return Err(AccountDirectoryError::Corrupt);
         }
-        let id_end = cursor.checked_add(id_len).ok_or(AccountDirectoryError::Corrupt)?;
-        let id = std::str::from_utf8(bytes.get(cursor..id_end).ok_or(AccountDirectoryError::Corrupt)?)
-            .map_err(|_| AccountDirectoryError::Corrupt)?;
+        let id_end = cursor
+            .checked_add(id_len)
+            .ok_or(AccountDirectoryError::Corrupt)?;
+        let id = std::str::from_utf8(
+            bytes
+                .get(cursor..id_end)
+                .ok_or(AccountDirectoryError::Corrupt)?,
+        )
+        .map_err(|_| AccountDirectoryError::Corrupt)?;
         cursor = id_end;
         if id.as_bytes().contains(&0) {
             return Err(AccountDirectoryError::Corrupt);
         }
         let username = AccountUsername::parse(name).map_err(|_| AccountDirectoryError::Corrupt)?;
         let user_id = UserId::new(id.to_owned()).map_err(|_| AccountDirectoryError::Corrupt)?;
-        if entries.iter().any(|e: &AccountDirectoryEntry| e.username == username || e.user_id == user_id) {
+        if entries
+            .iter()
+            .any(|e: &AccountDirectoryEntry| e.username == username || e.user_id == user_id)
+        {
             return Err(AccountDirectoryError::Corrupt);
         }
         entries.push(AccountDirectoryEntry { username, user_id });
@@ -252,9 +305,13 @@ mod tests {
         let user_id = UserId::new("user-alice").unwrap();
         {
             let mut directory = FileAccountDirectory::open(&path);
-            directory.insert_if_absent(username.clone(), user_id.clone()).unwrap();
-            assert_eq!(directory.insert_if_absent(username.clone(), UserId::new("other").unwrap()),
-                Err(AccountDirectoryError::AlreadyExists));
+            directory
+                .insert_if_absent(username.clone(), user_id.clone())
+                .unwrap();
+            assert_eq!(
+                directory.insert_if_absent(username.clone(), UserId::new("other").unwrap()),
+                Err(AccountDirectoryError::AlreadyExists)
+            );
         }
         let reopened = FileAccountDirectory::open(&path);
         assert_eq!(reopened.lookup(&username).unwrap(), user_id);
@@ -291,7 +348,11 @@ mod tests {
                 panic!("directory lock did not become available");
             }));
         }
-        let winners = workers.into_iter().map(|worker| worker.join().unwrap()).filter(|won| *won).count();
+        let winners = workers
+            .into_iter()
+            .map(|worker| worker.join().unwrap())
+            .filter(|won| *won)
+            .count();
         assert_eq!(winners, 1);
         let directory = FileAccountDirectory::open(&path);
         assert_eq!(directory.entries().unwrap().len(), 1);
@@ -313,6 +374,9 @@ mod tests {
     #[test]
     fn malformed_and_duplicate_entries_are_rejected() {
         assert_eq!(decode_entries(b"GUA1\x01\0\0\0\0"), Ok(Vec::new()));
-        assert_eq!(decode_entries(b"GUA1\x02\0\0\0\0"), Err(AccountDirectoryError::Corrupt));
+        assert_eq!(
+            decode_entries(b"GUA1\x02\0\0\0\0"),
+            Err(AccountDirectoryError::Corrupt)
+        );
     }
 }
