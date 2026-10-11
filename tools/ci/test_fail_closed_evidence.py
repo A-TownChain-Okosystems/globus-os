@@ -86,6 +86,12 @@ class FailClosedEvidenceTests(unittest.TestCase):
         self.assertEqual(result.state, State.ERROR)
         self.assertEqual(len(calls), 3)
 
+    def test_pagination_link_is_parsed(self):
+        from fail_closed_evidence import _parse_link_next
+        self.assertEqual(_parse_link_next('<https://api.github.com/page=2>; rel="next", <https://api.github.com/page=1>; rel="last'),
+                         "https://api.github.com/page=2")
+        self.assertIsNone(_parse_link_next(None))
+
     def test_non_github_endpoint_is_rejected(self):
         self.assertEqual(fetch_json("https://example.com", retries=0).state, State.ERROR)
 
