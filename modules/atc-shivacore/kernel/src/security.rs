@@ -1000,6 +1000,34 @@ mod tests {
     }
 
     #[test]
+    fn token_bucket_retains_fractional_seconds_between_refills() {
+        let bucket = TokenBucket::new(2, 1, 0);
+        assert!(bucket.try_consume(0, 2));
+        assert!(bucket.try_consume(0, 0));
+        assert!(!bucket.try_consume(0, 1));
+        assert!(!bucket.try_consume(500_000_000, 1));
+        assert!(bucket.try_consume(1_000_000_000, 1));
+        assert!(!bucket.try_consume(1_500_000_000, 1));
+        assert!(bucket.try_consume(2_000_000_000, 1));
+    }
+
+    #[test]
+    fn token_bucket_saturates_large_elapsed_time_and_refill_rate() {
+        let bucket = TokenBucket::new(u32::MAX, u32::MAX, 0);
+        assert_eq!(bucket.available(u64::MAX), u32::MAX);
+        assert!(bucket.try_consume(u64::MAX, u32::MAX));
+        assert_eq!(bucket.available(u64::MAX), u32::MAX - u32::MAX);
+    }
+
+    #[test]
+    fn token_bucket_does_not_refill_when_clock_moves_backwards() {
+        let bucket = TokenBucket::new(2, 1, 1_000_000_000);
+        assert!(bucket.try_consume(1_000_000_000, 2));
+        assert!(!bucket.try_consume(0, 1));
+        assert_eq!(bucket.available(0), 0);
+    }
+
+    #[test]
     fn test_rate_limiter_multiple_peers() {
         let rl = RateLimiter::new(2, 1);
         rl.allow(1, 0);
