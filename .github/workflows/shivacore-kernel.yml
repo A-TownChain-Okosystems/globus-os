@@ -59,7 +59,7 @@ jobs:
       - name: Install QEMU
         run: |
           sudo apt-get update
-          sudo apt-get install -y qemu-system-x86
+          sudo apt-get install -y qemu-system-x86 ovmf
 
       - name: Verify QEMU CPU model
         run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu }}([[:space:]]|$)'
@@ -125,6 +125,50 @@ jobs:
             exit "$status"
           fi
 
+      - name: UEFI boot smoke test (${{ matrix.cpu }})
+        run: |
+          set +e
+          timeout 20s qemu-system-x86_64 \
+            -cpu ${{ matrix.qemu_cpu }} \
+            -bios /usr/share/OVMF/OVMF_CODE.fd \
+            -drive format=raw,file=target/boot-images/shivacore-uefi.img \
+            -serial stdio \
+            -display none \
+            -no-reboot \
+            -no-shutdown 2>&1 | tee target/shivacore-uefi-${{ matrix.cpu }}.log
+          status=${PIPESTATUS[0]}
+          log=target/shivacore-uefi-${{ matrix.cpu }}.log
+          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log"; then
+            echo "UEFI boot did not reach kernel_main."
+            cat "$log"
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " "$log"; then
+            echo "UEFI CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
+            cat "$log"
+            exit 1
+          fi
+          for expected in \
+            "ShivaCore: CPU HAL compatibility check OK." \
+            "ShivaCore: KernelState::boot() -> Done." \
+            "ShivaCore: USER-001 mapped PID=1000" \
+            "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
+            "ShivaCore: USER-001 entering PID=1000" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1000" \
+            "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
+            "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
+            if ! grep -Fq "$expected" "$log"; then
+              echo "UEFI boot acceptance marker missing: $expected"
+              cat "$log"
+              exit 1
+            fi
+          done
+          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+            echo "UEFI QEMU exited unexpectedly with status $status."
+            exit "$status"
+          fi
+
       - name: Upload boot artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -134,3 +178,4 @@ jobs:
             target/boot-images/shivacore-bios.img
             target/boot-images/shivacore-uefi.img
             target/shivacore-qemu-${{ matrix.cpu }}.log
+            target/shivacore-uefi-${{ matrix.cpu }}.log
