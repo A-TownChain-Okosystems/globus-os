@@ -12,8 +12,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
-    thread,
-    time::Duration,
 };
 
 use crate::{AccountUsername, UserId};
