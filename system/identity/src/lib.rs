@@ -1,5 +1,6 @@
 //! GlobusOS identity and wallet boundary.
 
+mod account_lifecycle;
 mod file_store;
 mod ipc_key_provider;
 mod key_provider;
@@ -9,6 +10,7 @@ mod secure_store;
 mod service;
 
 use bip39::{Language, Mnemonic};
+pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
 pub use file_store::FileBlobStore;
 use hmac::{Hmac, Mac};
 pub use ipc_key_provider::{IdentityKeyIpcTransport, IpcIdentityKeyService};
