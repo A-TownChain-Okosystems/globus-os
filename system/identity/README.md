@@ -17,6 +17,16 @@ The `globus-identity` crate now provides:
 
 The documented ATC wallet flow is 256-bit entropy → 24 words → PBKDF2-HMAC-SHA512 seed → HMAC-SHA256 private key → SHA-256 public key → ATC address. fileciteturn20file0L2-L2
 
+## Account lifecycle primitives (Issue #67)
+
+The first implementation slice exports `AccountUsername` and `RecoveryConfirmation` from the identity crate:
+
+- Usernames are canonicalized to lowercase ASCII and constrained to 3–32 characters from `[a-z0-9_.-]`, with alphanumeric endpoints. This prevents case-collisions and visually ambiguous Unicode usernames.
+- Registration can request three randomly selected recovery-word positions and must not activate the account until the answers verify.
+- The short-lived confirmation object zeroizes its expected words when dropped. The caller remains responsible for a trusted local display/input path and must never log or transmit the phrase.
+
+These primitives do **not** yet provide a persistent multi-account username directory, atomic uniqueness enforcement, login throttling, recovery session revocation, production UI/IPC, or the complete account-wallet-Aurora binding coordinator. They are not a production-complete account lifecycle. Wallet derivation must also be reconciled with canonical `atc-wallet` before production signing or address compatibility is claimed.
+
 ## Security boundary
 
 The Identity Service does **not** expose private keys to applications. Applications request high-level operations; the Wallet Service performs protected signing after capability and policy checks.
