@@ -107,14 +107,24 @@ mod tests {
 
     #[test]
     fn username_is_canonical_and_case_insensitive() {
-        assert_eq!(AccountUsername::parse("Alice_01").unwrap().as_str(), "alice_01");
-        assert_eq!(AccountUsername::parse("ALICE_01").unwrap(), AccountUsername::parse("alice_01").unwrap());
+        assert_eq!(
+            AccountUsername::parse("Alice_01").unwrap().as_str(),
+            "alice_01"
+        );
+        assert_eq!(
+            AccountUsername::parse("ALICE_01").unwrap(),
+            AccountUsername::parse("alice_01").unwrap()
+        );
     }
 
     #[test]
     fn username_rejects_ambiguous_or_invalid_values() {
-        for value in ["", "ab", " leading", "a b c", "-alice", "alice-", "älice", "a".repeat(33).as_str()] {
-            assert_eq!(AccountUsername::parse(value), Err(AccountLifecycleError::InvalidUsername));
+        let too_long = "a".repeat(33);
+        for value in ["", "ab", " leading", "a b c", "-alice", "alice-", "älice", too_long.as_str()] {
+            assert_eq!(
+                AccountUsername::parse(value),
+                Err(AccountLifecycleError::InvalidUsername)
+            );
         }
     }
 
