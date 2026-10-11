@@ -448,8 +448,8 @@ impl TokenBucket {
         let last = self.last_refill.lock();
         let elapsed_ns = now.saturating_sub(*last);
         let elapsed_secs = elapsed_ns / 1_000_000_000;
-        let refill = (elapsed_secs.saturating_mul(self.refill_rate as u64))
-            .min(u32::MAX as u64) as u32;
+        let refill =
+            (elapsed_secs.saturating_mul(self.refill_rate as u64)).min(u32::MAX as u64) as u32;
         tokens.saturating_add(refill).min(self.capacity)
     }
 }
