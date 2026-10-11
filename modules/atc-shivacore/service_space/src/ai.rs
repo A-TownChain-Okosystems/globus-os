@@ -593,7 +593,7 @@ impl LlmRouter {
         if !self.registry.exists(&mid) {
             return Err(AiError::ModelNotFound);
         }
-        let h = shivacore::security::simple_hash(req.prompt.as_bytes());
+        let h = libshivacore::simple_hash(req.prompt.as_bytes());
         let out = format!(
             "ai:response:{:08x}",
             u64::from_be_bytes(h[..8].try_into().unwrap())

@@ -47,7 +47,7 @@ impl PohSequence {
         let mut input = Vec::with_capacity(40);
         input.extend_from_slice(&*hash);
         input.extend_from_slice(&tick.to_be_bytes());
-        let new_hash = shivacore::security::simple_hash(&input);
+        let new_hash = libshivacore::simple_hash(&input);
 
         let entry = PohEntry {
             hash: new_hash,
@@ -70,7 +70,7 @@ impl PohSequence {
         input.extend_from_slice(&*hash);
         input.extend_from_slice(&tick.to_be_bytes());
         input.extend_from_slice(event_hash);
-        let new_hash = shivacore::security::simple_hash(&input);
+        let new_hash = libshivacore::simple_hash(&input);
 
         let entry = PohEntry {
             hash: new_hash,
@@ -101,7 +101,7 @@ impl PohSequence {
             let mut input = Vec::with_capacity(40);
             input.extend_from_slice(&expected);
             input.extend_from_slice(&entry.tick.to_be_bytes());
-            let computed = shivacore::security::simple_hash(&input);
+            let computed = libshivacore::simple_hash(&input);
             if computed != entry.hash {
                 return false;
             }
@@ -154,7 +154,7 @@ impl DagVertex {
             input.extend_from_slice(p);
         }
         input.extend_from_slice(creator_did.as_bytes());
-        let id = shivacore::security::simple_hash(&input);
+        let id = libshivacore::simple_hash(&input);
 
         DagVertex {
             id,
@@ -319,7 +319,7 @@ impl Dag {
         for t in tips.iter() {
             input.extend_from_slice(t);
         }
-        shivacore::security::simple_hash(&input)
+        libshivacore::simple_hash(&input)
     }
 }
 
@@ -412,11 +412,8 @@ impl ValidatorRegistry {
         // Simplified: Hash mod total_stake → weighted selection
         let total = *self.total_stake.lock();
         let mut input = poh_hash.to_vec();
-        let hash_val = u64::from_be_bytes(
-            shivacore::security::simple_hash(&input)[..8]
-                .try_into()
-                .unwrap(),
-        );
+        let hash_val =
+            u64::from_be_bytes(libshivacore::simple_hash(&input)[..8].try_into().unwrap());
         let target = hash_val % total;
 
         let mut acc: u64 = 0;

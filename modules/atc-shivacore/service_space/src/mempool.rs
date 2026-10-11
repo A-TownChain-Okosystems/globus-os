@@ -87,7 +87,7 @@ impl Transaction {
         i.extend_from_slice(&timestamp.to_be_bytes());
         i.extend_from_slice(&poh_hash);
         i.extend_from_slice(&payload);
-        let id = shivacore::security::simple_hash(&i);
+        let id = libshivacore::simple_hash(&i);
         Transaction {
             id,
             tx_type,

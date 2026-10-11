@@ -3538,6 +3538,7 @@ dependencies = [
  "ed25519-dalek",
  "lazy_static",
  "libm",
+ "libshivacore",
  "rand 0.10.3",
  "shivacore",
  "spin 0.12.3",
