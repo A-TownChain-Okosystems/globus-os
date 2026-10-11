@@ -8,7 +8,7 @@
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
 
 pub const ABI_MAJOR: u16 = 1;
-pub const ABI_MINOR: u16 = 0;
+pub const ABI_MINOR: u16 = 1;
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,7 +159,7 @@ mod tests {
 
     #[test]
     fn abi_version_is_stable() {
-        assert_eq!(ABI_VERSION, 0x0001_0000);
+        assert_eq!(ABI_VERSION, 0x0001_0001);
         assert!(validate_abi_version(0x0001_ffff));
         assert!(!validate_abi_version(0x0002_0000));
     }
