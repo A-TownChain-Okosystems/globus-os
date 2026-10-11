@@ -6,8 +6,8 @@ use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable};
 use crate::kernel_init::{BootPhase, InitStatus, KernelState};
 use libshivacore::contracts::{
-    CapabilityAuthority, CapabilityCheckRequest, CapabilityCheckResult, KernelBootStatus,
-    KernelBootStatusProvider, KernelBootState,
+    CapabilityAuthority, CapabilityCheckRequest, CapabilityCheckResult, KernelBootState,
+    KernelBootStatus, KernelBootStatusProvider,
 };
 use libshivacore::{AbiError, CapabilityRights};
 
@@ -25,10 +25,7 @@ impl<'a> KernelCapabilityAuthority<'a> {
 }
 
 impl CapabilityAuthority for KernelCapabilityAuthority<'_> {
-    fn check(
-        &self,
-        request: CapabilityCheckRequest,
-    ) -> Result<CapabilityCheckResult, AbiError> {
+    fn check(&self, request: CapabilityCheckRequest) -> Result<CapabilityCheckResult, AbiError> {
         const VALID_RIGHTS: u8 = 0x1f;
         let requested = request.required.bits();
         if requested & !VALID_RIGHTS != 0 {
@@ -75,7 +72,10 @@ mod tests {
             })
             .unwrap();
         assert!(result.granted);
-        assert_eq!(result.effective_rights.bits(), Rights::READ.bits() | Rights::INSPECT.bits());
+        assert_eq!(
+            result.effective_rights.bits(),
+            Rights::READ.bits() | Rights::INSPECT.bits()
+        );
     }
 
     #[test]
@@ -133,10 +133,7 @@ impl<'a, N: crate::ats1000::NetworkStack> KernelNetworkAdapter<'a, N> {
     }
 
     /// Test/configuration seam that can only tighten, never widen, the ABI limit.
-    pub const fn with_max_message_size(
-        stack: &'a mut N,
-        requested_max: usize,
-    ) -> Self {
+    pub const fn with_max_message_size(stack: &'a mut N, requested_max: usize) -> Self {
         Self {
             stack,
             max_message_size: if requested_max < libshivacore::MAX_SYSCALL_PAYLOAD {
@@ -210,7 +207,11 @@ mod network_adapter_tests {
 
     #[test]
     fn network_adapter_normalizes_legacy_failures() {
-        let mut fake = FakeNetwork { connected: false, send_ok: false, received: 0 };
+        let mut fake = FakeNetwork {
+            connected: false,
+            send_ok: false,
+            received: 0,
+        };
         let mut adapter = KernelNetworkAdapter::new(&mut fake);
         assert_eq!(
             libshivacore::contracts::NetworkStack::connect(&mut adapter, &[0; 32]),
@@ -224,21 +225,35 @@ mod network_adapter_tests {
 
     #[test]
     fn network_adapter_returns_connection_and_received_length() {
-        let mut fake = FakeNetwork { connected: true, send_ok: true, received: 3 };
+        let mut fake = FakeNetwork {
+            connected: true,
+            send_ok: true,
+            received: 3,
+        };
         let mut adapter = KernelNetworkAdapter::new(&mut fake);
         assert_eq!(
             libshivacore::contracts::NetworkStack::connect(&mut adapter, &[1; 32]),
             Ok(17)
         );
-        assert_eq!(libshivacore::contracts::NetworkStack::send(&mut adapter, 17, b"abc"), Ok(()));
+        assert_eq!(
+            libshivacore::contracts::NetworkStack::send(&mut adapter, 17, b"abc"),
+            Ok(())
+        );
         let mut buffer = [0; 8];
-        assert_eq!(libshivacore::contracts::NetworkStack::recv(&mut adapter, 17, &mut buffer), Ok(3));
+        assert_eq!(
+            libshivacore::contracts::NetworkStack::recv(&mut adapter, 17, &mut buffer),
+            Ok(3)
+        );
         assert_eq!(&buffer[..3], &[0x5a; 3]);
     }
 
     #[test]
     fn network_adapter_rejects_oversized_payloads_before_dispatch() {
-        let mut fake = FakeNetwork { connected: true, send_ok: true, received: 0 };
+        let mut fake = FakeNetwork {
+            connected: true,
+            send_ok: true,
+            received: 0,
+        };
         let mut adapter = KernelNetworkAdapter::with_max_message_size(&mut fake, 2);
         assert_eq!(
             libshivacore::contracts::NetworkStack::send(&mut adapter, 17, b"abc"),
@@ -253,7 +268,11 @@ mod network_adapter_tests {
 
     #[test]
     fn network_adapter_rejects_lying_transport_length() {
-        let mut fake = FakeNetwork { connected: true, send_ok: true, received: 99 };
+        let mut fake = FakeNetwork {
+            connected: true,
+            send_ok: true,
+            received: 99,
+        };
         let mut adapter = KernelNetworkAdapter::new(&mut fake);
         let mut buffer = [0; 4];
         assert_eq!(
@@ -325,7 +344,10 @@ mod boot_status_adapter_tests {
     #[test]
     fn boot_phase_mapping_preserves_memory_and_done_semantics() {
         assert_eq!(abi_boot_phase(BootPhase::Memory) as u8, 8);
-        assert_eq!(abi_boot_phase(BootPhase::Done), libshivacore::KernelBootPhase::Ready);
+        assert_eq!(
+            abi_boot_phase(BootPhase::Done),
+            libshivacore::KernelBootPhase::Ready
+        );
     }
 
     #[test]
