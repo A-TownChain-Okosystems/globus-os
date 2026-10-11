@@ -77,3 +77,15 @@ results and test logs are inspected.
   without exposing `KernelState`.
 - Run formatting, workspace checks, targeted tests, and all required PR gates against the
   exact final head. Until then, status remains **VERIFICATION PENDING**.
+
+## Kernel adapter implemented in this phase
+
+`modules/atc-shivacore/kernel/src/abi_adapter.rs` implements
+`KernelCapabilityAuthority`, bound to the caller PID supplied by trusted syscall
+dispatch. It checks ownership before evaluating rights, rejects unknown handles and
+unknown rights bits, and returns only the public ABI result. Tests cover owned access,
+foreign-owner denial, unknown handles, and invalid rights bits.
+
+This adapter does not make caller identity a request field: caller identity is trusted
+context, not data supplied by an untrusted service. Integration into each syscall path
+must preserve that invariant.
