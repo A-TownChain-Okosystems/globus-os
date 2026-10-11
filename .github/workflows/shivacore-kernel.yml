@@ -125,12 +125,28 @@ jobs:
             exit "$status"
           fi
 
+      - name: Locate OVMF UEFI firmware
+        id: ovmf
+        run: |
+          firmware="$(find /usr/share/OVMF /usr/share/ovmf /usr/share/edk2 -type f \
+            \( -name 'OVMF_CODE*.fd' -o -name 'edk2-x86_64-code.fd' \) \
+            ! -iname '*vars*' 2>/dev/null | sort | head -n 1)"
+          if [ -z "$firmware" ]; then
+            echo "No OVMF code firmware found after installing ovmf."
+            find /usr/share -maxdepth 4 -type f -iname '*ovmf*' -print || true
+            exit 1
+          fi
+          echo "firmware=$firmware" >> "$GITHUB_OUTPUT"
+          echo "Using OVMF firmware: $firmware"
+
       - name: UEFI boot smoke test (${{ matrix.cpu }})
+        env:
+          OVMF_CODE: ${{ steps.ovmf.outputs.firmware }}
         run: |
           set +e
           timeout 20s qemu-system-x86_64 \
             -cpu ${{ matrix.qemu_cpu }} \
-            -bios /usr/share/OVMF/OVMF_CODE.fd \
+            -bios "$OVMF_CODE" \
             -drive format=raw,file=target/boot-images/shivacore-uefi.img \
             -serial stdio \
             -display none \
