@@ -247,3 +247,16 @@ A-TownChain-Okosystems / ShivaCoreDev.
 
 ## Repository Metadata
 Canonical repository: `A-TownChain-Okosystems/globus-os`.
+
+## Canonical status and inventories
+
+Use these documents together; they have different purposes:
+
+- [Implementation status and release gates](docs/IMPLEMENTATION_STATUS.md) — current declared state, blockers, acceptance checkpoints, and exact-SHA evidence requirements.
+- [Component and function catalog](docs/COMPONENT_FUNCTION_CATALOG.md) — subsystem ownership, responsibility, declared state, and verification boundary.
+- [Standard OS component coverage](docs/OS_STANDARD_COMPONENTS.md) — breadth/coverage baseline, not a claim of completed implementation.
+- [System architecture](docs/SYSTEM_ARCHITECTURE.md) — normative decomposition and trust boundaries.
+- [Roadmap](ROADMAP.md) — milestone ordering and planned work.
+- [CI root-cause register PR #52](https://github.com/A-TownChain-Okosystems/globus-os/pull/52) — exact-head failure findings for selected open PRs; the register remains a draft proposal until merged.
+
+**Evidence rule:** implementation, verification, and residual risk are separate states. Never mark a subsystem verified solely because its interface exists or a different commit passed CI.
