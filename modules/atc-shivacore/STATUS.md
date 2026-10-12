@@ -39,6 +39,18 @@ The implementation is enabled from the kernel library and contains deterministic
 
 See `docs/M1.2_VMM_IMPLEMENTATION.md` for the normative implementation boundary and remaining work.
 
+## Evidence-bound boundary freeze plan (2026-10-11)
+
+Der aktuelle Split ist dokumentiert und fuer Folgearbeiten fixiert, aber noch nicht als
+finale ABI-Trennung freigegeben. Der verbindliche Audit und die Akzeptanzkriterien stehen in
+[SHIVACORE_SERVICE_SPACE_DRIFT_AUDIT_2026-10-11.md](../../docs/audits/SHIVACORE_SERVICE_SPACE_DRIFT_AUDIT_2026-10-11.md).
+
+Audit-Basis: `fef3af85ff9ecab90c25bc179e2a3284fa17f633`; lokales Evidence-Ergebnis:
+Kernel `546/546`, Service-Space `548/548`, Kernel -> Service-Space `0` Referenzen.
+Die direkte Service-Space-Abhaengigkeit auf den Kernel und interne Kernel-Imports bleiben
+offene Boundary-Arbeit. Keine klassifizierte geplante Kernel-Datei wird ohne Owner-Entscheidung
+und Akzeptanztest geloescht.
+
 ## Architecture Delta — P0 #45 Cleanup Stufe 2 (2026-10-08)
 
 Reverse-Dependency-Audit: Der Kernel-Crate hat **0 Referenzen** auf Service-Space-
