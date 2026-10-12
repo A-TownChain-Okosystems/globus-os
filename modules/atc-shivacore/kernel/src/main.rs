@@ -55,6 +55,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     }
     serial_println!("ShivaCore: CPU HAL compatibility check OK.");
 
+    let phys_mem_offset_raw = boot_info
+        .physical_memory_offset
+        .into_option()
+        .expect("Bootloader hat physical_memory_offset nicht gesetzt (Config fehlt?)");
+    let validated_tables = validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
+        .unwrap_or_else(|error| panic!("ShivaCore: ACPI validation failed: {}", error));
+    serial_println!(
+        "ShivaCore: ACPI RSDP/root/table checksums validated; tables={}",
+        validated_tables
+    );
+    let phys_mem_offset = x86_64::VirtAddr::new(phys_mem_offset_raw);
+
     if let Some(fb) = boot_info.framebuffer.as_mut() {
         framebuffer::init(fb);
         println!("ShivaCore Kernel v0.0.3 -- K-Sprint 2");
@@ -68,18 +80,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     x86_64::instructions::interrupts::int3();
     interrupts::init_pics();
     serial_println!("ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).");
-
-    let phys_mem_offset_raw = boot_info
-        .physical_memory_offset
-        .into_option()
-        .expect("Bootloader hat physical_memory_offset nicht gesetzt (Config fehlt?)");
-    let validated_tables = validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
-        .unwrap_or_else(|error| panic!("ShivaCore: ACPI validation failed: {}", error));
-    serial_println!(
-        "ShivaCore: ACPI RSDP/root/table checksums validated; tables={}",
-        validated_tables
-    );
-    let phys_mem_offset = x86_64::VirtAddr::new(phys_mem_offset_raw);
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator =
