@@ -88,6 +88,12 @@ jobs:
             echo "CPU HAL compatibility gate did not pass."
             exit 1
           fi
+
+          if ! grep -q "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "ACPI RSDP/root/child-table validation did not pass in BIOS guest."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
           if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "USER-001 did not install the first Ring-3 process."
             exit 1
@@ -166,6 +172,7 @@ jobs:
           fi
           for expected in \
             "ShivaCore: CPU HAL compatibility check OK." \
+            "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" \
             "ShivaCore: KernelState::boot() -> Done." \
             "ShivaCore: USER-001 mapped PID=1000" \
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
