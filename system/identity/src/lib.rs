@@ -6,6 +6,7 @@ mod file_store;
 mod ipc_key_provider;
 mod key_provider;
 mod keystore;
+mod multi_account;
 mod persistence;
 mod secure_store;
 mod service;
@@ -21,6 +22,7 @@ pub use ipc_key_provider::{IdentityKeyIpcTransport, IpcIdentityKeyService};
 pub use key_provider::{
     SecureKeyId, SecureKeyService, SecureKeyServiceError, ShivaCoreKeyProvider,
 };
+pub use multi_account::{MultiAccountError, MultiAccountIdentityService};
 pub use keystore::{
     KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature,
 };
