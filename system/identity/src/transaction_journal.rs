@@ -196,7 +196,11 @@ pub fn append_transition<B: JournalBackend>(
         }
         Some(_) => {}
     }
-    let record = JournalRecord { transaction_id, state, payload };
+    let record = JournalRecord {
+        transaction_id,
+        state,
+        payload,
+    };
     backend.append_sync(&encode(&record)?)
 }
 
@@ -225,26 +229,73 @@ mod tests {
     #[test]
     fn prepared_then_commit_replays_terminal_state() {
         let mut journal = MemoryJournal::default();
-        append_transition(&mut journal, tx(), TransactionState::Prepared, b"account-a".to_vec()).unwrap();
-        append_transition(&mut journal, tx(), TransactionState::Committed, b"account-a".to_vec()).unwrap();
-        assert_eq!(replay(&journal.0).unwrap()[&tx()].state, TransactionState::Committed);
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Prepared,
+            b"account-a".to_vec(),
+        )
+        .unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Committed,
+            b"account-a".to_vec(),
+        )
+        .unwrap();
+        assert_eq!(
+            replay(&journal.0).unwrap()[&tx()].state,
+            TransactionState::Committed
+        );
     }
 
     #[test]
     fn prepared_can_be_aborted() {
         let mut journal = MemoryJournal::default();
-        append_transition(&mut journal, tx(), TransactionState::Prepared, b"account-a".to_vec()).unwrap();
-        append_transition(&mut journal, tx(), TransactionState::Aborted, b"account-a".to_vec()).unwrap();
-        assert_eq!(replay(&journal.0).unwrap()[&tx()].state, TransactionState::Aborted);
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Prepared,
+            b"account-a".to_vec(),
+        )
+        .unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Aborted,
+            b"account-a".to_vec(),
+        )
+        .unwrap();
+        assert_eq!(
+            replay(&journal.0).unwrap()[&tx()].state,
+            TransactionState::Aborted
+        );
     }
 
     #[test]
     fn terminal_transactions_cannot_be_reopened() {
         let mut journal = MemoryJournal::default();
-        append_transition(&mut journal, tx(), TransactionState::Prepared, b"x".to_vec()).unwrap();
-        append_transition(&mut journal, tx(), TransactionState::Committed, b"x".to_vec()).unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Prepared,
+            b"x".to_vec(),
+        )
+        .unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Committed,
+            b"x".to_vec(),
+        )
+        .unwrap();
         assert_eq!(
-            append_transition(&mut journal, tx(), TransactionState::Prepared, b"x".to_vec()),
+            append_transition(
+                &mut journal,
+                tx(),
+                TransactionState::Prepared,
+                b"x".to_vec()
+            ),
             Err(JournalError::TerminalTransaction)
         );
     }
@@ -252,7 +303,13 @@ mod tests {
     #[test]
     fn checksum_corruption_fails_closed() {
         let mut journal = MemoryJournal::default();
-        append_transition(&mut journal, tx(), TransactionState::Prepared, b"x".to_vec()).unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Prepared,
+            b"x".to_vec(),
+        )
+        .unwrap();
         journal.0[HEADER_LEN] ^= 1;
         assert_eq!(replay(&journal.0), Err(JournalError::ChecksumMismatch));
     }
@@ -260,7 +317,13 @@ mod tests {
     #[test]
     fn truncated_tail_fails_closed() {
         let mut journal = MemoryJournal::default();
-        append_transition(&mut journal, tx(), TransactionState::Prepared, b"x".to_vec()).unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Prepared,
+            b"x".to_vec(),
+        )
+        .unwrap();
         journal.0.pop();
         assert_eq!(replay(&journal.0), Err(JournalError::TruncatedRecord));
     }
@@ -269,7 +332,12 @@ mod tests {
     fn commit_without_prepare_is_rejected() {
         let mut journal = MemoryJournal::default();
         assert_eq!(
-            append_transition(&mut journal, tx(), TransactionState::Committed, b"x".to_vec()),
+            append_transition(
+                &mut journal,
+                tx(),
+                TransactionState::Committed,
+                b"x".to_vec()
+            ),
             Err(JournalError::TransitionWithoutPrepare)
         );
     }
@@ -277,9 +345,20 @@ mod tests {
     #[test]
     fn payload_cannot_change_mid_transaction() {
         let mut journal = MemoryJournal::default();
-        append_transition(&mut journal, tx(), TransactionState::Prepared, b"account-a".to_vec()).unwrap();
+        append_transition(
+            &mut journal,
+            tx(),
+            TransactionState::Prepared,
+            b"account-a".to_vec(),
+        )
+        .unwrap();
         assert_eq!(
-            append_transition(&mut journal, tx(), TransactionState::Committed, b"account-b".to_vec()),
+            append_transition(
+                &mut journal,
+                tx(),
+                TransactionState::Committed,
+                b"account-b".to_vec()
+            ),
             Err(JournalError::ConflictingPayload)
         );
     }
