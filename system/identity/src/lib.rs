@@ -22,10 +22,10 @@ pub use ipc_key_provider::{IdentityKeyIpcTransport, IpcIdentityKeyService};
 pub use key_provider::{
     SecureKeyId, SecureKeyService, SecureKeyServiceError, ShivaCoreKeyProvider,
 };
-pub use multi_account::{MultiAccountError, MultiAccountIdentityService};
 pub use keystore::{
     KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature,
 };
+pub use multi_account::{MultiAccountError, MultiAccountIdentityService};
 pub use persistence::{
     CredentialRecord, IDENTITY_RECORD_VERSION, IdentityRecord, IdentityStore,
     InMemoryIdentityStore, PersistenceError,
