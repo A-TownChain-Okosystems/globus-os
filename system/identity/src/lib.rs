@@ -6,9 +6,11 @@ mod file_store;
 mod ipc_key_provider;
 mod key_provider;
 mod keystore;
+mod multi_account;
 mod persistence;
 mod secure_store;
 mod service;
+pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
 pub use account_registry::{
@@ -24,6 +26,7 @@ pub use key_provider::{
 pub use keystore::{
     KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature,
 };
+pub use multi_account::{MultiAccountError, MultiAccountIdentityService};
 pub use persistence::{
     CredentialRecord, IDENTITY_RECORD_VERSION, IdentityRecord, IdentityStore,
     InMemoryIdentityStore, PersistenceError,
