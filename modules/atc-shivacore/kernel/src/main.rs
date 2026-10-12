@@ -298,6 +298,10 @@ fn validate_acpi_boot_tables(
         return Err("root-table entries are misaligned");
     }
 
+    let entry_count = (root_length - SDT_HEADER_LEN) / entry_size;
+    if entry_count == 0 {
+        return Err("root table contains no ACPI table entries");
+    }
     let mut validated = 1usize; // RSDT/XSDT
     for entry in root_table[SDT_HEADER_LEN..root_length].chunks_exact(entry_size) {
         let address = if entry_size == 8 {
