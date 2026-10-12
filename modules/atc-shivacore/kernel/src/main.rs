@@ -204,7 +204,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     }
 }
 
-
 /// Validate firmware-provided ACPI data before any ACPI address is used by a driver.
 /// Every read is bounded by a physical-memory region reported in BootInfo; the
 /// accepted table size is capped to avoid unbounded firmware-controlled reads.
@@ -238,35 +237,34 @@ fn validate_acpi_boot_tables(
             rsdp_address,
             RSDP_V2_MIN_LEN,
         )?;
-        let rsdp_length = u32::from_le_bytes([prefix[20], prefix[21], prefix[22], prefix[23]]) as usize;
+        let rsdp_length =
+            u32::from_le_bytes([prefix[20], prefix[21], prefix[22], prefix[23]]) as usize;
         if !(RSDP_V2_MIN_LEN..=MAX_RSDP_LEN).contains(&rsdp_length) {
             return Err("RSDP extended length is outside supported bounds");
         }
-        let extended = read_physical(
-            boot_info,
-            physical_memory_offset,
-            rsdp_address,
-            rsdp_length,
-        )?;
+        let extended = read_physical(boot_info, physical_memory_offset, rsdp_address, rsdp_length)?;
         if !acpi_checksum_valid(extended) {
             return Err("invalid RSDP extended checksum");
         }
         let xsdt = u64::from_le_bytes([
-            extended[24], extended[25], extended[26], extended[27],
-            extended[28], extended[29], extended[30], extended[31],
+            extended[24],
+            extended[25],
+            extended[26],
+            extended[27],
+            extended[28],
+            extended[29],
+            extended[30],
+            extended[31],
         ]);
         if xsdt != 0 {
             (xsdt, b"XSDT")
         } else {
-            let rsdt = u32::from_le_bytes([
-                extended[16], extended[17], extended[18], extended[19],
-            ]) as u64;
+            let rsdt =
+                u32::from_le_bytes([extended[16], extended[17], extended[18], extended[19]]) as u64;
             (rsdt, b"RSDT")
         }
     } else {
-        let rsdt = u32::from_le_bytes([
-            rsdp_v1[16], rsdp_v1[17], rsdp_v1[18], rsdp_v1[19],
-        ]) as u64;
+        let rsdt = u32::from_le_bytes([rsdp_v1[16], rsdp_v1[17], rsdp_v1[18], rsdp_v1[19]]) as u64;
         (rsdt, b"RSDT")
     };
 
@@ -283,12 +281,7 @@ fn validate_acpi_boot_tables(
         return Err("root-table signature does not match RSDP revision");
     }
     let root_length = sdt_length(root_header, MAX_SDT_LEN)?;
-    let root_table = read_physical(
-        boot_info,
-        physical_memory_offset,
-        root_address,
-        root_length,
-    )?;
+    let root_table = read_physical(boot_info, physical_memory_offset, root_address, root_length)?;
     if !acpi_checksum_valid(root_table) {
         return Err("root-table checksum invalid");
     }
@@ -306,8 +299,7 @@ fn validate_acpi_boot_tables(
     for entry in root_table[SDT_HEADER_LEN..root_length].chunks_exact(entry_size) {
         let address = if entry_size == 8 {
             u64::from_le_bytes([
-                entry[0], entry[1], entry[2], entry[3],
-                entry[4], entry[5], entry[6], entry[7],
+                entry[0], entry[1], entry[2], entry[3], entry[4], entry[5], entry[6], entry[7],
             ])
         } else {
             u32::from_le_bytes([entry[0], entry[1], entry[2], entry[3]]) as u64
@@ -315,23 +307,15 @@ fn validate_acpi_boot_tables(
         if address == 0 {
             return Err("root table contains a null child-table address");
         }
-        let header = read_physical(
-            boot_info,
-            physical_memory_offset,
-            address,
-            SDT_HEADER_LEN,
-        )?;
+        let header = read_physical(boot_info, physical_memory_offset, address, SDT_HEADER_LEN)?;
         let length = sdt_length(header, MAX_SDT_LEN)?;
-        let table = read_physical(
-            boot_info,
-            physical_memory_offset,
-            address,
-            length,
-        )?;
+        let table = read_physical(boot_info, physical_memory_offset, address, length)?;
         if !acpi_checksum_valid(table) {
             return Err("referenced ACPI table checksum invalid");
         }
-        validated = validated.checked_add(1).ok_or("ACPI table count overflow")?;
+        validated = validated
+            .checked_add(1)
+            .ok_or("ACPI table count overflow")?;
     }
     Ok(validated)
 }
