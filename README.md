@@ -16,6 +16,8 @@ GlobusOS is the complete operating-system userspace/platform layer above **Shiva
 
 The complete standard OS component coverage and implementation priorities are defined in [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md). That document is a coverage baseline, not a claim that every listed component is already production-ready.
 
+The formal Aurora AI 1.0 architecture, domain boundaries, agent contracts, Fabric/offline-first rules, risk/approval model, integration boundaries and staged acceptance criteria are defined in [`docs/AURORA_AI_ARCHITECTURE_1.0.md`](docs/AURORA_AI_ARCHITECTURE_1.0.md).
+
 ```text
 Applications
     ↓
