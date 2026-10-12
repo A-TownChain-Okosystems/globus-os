@@ -69,11 +69,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     interrupts::init_pics();
     serial_println!("ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).");
 
-    let phys_mem_offset = boot_info
+    let phys_mem_offset_raw = boot_info
         .physical_memory_offset
         .into_option()
         .expect("Bootloader hat physical_memory_offset nicht gesetzt (Config fehlt?)");
-    let phys_mem_offset = x86_64::VirtAddr::new(phys_mem_offset);
+    let validated_tables = validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
+        .unwrap_or_else(|error| panic!("ShivaCore: ACPI validation failed: {}", error));
+    serial_println!(
+        "ShivaCore: ACPI RSDP/root/table checksums validated; tables={}",
+        validated_tables
+    );
+    let phys_mem_offset = x86_64::VirtAddr::new(phys_mem_offset_raw);
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
     let mut frame_allocator =
@@ -196,6 +202,176 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     loop {
         x86_64::instructions::hlt();
     }
+}
+
+
+/// Validate firmware-provided ACPI data before any ACPI address is used by a driver.
+/// Every read is bounded by a physical-memory region reported in BootInfo; the
+/// accepted table size is capped to avoid unbounded firmware-controlled reads.
+fn validate_acpi_boot_tables(
+    boot_info: &BootInfo,
+    physical_memory_offset: u64,
+) -> Result<usize, &'static str> {
+    const RSDP_V1_LEN: usize = 20;
+    const RSDP_V2_MIN_LEN: usize = 36;
+    const MAX_RSDP_LEN: usize = 4096;
+    const SDT_HEADER_LEN: usize = 36;
+    const MAX_SDT_LEN: usize = 1024 * 1024;
+
+    let rsdp_address = boot_info
+        .rsdp_addr
+        .into_option()
+        .ok_or("bootloader did not provide an RSDP address")?;
+    let rsdp_v1 = read_physical(boot_info, physical_memory_offset, rsdp_address, RSDP_V1_LEN)?;
+    if &rsdp_v1[0..8] != b"RSD PTR " {
+        return Err("invalid RSDP signature");
+    }
+    if !acpi_checksum_valid(rsdp_v1) {
+        return Err("invalid RSDP v1 checksum");
+    }
+
+    let revision = rsdp_v1[15];
+    let (root_address, root_signature) = if revision >= 2 {
+        let prefix = read_physical(
+            boot_info,
+            physical_memory_offset,
+            rsdp_address,
+            RSDP_V2_MIN_LEN,
+        )?;
+        let rsdp_length = u32::from_le_bytes([prefix[20], prefix[21], prefix[22], prefix[23]]) as usize;
+        if !(RSDP_V2_MIN_LEN..=MAX_RSDP_LEN).contains(&rsdp_length) {
+            return Err("RSDP extended length is outside supported bounds");
+        }
+        let extended = read_physical(
+            boot_info,
+            physical_memory_offset,
+            rsdp_address,
+            rsdp_length,
+        )?;
+        if !acpi_checksum_valid(extended) {
+            return Err("invalid RSDP extended checksum");
+        }
+        let xsdt = u64::from_le_bytes([
+            extended[24], extended[25], extended[26], extended[27],
+            extended[28], extended[29], extended[30], extended[31],
+        ]);
+        if xsdt != 0 {
+            (xsdt, b"XSDT")
+        } else {
+            let rsdt = u32::from_le_bytes([
+                extended[16], extended[17], extended[18], extended[19],
+            ]) as u64;
+            (rsdt, b"RSDT")
+        }
+    } else {
+        let rsdt = u32::from_le_bytes([
+            rsdp_v1[16], rsdp_v1[17], rsdp_v1[18], rsdp_v1[19],
+        ]) as u64;
+        (rsdt, b"RSDT")
+    };
+
+    if root_address == 0 {
+        return Err("RSDP contains a null root-table address");
+    }
+    let root_header = read_physical(
+        boot_info,
+        physical_memory_offset,
+        root_address,
+        SDT_HEADER_LEN,
+    )?;
+    if &root_header[0..4] != root_signature {
+        return Err("root-table signature does not match RSDP revision");
+    }
+    let root_length = sdt_length(root_header, MAX_SDT_LEN)?;
+    let root_table = read_physical(
+        boot_info,
+        physical_memory_offset,
+        root_address,
+        root_length,
+    )?;
+    if !acpi_checksum_valid(root_table) {
+        return Err("root-table checksum invalid");
+    }
+
+    let entry_size = if root_signature == b"XSDT" { 8 } else { 4 };
+    if (root_length - SDT_HEADER_LEN) % entry_size != 0 {
+        return Err("root-table entries are misaligned");
+    }
+
+    let mut validated = 1usize; // RSDT/XSDT
+    for entry in root_table[SDT_HEADER_LEN..root_length].chunks_exact(entry_size) {
+        let address = if entry_size == 8 {
+            u64::from_le_bytes([
+                entry[0], entry[1], entry[2], entry[3],
+                entry[4], entry[5], entry[6], entry[7],
+            ])
+        } else {
+            u32::from_le_bytes([entry[0], entry[1], entry[2], entry[3]]) as u64
+        };
+        if address == 0 {
+            return Err("root table contains a null child-table address");
+        }
+        let header = read_physical(
+            boot_info,
+            physical_memory_offset,
+            address,
+            SDT_HEADER_LEN,
+        )?;
+        let length = sdt_length(header, MAX_SDT_LEN)?;
+        let table = read_physical(
+            boot_info,
+            physical_memory_offset,
+            address,
+            length,
+        )?;
+        if !acpi_checksum_valid(table) {
+            return Err("referenced ACPI table checksum invalid");
+        }
+        validated = validated.checked_add(1).ok_or("ACPI table count overflow")?;
+    }
+    Ok(validated)
+}
+
+fn sdt_length(header: &[u8], maximum: usize) -> Result<usize, &'static str> {
+    if header.len() < 8 {
+        return Err("truncated ACPI table header");
+    }
+    let length = u32::from_le_bytes([header[4], header[5], header[6], header[7]]) as usize;
+    if !(36..=maximum).contains(&length) {
+        return Err("ACPI table length is outside supported bounds");
+    }
+    Ok(length)
+}
+
+fn acpi_checksum_valid(bytes: &[u8]) -> bool {
+    bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte)) == 0
+}
+
+fn read_physical(
+    boot_info: &BootInfo,
+    physical_memory_offset: u64,
+    physical_address: u64,
+    length: usize,
+) -> Result<&'static [u8], &'static str> {
+    let end = physical_address
+        .checked_add(length as u64)
+        .ok_or("physical ACPI address overflow")?;
+    if !boot_info
+        .memory_regions
+        .iter()
+        .any(|region| region.start <= physical_address && end <= region.end)
+    {
+        return Err("ACPI bytes are outside a single reported physical-memory region");
+    }
+    let virtual_address = physical_memory_offset
+        .checked_add(physical_address)
+        .ok_or("ACPI virtual address overflow")?;
+    let virtual_address = x86_64::VirtAddr::try_new(virtual_address)
+        .map_err(|_| "ACPI virtual address is non-canonical")?;
+    // SAFETY: the bootloader maps physical memory at physical_memory_offset.
+    // The complete read range is checked against one firmware memory-map region
+    // and all lengths are bounded by the RSDP/SDT limits above.
+    Ok(unsafe { core::slice::from_raw_parts(virtual_address.as_ptr(), length) })
 }
 
 #[alloc_error_handler]
