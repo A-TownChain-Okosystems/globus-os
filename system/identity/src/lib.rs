@@ -10,6 +10,7 @@ mod multi_account;
 mod persistence;
 mod secure_store;
 mod service;
+pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
 pub use account_registry::{
