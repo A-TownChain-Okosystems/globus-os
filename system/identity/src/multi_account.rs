@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 
 use super::{
-    IdentitySession, IdentityService, IdentityServiceError, LoginResult, RegistrationResult, UserId,
-    WalletCreation,
+    IdentityService, IdentityServiceError, IdentitySession, LoginResult, RegistrationResult,
+    UserId, WalletCreation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -180,8 +180,16 @@ mod tests {
 
         assert_eq!(
             service
-                .register(alice.clone(), "Imposter", b"other-secret", 658467, "devnet", 1)
-                .err().unwrap(),
+                .register(
+                    alice.clone(),
+                    "Imposter",
+                    b"other-secret",
+                    658467,
+                    "devnet",
+                    1
+                )
+                .err()
+                .unwrap(),
             MultiAccountError::DuplicateAccount
         );
         assert!(service.login(&alice, b"alice-secret", 100, 60).is_ok());
