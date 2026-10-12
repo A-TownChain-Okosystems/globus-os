@@ -130,3 +130,10 @@ If any required edge is missing, the function is **not proven complete**.
 - Passing unit/component tests does not prove system-wide readiness.
 - Historical CI does not prove the current default branch.
 - Integration into GlobusOS does not move Aurora or blockchain semantics into the ShivaCore TCB.
+
+
+## Machine-readable function contract schema
+
+The normative field contract for every OS function is defined in [`OS_FUNCTION_CONTRACT_SCHEMA.json`](OS_FUNCTION_CONTRACT_SCHEMA.json). The schema requires typed inputs/outputs, preconditions/postconditions, invariants, error semantics, authorization, concurrency/resource limits, audit, interface versioning, tests, exact-SHA evidence, source binding, status, traceability, and explicit residuals.
+
+**Completeness boundary:** the current 80 records are a domain-level audit baseline, not proof that every exported symbol, syscall, IPC/RPC endpoint, event handler, CLI command, service API, or UI action has been enumerated. Source-to-catalog reconciliation must discover and account for those surfaces on exact repository SHAs. Any record without a complete behavioral contract remains `INCOMPLETE`; unresolved security or authority semantics remain `BLOCKED`. No implementation or verification status is inferred from this schema.
