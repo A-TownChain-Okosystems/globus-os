@@ -181,7 +181,7 @@ mod tests {
         assert_eq!(
             service
                 .register(alice.clone(), "Imposter", b"other-secret", 658467, "devnet", 1)
-                .unwrap_err(),
+                .err().unwrap(),
             MultiAccountError::DuplicateAccount
         );
         assert!(service.login(&alice, b"alice-secret", 100, 60).is_ok());
