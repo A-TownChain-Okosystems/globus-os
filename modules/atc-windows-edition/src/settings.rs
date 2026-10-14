@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 pub struct SettingsTab {
-    // TODO: fields
+    // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl SettingsTab {
@@ -16,16 +16,16 @@ impl SettingsTab {
 
     /// Load configuration
     pub fn load_config(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Save configuration
     pub fn save_config(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Switch network (mainnet/testnet)
     pub fn switch_network(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 }

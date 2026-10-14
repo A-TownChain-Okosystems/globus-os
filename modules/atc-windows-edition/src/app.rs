@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 pub struct App {
-    // TODO: fields
+    // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl App {
@@ -16,16 +16,16 @@ impl App {
 
     /// Create new app instance
     pub fn new(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Main update loop
     pub fn update(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Render UI
     pub fn render(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 }

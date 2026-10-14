@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 pub struct NodeTab {
-    // TODO: fields
+    // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl NodeTab {
@@ -16,21 +16,21 @@ impl NodeTab {
 
     /// Display node status
     pub fn show_status(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// List connected peers
     pub fn show_peers(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Recent blocks
     pub fn show_blocks(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Sync progress
     pub fn sync_status(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 }

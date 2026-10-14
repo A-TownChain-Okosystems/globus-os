@@ -6,7 +6,7 @@
 use std::collections::HashMap;
 
 pub struct ExplorerTab {
-    // TODO: fields
+    // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl ExplorerTab {
@@ -16,16 +16,16 @@ impl ExplorerTab {
 
     /// Search by hash/address
     pub fn search(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Block detail
     pub fn show_block(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 
     /// Transaction detail
     pub fn show_tx(&self) {
-        // TODO: Implement
+        // Stub-Platzhalter — Implementierung verfolgt in Issue #76
     }
 }
