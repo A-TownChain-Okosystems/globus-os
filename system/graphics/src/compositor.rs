@@ -93,7 +93,37 @@ impl Compositor {
             .find(|s| s.surface == surface)
             .ok_or(CompositorError::SurfaceMissing)?;
         item.z = max_z;
+        item.visible = true;
         self.next_z = self.next_z.saturating_add(1);
+        Ok(())
+    }
+    pub fn set_bounds(
+        &mut self,
+        surface: SurfaceId,
+        bounds: Rect,
+    ) -> Result<(), CompositorError> {
+        if bounds.width == 0 || bounds.height == 0 {
+            return Err(CompositorError::InvalidSize);
+        }
+        let item = self
+            .surfaces
+            .iter_mut()
+            .find(|s| s.surface == surface)
+            .ok_or(CompositorError::SurfaceMissing)?;
+        item.bounds = bounds;
+        Ok(())
+    }
+    pub fn set_visible(
+        &mut self,
+        surface: SurfaceId,
+        visible: bool,
+    ) -> Result<(), CompositorError> {
+        let item = self
+            .surfaces
+            .iter_mut()
+            .find(|s| s.surface == surface)
+            .ok_or(CompositorError::SurfaceMissing)?;
+        item.visible = visible;
         Ok(())
     }
     pub fn hit_test(&self, x: i32, y: i32) -> Option<SurfaceId> {
@@ -119,5 +149,17 @@ mod tests {
         assert_eq!(c.hit_test(30, 30), Some(SurfaceId(2)));
         c.focus(SurfaceId(1)).unwrap();
         assert_eq!(c.hit_test(30, 30), Some(SurfaceId(1)));
+    }
+
+    #[test]
+    fn geometry_and_visibility_updates_affect_hit_testing() {
+        let mut c = Compositor::new();
+        c.create(SurfaceId(1), Rect::new(0, 0, 100, 100)).unwrap();
+        c.set_bounds(SurfaceId(1), Rect::new(200, 200, 50, 50))
+            .unwrap();
+        assert_eq!(c.hit_test(10, 10), None);
+        assert_eq!(c.hit_test(210, 210), Some(SurfaceId(1)));
+        c.set_visible(SurfaceId(1), false).unwrap();
+        assert_eq!(c.hit_test(210, 210), None);
     }
 }
