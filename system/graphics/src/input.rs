@@ -86,6 +86,9 @@ impl InputRouter {
         };
         RoutedEvent { target, event }
     }
+    pub fn pointer_focus(&self) -> Option<SurfaceId> {
+        self.pointer_focus
+    }
     pub fn keyboard_focus(&self) -> Option<SurfaceId> {
         self.keyboard_focus
     }
