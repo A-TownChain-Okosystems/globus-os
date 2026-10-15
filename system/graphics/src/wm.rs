@@ -160,19 +160,38 @@ impl WindowManager {
         if window.state == WindowState::Closed {
             return Err(WindowError::Closed);
         }
-        if window.state != WindowState::Maximized {
-            if let Some((_, saved)) = self
-                .restore_bounds
-                .iter_mut()
-                .find(|(id, _)| *id == surface)
-            {
-                *saved = window.bounds;
-            } else {
-                self.restore_bounds.push((surface, window.bounds));
-            }
+        if !self.restore_bounds.iter().any(|(id, _)| *id == surface) {
+            self.restore_bounds.push((surface, window.bounds));
         }
         window.bounds = work_area;
         window.state = WindowState::Maximized;
+        window.focused = true;
+        for other in &mut self.windows {
+            if other.surface != surface {
+                other.focused = false;
+            }
+        }
+        Ok(())
+    }
+
+    /// Enter fullscreen while retaining the pre-transition geometry for restore.
+    pub fn fullscreen(&mut self, surface: SurfaceId, bounds: Rect) -> Result<(), WindowError> {
+        if bounds.width == 0 || bounds.height == 0 {
+            return Err(WindowError::InvalidSize);
+        }
+        let window = self
+            .windows
+            .iter_mut()
+            .find(|w| w.surface == surface)
+            .ok_or(WindowError::Missing)?;
+        if window.state == WindowState::Closed {
+            return Err(WindowError::Closed);
+        }
+        if !self.restore_bounds.iter().any(|(id, _)| *id == surface) {
+            self.restore_bounds.push((surface, window.bounds));
+        }
+        window.bounds = bounds;
+        window.state = WindowState::Fullscreen;
         window.focused = true;
         for other in &mut self.windows {
             if other.surface != surface {
@@ -304,6 +323,18 @@ mod tests {
             .unwrap();
         assert_eq!(wm.windows()[0].state, WindowState::Maximized);
         assert_eq!(wm.windows()[0].bounds, Rect::new(0, 24, 1920, 1056));
+        wm.restore(SurfaceId(1)).unwrap();
+        assert_eq!(wm.windows()[0].state, WindowState::Normal);
+        assert_eq!(wm.windows()[0].bounds, Rect::new(10, 20, 300, 200));
+    }
+
+    #[test]
+    fn fullscreen_restore_recovers_original_geometry() {
+        let mut wm = manager_with_window();
+        wm.fullscreen(SurfaceId(1), Rect::new(0, 0, 1920, 1080))
+            .unwrap();
+        assert_eq!(wm.windows()[0].state, WindowState::Fullscreen);
+        assert_eq!(wm.windows()[0].bounds, Rect::new(0, 0, 1920, 1080));
         wm.restore(SurfaceId(1)).unwrap();
         assert_eq!(wm.windows()[0].state, WindowState::Normal);
         assert_eq!(wm.windows()[0].bounds, Rect::new(10, 20, 300, 200));
