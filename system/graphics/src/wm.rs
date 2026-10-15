@@ -161,7 +161,11 @@ impl WindowManager {
             return Err(WindowError::Closed);
         }
         if window.state != WindowState::Maximized {
-            if let Some((_, saved)) = self.restore_bounds.iter_mut().find(|(id, _)| *id == surface) {
+            if let Some((_, saved)) = self
+                .restore_bounds
+                .iter_mut()
+                .find(|(id, _)| *id == surface)
+            {
                 *saved = window.bounds;
             } else {
                 self.restore_bounds.push((surface, window.bounds));
@@ -189,7 +193,11 @@ impl WindowManager {
         if window.state == WindowState::Closed {
             return Err(WindowError::Closed);
         }
-        if let Some(index) = self.restore_bounds.iter().position(|(id, _)| *id == surface) {
+        if let Some(index) = self
+            .restore_bounds
+            .iter()
+            .position(|(id, _)| *id == surface)
+        {
             let (_, bounds) = self.restore_bounds.remove(index);
             window.bounds = bounds;
         }
@@ -313,10 +321,7 @@ mod tests {
     fn closed_windows_cannot_be_moved_or_restored() {
         let mut wm = manager_with_window();
         wm.close(SurfaceId(1)).unwrap();
-        assert_eq!(
-            wm.move_window(SurfaceId(1), 1, 2),
-            Err(WindowError::Closed)
-        );
+        assert_eq!(wm.move_window(SurfaceId(1), 1, 2), Err(WindowError::Closed));
         assert_eq!(wm.restore(SurfaceId(1)), Err(WindowError::Closed));
     }
 }
