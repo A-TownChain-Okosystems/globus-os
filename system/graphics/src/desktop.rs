@@ -236,13 +236,11 @@ impl DesktopSession {
             WindowState::Normal => self.restore_window(surface),
             WindowState::Fullscreen => {
                 self.ensure_active()?;
-                self.windows.set_state(surface, WindowState::Fullscreen)?;
-                self.compositor
-                    .set_bounds(
-                        surface,
-                        Rect::new(0, 0, self.viewport.width, self.viewport.height),
-                    )
-                    .map_err(|_| DesktopError::Window(WindowError::Missing))?;
+                self.windows.fullscreen(
+                    surface,
+                    Rect::new(0, 0, self.viewport.width, self.viewport.height),
+                )?;
+                self.sync_bounds(surface)?;
                 self.compositor
                     .set_visible(surface, true)
                     .map_err(|_| DesktopError::Window(WindowError::Missing))?;
