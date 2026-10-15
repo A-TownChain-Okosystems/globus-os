@@ -34,25 +34,10 @@ pub struct Modifiers {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputEvent {
-    PointerMove {
-        x: i32,
-        y: i32,
-    },
-    PointerButton {
-        button: Button,
-        pressed: bool,
-        x: i32,
-        y: i32,
-    },
-    Key {
-        code: KeyCode,
-        pressed: bool,
-        modifiers: Modifiers,
-    },
-    Scroll {
-        delta_x: i32,
-        delta_y: i32,
-    },
+    PointerMove { x: i32, y: i32 },
+    PointerButton { button: Button, pressed: bool, x: i32, y: i32 },
+    Key { code: KeyCode, pressed: bool, modifiers: Modifiers },
+    Scroll { delta_x: i32, delta_y: i32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,12 +56,15 @@ impl InputRouter {
     pub fn new() -> Self {
         Self::default()
     }
+
     pub fn set_pointer_focus(&mut self, target: Option<SurfaceId>) {
         self.pointer_focus = target;
     }
+
     pub fn set_keyboard_focus(&mut self, target: Option<SurfaceId>) {
         self.keyboard_focus = target;
     }
+
     pub fn route(&self, event: InputEvent) -> RoutedEvent {
         let target = match event {
             InputEvent::PointerMove { .. }
@@ -86,6 +74,11 @@ impl InputRouter {
         };
         RoutedEvent { target, event }
     }
+
+    pub fn pointer_focus(&self) -> Option<SurfaceId> {
+        self.pointer_focus
+    }
+
     pub fn keyboard_focus(&self) -> Option<SurfaceId> {
         self.keyboard_focus
     }
@@ -94,6 +87,7 @@ impl InputRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn keyboard_and_pointer_have_independent_targets() {
         let mut r = InputRouter::new();
@@ -103,14 +97,10 @@ mod tests {
         let key = r.route(InputEvent::Key {
             code: KeyCode::Enter,
             pressed: true,
-            modifiers: Modifiers {
-                shift: false,
-                ctrl: false,
-                alt: false,
-                meta: false,
-            },
+            modifiers: Modifiers { shift: false, ctrl: false, alt: false, meta: false },
         });
         assert_eq!(pointer.target, Some(SurfaceId(1)));
         assert_eq!(key.target, Some(SurfaceId(2)));
+        assert_eq!(r.pointer_focus(), Some(SurfaceId(1)));
     }
 }
