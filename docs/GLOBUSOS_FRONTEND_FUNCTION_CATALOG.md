@@ -8,7 +8,7 @@ This catalog defines the user-facing function surface that must be independently
 
 ## Architectural surfaces
 
-- **DESKTOP** — applications, files, windows, launcher and session surface.
+- **DESKTOP** — applications, files, windows, launcher, session and context-menu surface.
 - **CONTROL CENTER** — system, personal, security, management, AI/Aurora, A-TownChain, developer, creator and administration controls.
 - **TRUST CENTER** — integrity, provenance, audit and verification evidence.
 
@@ -17,6 +17,12 @@ This catalog defines the user-facing function surface that must be independently
 `UI -> GlobusOS API -> Identity -> Capability -> Policy -> Validation -> Authoritative State -> Audit`
 
 The UI must not directly mutate kernel/TCB state. Security-sensitive settings and actions require explicit authorization and auditable state transitions. Wallet keys, TPM/TEE material and other privileged credentials remain behind their authoritative trust boundaries.
+
+## Context menu contract (GLOBUSOS-CONTEXT-MENU-001)
+
+The context menu is a desktop-shell interaction component, not an authority boundary. Initial target kinds: desktop background, app/launcher icon, file/folder, window/title bar, taskbar item and notification/tray item. Action availability is derived from the current target state and caller context; unknown/stale targets fail closed. Menu presentation never grants capability.
+
+Every mutation must follow `UI -> GlobusOS API -> Identity -> Capability -> Policy -> Validation -> Authoritative State -> Audit`. Destructive actions require explicit confirmation where applicable. Wallet signing/submission, consensus changes, kernel/TCB, TPM/TEE and direct ATC-VM state mutation are not generic context-menu actions. UI reports success only after authoritative confirmation. Keyboard support includes context-menu key / Shift+F10 where supported, arrow navigation, Enter/Space, Escape and predictable focus restoration. Touch uses long-press without suppressing normal accessibility behavior.
 
 ## Evidence rule
 
@@ -133,6 +139,14 @@ A screen, route, mock, placeholder, design, or frontend type does **not** prove 
 | ATC-FUNC-OS-UI-DESKTOP-002 | DESKTOP | DESKTOP | Windows — Window management surface | UNASSESSED | INCOMPLETE |
 | ATC-FUNC-OS-UI-DESKTOP-003 | DESKTOP | DESKTOP | Launcher — Application launcher surface | UNASSESSED | INCOMPLETE |
 | ATC-FUNC-OS-UI-DESKTOP-004 | DESKTOP | DESKTOP | Files — File management surface | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-005 | DESKTOP | DESKTOP | Context Menu — Open context menu for a validated UI target | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-006 | DESKTOP | DESKTOP | Context Menu — Resolve context target and available actions | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-007 | DESKTOP | DESKTOP | Context Menu — Navigate and select context actions | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-008 | DESKTOP | DESKTOP | Context Menu — Dispatch a non-privileged UI action | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-009 | DESKTOP | DESKTOP | Context Menu — Request an authorized system action | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-010 | DESKTOP | DESKTOP | Context Menu — Show action state and execution result | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-011 | DESKTOP | DESKTOP | Context Menu — Dismiss menu and restore focus | UNASSESSED | INCOMPLETE |
+| ATC-FUNC-OS-UI-DESKTOP-012 | DESKTOP | DESKTOP | Context Menu — Expose action labels, shortcuts and accessibility metadata | UNASSESSED | INCOMPLETE |
 | ATC-FUNC-OS-UI-TRUST-001 | TRUST_CENTER | TRUST_CENTER | System Integrity — System integrity evidence surface | UNASSESSED | INCOMPLETE |
 | ATC-FUNC-OS-UI-TRUST-002 | TRUST_CENTER | TRUST_CENTER | Secure Boot — Secure boot evidence surface | UNASSESSED | INCOMPLETE |
 | ATC-FUNC-OS-UI-TRUST-003 | TRUST_CENTER | TRUST_CENTER | Kernel Status — Kernel/TCB status evidence surface | UNASSESSED | INCOMPLETE |
