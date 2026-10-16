@@ -26,7 +26,7 @@ Required request path:
 
 ## Component and function mapping
 
-The complete machine-readable table in `SYSTEM_CONTROL_CENTER_IMPLEMENTATION_MAP.json` records all 20 SYSCTL families and 68 proposed function names, each linked to relevant existing UI IDs where a plausible correspondence exists. The SYSCTL IDs remain owned by Issue #191; this file does not create replacement IDs.
+The complete machine-readable table in `SYSTEM_CONTROL_CENTER_IMPLEMENTATION_MAP.json` records all 20 SYSCTL families and every function name explicitly enumerated in Issue #191. The issue states 68 candidates, but its 20 rows enumerate 63 names; the five-name discrepancy is recorded as an unresolved inventory gap. Each listed candidate is linked to relevant existing UI IDs where a plausible correspondence exists. The SYSCTL IDs remain owned by Issue #191; this file does not create replacement IDs.
 
 | SYSCTL | Control Center area | Existing UI IDs (candidate mapping) | Canonical owner / boundary |
 |---|---|---|---|
@@ -51,7 +51,7 @@ The complete machine-readable table in `SYSTEM_CONTROL_CENTER_IMPLEMENTATION_MAP
 | SYSCTL-019 | Notifications | `ATC-FUNC-OS-UI-PERSONAL-015` | GlobusOS notification service |
 | SYSCTL-020 | Policy administration | `ATC-FUNC-OS-UI-ADMIN-091`, `ATC-FUNC-OS-UI-AI-050` | Canonical policy authority; AI policy is not OS policy authority |
 
-The mappings above are candidates, not proof of complete semantic equivalence. All 68 backend function contracts remain `UNRESOLVED` until their input/output/error semantics, caller/adapter, tests and exact-SHA evidence are linked.
+The mappings above are candidates, not proof of complete semantic equivalence. All enumerated backend function candidates remain `UNRESOLVED`; five candidates claimed by Issue #191 are not individually named and must be identified before the inventory can be considered complete until their input/output/error semantics, caller/adapter, tests and exact-SHA evidence are linked.
 
 ## UI and API function responsibilities
 
