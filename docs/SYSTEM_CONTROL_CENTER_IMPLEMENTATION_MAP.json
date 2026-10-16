@@ -10,7 +10,9 @@
   "authority_rule": "Standalone First, Ecosystem Second. This map is an OS UI integration map only; canonical service implementations remain in their owning repositories.",
   "counts": {
     "component_families": 20,
-    "function_candidates": 68,
+    "function_candidates_enumerated": 63,
+    "function_candidates_reported_by_ecosystem_issue_191": 68,
+    "unaccounted_candidate_count": 5,
     "ui_catalog_ids_reused": true
   },
   "status_semantics": {
@@ -670,5 +672,10 @@
       "reconciliation_status": "UNRESOLVED",
       "notes": "A proposal is not an activation; approval and authoritative enforcement are separate."
     }
-  ]
+  ],
+  "count_discrepancy": {
+    "status": "UNRESOLVED",
+    "finding": "Issue #191 states 68 function candidates, but the 20 component rows enumerate 63 named candidates.",
+    "required_action": "Identify and document the five missing candidate names before marking the SYSCTL candidate inventory complete."
+  }
 }
