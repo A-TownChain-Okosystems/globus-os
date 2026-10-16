@@ -677,5 +677,114 @@
     "status": "UNRESOLVED",
     "finding": "Issue #191 states 68 function candidates, but the 20 component rows enumerate 63 named candidates.",
     "required_action": "Identify and document the five missing candidate names before marking the SYSCTL candidate inventory complete."
+  },
+  "desktop_context_menu": {
+    "component_id": "GLOBUSOS-DESKTOP-CONTEXT-MENU-001",
+    "name": "Native desktop context menu",
+    "status": "PROPOSED / NOT VERIFIED",
+    "canonical_owner": "A-TownChain-Okosystems/globus-os",
+    "canonical_module_to_audit": "system/graphics/{desktop,input,shell,wm}",
+    "related_issue": "https://github.com/A-TownChain-Okosystems/globus-os/issues/78",
+    "contract_id": "GLOBUSOS-CONTEXT-MENU-001",
+    "frontend_function_ids": [
+      "ATC-FUNC-OS-UI-DESKTOP-005",
+      "ATC-FUNC-OS-UI-DESKTOP-006",
+      "ATC-FUNC-OS-UI-DESKTOP-007",
+      "ATC-FUNC-OS-UI-DESKTOP-008",
+      "ATC-FUNC-OS-UI-DESKTOP-009",
+      "ATC-FUNC-OS-UI-DESKTOP-010",
+      "ATC-FUNC-OS-UI-DESKTOP-011",
+      "ATC-FUNC-OS-UI-DESKTOP-012"
+    ],
+    "target_kinds": [
+      "desktop_background",
+      "application_icon",
+      "file_or_folder",
+      "window_titlebar",
+      "taskbar_item",
+      "notification_or_tray_item"
+    ],
+    "functions": [
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-005",
+        "name": "Open context menu for a validated UI target",
+        "contract_status": "UNRESOLVED",
+        "notes": "Invoke from pointer, touch-and-hold or keyboard; anchor and target identity must be validated."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-006",
+        "name": "Resolve context target and available actions",
+        "contract_status": "UNRESOLVED",
+        "notes": "Resolve desktop, app icon, file/folder, window, taskbar and notification targets from authoritative UI state."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-007",
+        "name": "Navigate and select context actions",
+        "contract_status": "UNRESOLVED",
+        "notes": "Support pointer, keyboard arrows, Enter/Space, Escape, focus restoration and accessible labels."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-008",
+        "name": "Dispatch a non-privileged UI action",
+        "contract_status": "UNRESOLVED",
+        "notes": "Dispatch only allowlisted actions against the current target; reject stale or mismatched targets."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-009",
+        "name": "Request an authorized system action",
+        "contract_status": "UNRESOLVED",
+        "notes": "Route settings, service, file mutation, network and other privileged operations through OS API, identity, capability, policy and audit."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-010",
+        "name": "Show action state and execution result",
+        "contract_status": "UNRESOLVED",
+        "notes": "Represent loading, disabled, denied, approval-required, success, failure and stale state; success only after authoritative confirmation."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-011",
+        "name": "Dismiss menu and restore focus",
+        "contract_status": "UNRESOLVED",
+        "notes": "Dismiss on Escape, outside click, target invalidation or completed action; return focus predictably."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-012",
+        "name": "Expose action labels, shortcuts and accessibility metadata",
+        "contract_status": "UNRESOLVED",
+        "notes": "Provide stable labels, shortcut hints, focus order and accessible role/name/state; avoid color-only status."
+      }
+    ],
+    "security_flow": [
+      "UI",
+      "GlobusOS API",
+      "Identity",
+      "Capability",
+      "Policy",
+      "Validation",
+      "Authoritative State",
+      "Audit"
+    ],
+    "error_states": [
+      "INVALID_TARGET",
+      "STALE_TARGET",
+      "ACTION_NOT_AVAILABLE",
+      "UNAUTHENTICATED",
+      "PERMISSION_DENIED",
+      "POLICY_DENIED",
+      "APPROVAL_REQUIRED",
+      "UNAVAILABLE",
+      "TIMEOUT",
+      "PARTIAL_FAILURE",
+      "INTERNAL_ERROR"
+    ],
+    "acceptance_gates": [
+      "No context menu action grants authority by its presence or selection.",
+      "Target identity and state are validated again at dispatch time.",
+      "Mutations go through authoritative OS APIs and canonical identity/capability/policy checks.",
+      "Destructive operations use explicit confirmation and audit where applicable.",
+      "Keyboard, touch, focus restoration and accessibility behavior are tested.",
+      "Success is shown only after authoritative state confirmation.",
+      "Exact source SHA, source symbol, tests and Run/Job/Step CI evidence are linked before status promotion."
+    ]
   }
 }
