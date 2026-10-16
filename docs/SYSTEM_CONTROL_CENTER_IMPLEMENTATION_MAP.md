@@ -93,3 +93,26 @@ Every API adapter must distinguish at least: `INVALID_INPUT`, `UNAUTHENTICATED`,
 - Never infer implementation from a route, mock, data model, test name or green workspace CI alone.
 - Keep canonical owners: GlobusOS for OS/control center, ShivaCore for kernel boundary, Aurora for AI runtime, A-TownChain for chain/wallet/node and canonical ATC-VM, ecosystem for cross-repo architecture/catalog/evidence.
 - Catalog status remains `PROPOSED / NOT VERIFIED` until all function-level gates are satisfied.
+
+## Desktop context menu — GLOBUSOS-CONTEXT-MENU-001
+
+The native context menu is part of the canonical desktop shell tracked by [Issue #78](https://github.com/A-TownChain-Okosystems/globus-os/issues/78), not a new system service or a separate shell implementation. The canonical source audit must begin at `system/graphics/{desktop,input,shell,wm}`.
+
+Eight proposed UI function IDs were added to the existing frontend catalog; all remain `UNASSESSED / INCOMPLETE`:
+
+| Function ID | Responsibility |
+|---|---|
+| `ATC-FUNC-OS-UI-DESKTOP-005` | Open menu for a validated target |
+| `ATC-FUNC-OS-UI-DESKTOP-006` | Resolve target and available actions |
+| `ATC-FUNC-OS-UI-DESKTOP-007` | Keyboard/pointer navigation and selection |
+| `ATC-FUNC-OS-UI-DESKTOP-008` | Dispatch allowlisted, non-privileged UI actions |
+| `ATC-FUNC-OS-UI-DESKTOP-009` | Request a capability-checked system action |
+| `ATC-FUNC-OS-UI-DESKTOP-010` | Show authoritative result/error/approval state |
+| `ATC-FUNC-OS-UI-DESKTOP-011` | Dismiss menu and restore focus |
+| `ATC-FUNC-OS-UI-DESKTOP-012` | Accessible labels, shortcuts and focus order |
+
+Initial targets: desktop background, application icon, file/folder, window title bar, taskbar item, notification/tray item. Support context-menu key / Shift+F10 where available, arrow navigation, Enter/Space, Escape, touch long-press, outside-click dismissal and predictable focus restoration.
+
+The context menu is not an authority boundary. Revalidate the target when dispatching an action. Mutations must use `UI → GlobusOS API → Identity → Capability → Policy → Validation → Authoritative State → Audit`. Do not expose wallet signing/submission, consensus changes, direct kernel/TCB or TPM/TEE operations, or direct ATC-VM state mutation as generic context-menu actions. Show success only after authoritative confirmation.
+
+Acceptance tests must cover stale targets, unavailable actions, denied capabilities, approval-required operations, timeout/partial failure, keyboard/touch access, focus restoration and exact-SHA CI evidence. The new IDs are catalog proposals, not proof of implemented behavior.
