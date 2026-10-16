@@ -2194,6 +2194,181 @@
         "EXACT_SHA_CI"
       ],
       "e2e_required": true
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-005",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Open context menu for a validated UI target",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Invoke from pointer, touch-and-hold or keyboard; anchor and target identity must be validated."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-006",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Resolve context target and available actions",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Resolve desktop, app icon, file/folder, window, taskbar and notification targets from authoritative UI state."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-007",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Navigate and select context actions",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Support pointer, keyboard arrows, Enter/Space, Escape, focus restoration and accessible labels."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-008",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Dispatch a non-privileged UI action",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Dispatch only allowlisted actions against the current target; reject stale or mismatched targets."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-009",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Request an authorized system action",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Route settings, service, file mutation, network and other privileged operations through OS API, identity, capability, policy and audit."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-010",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Show action state and execution result",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Represent loading, disabled, denied, approval-required, success, failure and stale state; success only after authoritative confirmation."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-011",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Dismiss menu and restore focus",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Dismiss on Escape, outside click, target invalidation or completed action; return focus predictably."
+    },
+    {
+      "id": "ATC-FUNC-OS-UI-DESKTOP-012",
+      "surface": "DESKTOP",
+      "group": "DESKTOP",
+      "area": "Context Menu",
+      "function": "Expose action labels, shortcuts and accessibility metadata",
+      "status": "UNASSESSED",
+      "traceability": "INCOMPLETE",
+      "underlying_service_required": true,
+      "evidence_required": [
+        "SPEC",
+        "DOC",
+        "SOURCE_SYMBOL",
+        "IMPLEMENTATION_SHA",
+        "TEST",
+        "EXACT_SHA_CI"
+      ],
+      "e2e_required": true,
+      "implementation_notes": "Provide stable labels, shortcut hints, focus order and accessible role/name/state; avoid color-only status."
     }
-  ]
+  ],
+  "catalog_change": {
+    "change_id": "GLOBUSOS-CONTEXT-MENU-001",
+    "status": "PROPOSED / NOT VERIFIED",
+    "added_function_ids": [
+      "ATC-FUNC-OS-UI-DESKTOP-005",
+      "ATC-FUNC-OS-UI-DESKTOP-006",
+      "ATC-FUNC-OS-UI-DESKTOP-007",
+      "ATC-FUNC-OS-UI-DESKTOP-008",
+      "ATC-FUNC-OS-UI-DESKTOP-009",
+      "ATC-FUNC-OS-UI-DESKTOP-010",
+      "ATC-FUNC-OS-UI-DESKTOP-011",
+      "ATC-FUNC-OS-UI-DESKTOP-012"
+    ],
+    "reason": "Add explicit context-menu contracts for the native desktop shell without asserting implementation."
+  }
 }
