@@ -1,13 +1,12 @@
 //! Capability-gated wallet service boundary for GlobusOS.
 //!
 //! The service never exposes private keys. Signing is delegated to the configured
-//! keystore and requires an authenticated identity plus an explicit signing capability.
+//! keystore and requires an authenticated identity plus trusted host-side authorization.
 
 use globus_identity::{
     IdentitySession, KeyId, KeyStore, KeystoreError, LoginState, SignRequest, Signature,
 };
 use globus_ipc::{WalletSignMessage, WalletSignResponse};
-
 
 /// Trusted host-side policy for wallet signing authorization.
 ///
