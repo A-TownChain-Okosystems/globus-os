@@ -7,7 +7,11 @@ use globus_identity::{
     IdentitySession, KeyId, KeyStore, KeystoreError, LoginState, SignRequest, Signature,
 };
 use globus_ipc::{WalletSignMessage, WalletSignResponse};
-use globus_security::{Authorization, Grant, Right, authorize};
+use globus_security::{Authorization, Capability, Grant, Right, authorize};
+
+/// Stable capability target required by the wallet signing boundary.
+/// A grant's own capability must never be used as the authorization target.
+pub const WALLET_SIGN_CAPABILITY: Capability = Capability(2);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditEvidence {
@@ -92,7 +96,7 @@ impl<K: KeyStore> WalletService<K> {
         let Some(grant) = grant else {
             return Err(WalletServiceError::Unauthorized);
         };
-        if authorize(&[grant], grant.capability, Right::Sign) != Authorization::Allowed {
+        if authorize(&[grant], WALLET_SIGN_CAPABILITY, Right::Sign) != Authorization::Allowed {
             return Err(WalletServiceError::Unauthorized);
         }
 
@@ -178,7 +182,7 @@ mod tests {
             WalletServiceError::Unauthorized
         );
         let execute_grant = Grant {
-            capability: globus_security::Capability(1),
+            capability: WALLET_SIGN_CAPABILITY,
             right: Right::Execute,
         };
         assert_eq!(
@@ -187,8 +191,18 @@ mod tests {
                 .unwrap_err(),
             WalletServiceError::Unauthorized
         );
+        let wrong_target_grant = Grant {
+            capability: Capability(99),
+            right: Right::Sign,
+        };
+        assert_eq!(
+            service
+                .sign(&session, 10, Some(wrong_target_grant), request.clone())
+                .unwrap_err(),
+            WalletServiceError::Unauthorized
+        );
         let sign_grant = Grant {
-            capability: globus_security::Capability(2),
+            capability: WALLET_SIGN_CAPABILITY,
             right: Right::Sign,
         };
         let (signature, evidence) = service
@@ -208,7 +222,7 @@ mod tests {
             message: b"payload".to_vec(),
         };
         let grant = Grant {
-            capability: globus_security::Capability(1),
+            capability: WALLET_SIGN_CAPABILITY,
             right: Right::Sign,
         };
         assert_eq!(
