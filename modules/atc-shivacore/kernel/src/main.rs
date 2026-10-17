@@ -105,9 +105,37 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     println!("K-Sprint 2: Paging/Heap OK (Box+Vec getestet)");
     // Real kernel integration gate: execute the canonical kernel initialization
     // from the same UEFI -> kernel_main path after paging/heap are live.
-    let kernel_state = shivacore::kernel_init::KernelState::boot()
+    let mut kernel_state = shivacore::kernel_init::KernelState::boot()
         .expect("ShivaCore: canonical KernelState::boot() failed");
     serial_println!("ShivaCore: KernelState::boot() -> Done.");
+
+    // IPC-001: exercise the actual kernel IPC subsystem after boot. The test
+    // requires the owner process's explicit WRITE and READ capabilities and
+    // verifies a real send/receive round trip before QEMU may report success.
+    let ipc_pid = kernel_state
+        .processes
+        .spawn(shivacore::process::ProcessType::System, 128);
+    let ipc_channel = kernel_state
+        .ipc
+        .create_channel(&mut kernel_state.processes.caps, ipc_pid, 2);
+    let ipc_payload = alloc::vec![0x41, 0x54, 0x43, 0x01];
+    kernel_state
+        .ipc
+        .send(
+            &kernel_state.processes.caps,
+            ipc_pid,
+            ipc_channel,
+            ipc_payload.clone(),
+        )
+        .expect("ShivaCore: IPC-001 capability-gated send failed");
+    let ipc_message = kernel_state
+        .ipc
+        .recv(&kernel_state.processes.caps, ipc_pid, ipc_channel)
+        .expect("ShivaCore: IPC-001 capability-gated receive failed");
+    if ipc_message.data != ipc_payload {
+        panic!("ShivaCore: IPC-001 payload mismatch");
+    }
+    serial_println!("ShivaCore: IPC-001 capability-gated send/recv round-trip OK; bytes=4.");
 
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
