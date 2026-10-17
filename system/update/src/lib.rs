@@ -65,7 +65,7 @@ mod package_verification_tests {
             digest: format!("sha256:{}", hex::encode(Sha256::digest(bytes))),
             signature: String::new(),
         };
-        let mut message = b"GLOBUSOS-PACKAGE-SIGNATURE-V1\\0".to_vec();
+        let mut message = b"GLOBUSOS-PACKAGE-SIGNATURE-V1\0".to_vec();
         message.extend_from_slice(package.name.as_bytes());
         message.push(0);
         message.extend_from_slice(package.version.as_bytes());
