@@ -115,10 +115,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let ipc_pid = kernel_state
         .processes
         .spawn(shivacore::process::ProcessType::System, 128);
-    let ipc_channel =
-        kernel_state
-            .ipc
-            .create_channel(&mut kernel_state.processes.caps, ipc_pid, 2);
+    let ipc_channel = kernel_state
+        .ipc
+        .create_channel(&mut kernel_state.processes.caps, ipc_pid, 2);
     let ipc_payload = alloc::vec![0x41, 0x54, 0x43, 0x01];
     kernel_state
         .ipc
