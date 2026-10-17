@@ -1697,6 +1697,11 @@ dependencies = [
 [[package]]
 name = "globus-package"
 version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "hex",
+ "sha2 0.10.9",
+]
 
 [[package]]
 name = "globus-process"
