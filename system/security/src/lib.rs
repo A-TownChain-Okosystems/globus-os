@@ -41,9 +41,10 @@ pub enum Authorization {
 }
 
 pub fn authorize(grants: &[Grant], target: Capability, required: Right) -> Authorization {
-    if grants.iter().any(|g| {
-        g.capability == target && (g.right == required || g.right == Right::Admin)
-    }) {
+    if grants
+        .iter()
+        .any(|g| g.capability == target && (g.right == required || g.right == Right::Admin))
+    {
         Authorization::Allowed
     } else {
         Authorization::Denied
