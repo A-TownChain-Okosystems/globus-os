@@ -3,7 +3,7 @@
 pub mod capability_registry;
 pub mod identity;
 
-pub use capability_registry::{CapabilityError, CapabilityRegistry, SystemCapabilities};
+pub use capability_registry::{CapabilityObject, CapabilityRegistry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Capability(pub u128);
