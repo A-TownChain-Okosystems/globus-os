@@ -3,7 +3,7 @@
 pub mod capability_registry;
 pub mod identity;
 
-pub use capability_registry::{CapabilityError, CapabilityRegistry, SystemCapabilities};
+pub use capability_registry::{CapabilityObject, CapabilityRegistry};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Capability(pub u128);
@@ -41,9 +41,10 @@ pub enum Authorization {
 }
 
 pub fn authorize(grants: &[Grant], target: Capability, required: Right) -> Authorization {
-    if grants.iter().any(|g| {
-        g.capability == target && (g.right == required || g.right == Right::Admin)
-    }) {
+    if grants
+        .iter()
+        .any(|g| g.capability == target && (g.right == required || g.right == Right::Admin))
+    {
         Authorization::Allowed
     } else {
         Authorization::Denied
