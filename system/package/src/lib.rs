@@ -58,7 +58,6 @@ impl TrustedKeyring {
 
     pub fn revoke_key(&mut self, key: &[u8; 32]) {
         let id = key_id(key);
-        self.trusted_keys.retain(|trusted| trusted != key);
         if !self.revoked_key_ids.iter().any(|revoked| revoked == &id) {
             self.revoked_key_ids.push(id);
         }
