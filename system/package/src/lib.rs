@@ -27,11 +27,7 @@ pub enum Verification {
 /// The signed message is domain-separated and binds the package name, version,
 /// and declared digest. Public keys must come from a trusted configuration
 /// source; this function intentionally does not discover or trust keys itself.
-pub fn verify_package(
-    pkg: &Package,
-    artifact: &[u8],
-    trusted_keys: &[[u8; 32]],
-) -> Verification {
+pub fn verify_package(pkg: &Package, artifact: &[u8], trusted_keys: &[[u8; 32]]) -> Verification {
     if pkg.name.trim().is_empty() || pkg.version.trim().is_empty() || trusted_keys.is_empty() {
         return Verification::Untrusted;
     }
@@ -40,7 +36,9 @@ pub fn verify_package(
         return Verification::Untrusted;
     };
     if declared_digest.len() != 64
-        || !declared_digest.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+        || !declared_digest
+            .bytes()
+            .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
     {
         return Verification::Untrusted;
     }
