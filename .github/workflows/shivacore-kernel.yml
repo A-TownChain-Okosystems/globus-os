@@ -98,6 +98,16 @@ jobs:
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
             exit 1
           fi
+          if ! grep -q "ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB)." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Memory initialization marker missing from BIOS guest."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -Fq "ShivaCore: IPC-001 capability-gated send/recv round-trip OK; bytes=4." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Capability-gated IPC round-trip failed or marker missing in BIOS guest."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
           if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "USER-001 did not install the first Ring-3 process."
             exit 1
@@ -179,7 +189,9 @@ jobs:
           for expected in \
             "ShivaCore: CPU HAL compatibility check OK." \
             "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" \
+            "ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB)." \
             "ShivaCore: KernelState::boot() -> Done." \
+            "ShivaCore: IPC-001 capability-gated send/recv round-trip OK; bytes=4." \
             "ShivaCore: USER-001 mapped PID=1000" \
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
             "ShivaCore: USER-001 entering PID=1000" \
