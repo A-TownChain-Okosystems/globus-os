@@ -24,6 +24,7 @@ members = [
   "system/diagnostics",
   "system/shivacore-api",
   "sdk",
+  "boot/uefi-loader",
   "modules/atc-bootloader",
   "modules/atc-drivers",
   "modules/atc-globus-shell",
