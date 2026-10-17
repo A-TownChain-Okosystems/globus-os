@@ -7,3 +7,5 @@ publish = false
 
 [dependencies]
 uefi = { version = "0.40.0", features = ["alloc", "panic_handler"] }
+
+[workspace]
