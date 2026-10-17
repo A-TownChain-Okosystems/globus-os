@@ -141,9 +141,6 @@ fn verify_with_keyring(
     match verify_package(pkg, artifact, &active) {
         Verification::Trusted => Ok(()),
         Verification::Untrusted => {
-            if let Some(key) = keyring.trusted_keys.iter().find(|key| keyring.is_revoked(key)) {
-                let _ = key;
-            }
             if pkg.digest.strip_prefix("sha256:").is_none() {
                 return Err(VerifyError::InvalidDigest);
             }
