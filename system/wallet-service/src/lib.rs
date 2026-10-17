@@ -89,7 +89,10 @@ impl<K: KeyStore> WalletService<K> {
         {
             return Err(WalletServiceError::InvalidRequest);
         }
-        if authorize(grant, Right::Sign) != Authorization::Allowed {
+        let Some(grant) = grant else {
+            return Err(WalletServiceError::Unauthorized);
+        };
+        if authorize(&[grant], grant.capability, Right::Sign) != Authorization::Allowed {
             return Err(WalletServiceError::Unauthorized);
         }
 
