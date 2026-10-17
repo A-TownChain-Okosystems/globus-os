@@ -49,7 +49,10 @@ pub struct WalletService<K, A> {
 impl<K: KeyStore, A: WalletAuthorizer> WalletService<K, A> {
     /// Construct the service with a trusted host-side authorization policy.
     pub fn new(keystore: K, authorizer: A) -> Self {
-        Self { keystore, authorizer }
+        Self {
+            keystore,
+            authorizer,
+        }
     }
 
     /// Handle the typed IPC signing boundary. Recovery phrases and private keys are not
@@ -186,7 +189,9 @@ mod tests {
         };
         let denied_service = WalletService::new(TestStore, TestAuthorizer(false));
         assert_eq!(
-            denied_service.sign(&session, 10, request.clone()).unwrap_err(),
+            denied_service
+                .sign(&session, 10, request.clone())
+                .unwrap_err(),
             WalletServiceError::Unauthorized
         );
 
