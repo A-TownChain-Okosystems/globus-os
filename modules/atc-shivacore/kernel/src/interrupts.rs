@@ -559,6 +559,15 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
             return;
         }
     }
+    if is_send || is_receive {
+        serial_println!(
+            "ShivaCore: RING3_IPC pid={} syscall={} result={} error={:?}",
+            pid.0,
+            syscall_id,
+            response.value,
+            response.error
+        );
+    }
     frame.rax = response.value;
     frame.rdx = response.error.map(|error| error as u64).unwrap_or(0);
 }
