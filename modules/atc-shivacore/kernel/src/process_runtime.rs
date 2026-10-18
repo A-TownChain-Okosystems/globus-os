@@ -6,13 +6,14 @@
 //! and the actual IRETQ entry point.
 
 use crate::ats1000::{ExitCode, Pid};
-use crate::capability::{CapId, CapabilityTable};
+use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use crate::elf_loader::{ElfLoadError, ElfLoader};
 use crate::user_copy::{copy_from_user, CopyInError, UserMemoryReader};
 use crate::user_sched::UserScheduler;
 use crate::userspace::{UserspaceError, UserspaceManager};
-use crate::vfs::Vfs;
-use libshivacore::{AbiError, ProcessId, ProcessStartRequest, ProcessStatus};
+use crate::vfs::{Vfs, VfsError};
+use crate::syscall::{SyscallRequest, SyscallResponse};
+use libshivacore::{AbiError, ProcessId, ProcessStartRequest, ProcessStatus, Syscall};
 
 #[derive(Debug)]
 pub enum ProcessRuntimeError {
@@ -84,6 +85,136 @@ impl ProcessRuntime {
         )
         .map_err(ProcessRuntimeError::Load)?;
         Ok(ProcessId(pid.0))
+    }
+
+    /// Handle the three process ABI calls with an explicit kernel context.
+    ///
+    /// The interrupt/syscall entry layer must provide a `UserMemoryReader`
+    /// backed by the calling process's active page tables. The ordinary dispatcher
+    /// remains fail-closed unless this context-bearing entry point is used.
+    pub fn dispatch_process_syscall(
+        &mut self,
+        caller: Pid,
+        request: SyscallRequest,
+        reader: &impl UserMemoryReader,
+        vfs: &Vfs,
+        process_capabilities: &mut CapabilityTable,
+        max_executable_bytes: usize,
+    ) -> SyscallResponse {
+        if !libshivacore::validate_abi_version(request.abi_version) {
+            return SyscallResponse::err(AbiError::AbiVersionMismatch);
+        }
+        if request.payload_len > libshivacore::MAX_SYSCALL_PAYLOAD {
+            return SyscallResponse::err(AbiError::InvalidPayload);
+        }
+
+        match request.syscall_id {
+            id if id == Syscall::ProcessStart.id() => {
+                let Some(fs_cap) = request.capability else {
+                    return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                match self.start_from_user(
+                    reader,
+                    caller,
+                    request.arg0,
+                    request.payload_len,
+                    vfs,
+                    fs_cap.0,
+                    max_executable_bytes,
+                ) {
+                    Ok(pid) => SyscallResponse::ok(pid.0 as u64),
+                    Err(error) => SyscallResponse::err(Self::abi_error(&error)),
+                }
+            }
+            id if id == Syscall::ProcessTerminate.id() => {
+                if request.payload_len != 0 || request.arg0 > u32::MAX as u64 || request.arg1 > 255 {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
+                let target = Pid(request.arg0 as u32);
+                if target != caller
+                    && !Self::has_process_capability(
+                        process_capabilities,
+                        caller,
+                        target,
+                        request.capability,
+                        Rights::WRITE,
+                    )
+                {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
+                }
+                match self.terminate(
+                    ProcessId(target.0),
+                    request.arg1 as i32,
+                    process_capabilities,
+                ) {
+                    Ok(()) => SyscallResponse::ok(0),
+                    Err(error) => SyscallResponse::err(Self::abi_error(&error)),
+                }
+            }
+            id if id == Syscall::ProcessStatus.id() => {
+                if request.payload_len != 0 || request.arg0 > u32::MAX as u64 {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
+                let target = Pid(request.arg0 as u32);
+                if target != caller
+                    && !Self::has_process_capability(
+                        process_capabilities,
+                        caller,
+                        target,
+                        request.capability,
+                        Rights::INSPECT,
+                    )
+                {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
+                }
+                match self.status(ProcessId(target.0)) {
+                    Ok(status) => SyscallResponse::ok(status as u64),
+                    Err(error) => SyscallResponse::err(Self::abi_error(&error)),
+                }
+            }
+            _ => SyscallResponse::err(AbiError::InvalidSyscall),
+        }
+    }
+
+    fn has_process_capability(
+        capabilities: &CapabilityTable,
+        caller: Pid,
+        target: Pid,
+        handle: Option<libshivacore::CapabilityHandle>,
+        required: Rights,
+    ) -> bool {
+        let Some(handle) = handle else { return false };
+        capabilities
+            .get(CapId(handle.0))
+            .map(|cap| {
+                cap.owner == caller
+                    && cap.resource_type == ResourceType::Process
+                    && cap.resource_id == target.0 as u64
+                    && cap.rights.has(required)
+            })
+            .unwrap_or(false)
+    }
+
+    fn abi_error(error: &ProcessRuntimeError) -> AbiError {
+        match error {
+            ProcessRuntimeError::Abi(error) => *error,
+            ProcessRuntimeError::CopyIn(CopyInError::UnmappedOrUnreadable)
+            | ProcessRuntimeError::CopyIn(CopyInError::NullAddress)
+            | ProcessRuntimeError::CopyIn(CopyInError::AddressOverflow)
+            | ProcessRuntimeError::CopyIn(CopyInError::EmptyDestination)
+            | ProcessRuntimeError::CopyIn(CopyInError::TooLarge) => AbiError::InvalidPayload,
+            ProcessRuntimeError::Load(ElfLoadError::Vfs(VfsError::PermissionDenied)) => {
+                AbiError::PermissionDenied
+            }
+            ProcessRuntimeError::Load(ElfLoadError::Vfs(VfsError::NotFound))
+            | ProcessRuntimeError::NotFound
+            | ProcessRuntimeError::AlreadyExited => AbiError::InvalidHandle,
+            ProcessRuntimeError::Load(ElfLoadError::Userspace(UserspaceError::MaxProcessesReached)) => {
+                AbiError::ResourceExhausted
+            }
+            ProcessRuntimeError::Load(_)
+            | ProcessRuntimeError::Userspace(_) => AbiError::InvalidPayload,
+        }
     }
 
     /// Report the status from the scheduler's authoritative process entry.
