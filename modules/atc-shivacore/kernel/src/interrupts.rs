@@ -368,12 +368,12 @@ struct SyscallTrapFrame {
 
 static SYSCALL_KERNEL_STATE: Mutex<Option<shivacore::kernel_init::KernelState>> = Mutex::new(None);
 static SYSCALL_DISPATCHER: Mutex<shivacore::syscall::SyscallDispatcher> =
-    Mutex::new(crate::syscall::SyscallDispatcher::new());
+    Mutex::new(shivacore::syscall::SyscallDispatcher::new());
 
 /// Install the canonical, already initialized kernel state for trap dispatch.
 /// The state is moved here once; syscall handling never constructs a parallel
 /// capability table or IPC subsystem.
-pub fn install_syscall_kernel(state: crate::kernel_init::KernelState) {
+pub fn install_syscall_kernel(state: shivacore::kernel_init::KernelState) {
     let mut slot = SYSCALL_KERNEL_STATE.lock();
     assert!(slot.is_none(), "syscall kernel state installed twice");
     *slot = Some(state);
@@ -561,7 +561,7 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         return;
     }
 
-    let request = crate::syscall::SyscallRequest {
+    let request = shivacore::syscall::SyscallRequest {
         abi_version: frame.rdi as u32,
         syscall_id,
         capability: if frame.rsi == 0 {
