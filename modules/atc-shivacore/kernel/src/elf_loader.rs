@@ -341,6 +341,39 @@ impl ElfLoader {
         priority: u8,
         max_bytes: usize,
     ) -> Result<Pid, ElfLoadError> {
+        Self::load_elf_from_vfs_internal(
+            mgr, scheduler, vfs, path, caller_pid, fs_capability, priority, max_bytes, false,
+        )
+    }
+
+    /// Like `load_elf_from_vfs`, but keep the new process non-runnable until
+    /// init has completed capability handoff and explicitly activates the PID.
+    pub fn load_elf_from_vfs_staged(
+        mgr: &mut UserspaceManager,
+        scheduler: &mut UserScheduler,
+        vfs: &Vfs,
+        path: &str,
+        caller_pid: u64,
+        fs_capability: u64,
+        priority: u8,
+        max_bytes: usize,
+    ) -> Result<Pid, ElfLoadError> {
+        Self::load_elf_from_vfs_internal(
+            mgr, scheduler, vfs, path, caller_pid, fs_capability, priority, max_bytes, true,
+        )
+    }
+
+    fn load_elf_from_vfs_internal(
+        mgr: &mut UserspaceManager,
+        scheduler: &mut UserScheduler,
+        vfs: &Vfs,
+        path: &str,
+        caller_pid: u64,
+        fs_capability: u64,
+        priority: u8,
+        max_bytes: usize,
+        staged: bool,
+    ) -> Result<Pid, ElfLoadError> {
         let elf_data = vfs
             .read_executable(path, caller_pid, fs_capability, max_bytes)
             .map_err(ElfLoadError::Vfs)?;
@@ -348,10 +381,17 @@ impl ElfLoader {
         let context = mgr
             .get_context(pid)
             .ok_or(ElfLoadError::Userspace(UserspaceError::ProcessNotFound))?;
-        if !context.is_user_mode() || !context.valid_address(context.rip) || !context.valid_address(context.rsp) {
+        if !context.is_user_mode()
+            || !context.valid_address(context.rip)
+            || !context.valid_address(context.rsp)
+        {
             return Err(ElfLoadError::Userspace(UserspaceError::InvalidAddress));
         }
-        scheduler.add_process(pid, context, priority);
+        if staged {
+            scheduler.add_staged_process(pid, context, priority);
+        } else {
+            scheduler.add_process(pid, context, priority);
+        }
         Ok(pid)
     }
 
