@@ -2,9 +2,11 @@
 
 mod core_api;
 mod error_reporting;
+mod globus_init;
 mod service_boot;
 pub use core_api::{ProcessHandle, RuntimeCore, RuntimeError};
 pub use error_reporting::{SystemErrorView, latest_error, present};
+pub use globus_init::{GlobusInitError, InitReport, run_globus_init};
 pub use service_boot::{ServiceBootError, ServiceProcessAdapter, start_ready_services};
 
 use aurora_core::{AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine};
