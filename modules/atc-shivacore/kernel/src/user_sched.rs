@@ -205,6 +205,8 @@ pub enum BlockReason {
     Stopped,
     /// Waiting for a child to exit
     WaitChild,
+    /// Kept non-runnable until init completes capability handoff.
+    StartupGate,
 }
 
 impl SchedState {
@@ -319,6 +321,26 @@ impl UserScheduler {
     /// Add a user process to the scheduler
     pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
         self.entries.push(SchedEntry::new(pid, ctx, priority));
+    }
+
+    /// Register a process in a non-runnable startup gate. Init must grant
+    /// policy-approved capabilities and call `activate_staged_process` before
+    /// the scheduler can select it.
+    pub fn add_staged_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
+        let mut entry = SchedEntry::new(pid, ctx, priority);
+        entry.state = SchedState::Blocked(BlockReason::StartupGate);
+        self.entries.push(entry);
+    }
+
+    /// Release only a process blocked specifically for startup capability handoff.
+    pub fn activate_staged_process(&mut self, pid: Pid) -> bool {
+        match self.get_entry_mut(pid) {
+            Some(entry) if entry.state == SchedState::Blocked(BlockReason::StartupGate) => {
+                entry.state = SchedState::Ready;
+                true
+            }
+            _ => false,
+        }
     }
 
     /// Remove a process from the scheduler
