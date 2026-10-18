@@ -101,7 +101,7 @@ pub fn discover_pci<A: PciConfigAccess>(
             for device in 0..32u8 {
                 let first = PciAddress::new(window.segment, bus, device, 0);
                 let identity = read_config(access, first, 0)?;
-                if identity as u16 == 0xFFFF {
+                if identity as u16 == 0 || identity as u16 == 0xFFFF {
                     continue;
                 }
                 let header = read_config(access, first, 0x0C)?;
