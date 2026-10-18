@@ -56,8 +56,8 @@ mod tests {
     fn device(id: u64, class: DeviceClass) -> Device {
         Device {
             id: DeviceId(id),
-            name: format!("device-{id}"),
             class,
+            driver: String::new(),
         }
     }
 
