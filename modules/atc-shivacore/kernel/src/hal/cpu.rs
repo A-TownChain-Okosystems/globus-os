@@ -92,7 +92,6 @@ impl CpuInfo {
     }
 }
 
-
 /// Return the executing logical processor's APIC ID.
 ///
 /// Prefer CPUID topology leaf 0xB, whose EDX contains the full x2APIC ID.
@@ -166,7 +165,6 @@ fn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn apic_id_prefers_full_topology_id_over_legacy_eight_bit_id() {
