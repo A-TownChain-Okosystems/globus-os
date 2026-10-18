@@ -2,6 +2,7 @@
 
 pub mod compositor;
 pub mod desktop;
+pub mod display;
 pub mod input;
 pub mod media_surface;
 pub mod shell;

@@ -142,8 +142,12 @@ impl DesktopSession {
             return Err(DesktopError::Locked);
         }
         let id = SurfaceId(self.next_surface);
-        self.next_surface = self.next_surface.checked_add(1).ok_or(DesktopError::Shutdown)?;
-        self.compositor.create(id, bounds)
+        self.next_surface = self
+            .next_surface
+            .checked_add(1)
+            .ok_or(DesktopError::Shutdown)?;
+        self.compositor
+            .create(id, bounds)
             .map_err(|_| DesktopError::Window(WindowError::InvalidSize))?;
         if let Err(error) = self.windows.open(id, title, bounds) {
             let _ = self.compositor.remove(id);

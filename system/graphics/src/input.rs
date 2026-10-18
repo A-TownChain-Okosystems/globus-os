@@ -34,10 +34,25 @@ pub struct Modifiers {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputEvent {
-    PointerMove { x: i32, y: i32 },
-    PointerButton { button: Button, pressed: bool, x: i32, y: i32 },
-    Key { code: KeyCode, pressed: bool, modifiers: Modifiers },
-    Scroll { delta_x: i32, delta_y: i32 },
+    PointerMove {
+        x: i32,
+        y: i32,
+    },
+    PointerButton {
+        button: Button,
+        pressed: bool,
+        x: i32,
+        y: i32,
+    },
+    Key {
+        code: KeyCode,
+        pressed: bool,
+        modifiers: Modifiers,
+    },
+    Scroll {
+        delta_x: i32,
+        delta_y: i32,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

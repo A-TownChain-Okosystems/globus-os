@@ -1,7 +1,7 @@
 //! Capability-neutral window manager state machine.
- //!
- //! This module owns logical window lifecycle and geometry only. It does not
- //! grant application capabilities or perform privileged device operations.
+//!
+//! This module owns logical window lifecycle and geometry only. It does not
+//! grant application capabilities or perform privileged device operations.
 
 use crate::SurfaceId;
 use crate::compositor::{Rect, SurfacePlacement};
