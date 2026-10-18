@@ -1,11 +1,10 @@
 //! Boot-time orchestration between the dependency supervisor and a platform adapter.
 //!
-//! This crate defines the integration boundary only. A real ShivaCore process
-//! creation/capability-transfer implementation must implement `ServiceProcessAdapter`;
-//! the current public ABI does not yet expose a process-create syscall.
+//! This crate defines init orchestration. The platform adapter must bind the
+//! process IDs and lifecycle operations to the kernel's supported process runtime.
 
 use globus_services::{ServiceSpec, ServiceState, ServiceSupervisor, SupervisorError};
-use libshivacore::{AbiHandshake, CapabilityHandle};
+use libshivacore::{AbiHandshake, CapabilityHandle, ProcessId};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum ServiceBootError {
@@ -23,9 +22,19 @@ pub enum ServiceBootError {
 pub trait ServiceProcessAdapter {
     fn abi_handshake(&mut self) -> Result<AbiHandshake, String>;
     fn initial_capabilities(&mut self, service: &str) -> Result<Vec<CapabilityHandle>, String>;
-    fn launch(&mut self, service: &ServiceSpec, capabilities: &[CapabilityHandle])
-        -> Result<(), String>;
-    fn is_healthy(&mut self, service: &str) -> Result<bool, String>;
+    fn launch(
+        &mut self,
+        service: &ServiceSpec,
+        capabilities: &[CapabilityHandle],
+    ) -> Result<ProcessId, String>;
+    fn is_healthy(&mut self, service: &ServiceSpec, process: ProcessId) -> Result<bool, String>;
+    fn terminate(&mut self, service: &ServiceSpec, process: ProcessId) -> Result<(), String>;
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StartedService {
+    pub name: String,
+    pub process_id: ProcessId,
 }
 
 /// Starts every dependency-ready service in deterministic waves.
@@ -37,7 +46,7 @@ pub fn start_ready_services(
     supervisor: &mut ServiceSupervisor,
     specs: &[ServiceSpec],
     adapter: &mut impl ServiceProcessAdapter,
-) -> Result<Vec<String>, ServiceBootError> {
+) -> Result<Vec<StartedService>, ServiceBootError> {
     let handshake = adapter.abi_handshake().map_err(ServiceBootError::Adapter)?;
     if !handshake.compatible() {
         return Err(ServiceBootError::AbiVersionMismatch {
@@ -69,21 +78,29 @@ pub fn start_ready_services(
                     return Err(ServiceBootError::Adapter(error));
                 }
             };
-            if let Err(error) = adapter.launch(spec, &capabilities) {
-                supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
-                return Err(ServiceBootError::Adapter(error));
-            }
-            match adapter.is_healthy(&name) {
+            let process_id = match adapter.launch(spec, &capabilities) {
+                Ok(process_id) => process_id,
+                Err(error) => {
+                    supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
+                    return Err(ServiceBootError::Adapter(error));
+                }
+            };
+            match adapter.is_healthy(spec, process_id) {
                 Ok(true) => {
                     supervisor.mark_ready(&name).map_err(ServiceBootError::Supervisor)?;
-                    started.push(name);
+                    started.push(StartedService { name, process_id });
                     progressed = true;
                 }
                 Ok(false) => {
+                    let termination = adapter.terminate(spec, process_id);
                     supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
+                    if let Err(error) = termination {
+                        return Err(ServiceBootError::Adapter(error));
+                    }
                     return Err(ServiceBootError::HealthCheckFailed(name));
                 }
                 Err(error) => {
+                    let _ = adapter.terminate(spec, process_id);
                     supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
                     return Err(ServiceBootError::Adapter(error));
                 }
@@ -120,13 +137,17 @@ mod tests {
             &mut self,
             service: &ServiceSpec,
             _capabilities: &[CapabilityHandle],
-        ) -> Result<(), String> {
+        ) -> Result<ProcessId, String> {
             self.launched.push(service.name.clone());
-            Ok(())
+            Ok(ProcessId(self.launched.len() as u32 + 1000))
         }
 
-        fn is_healthy(&mut self, service: &str) -> Result<bool, String> {
-            Ok(self.unhealthy.as_deref() != Some(service))
+        fn is_healthy(&mut self, service: &ServiceSpec, _process: ProcessId) -> Result<bool, String> {
+            Ok(self.unhealthy.as_deref() != Some(service.name.as_str()))
+        }
+
+        fn terminate(&mut self, _service: &ServiceSpec, _process: ProcessId) -> Result<(), String> {
+            Ok(())
         }
     }
 
@@ -149,7 +170,10 @@ mod tests {
         };
 
         let started = start_ready_services(&mut supervisor, &specs, &mut adapter).unwrap();
-        assert_eq!(started, vec!["security", "network"]);
+        assert_eq!(
+            started.iter().map(|service| service.name.as_str()).collect::<Vec<_>>(),
+            vec!["security", "network"]
+        );
         assert_eq!(supervisor.snapshot("network").unwrap().state, ServiceState::Ready);
     }
 
