@@ -66,13 +66,25 @@ mod tests {
             &mut self,
             service: &ServiceSpec,
             _capabilities: &[CapabilityHandle],
-        ) -> Result<(), String> {
+        ) -> Result<libshivacore::ProcessId, String> {
             self.launched.push(service.name.clone());
-            Ok(())
+            Ok(libshivacore::ProcessId(self.launched.len() as u32 + 1000))
         }
 
-        fn is_healthy(&mut self, _service: &str) -> Result<bool, String> {
+        fn is_healthy(
+            &mut self,
+            _service: &ServiceSpec,
+            _process: libshivacore::ProcessId,
+        ) -> Result<bool, String> {
             Ok(true)
+        }
+
+        fn terminate(
+            &mut self,
+            _service: &ServiceSpec,
+            _process: libshivacore::ProcessId,
+        ) -> Result<(), String> {
+            Ok(())
         }
     }
 
