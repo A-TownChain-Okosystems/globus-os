@@ -292,6 +292,25 @@ impl DesktopSession {
                 DesktopError::Locked
             });
         }
+        match event {
+            InputEvent::PointerMove { x, y } => {
+                self.input.set_pointer_focus(self.hit_test(x, y));
+            }
+            InputEvent::PointerButton {
+                pressed: true,
+                x,
+                y,
+                ..
+            } => {
+                if let Some(surface) = self.hit_test(x, y) {
+                    self.focus_window(surface)?;
+                } else {
+                    self.input.set_pointer_focus(None);
+                    self.input.set_keyboard_focus(None);
+                }
+            }
+            _ => {}
+        }
         Ok(self.input.route(event))
     }
 
