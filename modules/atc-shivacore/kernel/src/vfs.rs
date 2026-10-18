@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
-use crate::capability::{CapabilityTable, Rights};
+use crate::capability::{CapabilityTable, ResourceType, Rights};
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
@@ -242,9 +242,14 @@ impl Vfs {
     // ── Capability-Check ───────────────────────────────────────────────────
 
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
+        let Ok(pid32) = u32::try_from(pid) else {
+            return false;
+        };
         let table = self.caps.lock();
         if let Some(cap) = table.get(crate::capability::CapId(cap_handle)) {
-            cap.owner == crate::ats1000::Pid(pid as u32) && cap.rights.has(required)
+            cap.owner == crate::ats1000::Pid(pid32)
+                && cap.resource_type == ResourceType::FileSystem
+                && cap.rights.has(required)
         } else {
             false
         }
@@ -508,6 +513,61 @@ impl Vfs {
         Ok(offset)
     }
 
+    /// Read a complete executable into kernel-owned memory.
+    ///
+    /// Both the caller's filesystem capability and the file's own metadata must
+    /// grant READ|EXEC. This path does not return a user pointer or file handle.
+    pub fn read_executable(
+        &self,
+        path: &str,
+        pid: u64,
+        cap_handle: u64,
+        max_bytes: usize,
+    ) -> Result<Vec<u8>, VfsError> {
+        if !self.check_cap(pid, cap_handle, Rights::READ | Rights::EXEC) {
+            return Err(VfsError::PermissionDenied);
+        }
+        let inode_id = self.resolve(path).ok_or(VfsError::NotFound)?;
+        let inode = self.inodes.get(&inode_id).ok_or(VfsError::NotFound)?;
+        if !inode.is_file() {
+            return Err(VfsError::IsADirectory);
+        }
+        if !inode.metadata.permissions.has(Rights::READ | Rights::EXEC) {
+            return Err(VfsError::NotExecutable);
+        }
+        if inode.data.len() > max_bytes {
+            return Err(VfsError::TooLarge);
+        }
+        Ok(inode.data.clone())
+    }
+
+    /// Change file permissions only when the caller owns the file and its
+    /// capability includes every right being granted.
+    pub fn set_file_permissions(
+        &mut self,
+        path: &str,
+        pid: u64,
+        cap_handle: u64,
+        permissions: Rights,
+    ) -> Result<(), VfsError> {
+        if !self.check_cap(pid, cap_handle, Rights::WRITE) {
+            return Err(VfsError::PermissionDenied);
+        }
+        if !self.check_cap(pid, cap_handle, permissions) {
+            return Err(VfsError::PermissionDenied);
+        }
+        let inode_id = self.resolve(path).ok_or(VfsError::NotFound)?;
+        let inode = self.inodes.get_mut(&inode_id).ok_or(VfsError::NotFound)?;
+        if !inode.is_file() {
+            return Err(VfsError::IsADirectory);
+        }
+        if inode.metadata.owner_pid != pid && pid != 0 {
+            return Err(VfsError::PermissionDenied);
+        }
+        inode.metadata.permissions = permissions;
+        Ok(())
+    }
+
     pub fn stat(&self, path: &str, _pid: u64, cap_handle: u64) -> Result<FileMetadata, VfsError> {
         if !self.check_cap(_pid, cap_handle, Rights::READ) {
             return Err(VfsError::PermissionDenied);
@@ -675,6 +735,8 @@ pub enum VfsError {
     BadFileDescriptor,
     InvalidMode,
     IoError(String),
+    NotExecutable,
+    TooLarge,
 }
 
 // ─── Tests ─────────────────────────────────────────────────────────────────
@@ -861,6 +923,32 @@ mod tests {
         vfs.create_file("/file.txt", 1, cap).unwrap();
         let result = vfs.create_file("/file.txt", 1, cap);
         assert_eq!(result, Err(VfsError::AlreadyExists));
+    }
+
+    #[test]
+    fn executable_read_requires_both_capability_and_file_execute_rights() {
+        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let mut vfs = Vfs::new(caps.clone());
+        let cap = grant_full_caps(&caps, 1);
+        vfs.create_file("/init", 1, cap).unwrap();
+        let fd = vfs.open("/init", OpenMode::Write, 1, cap).unwrap();
+        vfs.write(fd, b"not-an-elf", 1, cap).unwrap();
+        vfs.close(fd).unwrap();
+
+        assert_eq!(
+            vfs.read_executable("/init", 1, cap, 1024),
+            Err(VfsError::NotExecutable)
+        );
+        vfs.set_file_permissions("/init", 1, cap, Rights::READ | Rights::EXEC)
+            .unwrap();
+        assert_eq!(
+            vfs.read_executable("/init", 1, cap, 4),
+            Err(VfsError::TooLarge)
+        );
+        assert_eq!(
+            vfs.read_executable("/init", 1, cap, 1024).unwrap(),
+            b"not-an-elf"
+        );
     }
 
     #[test]

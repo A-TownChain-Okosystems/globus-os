@@ -205,6 +205,8 @@ pub enum BlockReason {
     Stopped,
     /// Waiting for a child to exit
     WaitChild,
+    /// Kept non-runnable until init completes capability handoff.
+    StartupGate,
 }
 
 impl SchedState {
@@ -321,6 +323,26 @@ impl UserScheduler {
         self.entries.push(SchedEntry::new(pid, ctx, priority));
     }
 
+    /// Register a process in a non-runnable startup gate. Init must grant
+    /// policy-approved capabilities and call `activate_staged_process` before
+    /// the scheduler can select it.
+    pub fn add_staged_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
+        let mut entry = SchedEntry::new(pid, ctx, priority);
+        entry.state = SchedState::Blocked(BlockReason::StartupGate);
+        self.entries.push(entry);
+    }
+
+    /// Release only a process blocked specifically for startup capability handoff.
+    pub fn activate_staged_process(&mut self, pid: Pid) -> bool {
+        match self.get_entry_mut(pid) {
+            Some(entry) if entry.state == SchedState::Blocked(BlockReason::StartupGate) => {
+                entry.state = SchedState::Ready;
+                true
+            }
+            _ => false,
+        }
+    }
+
     /// Remove a process from the scheduler
     pub fn remove_process(&mut self, pid: Pid) -> bool {
         if self.current == Some(pid) {
@@ -342,6 +364,35 @@ impl UserScheduler {
     }
     pub fn get_entry_mut(&mut self, pid: Pid) -> Option<&mut SchedEntry> {
         self.entries.iter_mut().find(|e| e.pid == pid)
+    }
+
+    /// Mark a scheduled process as exited and prevent it from being selected again.
+    /// This updates scheduler state; platform code must separately reclaim address
+    /// space and revoke process-owned capabilities.
+    pub fn terminate_process(&mut self, pid: Pid, exit_code: ExitCode) -> bool {
+        let Some(entry) = self.get_entry_mut(pid) else {
+            return false;
+        };
+        if entry.state.is_zombie() {
+            return false;
+        }
+        entry.state = SchedState::Zombie(exit_code);
+        if self.current == Some(pid) {
+            self.current = None;
+        }
+        true
+    }
+
+    /// Return lifecycle status from the scheduler's authoritative process entry.
+    pub fn process_status(&self, pid: Pid) -> Option<libshivacore::ProcessStatus> {
+        let entry = self.get_entry(pid)?;
+        Some(match &entry.state {
+            SchedState::Ready => libshivacore::ProcessStatus::Ready,
+            SchedState::Running => libshivacore::ProcessStatus::Running,
+            SchedState::Blocked(_) => libshivacore::ProcessStatus::Blocked,
+            SchedState::Zombie(code) if *code == 0 => libshivacore::ProcessStatus::Exited,
+            SchedState::Zombie(_) => libshivacore::ProcessStatus::Failed,
+        })
     }
 
     /// Pick the next process to run (round-robin with priority)
@@ -1378,4 +1429,22 @@ mod tests {
         }
         assert!(sys.scheduler.timer_ticks() >= 20);
     }
+    #[test]
+    fn scheduler_status_tracks_ready_running_blocked_and_exit() {
+        let mut manager = crate::userspace::UserspaceManager::new();
+        let binary = crate::userspace::UserBinary::hello_world();
+        let pid = manager.load_binary(binary).unwrap();
+        let context = manager.get_context(pid).unwrap().clone();
+        let mut scheduler = UserScheduler::new();
+        scheduler.add_process(pid, &context, 10);
+
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Ready));
+        scheduler.get_entry_mut(pid).unwrap().state = SchedState::Blocked(BlockReason::IoWait);
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Blocked));
+        assert!(scheduler.terminate_process(pid, 0));
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Exited));
+        assert!(!scheduler.terminate_process(pid, 1));
+        assert_eq!(scheduler.process_status(crate::ats1000::Pid(9999)), None);
+    }
+
 }

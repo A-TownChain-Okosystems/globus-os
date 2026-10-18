@@ -23,13 +23,17 @@ pub mod ipc;
 pub mod kernel_init;
 pub mod memory_manager;
 pub mod process;
+pub mod process_runtime;
 pub mod scheduler;
 pub mod security;
 pub mod syscall;
 pub mod system;
 pub mod timer;
 pub mod user_sched;
+pub mod user_copy;
 pub mod userspace;
+#[cfg(feature = "x86-boot")]
+pub mod x86_address_space;
 pub mod vfs;
 pub mod vmm;
 
