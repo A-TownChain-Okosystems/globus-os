@@ -2,7 +2,6 @@
 //!
 //! This crate contains only wire-safe identifiers and request/response types.
 //! Kernel implementations remain private to ShivaCore.
-
 #![no_std]
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
@@ -377,9 +376,18 @@ mod tests {
 
     #[test]
     fn abi_error_codes_round_trip_and_unknown_codes_fail_closed() {
-        assert_eq!(AbiError::from_code(AbiError::InvalidSyscall as u32), Some(AbiError::InvalidSyscall));
-        assert_eq!(AbiError::from_code(AbiError::PermissionDenied as u32), Some(AbiError::PermissionDenied));
-        assert_eq!(AbiError::from_code(AbiError::AbiVersionMismatch as u32), Some(AbiError::AbiVersionMismatch));
+        assert_eq!(
+            AbiError::from_code(AbiError::InvalidSyscall as u32),
+            Some(AbiError::InvalidSyscall)
+        );
+        assert_eq!(
+            AbiError::from_code(AbiError::PermissionDenied as u32),
+            Some(AbiError::PermissionDenied)
+        );
+        assert_eq!(
+            AbiError::from_code(AbiError::AbiVersionMismatch as u32),
+            Some(AbiError::AbiVersionMismatch)
+        );
         assert_eq!(AbiError::from_code(0), None);
         assert_eq!(AbiError::from_code(99), None);
     }
