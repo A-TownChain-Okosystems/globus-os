@@ -20,6 +20,8 @@ pub enum Syscall {
     CapabilityQuery = 0x0020,
     HandleClose = 0x0030,
     MonotonicTime = 0x0040,
+    CapabilityDelegate = 0x0021,
+    CapabilityRevoke = 0x0022,
 }
 
 impl Syscall {
@@ -123,6 +125,7 @@ impl CapabilityRights {
     pub const EXECUTE: Self = Self(4);
     pub const DELEGATE: Self = Self(8);
     pub const INSPECT: Self = Self(16);
+    pub const DEFINED_MASK: u8 = 0x1F;
 
     pub const fn contains(self, required: Self) -> bool {
         self.0 & required.0 == required.0
@@ -189,6 +192,8 @@ mod tests {
     fn syscall_ids_are_stable() {
         assert_eq!(Syscall::IpcSend.id(), 0x0010);
         assert_eq!(Syscall::MonotonicTime.id(), 0x0040);
+        assert_eq!(Syscall::CapabilityDelegate.id(), 0x0021);
+        assert_eq!(Syscall::CapabilityRevoke.id(), 0x0022);
     }
 
     #[test]
