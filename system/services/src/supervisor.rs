@@ -331,10 +331,10 @@ mod tests {
 
     #[test]
     fn duplicate_and_empty_names_are_rejected() {
-        assert_eq!(
-            ServiceSupervisor::new([spec("", &[], true)]).unwrap_err(),
-            SupervisorError::EmptyName
-        );
+        assert!(matches!(
+            ServiceSupervisor::new([spec("", &[], true)]),
+            Err(SupervisorError::EmptyName)
+        ));
         assert!(matches!(
             ServiceSupervisor::new([spec("security", &[], true), spec("security", &[], false)]),
             Err(SupervisorError::DuplicateService(_))
