@@ -84,7 +84,7 @@ impl PerCpuState {
             .compare_exchange(
                 CpuLifecycle::Initializing as u8,
                 CpuLifecycle::Online as u8,
-                Ordering::Release,
+                Ordering::AcqRel,
                 Ordering::Acquire,
             )
             .is_ok()
