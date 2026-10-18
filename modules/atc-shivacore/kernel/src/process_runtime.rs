@@ -120,6 +120,9 @@ impl ProcessRuntime {
 
         match request.syscall_id {
             id if id == Syscall::ProcessStart.id() => {
+                if request.arg1 != 0 {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
                 let Some(fs_cap) = request.capability else {
                     return SyscallResponse::err(AbiError::InvalidHandle);
                 };
