@@ -46,7 +46,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let cpu = hal::CpuInfo::detect();
     let boot_apic_id = hal::cpu::current_apic_id();
-    serial_println!("ShivaCore: BSP identity APIC_ID={:#x} (identity only; SMP not enabled)", boot_apic_id);
     serial_println!(
         "ShivaCore: CPU vendor={} family={} model={} stepping={} apic={} x2apic={} nx={} invariant_tsc={}",
         cpu.vendor_name(), cpu.family, cpu.model, cpu.stepping,
@@ -116,25 +115,27 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // PID 1001 owns the channel and receives READ; PID 1000 receives only a
     // delegated WRITE capability. These grants live in the canonical kernel
     // capability table and are not user-created or inferred from the PID.
-    let ring3_channel = kernel_state.ipc.create_channel(
-        &mut kernel_state.processes.caps,
-        ats1000::Pid(1001),
-        8,
-    );
-    let owner_send_cap = kernel_state.processes.caps
+    let ring3_channel =
+        kernel_state
+            .ipc
+            .create_channel(&mut kernel_state.processes.caps, ats1000::Pid(1001), 8);
+    let owner_send_cap = kernel_state
+        .processes
+        .caps
         .list_for(ats1000::Pid(1001))
         .iter()
         .find(|cap| {
             cap.resource_type == shivacore::capability::ResourceType::IpcChannel
                 && cap.resource_id == ring3_channel.0
                 && cap.rights.has(
-                    shivacore::capability::Rights::WRITE
-                        | shivacore::capability::Rights::DELEGATE,
+                    shivacore::capability::Rights::WRITE | shivacore::capability::Rights::DELEGATE,
                 )
         })
         .map(|cap| cap.id)
         .expect("Ring-3 IPC bootstrap did not create owner WRITE/DELEGATE capability");
-    let ring3_sender_cap = kernel_state.processes.caps
+    let ring3_sender_cap = kernel_state
+        .processes
+        .caps
         .delegate(
             ats1000::Pid(1001),
             owner_send_cap,
@@ -142,7 +143,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             shivacore::capability::Rights::WRITE,
         )
         .expect("Ring-3 sender capability delegation failed");
-    let ring3_receiver_cap = kernel_state.processes.caps
+    let ring3_receiver_cap = kernel_state
+        .processes
+        .caps
         .list_for(ats1000::Pid(1001))
         .iter()
         .find(|cap| {
@@ -198,11 +201,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     }
     sender_code.extend_from_slice(&[0xEB, 0xFE]); // park until timer preemption
 
-    let mut user_binary = userspace::UserBinary::from_bytes(
-        "ring3-ipc-sender",
-        sender_code,
-        0x0040_0000,
-    );
+    let mut user_binary =
+        userspace::UserBinary::from_bytes("ring3-ipc-sender", sender_code, 0x0040_0000);
     user_binary.data = sender_payload.to_vec();
     let user_addr_space = userspace::UserAddressSpace::default();
     let (user_root_1, mut user_mapper_1) = unsafe {
@@ -237,7 +237,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let mut receiver_code = alloc::vec::Vec::new();
     let mut emit_receive = |capacity: u64| {
         receiver_code.extend_from_slice(&[0x48, 0xB8]);
-        receiver_code.extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+        receiver_code
+            .extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
         receiver_code.extend_from_slice(&[0x48, 0xBF]);
         receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
         receiver_code.extend_from_slice(&[0x48, 0xBE]);
@@ -256,10 +257,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     emit_receive(2);
     drop(emit_receive);
     receiver_code.extend_from_slice(&[0x83, 0xFA, 0x05, 0x74, 0xBD]); // cmp edx,5; je back to first receive
-    // Now receive the same message with sufficient capacity.
+                                                                      // Now receive the same message with sufficient capacity.
     let mut emit_valid_receive = |capacity: u64| {
         receiver_code.extend_from_slice(&[0x48, 0xB8]);
-        receiver_code.extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+        receiver_code
+            .extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
         receiver_code.extend_from_slice(&[0x48, 0xBF]);
         receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
         receiver_code.extend_from_slice(&[0x48, 0xBE]);
@@ -276,11 +278,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     drop(emit_valid_receive);
     receiver_code.extend_from_slice(&[0xEB, 0xFE]);
 
-    let mut user_binary_2 = userspace::UserBinary::from_bytes(
-        "ring3-ipc-receiver",
-        receiver_code,
-        0x0040_1000,
-    );
+    let mut user_binary_2 =
+        userspace::UserBinary::from_bytes("ring3-ipc-receiver", receiver_code, 0x0040_1000);
     user_binary_2.data = alloc::vec![0u8; 64];
     // The roots have independent lower halves, so the processes may reuse the
     // same user virtual layout. Keep distinct addresses here for easier QEMU
@@ -333,6 +332,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         "ShivaCore: USER-001 isolated page-table roots PID=1000 CR3={:#x} PID=1001 CR3={:#x}",
         user_root_1.start_address().as_u64(),
         user_root_2.start_address().as_u64()
+    );
+    serial_println!(
+        "ShivaCore: BSP identity APIC_ID={:#x} (identity only; SMP not enabled)",
+        boot_apic_id
     );
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
