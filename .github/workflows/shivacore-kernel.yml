@@ -135,12 +135,12 @@ jobs:
           # Error names are stable ABI markers; unmapped spans are logged before
           # the dispatcher because they must never be dereferenced.
           for expected in \
-            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=PermissionDenied" \
-            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=InvalidHandle" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(PermissionDenied)" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(InvalidHandle)" \
             "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=InvalidPayload reason=unreadable-or-unmapped-user-span" \
             "ShivaCore: RING3_IPC pid=1000 syscall=16 result=12 error=None" \
-            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=ResourceExhausted" \
-            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=0 error=InvalidPayload" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(ResourceExhausted)" \
+            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=0 error=Some(InvalidPayload)" \
             "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None"; do
             if ! grep -Fq "$expected" target/shivacore-qemu-${{ matrix.cpu }}.log; then
               echo "Ring-3 IPC acceptance marker missing: $expected"
@@ -205,12 +205,12 @@ jobs:
             "ShivaCore: scheduler preemption -> context switch to PID=1000" \
             "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
             "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" \
-            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=PermissionDenied" \
-            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=InvalidHandle" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(PermissionDenied)" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(InvalidHandle)" \
             "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=InvalidPayload reason=unreadable-or-unmapped-user-span" \
             "ShivaCore: RING3_IPC pid=1000 syscall=16 result=12 error=None" \
-            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=ResourceExhausted" \
-            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=0 error=InvalidPayload" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(ResourceExhausted)" \
+            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=0 error=Some(InvalidPayload)" \
             "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None"; do
             if ! grep -Fq "$expected" "$log"; then
               echo "UEFI boot acceptance marker missing: $expected"
