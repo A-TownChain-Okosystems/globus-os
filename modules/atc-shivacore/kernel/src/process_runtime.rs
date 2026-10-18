@@ -581,6 +581,28 @@ mod tests {
         );
         assert_eq!(terminate_response.error, None);
         assert_eq!(runtime.status(pid).unwrap(), ProcessStatus::Exited);
+
+        let staged_pid = runtime
+            .start_staged_from_user(
+                &memory,
+                Pid(7),
+                0x2000,
+                ProcessStartRequest::WIRE_SIZE,
+                &vfs,
+                fs_cap.0,
+                &process_capabilities,
+                1024 * 1024,
+            )
+            .unwrap();
+        assert_eq!(runtime.status(staged_pid).unwrap(), ProcessStatus::Blocked);
+        runtime
+            .grant_initial_capabilities(Pid(7), staged_pid, &[], &mut process_capabilities)
+            .unwrap();
+        assert_eq!(runtime.status(staged_pid).unwrap(), ProcessStatus::Ready);
+        runtime
+            .terminate(staged_pid, 0, &mut process_capabilities)
+            .unwrap();
+        assert_eq!(runtime.status(staged_pid).unwrap(), ProcessStatus::Exited);
     }
 
     #[test]
