@@ -29,10 +29,28 @@ jobs:
         include:
           - cpu: intel-skylake
             qemu_cpu: Skylake-Client-v1
+            qemu_cpu_model: Skylake-Client-v1
             expected_vendor: Intel
           - cpu: amd-epyc
             qemu_cpu: EPYC
+            qemu_cpu_model: EPYC
             expected_vendor: AMD
+          - cpu: intel-haswell
+            qemu_cpu: Haswell
+            qemu_cpu_model: Haswell
+            expected_vendor: Intel
+          - cpu: amd-zen2
+            qemu_cpu: EPYC-Rome
+            qemu_cpu_model: EPYC-Rome
+            expected_vendor: AMD
+          - cpu: qemu-x86-64-baseline
+            qemu_cpu: qemu64
+            qemu_cpu_model: qemu64
+            expected_vendor: any
+          - cpu: qemu-x86-64-avx2
+            qemu_cpu: Haswell,+avx2
+            qemu_cpu_model: Haswell
+            expected_vendor: Intel
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +82,7 @@ jobs:
           sudo apt-get install -y qemu-system-x86 ovmf
 
       - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu }}([[:space:]]|$)'
+        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu_model }}([[:space:]]|$)'
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         id: bios_smoke
@@ -83,7 +101,7 @@ jobs:
             echo "ShivaCore did not reach kernel_main."
             exit 1
           fi
-          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log; then
+          if [ "${{ matrix.expected_vendor }}" != "any" ] && ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
             exit 1
