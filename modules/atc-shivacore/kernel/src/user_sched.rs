@@ -373,24 +373,6 @@ impl UserScheduler {
         })
     }
 
-    #[test]
-    fn scheduler_status_tracks_ready_running_blocked_and_exit() {
-        let mut manager = crate::userspace::UserspaceManager::new();
-        let binary = crate::userspace::UserBinary::hello_world();
-        let pid = manager.load_binary(binary).unwrap();
-        let context = manager.get_context(pid).unwrap().clone();
-        let mut scheduler = UserScheduler::new();
-        scheduler.add_process(pid, &context, 10);
-
-        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Ready));
-        scheduler.get_entry_mut(pid).unwrap().state = SchedState::Blocked(BlockReason::IoWait);
-        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Blocked));
-        assert!(scheduler.terminate_process(pid, 0));
-        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Exited));
-        assert!(!scheduler.terminate_process(pid, 1));
-        assert_eq!(scheduler.process_status(crate::ats1000::Pid(9999)), None);
-    }
-
     /// Pick the next process to run (round-robin with priority)
     fn pick_next(&self) -> Option<usize> {
         // Priority: find highest-priority (lowest number) runnable process
@@ -1425,4 +1407,22 @@ mod tests {
         }
         assert!(sys.scheduler.timer_ticks() >= 20);
     }
+    #[test]
+    fn scheduler_status_tracks_ready_running_blocked_and_exit() {
+        let mut manager = crate::userspace::UserspaceManager::new();
+        let binary = crate::userspace::UserBinary::hello_world();
+        let pid = manager.load_binary(binary).unwrap();
+        let context = manager.get_context(pid).unwrap().clone();
+        let mut scheduler = UserScheduler::new();
+        scheduler.add_process(pid, &context, 10);
+
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Ready));
+        scheduler.get_entry_mut(pid).unwrap().state = SchedState::Blocked(BlockReason::IoWait);
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Blocked));
+        assert!(scheduler.terminate_process(pid, 0));
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Exited));
+        assert!(!scheduler.terminate_process(pid, 1));
+        assert_eq!(scheduler.process_status(crate::ats1000::Pid(9999)), None);
+    }
+
 }
