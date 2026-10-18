@@ -425,19 +425,19 @@ mod tests {
 
     impl CapabilityClient for CapabilityTable {
         fn create_capability(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, rights: CapabilityRights) -> Result<CapabilityHandle, libshivacore::AbiError> {
-            let id = self.create(Pid(owner.0 as u32), ResourceType::Memory, resource_id, Rights(rights.bits()));
+            let id = self.create(Pid(owner.0 as u32), ResourceType::KnowledgeGraphEntity, resource_id, Rights(rights.bits()));
             Ok(CapabilityHandle(id.0))
         }
         fn check_capability(&self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, rights: CapabilityRights) -> bool {
-            self.check(Pid(owner.0 as u32), ResourceType::Memory, resource_id, Rights(rights.bits()))
+            self.check(Pid(owner.0 as u32), ResourceType::KnowledgeGraphEntity, resource_id, Rights(rights.bits()))
         }
         fn delegate_resource(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, target: ProcessId, rights: CapabilityRights) -> Result<CapabilityHandle, libshivacore::AbiError> {
-            let source_id = self.list_for(Pid(owner.0 as u32)).into_iter().find(|cap| cap.resource_type == ResourceType::Memory && cap.resource_id == resource_id && cap.rights.has(Rights(rights.bits() | Rights::DELEGATE.0))).map(|cap| cap.id).ok_or(libshivacore::AbiError::PermissionDenied)?;
+            let source_id = self.list_for(Pid(owner.0 as u32)).into_iter().find(|cap| cap.resource_type == ResourceType::KnowledgeGraphEntity && cap.resource_id == resource_id && cap.rights.has(Rights(rights.bits() | Rights::DELEGATE.0))).map(|cap| cap.id).ok_or(libshivacore::AbiError::PermissionDenied)?;
             let child = self.delegate(Pid(owner.0 as u32), source_id, Pid(target.0 as u32), Rights(rights.bits())).map_err(|_| libshivacore::AbiError::PermissionDenied)?;
             Ok(CapabilityHandle(child.0))
         }
         fn revoke_resource(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64) -> Result<(), libshivacore::AbiError> {
-            let ids: alloc::vec::Vec<CapId> = self.list_for(Pid(owner.0 as u32)).into_iter().filter(|cap| cap.resource_type == ResourceType::Memory && cap.resource_id == resource_id).map(|cap| cap.id).collect();
+            let ids: alloc::vec::Vec<CapId> = self.list_for(Pid(owner.0 as u32)).into_iter().filter(|cap| cap.resource_type == ResourceType::KnowledgeGraphEntity && cap.resource_id == resource_id).map(|cap| cap.id).collect();
             for id in ids { self.revoke(id); }
             Ok(())
         }
