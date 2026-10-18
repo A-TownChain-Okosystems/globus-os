@@ -473,8 +473,10 @@ fn syscall_interrupt_entry_addr() -> VirtAddr {
 /// handle (zero means absent), RDX=arg0, R10=arg1, R8=payload pointer,
 /// R9=payload length. Return: RAX=value, RDX=0 on success or AbiError code.
 ///
-/// Pointer-bearing IPC calls deliberately remain fail-closed in dispatch
-/// until copy-in/copy-out is connected to the active page table.
+/// IPC pointer spans are validated against the registered process layout and
+/// active page table before copy-in/copy-out. This implementation still relies
+/// on the boot path's shared CR3 and single-CPU/no-concurrent-remap invariant;
+/// it does not establish address-space isolation or SMP safety.
 extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
     let Some(pid) = USER_SCHEDULER.lock().as_ref().and_then(|s| s.current_pid()) else {
         frame.rax = 0;
