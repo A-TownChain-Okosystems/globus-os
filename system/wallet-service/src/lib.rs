@@ -49,7 +49,10 @@ impl<K: KeyStore> WalletService<K> {
     /// be supplied by the privileged security/kernel integration, not from an IPC
     /// request or other untrusted caller-controlled payload.
     pub fn new(keystore: K, capabilities: CapabilityRegistry) -> Self {
-        Self { keystore, capabilities }
+        Self {
+            keystore,
+            capabilities,
+        }
     }
 
     /// Handle the typed IPC signing boundary. Recovery phrases and private keys are not
@@ -176,11 +179,7 @@ mod tests {
 
     fn registry_with_sign_capability() -> CapabilityRegistry {
         let mut registry = CapabilityRegistry::new();
-        assert!(registry.grant(
-            Capability(2),
-            WALLET_SIGN_RESOURCE_ID,
-            Right::Sign,
-        ));
+        assert!(registry.grant(Capability(2), WALLET_SIGN_RESOURCE_ID, Right::Sign,));
         registry
     }
 
@@ -195,7 +194,9 @@ mod tests {
     #[test]
     fn signing_requires_registry_backed_capability() {
         let service = WalletService::new(TestStore, registry_with_sign_capability());
-        let (signature, evidence) = service.sign(&session(), 10, Capability(2), request()).unwrap();
+        let (signature, evidence) = service
+            .sign(&session(), 10, Capability(2), request())
+            .unwrap();
         assert_eq!(signature.bytes, b"payload");
         assert!(evidence.authorized);
     }
@@ -204,7 +205,9 @@ mod tests {
     fn forged_or_unknown_capability_is_rejected() {
         let service = WalletService::new(TestStore, CapabilityRegistry::new());
         assert_eq!(
-            service.sign(&session(), 10, Capability(2), request()).unwrap_err(),
+            service
+                .sign(&session(), 10, Capability(2), request())
+                .unwrap_err(),
             WalletServiceError::Unauthorized
         );
     }
@@ -217,11 +220,15 @@ mod tests {
         assert!(registry.revoke(Capability(4)));
         let service = WalletService::new(TestStore, registry);
         assert_eq!(
-            service.sign(&session(), 10, Capability(3), request()).unwrap_err(),
+            service
+                .sign(&session(), 10, Capability(3), request())
+                .unwrap_err(),
             WalletServiceError::Unauthorized
         );
         assert_eq!(
-            service.sign(&session(), 10, Capability(4), request()).unwrap_err(),
+            service
+                .sign(&session(), 10, Capability(4), request())
+                .unwrap_err(),
             WalletServiceError::Unauthorized
         );
     }
@@ -236,7 +243,9 @@ mod tests {
             message: b"payload".to_vec(),
         };
         assert_eq!(
-            service.sign_ipc(&session(), 10, Capability(2), request).unwrap_err(),
+            service
+                .sign_ipc(&session(), 10, Capability(2), request)
+                .unwrap_err(),
             WalletServiceError::IdentityMismatch
         );
     }
