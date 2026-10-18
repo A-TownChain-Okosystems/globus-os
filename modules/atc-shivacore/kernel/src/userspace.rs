@@ -802,6 +802,43 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_read_range_accepts_complete_regions_and_boundaries() {
+        let asp = UserAddressSpace::default();
+        assert!(asp.validate_read_range(asp.code_base, 1));
+        assert!(asp.validate_read_range(asp.data_base, 1));
+        assert!(asp.validate_read_range(asp.data_base + asp.data_size - 1, 1));
+        assert!(asp.validate_read_range(asp.stack_base - asp.stack_size, 1));
+        assert!(asp.validate_read_range(asp.stack_base, 1));
+        assert!(asp.validate_read_range(asp.heap_base, asp.heap_size as usize));
+    }
+
+    #[test]
+    fn test_validate_write_range_rejects_code_and_accepts_writable_regions() {
+        let asp = UserAddressSpace::default();
+        assert!(!asp.validate_write_range(asp.code_base, 1));
+        assert!(asp.validate_write_range(asp.data_base, 1));
+        assert!(asp.validate_write_range(asp.stack_base - asp.stack_size, 1));
+        assert!(asp.validate_write_range(asp.heap_base, 1));
+    }
+
+    #[test]
+    fn test_validate_range_rejects_cross_region_and_overflow() {
+        let asp = UserAddressSpace::default();
+        assert!(!asp.validate_read_range(asp.code_base + asp.code_size - 1, 2));
+        assert!(!asp.validate_read_range(asp.data_base - 1, 2));
+        assert!(!asp.validate_read_range(u64::MAX, 2));
+        assert!(!asp.validate_read_range(asp.heap_base, usize::MAX));
+        assert!(!asp.validate_write_range(asp.code_base, 0x1000));
+    }
+
+    #[test]
+    fn test_validate_zero_length_never_requires_a_valid_pointer() {
+        let asp = UserAddressSpace::default();
+        assert!(asp.validate_read_range(u64::MAX, 0));
+        assert!(asp.validate_write_range(0, 0));
+    }
+
+    #[test]
     fn test_initial_rsp() {
         let asp = UserAddressSpace::default();
         assert_eq!(asp.initial_rsp(), 0x7FFFF000);
