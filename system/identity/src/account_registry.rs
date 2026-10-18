@@ -324,7 +324,10 @@ mod tests {
     #[test]
     fn concurrent_registration_cannot_create_duplicate_username() {
         use std::sync::{Arc, Barrier};
-        use std::{thread, time::Duration};
+        use std::{
+            thread,
+            time::{Duration, Instant},
+        };
 
         let path = temp_path();
         let barrier = Arc::new(Barrier::new(2));
@@ -337,15 +340,22 @@ mod tests {
                 let user_id = UserId::new(format!("user-{suffix}")).unwrap();
                 let mut directory = FileAccountDirectory::open(worker_path);
                 worker_barrier.wait();
-                for _ in 0..200 {
+                // Filesystem sync/rename latency varies substantially across CI runners.
+                // Retry for a bounded wall-clock interval instead of a brittle 200 ms budget.
+                let deadline = Instant::now() + Duration::from_secs(10);
+                loop {
                     match directory.insert_if_absent(username.clone(), user_id.clone()) {
                         Ok(()) => return true,
-                        Err(AccountDirectoryError::Busy) => thread::sleep(Duration::from_millis(1)),
+                        Err(AccountDirectoryError::Busy) if Instant::now() < deadline => {
+                            thread::sleep(Duration::from_millis(1));
+                        }
+                        Err(AccountDirectoryError::Busy) => {
+                            panic!("directory lock did not become available within 10 seconds");
+                        }
                         Err(AccountDirectoryError::AlreadyExists) => return false,
                         Err(error) => panic!("unexpected directory error: {error:?}"),
                     }
                 }
-                panic!("directory lock did not become available");
             }));
         }
         let winners = workers
