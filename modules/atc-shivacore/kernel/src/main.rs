@@ -203,9 +203,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     user_binary.data = sender_payload.to_vec();
     let user_addr_space = userspace::UserAddressSpace::default();
+    let (user_root_1, mut user_mapper_1) = unsafe {
+        memory::create_user_mapper(phys_mem_offset, &mut frame_allocator)
+            .expect("ShivaCore: could not create isolated PML4 for PID=1000")
+    };
     unsafe {
         userspace::map_user_binary(
-            &mut mapper,
+            &mut user_mapper_1,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary,
@@ -292,9 +296,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         entry_point: 0x0140_0000,
         ..user_binary_2
     };
+    let (user_root_2, mut user_mapper_2) = unsafe {
+        memory::create_user_mapper(phys_mem_offset, &mut frame_allocator)
+            .expect("ShivaCore: could not create isolated PML4 for PID=1001")
+    };
     unsafe {
         userspace::map_user_binary(
-            &mut mapper,
+            &mut user_mapper_2,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary_2,
@@ -305,15 +313,22 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_pid_2 = ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
-    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
-    // No page-table changes are performed after Ring 3 begins; the syscall
-    // copy-in/copy-out path validates every page through this active mapper.
-    interrupts::install_active_mapper(&mut mapper);
+    interrupts::init_user_scheduler(
+        &user_ctx,
+        user_root_1,
+        user_mapper_1,
+        &user_ctx_2,
+        user_root_2,
+        user_mapper_2,
+    );
+    serial_println!("ShivaCore: USER-001 isolated PML4 roots installed for PID=1000 and PID=1001.");
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
         user_pid_2.0
     );
+    // Enter Ring 3 with PID 1000's private lower-half mappings active.
+    unsafe { memory::switch_to_page_table(user_root_1) };
     unsafe { userspace::enter_ring3(&user_ctx) }
 
     serial_println!("ShivaCore: K-Sprint 2 abgeschlossen. Uebergabe an Idle-Loop.");
