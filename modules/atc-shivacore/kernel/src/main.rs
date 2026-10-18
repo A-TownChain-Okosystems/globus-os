@@ -191,6 +191,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
     interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
+    // No page-table changes are performed after Ring 3 begins; the syscall
+    // copy-in/copy-out path validates every page through this active mapper.
+    interrupts::install_active_mapper(&mut mapper);
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
