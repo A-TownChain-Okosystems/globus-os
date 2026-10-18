@@ -1,7 +1,7 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 //! Minimal x86 CPU HAL. Detects Intel/AMD at runtime using CPUID.
 
-use core::arch::x86_64::__cpuid;
+use core::arch::x86_64::{__cpuid, __cpuid_count};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuVendor {
@@ -96,6 +96,41 @@ impl CpuInfo {
     }
 }
 
+
+/// Return the executing logical processor's APIC ID.
+///
+/// Prefer CPUID topology leaf 0xB, whose EDX contains the full x2APIC ID.
+/// The legacy leaf-1 EBX field is retained as a compatibility fallback and
+/// only carries an 8-bit initial APIC ID. This reports identity only; it does
+/// not imply that AP startup, local interrupt controllers, or SMP scheduling
+/// have been initialized.
+pub fn current_apic_id() -> u32 {
+    let max_basic_leaf = __cpuid(0).eax;
+    let leaf1 = if max_basic_leaf >= 1 {
+        __cpuid(1)
+    } else {
+        zero_cpuid()
+    };
+    let topology = if max_basic_leaf >= 0x0B {
+        __cpuid_count(0x0B, 0)
+    } else {
+        zero_cpuid()
+    };
+
+    apic_id_from_leaves(topology, leaf1)
+}
+
+fn apic_id_from_leaves(
+    topology_leaf_b: core::arch::x86_64::CpuidResult,
+    leaf1: core::arch::x86_64::CpuidResult,
+) -> u32 {
+    if topology_leaf_b.ebx != 0 {
+        topology_leaf_b.edx
+    } else {
+        (leaf1.ebx >> 24) & 0xFF
+    }
+}
+
 fn features_from_leaves(
     leaf1: core::arch::x86_64::CpuidResult,
     ext1: core::arch::x86_64::CpuidResult,
@@ -135,6 +170,35 @@ fn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn apic_id_prefers_full_topology_id_over_legacy_eight_bit_id() {
+        let topology = core::arch::x86_64::CpuidResult {
+            eax: 0,
+            ebx: 2,
+            ecx: 0,
+            edx: 0x1234,
+        };
+        let leaf1 = core::arch::x86_64::CpuidResult {
+            eax: 0,
+            ebx: 0xAB00_0000,
+            ecx: 0,
+            edx: 0,
+        };
+        assert_eq!(apic_id_from_leaves(topology, leaf1), 0x1234);
+    }
+
+    #[test]
+    fn apic_id_falls_back_to_legacy_leaf_when_topology_is_unavailable() {
+        let leaf1 = core::arch::x86_64::CpuidResult {
+            eax: 0,
+            ebx: 0xAB00_0000,
+            ecx: 0,
+            edx: 0,
+        };
+        assert_eq!(apic_id_from_leaves(zero_cpuid(), leaf1), 0xAB);
+    }
 
     #[test]
     fn detects_current_cpu_without_panicking() {
