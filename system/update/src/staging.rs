@@ -8,8 +8,10 @@
 use crate::Slot;
 use globus_package::VerifiedArtifact;
 
-/// Platform storage contract. Implementations must write only the requested
-/// inactive slot and make activation an atomic boot-selection change.
+/// Platform storage contract. Implementations must serialize this complete
+/// write/readback/activation sequence against other slot writers and boot
+/// selection changes, write only the requested inactive slot, and make
+/// activation an atomic boot-selection change.
 pub trait UpdateSlotStorage {
     type Error;
 
@@ -86,22 +88,37 @@ mod tests {
 
     impl From<Slot> for SlotKey {
         fn from(slot: Slot) -> Self {
-            Self(match slot { Slot::A => 0, Slot::B => 1 })
+            Self(match slot {
+                Slot::A => 0,
+                Slot::B => 1,
+            })
         }
     }
 
     impl MemorySlots {
         fn new() -> Self {
-            Self { active: Slot::A, slots: HashMap::new(), tamper_after_write: false, fail_write: false, activations: 0 }
+            Self {
+                active: Slot::A,
+                slots: HashMap::new(),
+                tamper_after_write: false,
+                fail_write: false,
+                activations: 0,
+            }
         }
     }
 
     impl UpdateSlotStorage for MemorySlots {
         type Error = &'static str;
 
-        fn active_slot(&self) -> Slot { self.active }
+        fn active_slot(&self) -> Slot {
+            self.active
+        }
 
-        fn write_inactive_slot(&mut self, slot: Slot, bytes: &[u8]) -> Result<(), Self::Error> {
+        fn write_inactive_slot(
+            &mut self,
+            slot: Slot,
+            bytes: &[u8],
+        ) -> Result<(), Self::Error> {
             if self.fail_write {
                 return Err("write failed");
             }
@@ -159,7 +176,10 @@ mod tests {
     #[test]
     fn does_not_activate_when_readback_differs() {
         let artifact = verified_artifact(b"verified image");
-        let mut storage = MemorySlots { tamper_after_write: true, ..MemorySlots::new() };
+        let mut storage = MemorySlots {
+            tamper_after_write: true,
+            ..MemorySlots::new()
+        };
 
         assert_eq!(
             stage_and_activate(&mut storage, Slot::B, &artifact),
@@ -172,7 +192,10 @@ mod tests {
     #[test]
     fn does_not_activate_when_write_fails() {
         let artifact = verified_artifact(b"verified image");
-        let mut storage = MemorySlots { fail_write: true, ..MemorySlots::new() };
+        let mut storage = MemorySlots {
+            fail_write: true,
+            ..MemorySlots::new()
+        };
 
         assert_eq!(
             stage_and_activate(&mut storage, Slot::B, &artifact),
