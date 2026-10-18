@@ -92,6 +92,63 @@ impl UserAddressSpace {
     pub fn in_heap(&self, addr: u64) -> bool {
         addr >= self.heap_base && addr < self.heap_base + self.heap_size
     }
+    /// Validate a complete byte span before copying from a userspace pointer.
+    ///
+    /// This is a virtual-layout check only. The caller must additionally verify
+    /// that every covered page is PRESENT and USER_ACCESSIBLE in the active page
+    /// tables before dereferencing the address.
+    pub fn validate_read_range(&self, addr: u64, len: usize) -> bool {
+        self.validate_range(addr, len, false)
+    }
+
+    /// Validate a complete byte span before copying to userspace.
+    ///
+    /// Code pages are deliberately excluded. The caller must additionally verify
+    /// PRESENT | USER_ACCESSIBLE | WRITABLE page-table flags for every page.
+    pub fn validate_write_range(&self, addr: u64, len: usize) -> bool {
+        self.validate_range(addr, len, true)
+    }
+
+    fn validate_range(&self, addr: u64, len: usize, write: bool) -> bool {
+        // A zero-byte operation must not dereference its pointer.
+        if len == 0 {
+            return true;
+        }
+        let Some(end) = addr.checked_add(len as u64) else {
+            return false;
+        };
+        if end <= addr {
+            return false;
+        }
+
+        let in_region = |base: u64, size: u64| {
+            base.checked_add(size)
+                .map(|region_end| addr >= base && end <= region_end)
+                .unwrap_or(false)
+        };
+        let stack = self.stack_base.checked_sub(self.stack_size)
+            .zip(self.stack_base.checked_add(1))
+            .map(|(base, region_end)| addr >= base && end <= region_end)
+            .unwrap_or(false);
+
+        let readable = in_region(self.code_base, self.code_size)
+            || in_region(self.data_base, self.data_size)
+            || stack
+            || in_region(self.heap_base, self.heap_size);
+        if !readable {
+            return false;
+        }
+        if !write {
+            return true;
+        }
+
+        // Writable virtual regions exclude code. These are policy checks only;
+        // the caller still has to validate the effective PTE flags.
+        in_region(self.data_base, self.data_size)
+            || stack
+            || in_region(self.heap_base, self.heap_size)
+    }
+
     /// Stack pointer initial value (top of stack)
     pub fn initial_rsp(&self) -> u64 {
         self.stack_base
@@ -674,6 +731,29 @@ mod tests {
         assert!(asp.in_stack(0x7FFFF000));
         assert!(asp.in_heap(0x00600000));
         assert!(!asp.in_heap(0x005FFFFF));
+    }
+
+    #[test]
+    fn test_user_read_and_write_ranges_are_bounded_and_overflow_safe() {
+        let asp = UserAddressSpace::default();
+
+        assert!(asp.validate_read_range(0x00400000, 16));
+        assert!(!asp.validate_write_range(0x00400000, 1), "code is read-only");
+        assert!(asp.validate_write_range(0x7FFFE000, 32), "mapped stack span is writable");
+        assert!(!asp.validate_read_range(0x004FFFF8, 16), "span must not cross region boundary");
+        assert!(!asp.validate_write_range(u64::MAX - 3, 8), "addition must not wrap");
+        assert!(!asp.validate_read_range(0x1000, 1), "kernel/unmapped address is outside user regions");
+        assert!(asp.validate_read_range(0, 0), "zero-byte operation does not dereference pointer");
+        assert!(asp.validate_write_range(u64::MAX, 0), "zero-byte operation does not dereference pointer");
+    }
+
+    #[test]
+    fn test_user_range_rejects_arithmetic_overflow_in_layout() {
+        let mut asp = UserAddressSpace::default();
+        asp.data_base = u64::MAX - 4;
+        asp.data_size = 32;
+        assert!(!asp.validate_read_range(u64::MAX - 2, 8));
+        assert!(!asp.validate_write_range(u64::MAX - 2, 8));
     }
 
     #[test]
