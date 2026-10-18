@@ -35,7 +35,11 @@ impl DisplayMode {
         if width == 0 || height == 0 || refresh_hz == 0 {
             None
         } else {
-            Some(Self { width, height, refresh_hz })
+            Some(Self {
+                width,
+                height,
+                refresh_hz,
+            })
         }
     }
 }
@@ -75,33 +79,61 @@ impl<'a> Framebuffer<'a> {
         if bytes.len() < required {
             return Err(DisplayError::BufferTooSmall);
         }
-        Ok(Self { bytes, width, height, stride, format })
+        Ok(Self {
+            bytes,
+            width,
+            height,
+            stride,
+            format,
+        })
     }
 
-    pub const fn width(&self) -> u32 { self.width }
-    pub const fn height(&self) -> u32 { self.height }
-    pub const fn stride(&self) -> usize { self.stride }
-    pub const fn pixel_format(&self) -> PixelFormat { self.format }
+    pub const fn width(&self) -> u32 {
+        self.width
+    }
+    pub const fn height(&self) -> u32 {
+        self.height
+    }
+    pub const fn stride(&self) -> usize {
+        self.stride
+    }
+    pub const fn pixel_format(&self) -> PixelFormat {
+        self.format
+    }
 
     pub fn clear(&mut self, color: u32) {
         self.fill_rect(0, 0, self.width, self.height, color);
     }
 
     pub fn fill_rect(&mut self, x: i32, y: i32, width: u32, height: u32, color: u32) {
-        if width == 0 || height == 0 { return; }
+        if width == 0 || height == 0 {
+            return;
+        }
         let left = i64::from(x).max(0).min(i64::from(self.width));
         let top = i64::from(y).max(0).min(i64::from(self.height));
-        let right = i64::from(x).saturating_add(i64::from(width)).max(0).min(i64::from(self.width));
-        let bottom = i64::from(y).saturating_add(i64::from(height)).max(0).min(i64::from(self.height));
-        if left >= right || top >= bottom { return; }
+        let right = i64::from(x)
+            .saturating_add(i64::from(width))
+            .max(0)
+            .min(i64::from(self.width));
+        let bottom = i64::from(y)
+            .saturating_add(i64::from(height))
+            .max(0)
+            .min(i64::from(self.height));
+        if left >= right || top >= bottom {
+            return;
+        }
         let (r, g, b) = ((color >> 16) as u8, (color >> 8) as u8, color as u8);
         for py in top as usize..bottom as usize {
             let row = py * self.stride;
             for px in left as usize..right as usize {
                 let offset = row + px * 4;
                 match self.format {
-                    PixelFormat::Rgbx8888 => self.bytes[offset..offset + 4].copy_from_slice(&[r, g, b, 0xff]),
-                    PixelFormat::Bgrx8888 => self.bytes[offset..offset + 4].copy_from_slice(&[b, g, r, 0xff]),
+                    PixelFormat::Rgbx8888 => {
+                        self.bytes[offset..offset + 4].copy_from_slice(&[r, g, b, 0xff])
+                    }
+                    PixelFormat::Bgrx8888 => {
+                        self.bytes[offset..offset + 4].copy_from_slice(&[b, g, r, 0xff])
+                    }
                 }
             }
         }
@@ -117,8 +149,20 @@ impl<'a> Framebuffer<'a> {
             }
             let title_height = 28.min(window.bounds.height);
             let frame = if window.focused { 0x4d8fe8 } else { 0x65748b };
-            self.fill_rect(window.bounds.x, window.bounds.y, window.bounds.width, window.bounds.height, 0xe5eaf1);
-            self.fill_rect(window.bounds.x, window.bounds.y, window.bounds.width, title_height, frame);
+            self.fill_rect(
+                window.bounds.x,
+                window.bounds.y,
+                window.bounds.width,
+                window.bounds.height,
+                0xe5eaf1,
+            );
+            self.fill_rect(
+                window.bounds.x,
+                window.bounds.y,
+                window.bounds.width,
+                title_height,
+                frame,
+            );
             let button_y = window.bounds.y.saturating_add(6);
             let right = i64::from(window.bounds.x) + i64::from(window.bounds.width);
             if right <= i64::from(i32::MAX) {
@@ -134,8 +178,16 @@ impl<'a> Framebuffer<'a> {
         self.fill_rect(12, taskbar_y.saturating_add(9), 30, 30, 0x4d8fe8);
         let mut x = 54i32;
         for task in shell.tasks() {
-            if x.saturating_add(112) > self.width.min(i32::MAX as u32) as i32 { break; }
-            let color = if task.active { 0x4d8fe8 } else if task.minimized { 0x394557 } else { 0x28364a };
+            if x.saturating_add(112) > self.width.min(i32::MAX as u32) as i32 {
+                break;
+            }
+            let color = if task.active {
+                0x4d8fe8
+            } else if task.minimized {
+                0x394557
+            } else {
+                0x28364a
+            };
             self.fill_rect(x, taskbar_y.saturating_add(8), 104, 32, color);
             x = x.saturating_add(112);
         }
@@ -159,8 +211,14 @@ mod tests {
     #[test]
     fn rejects_invalid_stride_and_short_buffers() {
         let mut bytes = [0u8; 16];
-        assert_eq!(Framebuffer::new(&mut bytes, 2, 2, 4, PixelFormat::Rgbx8888).err(), Some(DisplayError::InvalidStride));
-        assert_eq!(Framebuffer::new(&mut bytes, 3, 2, 12, PixelFormat::Rgbx8888).err(), Some(DisplayError::BufferTooSmall));
+        assert_eq!(
+            Framebuffer::new(&mut bytes, 2, 2, 4, PixelFormat::Rgbx8888).err(),
+            Some(DisplayError::InvalidStride)
+        );
+        assert_eq!(
+            Framebuffer::new(&mut bytes, 3, 2, 12, PixelFormat::Rgbx8888).err(),
+            Some(DisplayError::BufferTooSmall)
+        );
     }
 
     #[test]
