@@ -334,4 +334,6 @@ pub enum ProcessStatus {
     Running = 2,
     Exited = 3,
     Failed = 4,
+    /// Temporarily blocked on I/O, IPC, a signal, or a timer.
+    Blocked = 5,
 }
