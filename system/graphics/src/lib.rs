@@ -3,6 +3,7 @@
 pub mod compositor;
 pub mod desktop;
 pub mod display;
+pub mod gpu;
 pub mod input;
 pub mod media_surface;
 pub mod shell;
@@ -32,11 +33,7 @@ impl DisplayMode {
         if width == 0 || height == 0 || refresh_hz == 0 {
             None
         } else {
-            Some(Self {
-                width,
-                height,
-                refresh_hz,
-            })
+            Some(Self { width, height, refresh_hz })
         }
     }
 }
