@@ -17,8 +17,8 @@
 //         Identität = DID, nie IP/Port
 //   §11   Replay-Schutz: nonce je Absender, message_id Seen-Set,
 //         timestamp ±120s-Fenster, Chain-ID-Pflicht 658467
-//   §13/§14 Fehlercodes ATC-PROTO-P2P-001..019, Rate-Limiting über K15 TokenBucket
-// Baut auf K14 (p2p.rs, v0.9) und K15 (security.rs TokenBucket) auf.
+//   §13/§14 Fehlercodes ATC-PROTO-P2P-001..019, Rate-Limiting über Service-Space-TokenBucket
+// Protokoll-Rate-Limits sind Userspace-Policy; Kernel-Ressourcenlimits bleiben unabhängig.
 // ─────────────────────────────────────────────────────────────────────────
 
 use alloc::boxed::Box;
@@ -30,7 +30,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::p2p::{MessageType, P2pMessage, P2pNode, CHAIN_ID};
-use shivacore::security::TokenBucket;
+use crate::rate_limit::TokenBucket;
 
 /// Parsed HELLO payload: (protocol version, supported extensions, node id).
 pub type HelloPayload = (u16, Vec<(u8, u8, u8)>, [u8; 32]);

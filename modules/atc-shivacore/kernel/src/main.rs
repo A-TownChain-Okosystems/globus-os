@@ -45,6 +45,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: Kernel-Einstiegspunkt erreicht.");
 
     let cpu = hal::CpuInfo::detect();
+    let boot_apic_id = hal::cpu::current_apic_id();
     serial_println!(
         "ShivaCore: CPU vendor={} family={} model={} stepping={} apic={} x2apic={} nx={} invariant_tsc={}",
         cpu.vendor_name(), cpu.family, cpu.model, cpu.stepping,
@@ -105,27 +106,125 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     println!("K-Sprint 2: Paging/Heap OK (Box+Vec getestet)");
     // Real kernel integration gate: execute the canonical kernel initialization
     // from the same UEFI -> kernel_main path after paging/heap are live.
-    let kernel_state = shivacore::kernel_init::KernelState::boot()
+    let mut kernel_state = shivacore::kernel_init::KernelState::boot()
         .expect("ShivaCore: canonical KernelState::boot() failed");
     serial_println!("ShivaCore: KernelState::boot() -> Done.");
+    serial_println!("{}", kernel_state.boot_log());
+
+    // Trusted boot-time IPC bootstrap for the two Ring-3 smoke identities.
+    // PID 1001 owns the channel and receives READ; PID 1000 receives only a
+    // delegated WRITE capability. These grants live in the canonical kernel
+    // capability table and are not user-created or inferred from the PID.
+    let ring3_channel =
+        kernel_state
+            .ipc
+            .create_channel(&mut kernel_state.processes.caps, ats1000::Pid(1001), 8);
+    let owner_send_cap = kernel_state
+        .processes
+        .caps
+        .list_for(ats1000::Pid(1001))
+        .iter()
+        .find(|cap| {
+            cap.resource_type == shivacore::capability::ResourceType::IpcChannel
+                && cap.resource_id == ring3_channel.0
+                && cap.rights.has(
+                    shivacore::capability::Rights::WRITE | shivacore::capability::Rights::DELEGATE,
+                )
+        })
+        .map(|cap| cap.id)
+        .expect("Ring-3 IPC bootstrap did not create owner WRITE/DELEGATE capability");
+    let ring3_sender_cap = kernel_state
+        .processes
+        .caps
+        .delegate(
+            ats1000::Pid(1001),
+            owner_send_cap,
+            ats1000::Pid(1000),
+            shivacore::capability::Rights::WRITE,
+        )
+        .expect("Ring-3 sender capability delegation failed");
+    let ring3_receiver_cap = kernel_state
+        .processes
+        .caps
+        .list_for(ats1000::Pid(1001))
+        .iter()
+        .find(|cap| {
+            cap.resource_type == shivacore::capability::ResourceType::IpcChannel
+                && cap.resource_id == ring3_channel.0
+                && cap.rights.has(shivacore::capability::Rights::READ)
+        })
+        .map(|cap| cap.id)
+        .expect("Ring-3 receiver READ capability missing");
+    serial_println!(
+        "ShivaCore: Ring-3 IPC bootstrap channel={} sender_pid=1000 sender_cap={} receiver_pid=1001 receiver_cap={} capacity=8",
+        ring3_channel.0,
+        ring3_sender_cap.0,
+        ring3_receiver_cap.0
+    );
+    // Move the canonical state into the syscall runtime before Ring 3 starts.
+    // No shadow capability table or IPC registry is created for trap handling.
+    interrupts::install_syscall_kernel(kernel_state);
 
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
-    let user_binary = userspace::UserBinary::from_bytes(
-        "ring3-smoke",
-        alloc::vec![
-            0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x1000
-            0x48, 0xBB, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x1001
-            0x49, 0xBC, 0x12, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x1012
-            0xEB, 0xFE, // loop forever until timer preemption
-        ],
-        0x0040_0000,
-    );
+    // Real Ring-3 sender: invoke ABI-v1 IPC_SEND through int 0x80.
+    // Constants come from libshivacore's public ABI; payload is in the mapped
+    // writable data region so the kernel must validate/copy a real user span.
+    let mut sender_code = alloc::vec::Vec::new();
+    let sender_payload = b"ring3-ipc-ok";
+    // Emit multiple real traps: foreign cap, absent cap, unmapped pointer, then
+    // a valid send. The kernel's trap log records each return code.
+    let mut emit_send = |capability: u64, payload_ptr: u64, payload_len: usize| {
+        sender_code.extend_from_slice(&[0x48, 0xB8]);
+        sender_code.extend_from_slice(&(libshivacore::Syscall::IpcSend.id() as u64).to_le_bytes());
+        sender_code.extend_from_slice(&[0x48, 0xBF]);
+        sender_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+        sender_code.extend_from_slice(&[0x48, 0xBE]);
+        sender_code.extend_from_slice(&capability.to_le_bytes());
+        sender_code.extend_from_slice(&[0x48, 0xBA]);
+        sender_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+        sender_code.extend_from_slice(&[0x49, 0xB8]);
+        sender_code.extend_from_slice(&payload_ptr.to_le_bytes());
+        sender_code.extend_from_slice(&[0x49, 0xB9]);
+        sender_code.extend_from_slice(&(payload_len as u64).to_le_bytes());
+        sender_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR]);
+    };
+    emit_send(ring3_receiver_cap.0, 0x0050_0000, sender_payload.len());
+    emit_send(0, 0x0050_0000, sender_payload.len());
+    emit_send(ring3_sender_cap.0, 0x0050_1000, sender_payload.len()); // valid region, unmapped page
+    emit_send(ring3_sender_cap.0, 0x0050_0000, sender_payload.len());
+    // The receiver consumes at most one message. Nine further sends force at
+    // least one ResourceExhausted result even if timer scheduling interleaves.
+    for _ in 0..9 {
+        emit_send(ring3_sender_cap.0, 0x0050_0000, sender_payload.len());
+    }
+    // Arm a deterministic register-isolation checkpoint only after all syscalls.
+    // R13 is written last so the timer handler never checks a partially loaded pattern.
+    sender_code.extend_from_slice(&[0x48, 0xB8]);
+    sender_code.extend_from_slice(&0x1000u64.to_le_bytes()); // RAX
+    sender_code.extend_from_slice(&[0x48, 0xBB]);
+    sender_code.extend_from_slice(&0x1001u64.to_le_bytes()); // RBX
+    sender_code.extend_from_slice(&[0x49, 0xBC]);
+    sender_code.extend_from_slice(&0x1012u64.to_le_bytes()); // R12
+    sender_code.extend_from_slice(&[0x49, 0xBD]);
+    sender_code.extend_from_slice(&0x5343_4845_4455_4c31u64.to_le_bytes()); // R13 marker
+    sender_code.extend_from_slice(&[0xEB, 0xFE]); // park until timer preemption
+
+    let mut user_binary =
+        userspace::UserBinary::from_bytes("ring3-ipc-sender", sender_code, 0x0040_0000);
+    user_binary.data = sender_payload.to_vec();
     let user_addr_space = userspace::UserAddressSpace::default();
+    let (user_root_1, mut user_mapper_1) = unsafe {
+        memory::create_user_mapper(phys_mem_offset, &mut frame_allocator)
+            .expect("ShivaCore: could not create isolated PML4 for PID=1000")
+    };
+    // Image bytes are copied through their user virtual addresses, so make
+    // the destination root active while populating the freshly mapped pages.
+    unsafe { memory::switch_to_page_table(user_root_1) };
     unsafe {
         userspace::map_user_binary(
-            &mut mapper,
+            &mut user_mapper_1,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary,
@@ -142,23 +241,69 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_ctx.rsp
     );
 
-    // Second real Ring-3 image. Both processes intentionally share the current
-    // kernel page table for this first scheduler gate; the scheduler switches
-    // the CPU IRET frame while CR3/address-space switching remains a later gate.
-    let user_binary_2 = userspace::UserBinary::from_bytes(
-        "ring3-smoke-2",
-        alloc::vec![
-            0x48, 0xB8, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x2000
-            0x48, 0xBB, 0x01, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x2001
-            0x49, 0xBC, 0x12, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x2012
-            0xEB, 0xFE, // loop forever until timer preemption
-        ],
-        0x0040_1000,
-    );
-    // Keep the first scheduler gate on the current shared CR3, but allocate
-    // a disjoint virtual region for PID 1001. This prevents the second mapping
-    // from colliding with PID 1000's code/data/stack pages. Full CR3 switching
-    // remains the next isolation gate.
+    // Second real Ring-3 image. It receives a separate PML4 root with its own
+    // lower-half user mappings and the same supervisor-only kernel upper half.
+    // Real Ring-3 receiver: invoke ABI-v1 IPC_RECEIVE into its mapped data.
+    let mut receiver_code = alloc::vec::Vec::new();
+    let mut emit_receive = |capacity: u64| {
+        receiver_code.extend_from_slice(&[0x48, 0xB8]);
+        receiver_code
+            .extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBF]);
+        receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBE]);
+        receiver_code.extend_from_slice(&ring3_receiver_cap.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBA]);
+        receiver_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB8]);
+        receiver_code.extend_from_slice(&0x0150_0000u64.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB9]);
+        receiver_code.extend_from_slice(&capacity.to_le_bytes());
+        receiver_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR]);
+    };
+    // A too-small receive must fail without dequeuing the queued message.
+    // Retry while the queue is empty (error code 5); once a message exists,
+    // the expected InvalidPayload (4) falls through to the valid receive.
+    emit_receive(2);
+    drop(emit_receive);
+    receiver_code.extend_from_slice(&[0x83, 0xFA, 0x05, 0x74, 0xBD]); // cmp edx,5; je back to first receive
+                                                                      // Now receive the same message with sufficient capacity.
+    let mut emit_valid_receive = |capacity: u64| {
+        receiver_code.extend_from_slice(&[0x48, 0xB8]);
+        receiver_code
+            .extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBF]);
+        receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBE]);
+        receiver_code.extend_from_slice(&ring3_receiver_cap.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBA]);
+        receiver_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB8]);
+        receiver_code.extend_from_slice(&0x0150_0000u64.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB9]);
+        receiver_code.extend_from_slice(&capacity.to_le_bytes());
+        receiver_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR]);
+    };
+    emit_valid_receive(64);
+    drop(emit_valid_receive);
+    // Distinct register pattern for the receiver. R13 is the arm marker and is
+    // deliberately written last, after the three checked registers.
+    receiver_code.extend_from_slice(&[0x48, 0xB8]);
+    receiver_code.extend_from_slice(&0x2000u64.to_le_bytes()); // RAX
+    receiver_code.extend_from_slice(&[0x48, 0xBB]);
+    receiver_code.extend_from_slice(&0x2001u64.to_le_bytes()); // RBX
+    receiver_code.extend_from_slice(&[0x49, 0xBC]);
+    receiver_code.extend_from_slice(&0x2012u64.to_le_bytes()); // R12
+    receiver_code.extend_from_slice(&[0x49, 0xBD]);
+    receiver_code.extend_from_slice(&0x5343_4845_4455_4c31u64.to_le_bytes()); // R13 marker
+    receiver_code.extend_from_slice(&[0xEB, 0xFE]);
+
+    let mut user_binary_2 =
+        userspace::UserBinary::from_bytes("ring3-ipc-receiver", receiver_code, 0x0040_1000);
+    user_binary_2.data = alloc::vec![0u8; 64];
+    // The roots have independent lower halves, so the processes may reuse the
+    // same user virtual layout. Keep distinct addresses here for easier QEMU
+    // diagnostics while validating the isolation mechanism.
     let user_addr_space_2 = userspace::UserAddressSpace {
         code_base: 0x0140_0000,
         code_size: 0x0010_0000,
@@ -173,9 +318,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         entry_point: 0x0140_0000,
         ..user_binary_2
     };
+    let (user_root_2, mut user_mapper_2) = unsafe {
+        memory::create_user_mapper(phys_mem_offset, &mut frame_allocator)
+            .expect("ShivaCore: could not create isolated PML4 for PID=1001")
+    };
+    unsafe { memory::switch_to_page_table(user_root_2) };
     unsafe {
         userspace::map_user_binary(
-            &mut mapper,
+            &mut user_mapper_2,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary_2,
@@ -186,16 +336,35 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_pid_2 = ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
-    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
+    // Return to the sender root before registering both spaces; all later
+    // kernel execution uses shared supervisor mappings, and timer preemption
+    // performs the per-process CR3 switch.
+    unsafe { memory::switch_to_page_table(user_root_1) };
+    interrupts::init_user_scheduler(
+        &user_ctx,
+        user_root_1,
+        user_mapper_1,
+        &user_ctx_2,
+        user_root_2,
+        user_mapper_2,
+    );
+    serial_println!(
+        "ShivaCore: USER-001 isolated page-table roots PID=1000 CR3={:#x} PID=1001 CR3={:#x}",
+        user_root_1.start_address().as_u64(),
+        user_root_2.start_address().as_u64()
+    );
+    serial_println!(
+        "ShivaCore: BSP identity APIC_ID={:#x} (identity only; SMP not enabled)",
+        boot_apic_id
+    );
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
         user_pid_2.0
     );
+    // Enter Ring 3 with PID 1000's private lower-half mappings active.
+    unsafe { memory::switch_to_page_table(user_root_1) };
     unsafe { userspace::enter_ring3(&user_ctx) }
-
-    serial_println!("{}", kernel_state.boot_log());
-    serial_println!("ShivaCore: kernel init chain connected to kernel_main.");
 
     serial_println!("ShivaCore: K-Sprint 2 abgeschlossen. Uebergabe an Idle-Loop.");
 

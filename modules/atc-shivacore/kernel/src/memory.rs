@@ -18,6 +18,65 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     &mut *virt.as_mut_ptr()
 }
 
+/// Create an isolated user page-table root while preserving supervisor mappings.
+///
+/// The kernel image is linked in the lower canonical half (currently around
+/// 1 TiB, PML4 index 2), while user mappings occupy PML4 index 0. Copying only
+/// indices 256..512 therefore drops the kernel's own code/data mappings and
+/// faults as soon as CR3 switches to the new root. Preserve every supervisor
+/// root entry except index 0, which is reserved for the user address layout.
+/// The caller must serialize frame allocation and must not mutate shared kernel
+/// mappings after this operation.
+pub unsafe fn create_user_mapper(
+    physical_memory_offset: VirtAddr,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+) -> Option<(PhysFrame<Size4KiB>, OffsetPageTable<'static>)> {
+    use x86_64::structures::paging::PageTableFlags;
+
+    let active_root = active_level_4_table(physical_memory_offset);
+
+    // Index 0 is dedicated to user mappings. Every copied entry must remain
+    // supervisor-only; otherwise a user process could inherit privileged memory.
+    for index in 1..512 {
+        let entry = &active_root[index];
+        if !entry.is_unused() && entry.flags().contains(PageTableFlags::USER_ACCESSIBLE) {
+            return None;
+        }
+    }
+
+    let root_frame = frame_allocator.allocate_frame()?;
+    let root_virt = physical_memory_offset + root_frame.start_address().as_u64();
+    let root_ptr = root_virt.as_mut_ptr::<PageTable>();
+
+    // SAFETY: the bootloader-provided physical-memory mapping covers the
+    // allocated usable frame; the allocator grants exclusive ownership here.
+    unsafe { core::ptr::write(root_ptr, PageTable::new()) };
+
+    for index in 1..512 {
+        // SAFETY: root_ptr is a valid, exclusively owned 4-KiB page-table frame.
+        unsafe { (&mut *root_ptr)[index] = active_root[index].clone() };
+    }
+
+    // SAFETY: root_ptr refers to a page-table frame kept allocated for the
+    // lifetime of the process address space; the physical-memory mapping is
+    // permanent. Ownership is transferred into this mapper.
+    let root_table: &'static mut PageTable = unsafe { &mut *root_ptr };
+    Some((
+        root_frame,
+        OffsetPageTable::new(root_table, physical_memory_offset),
+    ))
+}
+
+/// Switch to a process root. Reloading CR3 invalidates non-global translations
+/// for the local CPU. This does not perform remote-CPU TLB shootdown; callers
+/// must not treat it as SMP-safe while address-space mutations are possible.
+pub unsafe fn switch_to_page_table(root_frame: PhysFrame<Size4KiB>) {
+    use x86_64::registers::control::{Cr3, Cr3Flags};
+    // SAFETY: the caller provides a live, aligned root frame allocated as a
+    // PML4 page table. Kernel mappings are shared with the boot root.
+    unsafe { Cr3::write(root_frame, Cr3Flags::empty()) };
+}
+
 pub struct BootInfoFrameAllocator {
     memory_regions: &'static MemoryRegions,
     next: usize,

@@ -69,16 +69,60 @@ jobs:
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         id: bios_smoke
         run: |
-          set +e
-          timeout 20s qemu-system-x86_64 \
+          log=target/shivacore-qemu-${{ matrix.cpu }}.log
+          monitor_port=4444
+          qemu-system-x86_64 \
             -cpu ${{ matrix.qemu_cpu }} \
             -drive format=raw,file=target/boot-images/shivacore-bios.img \
             -serial stdio \
+            -monitor tcp:127.0.0.1:${monitor_port},server,nowait \
             -display none \
             -no-reboot \
-            -no-shutdown 2>&1 | tee target/shivacore-qemu-${{ matrix.cpu }}.log
-          status=${PIPESTATUS[0]}
+            -no-shutdown > "$log" 2>&1 &
+          qemu_pid=$!
+          # Wait for the final Ring-3 IPC acceptance marker instead of treating
+          # an external 20-second timeout (exit 124) as a successful smoke test.
+          for attempt in $(seq 1 150); do
+            if grep -Fq "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None" "$log"; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat "$log"
+              echo "QEMU exited before all smoke-test markers were observed."
+              wait "$qemu_pid" || true
+              exit 1
+            fi
+            sleep 0.2
+          done
+          if ! grep -Fq "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None" "$log"; then
+            cat "$log"
+            echo "Timed out waiting for the final Ring-3 IPC marker."
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" || true
+            exit 1
+          fi
+          # Ask QEMU's monitor to quit cleanly after the guest has demonstrated
+          # all required behavior. This is a harness shutdown, not a guest shutdown.
+          monitor_sent=0
+          for attempt in $(seq 1 20); do
+            if { printf 'quit\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
+              monitor_sent=1
+              break
+            fi
+            sleep 0.1
+          done
+          if [ "$monitor_sent" -ne 1 ]; then
+            echo "Could not send QEMU monitor quit command."
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" || true
+            exit 1
+          fi
+          set +e
+          wait "$qemu_pid"
+          status=$?
+          set -e
           echo "qemu_exit_code=$status" >> "$GITHUB_OUTPUT"
+          cat "$log"
           if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "ShivaCore did not reach kernel_main."
             exit 1
@@ -106,6 +150,11 @@ jobs:
             echo "SCHED-001 scheduler was not armed with two Ring-3 processes."
             exit 1
           fi
+          if ! grep -q "ShivaCore: USER-001 isolated page-table roots PID=1000 CR3=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Distinct Ring-3 page-table roots were not installed."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
           if ! grep -q "ShivaCore: USER-001 entering PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Kernel did not attempt the real Ring-3 IRETQ entry."
             exit 1
@@ -130,8 +179,26 @@ jobs:
             echo "Canonical KernelState::boot() was not reached from kernel_main."
             exit 1
           fi
-          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
-            echo "QEMU exited unexpectedly with status $status."
+
+          # Assert the actual CPL3 int 0x80 IPC path, not just process setup.
+          # Error names are stable ABI markers; unmapped spans are logged before
+          # the dispatcher because they must never be dereferenced.
+          for expected in \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(PermissionDenied)" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(InvalidHandle)" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=InvalidPayload reason=unreadable-or-unmapped-user-span" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=12 error=None" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(ResourceExhausted)" \
+            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=0 error=Some(InvalidPayload)" \
+            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None"; do
+            if ! grep -Fq "$expected" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+              echo "Ring-3 IPC acceptance marker missing: $expected"
+              cat target/shivacore-qemu-${{ matrix.cpu }}.log
+              exit 1
+            fi
+          done
+          if [ "$status" -ne 0 ]; then
+            echo "QEMU monitor shutdown did not exit cleanly (status $status)."
             exit "$status"
           fi
 
@@ -154,18 +221,61 @@ jobs:
         env:
           OVMF_CODE: ${{ steps.ovmf.outputs.firmware }}
         run: |
-          set +e
-          timeout 20s qemu-system-x86_64 \
+          log=target/shivacore-uefi-${{ matrix.cpu }}.log
+          monitor_port=4445
+          qemu-system-x86_64 \
             -cpu ${{ matrix.qemu_cpu }} \
             -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
             -drive format=raw,file=target/boot-images/shivacore-uefi.img \
             -serial stdio \
+            -monitor tcp:127.0.0.1:${monitor_port},server,nowait \
             -display none \
             -no-reboot \
-            -no-shutdown 2>&1 | tee target/shivacore-uefi-${{ matrix.cpu }}.log
-          status=${PIPESTATUS[0]}
+            -no-shutdown > "$log" 2>&1 &
+          qemu_pid=$!
+          # Wait for the final Ring-3 IPC acceptance marker instead of treating
+          # an external 20-second timeout (exit 124) as a successful smoke test.
+          for attempt in $(seq 1 150); do
+            if grep -Fq "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None" "$log"; then
+              break
+            fi
+            if ! kill -0 "$qemu_pid" 2>/dev/null; then
+              cat "$log"
+              echo "QEMU exited before all UEFI smoke-test markers were observed."
+              wait "$qemu_pid" || true
+              exit 1
+            fi
+            sleep 0.2
+          done
+          if ! grep -Fq "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None" "$log"; then
+            cat "$log"
+            echo "Timed out waiting for the final UEFI Ring-3 IPC marker."
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" || true
+            exit 1
+          fi
+          # Ask QEMU's monitor to quit cleanly after the guest has demonstrated
+          # all required behavior. This is a harness shutdown, not a guest shutdown.
+          monitor_sent=0
+          for attempt in $(seq 1 20); do
+            if { printf 'quit\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
+              monitor_sent=1
+              break
+            fi
+            sleep 0.1
+          done
+          if [ "$monitor_sent" -ne 1 ]; then
+            echo "Could not send QEMU monitor quit command."
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" || true
+            exit 1
+          fi
+          set +e
+          wait "$qemu_pid"
+          status=$?
+          set -e
           echo "qemu_exit_code=$status" >> "$GITHUB_OUTPUT"
-          log=target/shivacore-uefi-${{ matrix.cpu }}.log
+          cat "$log"
           if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log"; then
             echo "UEFI boot did not reach kernel_main."
             cat "$log"
@@ -182,19 +292,27 @@ jobs:
             "ShivaCore: KernelState::boot() -> Done." \
             "ShivaCore: USER-001 mapped PID=1000" \
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
+            "ShivaCore: USER-001 isolated page-table roots PID=1000 CR3=" \
             "ShivaCore: USER-001 entering PID=1000" \
             "ShivaCore: scheduler preemption -> context switch to PID=1001" \
             "ShivaCore: scheduler preemption -> context switch to PID=1000" \
             "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
-            "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
+            "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(PermissionDenied)" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(InvalidHandle)" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=InvalidPayload reason=unreadable-or-unmapped-user-span" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=12 error=None" \
+            "ShivaCore: RING3_IPC pid=1000 syscall=16 result=0 error=Some(ResourceExhausted)" \
+            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=0 error=Some(InvalidPayload)" \
+            "ShivaCore: RING3_IPC pid=1001 syscall=17 result=12 error=None"; do
             if ! grep -Fq "$expected" "$log"; then
               echo "UEFI boot acceptance marker missing: $expected"
               cat "$log"
               exit 1
             fi
           done
-          if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
-            echo "UEFI QEMU exited unexpectedly with status $status."
+          if [ "$status" -ne 0 ]; then
+            echo "UEFI QEMU monitor shutdown did not exit cleanly (status $status)."
             exit "$status"
           fi
 

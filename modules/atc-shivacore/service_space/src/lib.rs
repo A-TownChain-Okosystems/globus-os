@@ -30,6 +30,7 @@ pub mod mempool;
 pub mod net;
 pub mod p2p;
 pub mod p2p_secure;
+pub mod rate_limit;
 pub mod remote_caps;
 pub mod security_audit;
 pub mod service_init;

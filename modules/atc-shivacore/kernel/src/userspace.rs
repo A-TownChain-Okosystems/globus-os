@@ -13,8 +13,11 @@ use alloc::vec::Vec;
 use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
+    structures::paging::mapper::TranslateResult,
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
+    structures::paging::{
+        FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB, Translate,
+    },
     VirtAddr,
 };
 
@@ -92,6 +95,110 @@ impl UserAddressSpace {
     pub fn in_heap(&self, addr: u64) -> bool {
         addr >= self.heap_base && addr < self.heap_base + self.heap_size
     }
+    /// Validate a complete byte span before copying from a userspace pointer.
+    ///
+    /// This is a virtual-layout check only. The caller must additionally verify
+    /// that every covered page is PRESENT and USER_ACCESSIBLE in the active page
+    /// tables before dereferencing the address.
+    pub fn validate_read_range(&self, addr: u64, len: usize) -> bool {
+        self.validate_range(addr, len, false)
+    }
+
+    /// Validate a complete byte span before copying to userspace.
+    ///
+    /// Code pages are deliberately excluded. The caller must additionally verify
+    /// PRESENT | USER_ACCESSIBLE | WRITABLE page-table flags for every page.
+    pub fn validate_write_range(&self, addr: u64, len: usize) -> bool {
+        self.validate_range(addr, len, true)
+    }
+
+    fn validate_range(&self, addr: u64, len: usize, write: bool) -> bool {
+        // A zero-byte operation must not dereference its pointer.
+        if len == 0 {
+            return true;
+        }
+        let Some(end) = addr.checked_add(len as u64) else {
+            return false;
+        };
+        if end <= addr {
+            return false;
+        }
+
+        let in_region = |base: u64, size: u64| {
+            base.checked_add(size)
+                .map(|region_end| addr >= base && end <= region_end)
+                .unwrap_or(false)
+        };
+        let stack = self
+            .stack_base
+            .checked_sub(self.stack_size)
+            .zip(self.stack_base.checked_add(1))
+            .map(|(base, region_end)| addr >= base && end <= region_end)
+            .unwrap_or(false);
+
+        let readable = in_region(self.code_base, self.code_size)
+            || in_region(self.data_base, self.data_size)
+            || stack
+            || in_region(self.heap_base, self.heap_size);
+        if !readable {
+            return false;
+        }
+        if !write {
+            return true;
+        }
+
+        // Writable virtual regions exclude code. These are policy checks only;
+        // the caller still has to validate the effective PTE flags.
+        in_region(self.data_base, self.data_size)
+            || stack
+            || in_region(self.heap_base, self.heap_size)
+    }
+
+    /// Validate the virtual span and every effective page-table entry before access.
+    ///
+    /// Callers must invoke this while holding exclusive access to the active mapper
+    /// so mappings cannot change between validation and the subsequent copy.
+    #[cfg(feature = "x86-boot")]
+    pub fn validate_mapped_range(
+        &self,
+        mapper: &OffsetPageTable<'static>,
+        addr: u64,
+        len: usize,
+        write: bool,
+    ) -> bool {
+        let layout_ok = if write {
+            self.validate_write_range(addr, len)
+        } else {
+            self.validate_read_range(addr, len)
+        };
+        if !layout_ok || len == 0 {
+            return layout_ok;
+        }
+
+        let Some(end) = addr.checked_add(len as u64) else {
+            return false;
+        };
+        if end <= addr {
+            return false;
+        }
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(addr));
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(end - 1));
+        for page in Page::range_inclusive(first, last) {
+            match mapper.translate(page.start_address()) {
+                TranslateResult::Mapped { flags, .. } => {
+                    if !flags.contains(PageTableFlags::PRESENT)
+                        || !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+                        || (write && !flags.contains(PageTableFlags::WRITABLE))
+                    {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        true
+    }
+
     /// Stack pointer initial value (top of stack)
     pub fn initial_rsp(&self) -> u64 {
         self.stack_base
@@ -674,6 +781,89 @@ mod tests {
         assert!(asp.in_stack(0x7FFFF000));
         assert!(asp.in_heap(0x00600000));
         assert!(!asp.in_heap(0x005FFFFF));
+    }
+
+    #[test]
+    fn test_user_read_and_write_ranges_are_bounded_and_overflow_safe() {
+        let asp = UserAddressSpace::default();
+
+        assert!(asp.validate_read_range(0x00400000, 16));
+        assert!(
+            !asp.validate_write_range(0x00400000, 1),
+            "code is read-only"
+        );
+        assert!(
+            asp.validate_write_range(0x7FFFE000, 32),
+            "mapped stack span is writable"
+        );
+        assert!(
+            !asp.validate_read_range(0x004FFFF8, 16),
+            "span must not cross region boundary"
+        );
+        assert!(
+            !asp.validate_write_range(u64::MAX - 3, 8),
+            "addition must not wrap"
+        );
+        assert!(
+            !asp.validate_read_range(0x1000, 1),
+            "kernel/unmapped address is outside user regions"
+        );
+        assert!(
+            asp.validate_read_range(0, 0),
+            "zero-byte operation does not dereference pointer"
+        );
+        assert!(
+            asp.validate_write_range(u64::MAX, 0),
+            "zero-byte operation does not dereference pointer"
+        );
+    }
+
+    #[test]
+    fn test_user_range_rejects_arithmetic_overflow_in_layout() {
+        let asp = UserAddressSpace {
+            data_base: u64::MAX - 4,
+            data_size: 32,
+            ..UserAddressSpace::default()
+        };
+        assert!(!asp.validate_read_range(u64::MAX - 2, 8));
+        assert!(!asp.validate_write_range(u64::MAX - 2, 8));
+    }
+
+    #[test]
+    fn test_validate_read_range_accepts_complete_regions_and_boundaries() {
+        let asp = UserAddressSpace::default();
+        assert!(asp.validate_read_range(asp.code_base, 1));
+        assert!(asp.validate_read_range(asp.data_base, 1));
+        assert!(asp.validate_read_range(asp.data_base + asp.data_size - 1, 1));
+        assert!(asp.validate_read_range(asp.stack_base - asp.stack_size, 1));
+        assert!(asp.validate_read_range(asp.stack_base, 1));
+        assert!(asp.validate_read_range(asp.heap_base, asp.heap_size as usize));
+    }
+
+    #[test]
+    fn test_validate_write_range_rejects_code_and_accepts_writable_regions() {
+        let asp = UserAddressSpace::default();
+        assert!(!asp.validate_write_range(asp.code_base, 1));
+        assert!(asp.validate_write_range(asp.data_base, 1));
+        assert!(asp.validate_write_range(asp.stack_base - asp.stack_size, 1));
+        assert!(asp.validate_write_range(asp.heap_base, 1));
+    }
+
+    #[test]
+    fn test_validate_range_rejects_cross_region_and_overflow() {
+        let asp = UserAddressSpace::default();
+        assert!(!asp.validate_read_range(asp.code_base + asp.code_size - 1, 2));
+        assert!(!asp.validate_read_range(asp.data_base - 1, 2));
+        assert!(!asp.validate_read_range(u64::MAX, 2));
+        assert!(!asp.validate_read_range(asp.heap_base, usize::MAX));
+        assert!(!asp.validate_write_range(asp.code_base, 0x1000));
+    }
+
+    #[test]
+    fn test_validate_zero_length_never_requires_a_valid_pointer() {
+        let asp = UserAddressSpace::default();
+        assert!(asp.validate_read_range(u64::MAX, 0));
+        assert!(asp.validate_write_range(0, 0));
     }
 
     #[test]

@@ -765,11 +765,20 @@ pub struct AtcNetStats {
     pub current_height: u64,
 }
 
-// === ats1000 NetworkStack Trait Implementation === //
+// === Userspace network-service contract === //
 
-use shivacore::ats1000::NetworkStack;
+/// Local userspace-facing contract for the ATCNet protocol handler.
+///
+/// This trait deliberately contains no kernel implementation types. It is an
+/// in-process service abstraction only; it does not by itself provide IPC,
+/// process isolation, or a privileged network-device boundary.
+pub trait NetworkService {
+    fn connect(&mut self, peer_node_id: &[u8; 32]) -> Option<u64>;
+    fn send(&mut self, conn: u64, msg: &[u8]) -> bool;
+    fn recv(&mut self, conn: u64, buf: &mut [u8]) -> u64;
+}
 
-impl NetworkStack for AtcNetHandler {
+impl NetworkService for AtcNetHandler {
     fn connect(&mut self, peer_node_id: &[u8; 32]) -> Option<u64> {
         let peer_id: PeerId = *peer_node_id;
         let did = format!("did:shivacore:{}", hex_encode(&peer_id[..8]));
@@ -1207,7 +1216,7 @@ mod tests {
     fn test_ats1000_network_stack_trait() {
         let mut h = AtcNetHandler::new(dummy_peer_id(0), "did:shivacore:self".to_string());
         let peer_id = dummy_peer_id(1);
-        let conn = NetworkStack::connect(&mut h, &peer_id).unwrap();
+        let conn = NetworkService::connect(&mut h, &peer_id).unwrap();
         assert!(conn > 0);
     }
 

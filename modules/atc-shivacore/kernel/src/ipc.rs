@@ -259,6 +259,16 @@ impl IpcSubsystem {
         caps.delegate(owner, *source_cap, target, rights)
     }
 
+    /// Returns the next queued payload length without consuming the message.
+    /// Call only after authorizing the receiver to avoid leaking queue metadata.
+    pub fn next_message_len(&self, channel_id: ChannelId) -> Option<usize> {
+        self.channels
+            .get(&channel_id)
+            .filter(|channel| !channel.closed)
+            .and_then(|channel| channel.buffer.first())
+            .map(|message| message.data.len())
+    }
+
     pub fn channel_count(&self) -> usize {
         self.channels.len()
     }

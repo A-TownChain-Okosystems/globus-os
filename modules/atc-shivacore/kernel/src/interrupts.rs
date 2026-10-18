@@ -6,6 +6,7 @@
 
 use crate::gdt;
 use crate::serial_println;
+use alloc::vec::Vec;
 use core::arch::global_asm;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
@@ -16,6 +17,7 @@ use x86_64::registers::rflags::RFlags;
 use x86_64::structures::idt::{
     InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode,
 };
+use x86_64::structures::paging::{OffsetPageTable, PhysFrame, Size4KiB};
 use x86_64::VirtAddr;
 
 pub const PIC_1_OFFSET: u8 = 0x20;
@@ -25,8 +27,37 @@ pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
+struct RegisteredUserAddressSpace {
+    pid: shivacore::ats1000::Pid,
+    context: UserContext,
+    root_frame: PhysFrame<Size4KiB>,
+    mapper: OffsetPageTable<'static>,
+}
 
-pub fn init_user_scheduler(first: &UserContext, second: &UserContext) {
+static USER_ADDRESS_SPACES: Mutex<Vec<RegisteredUserAddressSpace>> = Mutex::new(Vec::new());
+
+pub fn init_user_scheduler(
+    first: &UserContext,
+    first_root: PhysFrame<Size4KiB>,
+    first_mapper: OffsetPageTable<'static>,
+    second: &UserContext,
+    second_root: PhysFrame<Size4KiB>,
+    second_mapper: OffsetPageTable<'static>,
+) {
+    *USER_ADDRESS_SPACES.lock() = alloc::vec![
+        RegisteredUserAddressSpace {
+            pid: first.pid,
+            context: first.clone(),
+            root_frame: first_root,
+            mapper: first_mapper,
+        },
+        RegisteredUserAddressSpace {
+            pid: second.pid,
+            context: second.clone(),
+            root_frame: second_root,
+            mapper: second_mapper,
+        },
+    ];
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
@@ -70,9 +101,13 @@ lazy_static! {
                 .set_handler_addr(timer_interrupt_entry_addr())
         };
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
-        // User-mode software interrupt gate. DPL3 permits CPL3 to enter the kernel.
-        idt[0x80].set_handler_fn(syscall_interrupt_handler)
-            .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
+        // User-mode software interrupt gate. The assembly trampoline saves every
+        // general-purpose register before entering Rust and returns with IRETQ.
+        unsafe {
+            idt[0x80]
+                .set_handler_addr(syscall_interrupt_entry_addr())
+                .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
+        }
         idt
     };
 }
@@ -276,22 +311,38 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
             1001 => (0x2000, 0x2001, 0x2012),
             _ => (current.regs.rax, current.regs.rbx, current.regs.r12),
         };
-        if current.regs.rax != rax || current.regs.rbx != rbx || current.regs.r12 != r12 {
-            panic!(
-                "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-                pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+        // User code may legitimately clobber registers while executing syscalls.
+        // Assert the isolation pattern only after the Ring-3 payload arms it by
+        // writing R13 last; this avoids mistaking an arbitrary syscall snapshot
+        // for register corruption.
+        const REGISTER_CHECKPOINT_MARKER: u64 = 0x5343_4845_4455_4c31;
+        if current.regs.r13 == REGISTER_CHECKPOINT_MARKER {
+            if current.regs.rax != rax || current.regs.rbx != rbx || current.regs.r12 != r12 {
+                panic!(
+                    "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                    pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+                );
+            }
+            serial_println!(
+                "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                pid.0,
+                current.regs.rax,
+                current.regs.rbx,
+                current.regs.r12
             );
         }
-        serial_println!(
-            "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-            pid.0,
-            current.regs.rax,
-            current.regs.rbx,
-            current.regs.r12
-        );
     }
 
     if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
+        let next_root = USER_ADDRESS_SPACES
+            .lock()
+            .iter()
+            .find(|space| space.pid == next_pid)
+            .map(|space| space.root_frame)
+            .unwrap_or_else(|| panic!("SCHED-001 missing page-table root for PID={}", next_pid.0));
+        // The kernel stack, trampoline, IDT, and scheduler code are present in
+        // every root through supervisor-only upper-half mappings.
+        unsafe { crate::memory::switch_to_page_table(next_root) };
         serial_println!(
             "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x} RAX={:#x}",
             next_pid.0,
@@ -311,13 +362,307 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_timer_trampoline as usize as u64)
 }
 
-extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
-    serial_println!(
-        "ShivaCore: CPL3 syscall gate entered at RIP={:#x}",
-        stack_frame.instruction_pointer.as_u64()
+/// Register layout at the stack pointer produced by
+/// shivacore_syscall_trampoline. The trampoline pushes R15 first and RAX last,
+/// so RAX is at offset zero; the CPU's privilege-transition IRET frame follows
+/// the fifteen saved general-purpose registers.
+#[repr(C)]
+struct SyscallTrapFrame {
+    rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+    rsi: u64,
+    rdi: u64,
+    rbp: u64,
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+    rip: u64,
+    cs: u64,
+    rflags: u64,
+    rsp: u64,
+    ss: u64,
+}
+
+static SYSCALL_KERNEL_STATE: Mutex<Option<shivacore::kernel_init::KernelState>> = Mutex::new(None);
+static SYSCALL_DISPATCHER: Mutex<shivacore::syscall::SyscallDispatcher> =
+    Mutex::new(shivacore::syscall::SyscallDispatcher::new());
+
+/// Install the canonical, already initialized kernel state for trap dispatch.
+/// The state is moved here once; syscall handling never constructs a parallel
+/// capability table or IPC subsystem.
+pub fn install_syscall_kernel(state: shivacore::kernel_init::KernelState) {
+    let mut slot = SYSCALL_KERNEL_STATE.lock();
+    assert!(slot.is_none(), "syscall kernel state installed twice");
+    *slot = Some(state);
+}
+
+/// The mapper is installed after all boot-time mappings are complete. Ring-3
+/// syscall handling is the only consumer while user execution is active.
+fn user_address_space(pid: shivacore::ats1000::Pid) -> Option<UserContext> {
+    USER_ADDRESS_SPACES
+        .lock()
+        .iter()
+        .find(|space| space.pid == pid)
+        .map(|space| space.context.clone())
+}
+
+fn validate_user_buffer(
+    space: &RegisteredUserAddressSpace,
+    address: u64,
+    len: usize,
+    write: bool,
+) -> bool {
+    if len == 0 {
+        return true;
+    }
+    space
+        .context
+        .addr_space
+        .validate_mapped_range(&space.mapper, address, len, write)
+}
+
+fn copy_from_user(space: &RegisteredUserAddressSpace, address: u64, len: usize) -> Option<Vec<u8>> {
+    if !validate_user_buffer(space, address, len, false) {
+        return None;
+    }
+    let mut bytes = alloc::vec![0u8; len];
+    if len != 0 {
+        // SAFETY: the address-space registry lock is held by the trap handler
+        // across validation and copy, so no mapper mutation can invalidate PTEs.
+        unsafe {
+            core::ptr::copy_nonoverlapping(address as *const u8, bytes.as_mut_ptr(), len);
+        }
+    }
+    Some(bytes)
+}
+
+fn copy_to_user(space: &RegisteredUserAddressSpace, address: u64, bytes: &[u8]) -> bool {
+    if !validate_user_buffer(space, address, bytes.len(), true) {
+        return false;
+    }
+    if !bytes.is_empty() {
+        // SAFETY: the registry lock remains held across PTE validation and copy.
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), address as *mut u8, bytes.len());
+        }
+    }
+    true
+}
+
+extern "C" {
+    fn shivacore_syscall_trampoline();
+}
+
+global_asm!(
+    r#"
+    .global shivacore_syscall_trampoline
+shivacore_syscall_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    # CPL0-origin INT 0x80 has no saved RSP/SS pair. Reject it before Rust
+    # can interpret the stack as the five-word CPL3 privilege-transition frame.
+    mov rax, qword ptr [rsp + 128]
+    and eax, 3
+    cmp eax, 3
+    jne .Lshivacore_syscall_bad_privilege
+    mov r12, rsp
+    mov rdi, rsp
+    and rsp, -16
+    call {handler}
+    mov rsp, r12
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    iretq
+
+.Lshivacore_syscall_bad_privilege:
+    and rsp, -16
+    call {bad_handler}
+    ud2
+"#,
+    handler = sym syscall_trap_rust,
+    bad_handler = sym syscall_privilege_violation
+);
+
+fn syscall_interrupt_entry_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_syscall_trampoline as usize as u64)
+}
+
+/// Fail closed if a CPL0 caller attempts to use the Ring-3-only syscall gate.
+/// The assembly checks CS before building a full privilege-transition frame.
+extern "C" fn syscall_privilege_violation() -> ! {
+    panic!("ShivaCore: rejected INT 0x80 from non-Ring-3 context");
+}
+
+/// Trap ABI (x86-64): RAX=syscall id, RDI=ABI version, RSI=capability
+/// handle (zero means absent), RDX=arg0, R10=arg1, R8=payload pointer,
+/// R9=payload length. Return: RAX=value, RDX=0 on success or AbiError code.
+///
+/// IPC pointer spans are validated against the registered process layout and
+/// that process's mapper before copy-in/copy-out. Processes have distinct CR3
+/// roots, but this path is not yet SMP-safe: current PID/scheduler state is
+/// global, there is no remote TLB shootdown protocol, and frame allocation and
+/// address-space teardown do not yet have a complete concurrent lifecycle.
+extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
+    // CS was checked in assembly before interpreting RSP/SS. Recheck the
+    // complete frame so a malformed user SS selector fails closed as well.
+    if !shivacore::hal::privilege::is_user_trap_frame(frame.cs, frame.ss) {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    }
+
+    let Some(pid) = USER_SCHEDULER.lock().as_ref().and_then(|s| s.current_pid()) else {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    };
+
+    // Hold the address-space registry lock from PTE validation through
+    // dispatch and copy-out. A future unmap/remap implementation must use this
+    // same lock, preventing validation/copy TOCTOU races across CPUs.
+    let address_spaces = USER_ADDRESS_SPACES.lock();
+    let Some(user_space) = address_spaces.iter().find(|space| space.pid == pid) else {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    };
+
+    let syscall_id = frame.rax as u16;
+    let is_send = syscall_id == libshivacore::Syscall::IpcSend.id();
+    let is_receive = syscall_id == libshivacore::Syscall::IpcReceive.id();
+    let payload_len = if is_receive { 0 } else { frame.r9 as usize };
+    let receive_capacity = if is_receive { frame.r9 as usize } else { 0 };
+
+    // Enforce the ABI ceiling before allocating or walking a user-controlled span.
+    if (is_send && payload_len > libshivacore::MAX_SYSCALL_PAYLOAD)
+        || (is_receive && receive_capacity > libshivacore::MAX_SYSCALL_PAYLOAD)
+    {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+        return;
+    }
+
+    // Copy-in/copy-out is only performed after validating the full span against
+    // the process layout and every effective PTE. IPC receive validates the
+    // entire destination before dequeueing, so a bad buffer cannot consume data.
+    let payload = if is_send {
+        match copy_from_user(user_space, frame.r8, payload_len) {
+            Some(bytes) => bytes,
+            None => {
+                serial_println!(
+                    "ShivaCore: RING3_IPC pid={} syscall={} result=0 error=InvalidPayload reason=unreadable-or-unmapped-user-span",
+                    pid.0,
+                    syscall_id
+                );
+                frame.rax = 0;
+                frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+                return;
+            }
+        }
+    } else {
+        Vec::new()
+    };
+    if is_receive && !validate_user_buffer(user_space, frame.r8, receive_capacity, true) {
+        serial_println!(
+            "ShivaCore: RING3_IPC pid={} syscall={} result=0 error=InvalidPayload reason=unwritable-or-unmapped-user-span",
+            pid.0,
+            syscall_id
+        );
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+        return;
+    }
+
+    let request = shivacore::syscall::SyscallRequest {
+        abi_version: frame.rdi as u32,
+        syscall_id,
+        capability: if frame.rsi == 0 {
+            None
+        } else {
+            Some(libshivacore::CapabilityHandle(frame.rsi))
+        },
+        arg0: frame.rdx,
+        arg1: if is_receive {
+            receive_capacity as u64
+        } else {
+            frame.r10
+        },
+        payload_len,
+    };
+
+    let mut state_guard = SYSCALL_KERNEL_STATE.lock();
+    let Some(state) = state_guard.as_mut() else {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    };
+
+    let mut receive_buffer = Vec::new();
+    let response = SYSCALL_DISPATCHER.lock().dispatch_with_ipc(
+        pid,
+        request,
+        &mut state.processes.caps,
+        &mut state.ipc,
+        &payload,
+        &mut receive_buffer,
     );
-    // Return to the interrupted userspace instruction for now. The ABI dispatcher
-    // is wired next; this gate is intentionally observable before SCHED-001/SYS-001.
+
+    if response.error.is_none() && is_receive {
+        if receive_buffer.len() > receive_capacity
+            || !copy_to_user(user_space, frame.r8, &receive_buffer)
+        {
+            // The registry lock keeps the mapping stable from validation through
+            // copy-out. Fail closed if the dispatcher returns an oversized payload
+            // or the destination cannot be validated again.
+            frame.rax = 0;
+            frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+            return;
+        }
+    }
+    if is_send || is_receive {
+        serial_println!(
+            "ShivaCore: RING3_IPC pid={} syscall={} result={} error={:?}",
+            pid.0,
+            syscall_id,
+            response.value,
+            response.error
+        );
+    }
+    frame.rax = response.value;
+    frame.rdx = response.error.map(|error| error as u64).unwrap_or(0);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {

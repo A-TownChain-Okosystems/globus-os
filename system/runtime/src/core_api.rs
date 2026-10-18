@@ -58,6 +58,8 @@ impl RuntimeCore {
             | Syscall::IpcSend
             | Syscall::IpcReceive
             | Syscall::CapabilityQuery
+            | Syscall::CapabilityDelegate
+            | Syscall::CapabilityRevoke
             | Syscall::HandleClose
             | Syscall::MonotonicTime => true,
         }
