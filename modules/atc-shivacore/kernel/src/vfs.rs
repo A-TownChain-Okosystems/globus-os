@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
-use crate::capability::{CapabilityTable, Rights};
+use crate::capability::{CapabilityTable, ResourceType, Rights};
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
@@ -244,7 +244,9 @@ impl Vfs {
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
         let table = self.caps.lock();
         if let Some(cap) = table.get(crate::capability::CapId(cap_handle)) {
-            cap.owner == crate::ats1000::Pid(pid as u32) && cap.rights.has(required)
+            cap.owner == crate::ats1000::Pid(pid as u32)
+                && cap.resource_type == ResourceType::FileSystem
+                && cap.rights.has(required)
         } else {
             false
         }
