@@ -197,6 +197,31 @@ mod tests {
     }
 
     #[test]
+    fn process_start_wire_decoder_requires_exact_size_and_valid_path() {
+        let mut bytes = [0u8; ProcessStartRequest::WIRE_SIZE];
+        bytes[..5].copy_from_slice(b"/init");
+        let len_offset = MAX_PROCESS_PATH;
+        bytes[len_offset..len_offset + 2].copy_from_slice(&5u16.to_le_bytes());
+        bytes[len_offset + 2] = 10;
+        bytes[len_offset + 4..len_offset + 8].copy_from_slice(&4u32.to_le_bytes());
+
+        let decoded = ProcessStartRequest::decode_wire(&bytes).unwrap();
+        assert_eq!(decoded.path_len, 5);
+        assert_eq!(decoded.priority, 10);
+        assert_eq!(decoded.args_len, 4);
+        assert_eq!(
+            ProcessStartRequest::decode_wire(&bytes[..bytes.len() - 1]),
+            Err(AbiError::InvalidPayload)
+        );
+
+        bytes[0] = b'x';
+        assert_eq!(
+            ProcessStartRequest::decode_wire(&bytes),
+            Err(AbiError::InvalidPayload)
+        );
+    }
+
+    #[test]
     fn simple_hash_is_stable() {
         assert_eq!(simple_hash(b"abc"), simple_hash(b"abc"));
         assert_ne!(simple_hash(b"abc"), simple_hash(b"abd"));
@@ -242,6 +267,41 @@ pub struct ProcessStartRequest {
 }
 
 impl ProcessStartRequest {
+    /// Canonical wire size: path[256] + path_len[u16] + priority[u8] +
+    /// flags[u8] + args_len[u32]. Integers are little-endian on the wire.
+    pub const WIRE_SIZE: usize = MAX_PROCESS_PATH + 2 + 1 + 1 + 4;
+
+    /// Decode an exact-size byte payload without reading user pointers or allocating.
+    ///
+    /// Callers must first copy the bytes from userspace using a kernel-validated
+    /// copy-in routine. This decoder deliberately accepts a byte slice, never an
+    /// address, so it cannot dereference an untrusted pointer itself.
+    pub fn decode_wire(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() != Self::WIRE_SIZE {
+            return Err(AbiError::InvalidPayload);
+        }
+
+        let mut path = [0u8; MAX_PROCESS_PATH];
+        path.copy_from_slice(&bytes[..MAX_PROCESS_PATH]);
+        let request = Self {
+            path,
+            path_len: u16::from_le_bytes([
+                bytes[MAX_PROCESS_PATH],
+                bytes[MAX_PROCESS_PATH + 1],
+            ]),
+            priority: bytes[MAX_PROCESS_PATH + 2],
+            flags: bytes[MAX_PROCESS_PATH + 3],
+            args_len: u32::from_le_bytes([
+                bytes[MAX_PROCESS_PATH + 4],
+                bytes[MAX_PROCESS_PATH + 5],
+                bytes[MAX_PROCESS_PATH + 6],
+                bytes[MAX_PROCESS_PATH + 7],
+            ]),
+        };
+        request.validate()?;
+        Ok(request)
+    }
+
     /// Validates bounds and path encoding without allocating.
     pub fn validate(&self) -> Result<(), AbiError> {
         let path_len = self.path_len as usize;
