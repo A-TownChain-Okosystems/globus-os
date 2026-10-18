@@ -251,6 +251,107 @@ impl CapabilityTable {
     }
 }
 
+/// Trusted adapter from the stable userspace capability contract to the
+/// kernel-owned capability table. It owns no second table and stores no copy
+/// of authorization state.
+pub struct KernelCapabilityClient<'a> {
+    table: &'a mut CapabilityTable,
+}
+
+impl<'a> KernelCapabilityClient<'a> {
+    pub fn new(table: &'a mut CapabilityTable) -> Self {
+        Self { table }
+    }
+
+    fn pid(id: libshivacore::ProcessId) -> Result<Pid, libshivacore::AbiError> {
+        u32::try_from(id.0)
+            .map(Pid)
+            .map_err(|_| libshivacore::AbiError::InvalidHandle)
+    }
+
+    fn resource(
+        resource: libshivacore::CapabilityResource,
+    ) -> ResourceType {
+        match resource {
+            libshivacore::CapabilityResource::KnowledgeGraphEntity => ResourceType::Memory,
+        }
+    }
+}
+
+impl libshivacore::CapabilityClient for KernelCapabilityClient<'_> {
+    fn create_capability(
+        &mut self,
+        owner: libshivacore::ProcessId,
+        resource: libshivacore::CapabilityResource,
+        resource_id: u64,
+        rights: libshivacore::CapabilityRights,
+    ) -> Result<libshivacore::CapabilityHandle, libshivacore::AbiError> {
+        let pid = Self::pid(owner)?;
+        if rights.bits() & !libshivacore::CapabilityRights::DEFINED_MASK != 0 {
+            return Err(libshivacore::AbiError::InvalidPayload);
+        }
+        let id = self.table.create(pid, Self::resource(resource), resource_id, Rights(rights.bits()));
+        Ok(libshivacore::CapabilityHandle(id.0))
+    }
+
+    fn check_capability(
+        &self,
+        owner: libshivacore::ProcessId,
+        resource: libshivacore::CapabilityResource,
+        resource_id: u64,
+        rights: libshivacore::CapabilityRights,
+    ) -> bool {
+        let Ok(pid) = Self::pid(owner) else { return false };
+        if rights.bits() & !libshivacore::CapabilityRights::DEFINED_MASK != 0 {
+            return false;
+        }
+        self.table.check(pid, Self::resource(resource), resource_id, Rights(rights.bits()))
+    }
+
+    fn delegate_resource(
+        &mut self,
+        owner: libshivacore::ProcessId,
+        resource: libshivacore::CapabilityResource,
+        resource_id: u64,
+        target: libshivacore::ProcessId,
+        rights: libshivacore::CapabilityRights,
+    ) -> Result<libshivacore::CapabilityHandle, libshivacore::AbiError> {
+        let owner_pid = Self::pid(owner)?;
+        let target_pid = Self::pid(target)?;
+        if rights.bits() & !libshivacore::CapabilityRights::DEFINED_MASK != 0 {
+            return Err(libshivacore::AbiError::InvalidPayload);
+        }
+        let required = Rights(rights.bits() | Rights::DELEGATE.bits());
+        let source = self.table.list_for(owner_pid).into_iter()
+            .find(|cap| cap.resource_type == Self::resource(resource)
+                && cap.resource_id == resource_id && cap.rights.has(required))
+            .ok_or(libshivacore::AbiError::PermissionDenied)?;
+        let child = self.table.delegate(owner_pid, source.id, target_pid, Rights(rights.bits()))
+            .map_err(|_| libshivacore::AbiError::PermissionDenied)?;
+        Ok(libshivacore::CapabilityHandle(child.0))
+    }
+
+    fn revoke_resource(
+        &mut self,
+        owner: libshivacore::ProcessId,
+        resource: libshivacore::CapabilityResource,
+        resource_id: u64,
+    ) -> Result<(), libshivacore::AbiError> {
+        let owner_pid = Self::pid(owner)?;
+        let ids: Vec<CapId> = self.table.list_for(owner_pid).into_iter()
+            .filter(|cap| cap.resource_type == Self::resource(resource) && cap.resource_id == resource_id)
+            .map(|cap| cap.id)
+            .collect();
+        if ids.is_empty() {
+            return Err(libshivacore::AbiError::InvalidHandle);
+        }
+        for id in ids {
+            self.table.revoke(id);
+        }
+        Ok(())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
