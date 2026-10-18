@@ -20,7 +20,9 @@ pub mod timer;
 
 pub use block_cache::{BlockCache, CacheError};
 pub use block_manager::{BlockDeviceId, BlockDeviceRegistry};
-pub use hardware_inventory::{HardwareInventory, HardwareLocation, HardwareRecord, HardwareStatus, InventoryError};
+pub use hardware_inventory::{
+    HardwareInventory, HardwareLocation, HardwareRecord, HardwareStatus, InventoryError,
+};
 pub use registry::DeviceRegistry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
