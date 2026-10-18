@@ -112,7 +112,7 @@ pub fn discover_pci<A: PciConfigAccess>(
                         read_config(access, address, 0)?
                     };
                     let vendor = identity as u16;
-                    if vendor == 0xFFFF {
+                    if vendor == 0 || vendor == 0xFFFF {
                         continue;
                     }
                     let device_id_raw = (identity >> 16) as u16;
@@ -302,6 +302,50 @@ mod tests {
         assert!(validate_dma_region(DmaRegion {
             iova: u64::MAX - 3, physical: 0x1000, length: 8, writable: true,
         }).is_err());
+    }
+
+    #[test]
+    fn failed_driver_initialization_is_recorded_without_marking_device_ready() {
+        let address = PciAddress::new(0, 0, 1, 0);
+        let mut inventory = HardwareInventory::new();
+        inventory.register(HardwareRecord {
+            id: device_id(address),
+            class: DeviceClass::Network,
+            location: HardwareLocation::Pci {
+                segment: 0, bus: 0, device: 1, function: 0,
+            },
+            vendor_id: Some(0x1234),
+            device_id: Some(0x5678),
+            revision: Some(1),
+            status: HardwareStatus::Discovered,
+            driver: None,
+            capabilities: alloc::vec![String::from("pci")],
+        }).unwrap();
+        inventory.set_status(
+            device_id(address),
+            HardwareStatus::Failed,
+            Some(String::from("test-net")),
+        ).unwrap();
+        let record = inventory.get(device_id(address)).unwrap();
+        assert_eq!(record.status, HardwareStatus::Failed);
+        assert_eq!(record.driver.as_deref(), Some("test-net"));
+    }
+
+    #[test]
+    fn corrupted_mcfg_checksum_is_rejected() {
+        let mut bytes = alloc::vec![0u8; 60];
+        bytes[0..4].copy_from_slice(b"MCFG");
+        bytes[4..8].copy_from_slice(&60u32.to_le_bytes());
+        bytes[44..52].copy_from_slice(&0xE000_0000u64.to_le_bytes());
+        bytes[52] = 0;
+        bytes[53] = 0;
+        let sum = bytes.iter().fold(0u8, |sum, byte| sum.wrapping_add(*byte));
+        bytes[9] = 0u8.wrapping_sub(sum);
+        bytes[45] ^= 1;
+        assert_eq!(
+            parse_mcfg_windows(&bytes),
+            Err(DiscoveryError::InvalidMcfg(AcpiError::InvalidChecksum))
+        );
     }
 
     #[test]
