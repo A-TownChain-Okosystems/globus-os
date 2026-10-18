@@ -25,15 +25,6 @@ pub enum Right {
     Admin,
 }
 
-/// A grant pairing a capability with a granted right.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct Grant {
-    /// The capability associated with this grant.
-    pub capability: Capability,
-    /// The right granted for the capability.
-    pub right: Right,
-}
-
 /// The outcome of an authorization check.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Authorization {
@@ -43,31 +34,63 @@ pub enum Authorization {
     Denied,
 }
 
-/// Authorizes a requested right against an optional grant.
-pub fn authorize(grant: Option<Grant>, requested: Right) -> Authorization {
-    match grant {
-        Some(g) if g.right == requested || g.right == Right::Admin => Authorization::Allowed,
-        _ => Authorization::Denied,
+/// Authorizes only a capability that exists in the trusted registry, is bound to
+/// the requested object, has the requested right, and has not been revoked.
+/// Callers must never treat a caller-constructed permission claim as authority.
+pub fn authorize(
+    registry: &CapabilityRegistry,
+    capability: Capability,
+    object_id: u64,
+    requested: Right,
+) -> Authorization {
+    if registry.authorize(capability, object_id, requested) {
+        Authorization::Allowed
+    } else {
+        Authorization::Denied
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
-    fn signing_is_distinct_from_execute() {
-        let grant = Grant {
-            capability: Capability(1),
-            right: Right::Execute,
-        };
-        assert_eq!(authorize(Some(grant), Right::Sign), Authorization::Denied);
+    fn unknown_capability_is_denied() {
+        let registry = CapabilityRegistry::new();
+        assert_eq!(
+            authorize(&registry, Capability(99), 7, Right::Sign),
+            Authorization::Denied
+        );
     }
+
     #[test]
-    fn admin_can_sign() {
-        let grant = Grant {
-            capability: Capability(1),
-            right: Right::Admin,
-        };
-        assert_eq!(authorize(Some(grant), Right::Sign), Authorization::Allowed);
+    fn registry_enforces_object_binding_and_revocation() {
+        let mut registry = CapabilityRegistry::new();
+        let capability = Capability(7);
+        assert!(registry.grant(capability, 42, Right::Sign));
+        assert_eq!(
+            authorize(&registry, capability, 42, Right::Sign),
+            Authorization::Allowed
+        );
+        assert_eq!(
+            authorize(&registry, capability, 99, Right::Sign),
+            Authorization::Denied
+        );
+        assert!(registry.revoke(capability));
+        assert_eq!(
+            authorize(&registry, capability, 42, Right::Sign),
+            Authorization::Denied
+        );
+    }
+
+    #[test]
+    fn wrong_right_is_denied() {
+        let mut registry = CapabilityRegistry::new();
+        let capability = Capability(8);
+        assert!(registry.grant(capability, 42, Right::Execute));
+        assert_eq!(
+            authorize(&registry, capability, 42, Right::Sign),
+            Authorization::Denied
+        );
     }
 }
