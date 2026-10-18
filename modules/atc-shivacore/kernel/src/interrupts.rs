@@ -8,8 +8,7 @@ use crate::gdt;
 use crate::serial_println;
 use alloc::vec::Vec;
 use core::arch::global_asm;
-use core::sync::atomic::{AtomicPtr, Ordering};
-use x86_64::structures::paging::OffsetPageTable;
+use x86_64::structures::paging::{OffsetPageTable, PhysFrame, Size4KiB};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use shivacore::user_sched::{SavedContext, UserScheduler};
@@ -28,11 +27,37 @@ pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
-static USER_ADDRESS_SPACES: Mutex<Vec<(shivacore::ats1000::Pid, UserContext)>> = Mutex::new(Vec::new());
-static ACTIVE_MAPPER: AtomicPtr<OffsetPageTable<'static>> = AtomicPtr::new(core::ptr::null_mut());
+struct RegisteredUserAddressSpace {
+    pid: shivacore::ats1000::Pid,
+    context: UserContext,
+    root_frame: PhysFrame<Size4KiB>,
+    mapper: OffsetPageTable<'static>,
+}
 
-pub fn init_user_scheduler(first: &UserContext, second: &UserContext) {
-    *USER_ADDRESS_SPACES.lock() = alloc::vec![(first.pid, first.clone()), (second.pid, second.clone())];
+static USER_ADDRESS_SPACES: Mutex<Vec<RegisteredUserAddressSpace>> = Mutex::new(Vec::new());
+
+pub fn init_user_scheduler(
+    first: &UserContext,
+    first_root: PhysFrame<Size4KiB>,
+    first_mapper: OffsetPageTable<'static>,
+    second: &UserContext,
+    second_root: PhysFrame<Size4KiB>,
+    second_mapper: OffsetPageTable<'static>,
+) {
+    *USER_ADDRESS_SPACES.lock() = alloc::vec![
+        RegisteredUserAddressSpace {
+            pid: first.pid,
+            context: first.clone(),
+            root_frame: first_root,
+            mapper: first_mapper,
+        },
+        RegisteredUserAddressSpace {
+            pid: second.pid,
+            context: second.clone(),
+            root_frame: second_root,
+            mapper: second_mapper,
+        },
+    ];
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
@@ -302,6 +327,15 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     }
 
     if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
+        let next_root = USER_ADDRESS_SPACES
+            .lock()
+            .iter()
+            .find(|space| space.pid == next_pid)
+            .map(|space| space.root_frame)
+            .unwrap_or_else(|| panic!("SCHED-001 missing page-table root for PID={}", next_pid.0));
+        // The kernel stack, trampoline, IDT, and scheduler code are present in
+        // every root through supervisor-only upper-half mappings.
+        unsafe { crate::memory::switch_to_page_table(next_root) };
         serial_println!(
             "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x} RAX={:#x}",
             next_pid.0,
@@ -347,16 +381,12 @@ pub fn install_syscall_kernel(state: crate::kernel_init::KernelState) {
 
 /// The mapper is installed after all boot-time mappings are complete. Ring-3
 /// syscall handling is the only consumer while user execution is active.
-pub fn install_active_mapper(mapper: &mut OffsetPageTable<'static>) {
-    ACTIVE_MAPPER.store(mapper as *mut _, Ordering::Release);
-}
-
 fn user_address_space(pid: shivacore::ats1000::Pid) -> Option<UserContext> {
     USER_ADDRESS_SPACES
         .lock()
         .iter()
-        .find(|(registered_pid, _)| *registered_pid == pid)
-        .map(|(_, context)| context.clone())
+        .find(|space| space.pid == pid)
+        .map(|space| space.context.clone())
 }
 
 fn validate_user_buffer(
@@ -368,16 +398,14 @@ fn validate_user_buffer(
     if len == 0 {
         return true;
     }
-    let Some(context) = user_address_space(pid) else { return false };
-    let mapper = ACTIVE_MAPPER.load(Ordering::Acquire);
-    if mapper.is_null() {
+    let spaces = USER_ADDRESS_SPACES.lock();
+    let Some(space) = spaces.iter().find(|space| space.pid == pid) else {
         return false;
-    }
-    // SAFETY: mapper is installed before Ring 3 starts and no mapper mutation
-    // occurs while the user scheduler is running on this single boot CPU.
-    unsafe {
-        context.addr_space.validate_mapped_range(&*mapper, address, len, write)
-    }
+    };
+    // The registry lock serializes mapper access. Address-space mutation is not
+    // exposed after Ring 3 starts; any future unmap/remap API must hold this same
+    // lock across validation and the memory copy.
+    space.context.addr_space.validate_mapped_range(&space.mapper, address, len, write)
 }
 
 fn copy_from_user(
