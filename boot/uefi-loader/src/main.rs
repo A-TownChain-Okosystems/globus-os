@@ -3,6 +3,9 @@
 
 extern crate alloc;
 
+#[global_allocator]
+static ALLOCATOR: uefi::allocator::Allocator = uefi::allocator::Allocator;
+
 use alloc::vec::Vec;
 use core::{mem, ptr, slice};
 use uefi::{
@@ -13,7 +16,7 @@ use uefi::{
     helpers, println,
     table::cfg::ConfigTableEntry,
     system,
-    Handle, Status,
+    Status,
 };
 
 const KERNEL_PATH: &uefi::CStr16 = cstr16!("\\EFI\\GLOBUS\\SHIVACORE.ELF");
