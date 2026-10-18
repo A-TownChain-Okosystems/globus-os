@@ -128,9 +128,31 @@ impl CapabilityRights {
         self.0 & required.0 == required.0
     }
 
+    /// Compatibility helper for callers migrating from the kernel Rights type.
+    pub const fn has(self, required: Self) -> bool {
+        self.contains(required)
+    }
+
     pub const fn bits(self) -> u8 {
         self.0
     }
+}
+
+impl core::ops::BitOr for CapabilityRights {
+    type Output = Self;
+
+    fn bitor(self, rhs: Self) -> Self::Output {
+        Self(self.0 | rhs.0)
+    }
+}
+
+impl core::ops::BitAnd for CapabilityRights {
+    type Output = Self;
+
+    fn bitand(self, rhs: Self) -> Self::Output {
+        Self(self.0 & rhs.0)
+    }
+}
 }
 
 /// Stable boot phases visible to services without exposing KernelState.
