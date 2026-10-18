@@ -92,7 +92,7 @@ mod tests {
 
     impl MemorySlots {
         fn new() -> Self {
-            Self { active: Slot::A, ..Self::default() }
+            Self { active: Slot::A, slots: HashMap::new(), tamper_after_write: false, fail_write: false, activations: 0 }
         }
     }
 
