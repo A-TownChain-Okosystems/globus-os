@@ -203,7 +203,7 @@ pub fn current_apic_id_gs() -> Option<u32> {
 /// Read the logical CPU ID via a GS-relative memory operand.
 #[inline]
 pub fn current_logical_id_gs() -> Option<u32> {
-    if read_msr(IA32_GS_BASE) == 0 {
+    if unsafe { read_msr(IA32_GS_BASE) } == 0 {
         return None;
     }
     let value: u32;
