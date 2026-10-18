@@ -3,7 +3,6 @@ name: Merge Conflict Detection
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review, edited]
-  workflow_dispatch:
 
 permissions:
   contents: read
@@ -50,6 +49,7 @@ jobs:
         env:
           PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
           BASE_REF: ${{ github.event.pull_request.base.ref }}
         shell: bash
         run: |
@@ -78,7 +78,7 @@ jobs:
           {
             echo "schema=globusos.merge-conflict-report.v1"
             echo "repository=$GITHUB_REPOSITORY"
-            echo "pull_request=$GITHUB_EVENT_NUMBER"
+            echo "pull_request=$PR_NUMBER"
             echo "base_sha=$PR_BASE_SHA"
             echo "head_sha=$PR_HEAD_SHA"
             echo "merge_base=$(git merge-base "$PR_BASE_SHA" "$PR_HEAD_SHA")"
@@ -159,8 +159,3 @@ jobs:
           fi
           echo "Synthetic conflict and conflict-free fixtures passed."
 
-      - name: Explain manual invocation limitation
-        if: github.event_name == 'workflow_dispatch'
-        run: |
-          echo "::error::Manual runs lack a validated pull-request base/head pair. This check cannot report PASS without exact PR SHAs."
-          exit 1
