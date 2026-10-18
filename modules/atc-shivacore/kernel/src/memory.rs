@@ -60,7 +60,10 @@ pub unsafe fn create_user_mapper(
     // lifetime of the process address space; the physical-memory mapping is
     // permanent. Ownership is transferred into this mapper.
     let root_table: &'static mut PageTable = unsafe { &mut *root_ptr };
-    Some((root_frame, OffsetPageTable::new(root_table, physical_memory_offset)))
+    Some((
+        root_frame,
+        OffsetPageTable::new(root_table, physical_memory_offset),
+    ))
 }
 
 /// Switch to a process root. Reloading CR3 invalidates non-global translations
