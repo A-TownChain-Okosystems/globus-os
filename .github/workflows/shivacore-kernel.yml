@@ -189,7 +189,7 @@ jobs:
             cat "$log"
             exit 1
           fi
-          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " "$log"; then
+          if [ "${{ matrix.expected_vendor }}" != "any" ] && ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " "$log"; then
             echo "UEFI CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
             cat "$log"
             exit 1
