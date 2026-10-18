@@ -2,7 +2,7 @@
 //!
 //! Raw config-space access and BAR mapping remain privileged HAL operations.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct PciAddress {
     pub segment: u16,
     pub bus: u8,
