@@ -1,5 +1,7 @@
 //! Isolated device-service registry and hardware contracts.
 
+extern crate alloc;
+
 pub mod acpi;
 pub mod apic;
 pub mod block;
