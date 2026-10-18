@@ -245,11 +245,27 @@ shivacore_page_fault_trampoline:
     push rcx
     push rbx
     push rax
+    // CS is at 17 qwords from the saved-register base (15 registers,
+    // hardware error code, RIP). Ring 0 has no hardware-pushed RSP/SS, so
+    // route it to a raw-pointer handler without constructing a full user frame.
+    mov rax, [rsp + 136]
+    and rax, 3
+    cmp rax, 3
+    jne .Lshivacore_kernel_page_fault
     mov r12, rsp
     mov rdi, rsp
     and rsp, -16
     call {handler}
     mov rsp, r12
+    jmp .Lshivacore_page_fault_restore
+
+.Lshivacore_kernel_page_fault:
+    mov rdi, rsp
+    and rsp, -16
+    call {kernel_handler}
+    ud2
+
+.Lshivacore_page_fault_restore:
     pop rax
     pop rbx
     pop rcx
@@ -268,29 +284,39 @@ shivacore_page_fault_trampoline:
     add rsp, 8
     iretq
 "#,
-    handler = sym page_fault_trap_rust
+    handler = sym page_fault_trap_rust,
+    kernel_handler = sym kernel_page_fault_trap_rust
 );
 
 fn page_fault_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_page_fault_trampoline as usize as u64)
 }
 
-/// Ring-3 faults terminate only the current process (exit status 139). A Ring-0
-/// fault remains fatal: the frame is not a user IRET frame and must never be
-/// resumed. If no other process is runnable, stop in a defined fatal path.
+/// Ring-0 faults have no hardware-saved RSP/SS. Read only fields that are
+/// guaranteed to exist in the short privilege-level frame; never create a
+/// reference to the larger Ring-3 frame for this stack layout.
+extern "C" fn kernel_page_fault_trap_rust(frame: *const u64) -> ! {
+    use x86_64::registers::control::Cr2;
+    let fault_addr = Cr2::read();
+    // Saved register slots 0..14, then error code, RIP, CS, RFLAGS.
+    let error_code = unsafe { *frame.add(15) };
+    let rip = unsafe { *frame.add(16) };
+    let cs = unsafe { *frame.add(17) };
+    serial_println!(
+        "EXCEPTION: KERNEL PAGE FAULT addr={:?} error={:#x} RIP={:#x} CS={:#x}",
+        fault_addr, error_code, rip, cs
+    );
+    panic!("fatal Ring-0 page fault at {:?}", fault_addr);
+}
+
+/// Ring-3 faults terminate only the current process (exit status 139). If no
+/// other process is runnable, stop in a defined fatal path.
 extern "C" fn page_fault_trap_rust(frame: &mut PageFaultTrapFrame) {
     use x86_64::registers::control::Cr2;
 
     let fault_addr = Cr2::read();
-    let cpl = frame.cs & 0x3;
-    if cpl != 3 {
-        serial_println!(
-            "EXCEPTION: KERNEL PAGE FAULT addr={:?} error={:#x} RIP={:#x} CS={:#x}",
-            fault_addr, frame.error_code, frame.rip, frame.cs
-        );
-        panic!("fatal Ring-0 page fault at {:?}", fault_addr);
-    }
-
+    // The assembly trampoline only calls this handler after validating that
+    // the hardware-saved CS has CPL=3, so RSP/SS are present in this frame.
     let mut scheduler_guard = USER_SCHEDULER.lock();
     let scheduler = scheduler_guard.as_mut()
         .unwrap_or_else(|| panic!("Ring-3 page fault with no user scheduler"));
