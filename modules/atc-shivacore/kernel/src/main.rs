@@ -108,6 +108,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let kernel_state = shivacore::kernel_init::KernelState::boot()
         .expect("ShivaCore: canonical KernelState::boot() failed");
     serial_println!("ShivaCore: KernelState::boot() -> Done.");
+    serial_println!("{}", kernel_state.boot_log());
+    // Move the canonical state into the syscall runtime before Ring 3 starts.
+    // No shadow capability table or IPC registry is created for trap handling.
+    interrupts::install_syscall_kernel(kernel_state);
 
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
@@ -193,9 +197,6 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_pid_2.0
     );
     unsafe { userspace::enter_ring3(&user_ctx) }
-
-    serial_println!("{}", kernel_state.boot_log());
-    serial_println!("ShivaCore: kernel init chain connected to kernel_main.");
 
     serial_println!("ShivaCore: K-Sprint 2 abgeschlossen. Uebergabe an Idle-Loop.");
 
