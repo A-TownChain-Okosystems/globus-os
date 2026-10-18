@@ -390,7 +390,7 @@ fn user_address_space(pid: shivacore::ats1000::Pid) -> Option<UserContext> {
 }
 
 fn validate_user_buffer(
-    pid: shivacore::ats1000::Pid,
+    space: &RegisteredUserAddressSpace,
     address: u64,
     len: usize,
     write: bool,
@@ -398,28 +398,21 @@ fn validate_user_buffer(
     if len == 0 {
         return true;
     }
-    let spaces = USER_ADDRESS_SPACES.lock();
-    let Some(space) = spaces.iter().find(|space| space.pid == pid) else {
-        return false;
-    };
-    // The registry lock serializes mapper access. Address-space mutation is not
-    // exposed after Ring 3 starts; any future unmap/remap API must hold this same
-    // lock across validation and the memory copy.
     space.context.addr_space.validate_mapped_range(&space.mapper, address, len, write)
 }
 
 fn copy_from_user(
-    pid: shivacore::ats1000::Pid,
+    space: &RegisteredUserAddressSpace,
     address: u64,
     len: usize,
 ) -> Option<Vec<u8>> {
-    if !validate_user_buffer(pid, address, len, false) {
+    if !validate_user_buffer(space, address, len, false) {
         return None;
     }
     let mut bytes = alloc::vec![0u8; len];
     if len != 0 {
-        // SAFETY: every page in the complete source span was validated PRESENT
-        // and USER_ACCESSIBLE; zero length never dereferences the pointer.
+        // SAFETY: the address-space registry lock is held by the trap handler
+        // across validation and copy, so no mapper mutation can invalidate PTEs.
         unsafe {
             core::ptr::copy_nonoverlapping(address as *const u8, bytes.as_mut_ptr(), len);
         }
@@ -428,16 +421,15 @@ fn copy_from_user(
 }
 
 fn copy_to_user(
-    pid: shivacore::ats1000::Pid,
+    space: &RegisteredUserAddressSpace,
     address: u64,
     bytes: &[u8],
 ) -> bool {
-    if !validate_user_buffer(pid, address, bytes.len(), true) {
+    if !validate_user_buffer(space, address, bytes.len(), true) {
         return false;
     }
     if !bytes.is_empty() {
-        // SAFETY: every destination page was validated PRESENT, USER_ACCESSIBLE
-        // and WRITABLE before the copy; no mapping changes occur in this path.
+        // SAFETY: the registry lock remains held across PTE validation and copy.
         unsafe {
             core::ptr::copy_nonoverlapping(bytes.as_ptr(), address as *mut u8, bytes.len());
         }
@@ -512,6 +504,16 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         return;
     };
 
+    // Hold the address-space registry lock from PTE validation through
+    // dispatch and copy-out. A future unmap/remap implementation must use this
+    // same lock, preventing validation/copy TOCTOU races across CPUs.
+    let address_spaces = USER_ADDRESS_SPACES.lock();
+    let Some(user_space) = address_spaces.iter().find(|space| space.pid == pid) else {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    };
+
     let syscall_id = frame.rax as u16;
     let is_send = syscall_id == libshivacore::Syscall::IpcSend.id();
     let is_receive = syscall_id == libshivacore::Syscall::IpcReceive.id();
@@ -531,7 +533,7 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
     // the process layout and every effective PTE. IPC receive validates the
     // entire destination before dequeueing, so a bad buffer cannot consume data.
     let payload = if is_send {
-        match copy_from_user(pid, frame.r8, payload_len) {
+        match copy_from_user(user_space, frame.r8, payload_len) {
             Some(bytes) => bytes,
             None => {
                 serial_println!(
@@ -547,7 +549,7 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
     } else {
         Vec::new()
     };
-    if is_receive && !validate_user_buffer(pid, frame.r8, receive_capacity, true) {
+    if is_receive && !validate_user_buffer(user_space, frame.r8, receive_capacity, true) {
         serial_println!(
             "ShivaCore: RING3_IPC pid={} syscall={} result=0 error=InvalidPayload reason=unwritable-or-unmapped-user-span",
             pid.0,
@@ -590,7 +592,7 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
 
     if response.error.is_none() && is_receive {
         if receive_buffer.len() > receive_capacity
-            || !copy_to_user(pid, frame.r8, &receive_buffer)
+            || !copy_to_user(user_space, frame.r8, &receive_buffer)
         {
             // The pre-validation and single-CPU mapping invariant should make
             // this unreachable. Fail closed if that invariant is ever broken.
