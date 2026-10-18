@@ -362,26 +362,27 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_timer_trampoline as usize as u64)
 }
 
-/// Register layout produced by shivacore_syscall_trampoline. The first
-/// fifteen fields are pushed by the trampoline; the final five are the CPU's
-/// privilege-transition IRET frame.
+/// Register layout at the stack pointer produced by
+/// shivacore_syscall_trampoline. The trampoline pushes R15 first and RAX last,
+/// so RAX is at offset zero; the CPU's privilege-transition IRET frame follows
+/// the fifteen saved general-purpose registers.
 #[repr(C)]
 struct SyscallTrapFrame {
-    r15: u64,
-    r14: u64,
-    r13: u64,
-    r12: u64,
-    r11: u64,
-    r10: u64,
-    r9: u64,
-    r8: u64,
-    rbp: u64,
-    rdi: u64,
-    rsi: u64,
-    rdx: u64,
-    rcx: u64,
-    rbx: u64,
     rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+    rsi: u64,
+    rdi: u64,
+    rbp: u64,
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
     rip: u64,
     cs: u64,
     rflags: u64,
