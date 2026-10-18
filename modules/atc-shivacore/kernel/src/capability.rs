@@ -46,7 +46,7 @@ impl Rights {
         (self.0 & other.0) == other.0
     }
     pub fn from_bits_truncate(bits: u8) -> Rights {
-        Rights(bits & 0x0F)
+        Rights(bits & 0x1F)
     }
     pub fn bits(self) -> u8 {
         self.0
@@ -256,6 +256,17 @@ mod tests {
     use super::*;
     fn pid(n: u32) -> Pid {
         Pid(n)
+    }
+
+    #[test]
+    fn inspect_right_survives_bitfield_truncation() {
+        assert_eq!(Rights::from_bits_truncate(Rights::INSPECT.bits()), Rights::INSPECT);
+        assert!(Rights::from_bits_truncate(Rights::INSPECT.bits()).has(Rights::INSPECT));
+    }
+
+    #[test]
+    fn unknown_right_bits_are_rejected_by_truncation() {
+        assert_eq!(Rights::from_bits_truncate(0x80 | Rights::READ.bits()), Rights::READ);
     }
 
     #[test]
