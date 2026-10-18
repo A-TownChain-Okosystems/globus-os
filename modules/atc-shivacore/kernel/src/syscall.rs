@@ -127,7 +127,8 @@ impl SyscallDispatcher {
                 if rights.0 & !Rights::ALL.0 != 0 {
                     return SyscallResponse::err(AbiError::InvalidPayload);
                 }
-                match capabilities.delegate(pid, CapId(handle.0), Pid(request.arg0 as u32), rights) {
+                match capabilities.delegate(pid, CapId(handle.0), Pid(request.arg0 as u32), rights)
+                {
                     Ok(child) => SyscallResponse::ok(child.0),
                     Err(_) => SyscallResponse::err(AbiError::PermissionDenied),
                 }
@@ -197,13 +198,21 @@ impl SyscallDispatcher {
                 if request.payload_len != payload.len() {
                     return SyscallResponse::err(AbiError::InvalidPayload);
                 }
-                if !self.check_capability(pid, Some(handle), capabilities,
-                    ResourceType::IpcChannel, channel_id.0, Rights::WRITE) {
+                if !self.check_capability(
+                    pid,
+                    Some(handle),
+                    capabilities,
+                    ResourceType::IpcChannel,
+                    channel_id.0,
+                    Rights::WRITE,
+                ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
                 match ipc.send(capabilities, pid, channel_id, payload.to_vec()) {
                     Ok(()) => SyscallResponse::ok(payload.len() as u64),
-                    Err(IpcError::NoWriteCapability) => SyscallResponse::err(AbiError::PermissionDenied),
+                    Err(IpcError::NoWriteCapability) => {
+                        SyscallResponse::err(AbiError::PermissionDenied)
+                    }
                     Err(IpcError::ChannelFull) => SyscallResponse::err(AbiError::ResourceExhausted),
                     Err(_) => SyscallResponse::err(AbiError::EndpointUnavailable),
                 }
@@ -216,11 +225,20 @@ impl SyscallDispatcher {
                 if max_payload > MAX_SYSCALL_PAYLOAD {
                     return SyscallResponse::err(AbiError::InvalidPayload);
                 }
-                if !self.check_capability(pid, Some(handle), capabilities,
-                    ResourceType::IpcChannel, channel_id.0, Rights::READ) {
+                if !self.check_capability(
+                    pid,
+                    Some(handle),
+                    capabilities,
+                    ResourceType::IpcChannel,
+                    channel_id.0,
+                    Rights::READ,
+                ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
-                if ipc.next_message_len(channel_id).is_some_and(|len| len > max_payload) {
+                if ipc
+                    .next_message_len(channel_id)
+                    .is_some_and(|len| len > max_payload)
+                {
                     return SyscallResponse::err(AbiError::InvalidPayload);
                 }
                 match ipc.recv(capabilities, pid, channel_id) {
@@ -229,7 +247,9 @@ impl SyscallDispatcher {
                         receive_buffer.extend_from_slice(&message.data);
                         SyscallResponse::ok(message.data.len() as u64)
                     }
-                    Err(IpcError::NoReadCapability) => SyscallResponse::err(AbiError::PermissionDenied),
+                    Err(IpcError::NoReadCapability) => {
+                        SyscallResponse::err(AbiError::PermissionDenied)
+                    }
                     Err(_) => SyscallResponse::err(AbiError::EndpointUnavailable),
                 }
             }
@@ -341,22 +361,35 @@ mod tests {
     #[test]
     fn delegate_syscall_attenuates_and_rejects_rights_expansion() {
         let mut table = CapabilityTable::new();
-        let root = table.create(pid(1), ResourceType::Memory, 9, Rights::READ | Rights::DELEGATE);
+        let root = table.create(
+            pid(1),
+            ResourceType::Memory,
+            9,
+            Rights::READ | Rights::DELEGATE,
+        );
         let mut d = SyscallDispatcher::new();
-        let delegated = d.dispatch(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(root.0)),
-            arg0: 2,
-            arg1: Rights::READ.bits() as u64,
-            ..request(Syscall::CapabilityDelegate)
-        }, &mut table);
+        let delegated = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(root.0)),
+                arg0: 2,
+                arg1: Rights::READ.bits() as u64,
+                ..request(Syscall::CapabilityDelegate)
+            },
+            &mut table,
+        );
         assert_eq!(delegated.error, None);
         assert!(table.check(pid(2), ResourceType::Memory, 9, Rights::READ));
-        let expanded = d.dispatch(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(root.0)),
-            arg0: 3,
-            arg1: (Rights::READ | Rights::WRITE).bits() as u64,
-            ..request(Syscall::CapabilityDelegate)
-        }, &mut table);
+        let expanded = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(root.0)),
+                arg0: 3,
+                arg1: (Rights::READ | Rights::WRITE).bits() as u64,
+                ..request(Syscall::CapabilityDelegate)
+            },
+            &mut table,
+        );
         assert_eq!(expanded.error, Some(AbiError::PermissionDenied));
         assert!(!table.check(pid(3), ResourceType::Memory, 9, Rights::READ));
     }
@@ -364,18 +397,31 @@ mod tests {
     #[test]
     fn revoke_syscall_rejects_foreign_owner_and_cascades() {
         let mut table = CapabilityTable::new();
-        let root = table.create(pid(1), ResourceType::Memory, 9, Rights::READ | Rights::DELEGATE);
+        let root = table.create(
+            pid(1),
+            ResourceType::Memory,
+            9,
+            Rights::READ | Rights::DELEGATE,
+        );
         let child = table.delegate(pid(1), root, pid(2), Rights::READ).unwrap();
         let mut d = SyscallDispatcher::new();
-        let denied = d.dispatch(pid(2), SyscallRequest {
-            capability: Some(CapabilityHandle(root.0)),
-            ..request(Syscall::CapabilityRevoke)
-        }, &mut table);
+        let denied = d.dispatch(
+            pid(2),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(root.0)),
+                ..request(Syscall::CapabilityRevoke)
+            },
+            &mut table,
+        );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
-        let revoked = d.dispatch(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(root.0)),
-            ..request(Syscall::CapabilityRevoke)
-        }, &mut table);
+        let revoked = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(root.0)),
+                ..request(Syscall::CapabilityRevoke)
+            },
+            &mut table,
+        );
         assert_eq!(revoked.error, None);
         assert!(table.get(root).is_none());
         assert!(table.get(child).is_none());
@@ -386,20 +432,32 @@ mod tests {
         let mut table = CapabilityTable::new();
         let cap = table.create(pid(1), ResourceType::Memory, 9, Rights::READ);
         let mut d = SyscallDispatcher::new();
-        let foreign = d.dispatch(pid(2), SyscallRequest {
-            capability: Some(CapabilityHandle(cap.0)),
-            ..request(Syscall::HandleClose)
-        }, &mut table);
+        let foreign = d.dispatch(
+            pid(2),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                ..request(Syscall::HandleClose)
+            },
+            &mut table,
+        );
         assert_eq!(foreign.error, Some(AbiError::PermissionDenied));
-        let invalid = d.dispatch(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(u64::MAX)),
-            ..request(Syscall::HandleClose)
-        }, &mut table);
+        let invalid = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(u64::MAX)),
+                ..request(Syscall::HandleClose)
+            },
+            &mut table,
+        );
         assert_eq!(invalid.error, Some(AbiError::InvalidHandle));
-        let closed = d.dispatch(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(cap.0)),
-            ..request(Syscall::HandleClose)
-        }, &mut table);
+        let closed = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                ..request(Syscall::HandleClose)
+            },
+            &mut table,
+        );
         assert_eq!(closed.error, None);
         assert!(table.get(cap).is_none());
     }
@@ -409,52 +467,92 @@ mod tests {
         let mut caps = CapabilityTable::new();
         let mut ipc = IpcSubsystem::new();
         let channel = ipc.create_channel(&mut caps, pid(1), 2);
-        let write_cap = caps.list_for(pid(1)).iter()
-            .find(|cap| cap.resource_type == ResourceType::IpcChannel
-                && cap.resource_id == channel.0 && cap.rights.has(Rights::WRITE))
-            .unwrap().id;
-        let read_cap = caps.list_for(pid(1)).iter()
-            .find(|cap| cap.resource_type == ResourceType::IpcChannel
-                && cap.resource_id == channel.0 && cap.rights.has(Rights::READ))
-            .unwrap().id;
+        let write_cap = caps
+            .list_for(pid(1))
+            .iter()
+            .find(|cap| {
+                cap.resource_type == ResourceType::IpcChannel
+                    && cap.resource_id == channel.0
+                    && cap.rights.has(Rights::WRITE)
+            })
+            .unwrap()
+            .id;
+        let read_cap = caps
+            .list_for(pid(1))
+            .iter()
+            .find(|cap| {
+                cap.resource_type == ResourceType::IpcChannel
+                    && cap.resource_id == channel.0
+                    && cap.rights.has(Rights::READ)
+            })
+            .unwrap()
+            .id;
         let mut dispatcher = SyscallDispatcher::new();
         let mut received = Vec::new();
 
-        let sent = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(write_cap.0)),
-            arg0: channel.0,
-            payload_len: 5,
-            ..request(Syscall::IpcSend)
-        }, &mut caps, &mut ipc, b"hello", &mut received);
+        let sent = dispatcher.dispatch_with_ipc(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(write_cap.0)),
+                arg0: channel.0,
+                payload_len: 5,
+                ..request(Syscall::IpcSend)
+            },
+            &mut caps,
+            &mut ipc,
+            b"hello",
+            &mut received,
+        );
         assert_eq!(sent.error, None);
         assert_eq!(sent.value, 5);
         assert_eq!(ipc.pending_messages(channel), Some(1));
 
-        let malformed_receive = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(read_cap.0)),
-            arg0: channel.0,
-            arg1: 5,
-            payload_len: 1,
-            ..request(Syscall::IpcReceive)
-        }, &mut caps, &mut ipc, b"x", &mut received);
+        let malformed_receive = dispatcher.dispatch_with_ipc(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(read_cap.0)),
+                arg0: channel.0,
+                arg1: 5,
+                payload_len: 1,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut caps,
+            &mut ipc,
+            b"x",
+            &mut received,
+        );
         assert_eq!(malformed_receive.error, Some(AbiError::InvalidPayload));
         assert_eq!(ipc.pending_messages(channel), Some(1));
 
-        let too_small = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(read_cap.0)),
-            arg0: channel.0,
-            arg1: 2,
-            ..request(Syscall::IpcReceive)
-        }, &mut caps, &mut ipc, &[], &mut received);
+        let too_small = dispatcher.dispatch_with_ipc(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(read_cap.0)),
+                arg0: channel.0,
+                arg1: 2,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut caps,
+            &mut ipc,
+            &[],
+            &mut received,
+        );
         assert_eq!(too_small.error, Some(AbiError::InvalidPayload));
         assert_eq!(ipc.pending_messages(channel), Some(1));
 
-        let received_response = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(read_cap.0)),
-            arg0: channel.0,
-            arg1: 5,
-            ..request(Syscall::IpcReceive)
-        }, &mut caps, &mut ipc, &[], &mut received);
+        let received_response = dispatcher.dispatch_with_ipc(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(read_cap.0)),
+                arg0: channel.0,
+                arg1: 5,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut caps,
+            &mut ipc,
+            &[],
+            &mut received,
+        );
         assert_eq!(received_response.error, None);
         assert_eq!(received, b"hello");
         assert_eq!(ipc.pending_messages(channel), Some(0));
@@ -465,30 +563,49 @@ mod tests {
         let mut caps = CapabilityTable::new();
         let mut ipc = IpcSubsystem::new();
         let channel = ipc.create_channel(&mut caps, pid(1), 1);
-        let write_cap = caps.list_for(pid(1)).iter()
-            .find(|cap| cap.resource_type == ResourceType::IpcChannel
-                && cap.resource_id == channel.0 && cap.rights.has(Rights::WRITE))
-            .unwrap().id;
+        let write_cap = caps
+            .list_for(pid(1))
+            .iter()
+            .find(|cap| {
+                cap.resource_type == ResourceType::IpcChannel
+                    && cap.resource_id == channel.0
+                    && cap.rights.has(Rights::WRITE)
+            })
+            .unwrap()
+            .id;
         let mut dispatcher = SyscallDispatcher::new();
         let mut received = Vec::new();
-        let denied = dispatcher.dispatch_with_ipc(pid(2), SyscallRequest {
-            capability: Some(CapabilityHandle(write_cap.0)),
-            arg0: channel.0,
-            payload_len: 1,
-            ..request(Syscall::IpcSend)
-        }, &mut caps, &mut ipc, b"x", &mut received);
+        let denied = dispatcher.dispatch_with_ipc(
+            pid(2),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(write_cap.0)),
+                arg0: channel.0,
+                payload_len: 1,
+                ..request(Syscall::IpcSend)
+            },
+            &mut caps,
+            &mut ipc,
+            b"x",
+            &mut received,
+        );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
         assert_eq!(ipc.pending_messages(channel), Some(0));
 
-        let missing_channel_cap = caps.create(
-            pid(1), ResourceType::IpcChannel, u64::MAX, Rights::WRITE
+        let missing_channel_cap =
+            caps.create(pid(1), ResourceType::IpcChannel, u64::MAX, Rights::WRITE);
+        let missing = dispatcher.dispatch_with_ipc(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(missing_channel_cap.0)),
+                arg0: u64::MAX,
+                payload_len: 1,
+                ..request(Syscall::IpcSend)
+            },
+            &mut caps,
+            &mut ipc,
+            b"x",
+            &mut received,
         );
-        let missing = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(missing_channel_cap.0)),
-            arg0: u64::MAX,
-            payload_len: 1,
-            ..request(Syscall::IpcSend)
-        }, &mut caps, &mut ipc, b"x", &mut received);
         assert_eq!(missing.error, Some(AbiError::EndpointUnavailable));
     }
 
