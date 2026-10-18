@@ -70,7 +70,7 @@ impl SyscallDispatcher {
         &mut self,
         pid: Pid,
         request: SyscallRequest,
-        capabilities: &CapabilityTable,
+        capabilities: &mut CapabilityTable,
     ) -> SyscallResponse {
         if !validate_abi_version(request.abi_version) {
             return SyscallResponse::err(AbiError::AbiVersionMismatch);
@@ -84,6 +84,8 @@ impl SyscallDispatcher {
             x if x == Syscall::IpcSend.id() => Syscall::IpcSend,
             x if x == Syscall::IpcReceive.id() => Syscall::IpcReceive,
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
+            x if x == Syscall::CapabilityDelegate.id() => Syscall::CapabilityDelegate,
+            x if x == Syscall::CapabilityRevoke.id() => Syscall::CapabilityRevoke,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
@@ -130,10 +132,52 @@ impl SyscallDispatcher {
                 }
                 SyscallResponse::ok(1)
             }
-            Syscall::HandleClose => {
-                if request.capability.is_none() {
+            Syscall::CapabilityDelegate => {
+                let Some(handle) = request.capability else {
                     return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                let Some(source) = capabilities.get(CapId(handle.0)) else {
+                    return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                if source.owner != pid || !source.rights.has(Rights::DELEGATE) {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
                 }
+                if request.arg0 > u32::MAX as u64 || request.arg1 > u8::MAX as u64 {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
+                let rights = Rights(request.arg1 as u8);
+                if rights.0 & !Rights::ALL.0 != 0 {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
+                match capabilities.delegate(pid, CapId(handle.0), Pid(request.arg0 as u32), rights) {
+                    Ok(child) => SyscallResponse::ok(child.0),
+                    Err(_) => SyscallResponse::err(AbiError::PermissionDenied),
+                }
+            }
+            Syscall::CapabilityRevoke => {
+                let Some(handle) = request.capability else {
+                    return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                let Some(cap) = capabilities.get(CapId(handle.0)) else {
+                    return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                if cap.owner != pid || !cap.rights.has(Rights::DELEGATE) {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
+                }
+                capabilities.revoke(CapId(handle.0));
+                SyscallResponse::ok(0)
+            }
+            Syscall::HandleClose => {
+                let Some(handle) = request.capability else {
+                    return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                let Some(cap) = capabilities.get(CapId(handle.0)) else {
+                    return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                if cap.owner != pid {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
+                }
+                capabilities.revoke(CapId(handle.0));
                 SyscallResponse::ok(0)
             }
             Syscall::MonotonicTime => {
@@ -193,7 +237,7 @@ mod tests {
                 syscall_id: 0xffff,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidSyscall));
     }
@@ -238,7 +282,7 @@ mod tests {
                 arg0: 42,
                 ..request(Syscall::IpcSend)
             },
-            &table,
+            &mut table,
         );
         assert_eq!(r.error, None);
         let denied = d.dispatch(
@@ -251,6 +295,72 @@ mod tests {
             &table,
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn delegate_syscall_attenuates_and_rejects_rights_expansion() {
+        let mut table = CapabilityTable::new();
+        let root = table.create(pid(1), ResourceType::Memory, 9, Rights::READ | Rights::DELEGATE);
+        let mut d = SyscallDispatcher::new();
+        let delegated = d.dispatch(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(root.0)),
+            arg0: 2,
+            arg1: Rights::READ.bits() as u64,
+            ..request(Syscall::CapabilityDelegate)
+        }, &mut table);
+        assert_eq!(delegated.error, None);
+        assert!(table.check(pid(2), ResourceType::Memory, 9, Rights::READ));
+        let expanded = d.dispatch(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(root.0)),
+            arg0: 3,
+            arg1: (Rights::READ | Rights::WRITE).bits() as u64,
+            ..request(Syscall::CapabilityDelegate)
+        }, &mut table);
+        assert_eq!(expanded.error, Some(AbiError::PermissionDenied));
+        assert!(!table.check(pid(3), ResourceType::Memory, 9, Rights::READ));
+    }
+
+    #[test]
+    fn revoke_syscall_rejects_foreign_owner_and_cascades() {
+        let mut table = CapabilityTable::new();
+        let root = table.create(pid(1), ResourceType::Memory, 9, Rights::READ | Rights::DELEGATE);
+        let child = table.delegate(pid(1), root, pid(2), Rights::READ).unwrap();
+        let mut d = SyscallDispatcher::new();
+        let denied = d.dispatch(pid(2), SyscallRequest {
+            capability: Some(CapabilityHandle(root.0)),
+            ..request(Syscall::CapabilityRevoke)
+        }, &mut table);
+        assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+        let revoked = d.dispatch(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(root.0)),
+            ..request(Syscall::CapabilityRevoke)
+        }, &mut table);
+        assert_eq!(revoked.error, None);
+        assert!(table.get(root).is_none());
+        assert!(table.get(child).is_none());
+    }
+
+    #[test]
+    fn close_rejects_foreign_and_invalid_handles() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::Memory, 9, Rights::READ);
+        let mut d = SyscallDispatcher::new();
+        let foreign = d.dispatch(pid(2), SyscallRequest {
+            capability: Some(CapabilityHandle(cap.0)),
+            ..request(Syscall::HandleClose)
+        }, &mut table);
+        assert_eq!(foreign.error, Some(AbiError::PermissionDenied));
+        let invalid = d.dispatch(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(u64::MAX)),
+            ..request(Syscall::HandleClose)
+        }, &mut table);
+        assert_eq!(invalid.error, Some(AbiError::InvalidHandle));
+        let closed = d.dispatch(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(cap.0)),
+            ..request(Syscall::HandleClose)
+        }, &mut table);
+        assert_eq!(closed.error, None);
+        assert!(table.get(cap).is_none());
     }
 
     #[test]
