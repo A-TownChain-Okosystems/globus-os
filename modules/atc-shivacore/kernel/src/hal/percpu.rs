@@ -212,7 +212,6 @@ pub fn current_logical_id_gs() -> Option<u32> {
     Some(value)
 }
 
-
 #[inline]
 fn interrupts_enabled() -> bool {
     let flags: u64;
