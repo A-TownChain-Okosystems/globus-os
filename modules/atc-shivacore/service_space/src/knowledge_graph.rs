@@ -386,7 +386,7 @@ impl KnowledgeGraph {
         owner: ProcessId,
         entity: EntityId,
         target: ProcessId,
-    ) -> Result<CapId, KgError> {
+    ) -> Result<CapabilityHandle, KgError> {
         if !self.entities.contains_key(&entity) {
             return Err(KgError::EntityNotFound);
         }
