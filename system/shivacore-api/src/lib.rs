@@ -186,6 +186,7 @@ mod tests {
             priority: 10,
             flags: 0,
             args_len: 0,
+            spawn_capability: CapabilityHandle(1),
         };
         request.path[..5].copy_from_slice(b"/init");
         assert_eq!(request.validate(), Ok(()));
@@ -204,6 +205,7 @@ mod tests {
         bytes[len_offset..len_offset + 2].copy_from_slice(&5u16.to_le_bytes());
         bytes[len_offset + 2] = 10;
         bytes[len_offset + 4..len_offset + 8].copy_from_slice(&4u32.to_le_bytes());
+        bytes[len_offset + 8..len_offset + 16].copy_from_slice(&1u64.to_le_bytes());
 
         let decoded = ProcessStartRequest::decode_wire(&bytes).unwrap();
         assert_eq!(decoded.path_len, 5);
@@ -264,12 +266,14 @@ pub struct ProcessStartRequest {
     pub priority: u8,
     pub flags: u8,
     pub args_len: u32,
+    /// Kernel-issued authority to create a child process; never a user-chosen PID.
+    pub spawn_capability: CapabilityHandle,
 }
 
 impl ProcessStartRequest {
     /// Canonical wire size: path[256] + path_len[u16] + priority[u8] +
     /// flags[u8] + args_len[u32]. Integers are little-endian on the wire.
-    pub const WIRE_SIZE: usize = MAX_PROCESS_PATH + 2 + 1 + 1 + 4;
+    pub const WIRE_SIZE: usize = MAX_PROCESS_PATH + 2 + 1 + 1 + 4 + 8;
 
     /// Decode an exact-size byte payload without reading user pointers or allocating.
     ///
@@ -297,6 +301,16 @@ impl ProcessStartRequest {
                 bytes[MAX_PROCESS_PATH + 6],
                 bytes[MAX_PROCESS_PATH + 7],
             ]),
+            spawn_capability: CapabilityHandle(u64::from_le_bytes([
+                bytes[MAX_PROCESS_PATH + 8],
+                bytes[MAX_PROCESS_PATH + 9],
+                bytes[MAX_PROCESS_PATH + 10],
+                bytes[MAX_PROCESS_PATH + 11],
+                bytes[MAX_PROCESS_PATH + 12],
+                bytes[MAX_PROCESS_PATH + 13],
+                bytes[MAX_PROCESS_PATH + 14],
+                bytes[MAX_PROCESS_PATH + 15],
+            ])),
         };
         request.validate()?;
         Ok(request)
@@ -313,7 +327,7 @@ impl ProcessStartRequest {
             return Err(AbiError::InvalidPayload);
         }
         core::str::from_utf8(path).map_err(|_| AbiError::InvalidPayload)?;
-        if self.flags != 0 {
+        if self.flags != 0 || self.spawn_capability.0 == 0 {
             return Err(AbiError::InvalidPayload);
         }
         Ok(())
