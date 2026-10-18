@@ -820,9 +820,11 @@ mod tests {
 
     #[test]
     fn test_user_range_rejects_arithmetic_overflow_in_layout() {
-        let mut asp = UserAddressSpace::default();
-        asp.data_base = u64::MAX - 4;
-        asp.data_size = 32;
+        let asp = UserAddressSpace {
+            data_base: u64::MAX - 4,
+            data_size: 32,
+            ..UserAddressSpace::default()
+        };
         assert!(!asp.validate_read_range(u64::MAX - 2, 8));
         assert!(!asp.validate_write_range(u64::MAX - 2, 8));
     }
