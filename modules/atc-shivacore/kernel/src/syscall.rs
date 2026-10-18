@@ -86,6 +86,9 @@ impl SyscallDispatcher {
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
+            x if x == Syscall::ProcessStart.id() => Syscall::ProcessStart,
+            x if x == Syscall::ProcessTerminate.id() => Syscall::ProcessTerminate,
+            x if x == Syscall::ProcessStatus.id() => Syscall::ProcessStatus,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
@@ -139,6 +142,11 @@ impl SyscallDispatcher {
             Syscall::MonotonicTime => {
                 self.monotonic_ticks = self.monotonic_ticks.wrapping_add(1);
                 SyscallResponse::ok(self.monotonic_ticks)
+            }
+            // The ABI reserves these IDs, but process creation/termination/status
+            // are not yet wired to the scheduler and ELF loader. Fail closed.
+            Syscall::ProcessStart | Syscall::ProcessTerminate | Syscall::ProcessStatus => {
+                SyscallResponse::err(AbiError::UnsupportedOperation)
             }
         }
     }
@@ -251,6 +259,20 @@ mod tests {
             &table,
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn process_syscalls_fail_closed_until_kernel_integration_exists() {
+        let mut dispatcher = SyscallDispatcher::new();
+        for syscall in [Syscall::ProcessStart, Syscall::ProcessTerminate, Syscall::ProcessStatus] {
+            let response = dispatcher.dispatch(
+                pid(1),
+                request(syscall),
+                &CapabilityTable::new(),
+            );
+            assert_eq!(response.error, Some(AbiError::UnsupportedOperation));
+            assert_eq!(response.value, 0);
+        }
     }
 
     #[test]
