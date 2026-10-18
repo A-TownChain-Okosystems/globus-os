@@ -594,8 +594,9 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         if receive_buffer.len() > receive_capacity
             || !copy_to_user(user_space, frame.r8, &receive_buffer)
         {
-            // The pre-validation and single-CPU mapping invariant should make
-            // this unreachable. Fail closed if that invariant is ever broken.
+            // The registry lock keeps the mapping stable from validation through
+            // copy-out. Fail closed if the dispatcher returns an oversized payload
+            // or the destination cannot be validated again.
             frame.rax = 0;
             frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
             return;
