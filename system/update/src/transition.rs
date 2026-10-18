@@ -9,6 +9,19 @@ pub enum TransitionError {
 }
 
 impl UpdatePlan {
+    /// Creates an idle update plan with the alternate slot selected as target.
+    pub const fn new(current: Slot) -> Self {
+        let target = match current {
+            Slot::A => Slot::B,
+            Slot::B => Slot::A,
+        };
+        Self {
+            current,
+            target,
+            state: UpdateState::Idle,
+        }
+    }
+
     pub fn advance(&mut self, next: UpdateState) -> Result<(), TransitionError> {
         let valid = matches!(
             (self.state, next),
