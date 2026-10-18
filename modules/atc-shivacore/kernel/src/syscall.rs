@@ -251,7 +251,7 @@ mod tests {
                 abi_version: 0x0002_0000,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(r.error, Some(AbiError::AbiVersionMismatch));
     }
@@ -265,7 +265,7 @@ mod tests {
                 payload_len: MAX_SYSCALL_PAYLOAD + 1,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidPayload));
     }
@@ -292,7 +292,7 @@ mod tests {
                 arg0: 42,
                 ..request(Syscall::IpcSend)
             },
-            &table,
+            &mut table,
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
     }
@@ -369,12 +369,12 @@ mod tests {
         let a = d.dispatch(
             pid(1),
             request(Syscall::MonotonicTime),
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         let b = d.dispatch(
             pid(1),
             request(Syscall::MonotonicTime),
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(a.value + 1, b.value);
     }
@@ -390,7 +390,7 @@ mod tests {
                 capability: Some(CapabilityHandle(cap.0)),
                 ..request(Syscall::CapabilityQuery)
             },
-            &table,
+            &mut table,
         );
         assert_eq!(r.error, Some(AbiError::PermissionDenied));
     }
