@@ -8,7 +8,6 @@ use crate::gdt;
 use crate::serial_println;
 use alloc::vec::Vec;
 use core::arch::global_asm;
-use x86_64::structures::paging::{OffsetPageTable, PhysFrame, Size4KiB};
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use shivacore::user_sched::{SavedContext, UserScheduler};
@@ -18,6 +17,7 @@ use x86_64::registers::rflags::RFlags;
 use x86_64::structures::idt::{
     InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode,
 };
+use x86_64::structures::paging::{OffsetPageTable, PhysFrame, Size4KiB};
 use x86_64::VirtAddr;
 
 pub const PIC_1_OFFSET: u8 = 0x20;
@@ -360,10 +360,26 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
 /// privilege-transition IRET frame.
 #[repr(C)]
 struct SyscallTrapFrame {
-    r15: u64, r14: u64, r13: u64, r12: u64, r11: u64,
-    r10: u64, r9: u64, r8: u64, rbp: u64, rdi: u64,
-    rsi: u64, rdx: u64, rcx: u64, rbx: u64, rax: u64,
-    rip: u64, cs: u64, rflags: u64, rsp: u64, ss: u64,
+    r15: u64,
+    r14: u64,
+    r13: u64,
+    r12: u64,
+    r11: u64,
+    r10: u64,
+    r9: u64,
+    r8: u64,
+    rbp: u64,
+    rdi: u64,
+    rsi: u64,
+    rdx: u64,
+    rcx: u64,
+    rbx: u64,
+    rax: u64,
+    rip: u64,
+    cs: u64,
+    rflags: u64,
+    rsp: u64,
+    ss: u64,
 }
 
 static SYSCALL_KERNEL_STATE: Mutex<Option<shivacore::kernel_init::KernelState>> = Mutex::new(None);
@@ -398,14 +414,13 @@ fn validate_user_buffer(
     if len == 0 {
         return true;
     }
-    space.context.addr_space.validate_mapped_range(&space.mapper, address, len, write)
+    space
+        .context
+        .addr_space
+        .validate_mapped_range(&space.mapper, address, len, write)
 }
 
-fn copy_from_user(
-    space: &RegisteredUserAddressSpace,
-    address: u64,
-    len: usize,
-) -> Option<Vec<u8>> {
+fn copy_from_user(space: &RegisteredUserAddressSpace, address: u64, len: usize) -> Option<Vec<u8>> {
     if !validate_user_buffer(space, address, len, false) {
         return None;
     }
@@ -420,11 +435,7 @@ fn copy_from_user(
     Some(bytes)
 }
 
-fn copy_to_user(
-    space: &RegisteredUserAddressSpace,
-    address: u64,
-    bytes: &[u8],
-) -> bool {
+fn copy_to_user(space: &RegisteredUserAddressSpace, address: u64, bytes: &[u8]) -> bool {
     if !validate_user_buffer(space, address, bytes.len(), true) {
         return false;
     }
@@ -570,7 +581,11 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
             Some(libshivacore::CapabilityHandle(frame.rsi))
         },
         arg0: frame.rdx,
-        arg1: if is_receive { receive_capacity as u64 } else { frame.r10 },
+        arg1: if is_receive {
+            receive_capacity as u64
+        } else {
+            frame.r10
+        },
         payload_len,
     };
 
