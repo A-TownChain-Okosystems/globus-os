@@ -9,6 +9,7 @@ use uefi::{
     boot::{self, AllocateType, MemoryType},
     cstr16, entry,
     fs::FileSystem,
+    mem::memory_map::MemoryMap,
     helpers, println,
     table::cfg::ConfigTableEntry,
     system,
@@ -81,7 +82,7 @@ fn run() -> Result<(), Status> {
 
     let image = boot::image_handle();
     let mut fs = FileSystem::new(boot::get_image_file_system(image).map_err(|e| e.status())?);
-    let kernel = fs.read(KERNEL_PATH).map_err(|e| e.status())?;
+    let kernel = fs.read(KERNEL_PATH).map_err(|_| Status::LOAD_ERROR)?;
     drop(fs);
 
     let (entry_point, loaded_start, loaded_end) = load_elf64(&kernel)?;
