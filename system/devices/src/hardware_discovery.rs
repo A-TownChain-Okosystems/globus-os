@@ -86,8 +86,15 @@ pub fn discover_pci<A: PciConfigAccess>(
     inventory: &mut HardwareInventory,
 ) -> Result<usize, DiscoveryError> {
     let mut discovered = 0;
-    for window in windows {
+    for (index, window) in windows.iter().enumerate() {
         window.validate().map_err(DiscoveryError::InvalidMcfg)?;
+        if windows[..index].iter().any(|previous| {
+            previous.segment == window.segment
+                && previous.start_bus <= window.end_bus
+                && window.start_bus <= previous.end_bus
+        }) {
+            return Err(DiscoveryError::InvalidWindow);
+        }
         for bus in window.start_bus..=window.end_bus {
             for device in 0..32u8 {
                 let first = PciAddress::new(window.segment, bus, device, 0);
@@ -131,7 +138,7 @@ pub fn discover_pci<A: PciConfigAccess>(
                         driver: None,
                         capabilities: alloc::vec![
                             String::from("pci"),
-                            String::from("class:"),
+                            alloc::format!("pci-class-{class:02x}"),
                         ],
                     };
                     inventory.register(record).map_err(DiscoveryError::Inventory)?;
@@ -281,7 +288,7 @@ mod tests {
         // Window validation is also performed at discovery entry.
         let mut inventory = HardwareInventory::new();
         let fake = FakePci::default();
-        assert!(matches!(discover_pci(&fake, &windows, &mut inventory), Err(DiscoveryError::InvalidMcfg(_))));
+        assert_eq!(discover_pci(&fake, &windows, &mut inventory), Err(DiscoveryError::InvalidWindow));
     }
 
     #[test]
