@@ -31,8 +31,19 @@ pub unsafe fn create_user_mapper(
 ) -> Option<(PhysFrame<Size4KiB>, OffsetPageTable<'static>)> {
     use x86_64::structures::paging::PageTableFlags;
 
-    let root_frame = frame_allocator.allocate_frame()?;
     let active_root = active_level_4_table(physical_memory_offset);
+
+    // Validate the complete upper-half root before allocating a frame. If an
+    // inherited entry is user-accessible, fail without leaking a page-table
+    // frame from the boot allocator.
+    for index in 256..512 {
+        let entry = &active_root[index];
+        if !entry.is_unused() && entry.flags().contains(PageTableFlags::USER_ACCESSIBLE) {
+            return None;
+        }
+    }
+
+    let root_frame = frame_allocator.allocate_frame()?;
     let root_virt = physical_memory_offset + root_frame.start_address().as_u64();
     let root_ptr = root_virt.as_mut_ptr::<PageTable>();
 
@@ -41,15 +52,8 @@ pub unsafe fn create_user_mapper(
     unsafe { core::ptr::write(root_ptr, PageTable::new()) };
 
     for index in 256..512 {
-        let entry = active_root[index].clone();
-        // Do not inherit any upper-half PML4 entry that permits CPL3 access.
-        // Failing closed is safer than sharing a potentially user-accessible
-        // kernel subtree into every process root.
-        if !entry.is_unused() && entry.flags().contains(PageTableFlags::USER_ACCESSIBLE) {
-            return None;
-        }
         // SAFETY: root_ptr is a valid, exclusively owned 4-KiB page-table frame.
-        unsafe { (*root_ptr)[index] = entry };
+        unsafe { (*root_ptr)[index] = active_root[index].clone() };
     }
 
     // SAFETY: root_ptr refers to a page-table frame kept allocated for the
