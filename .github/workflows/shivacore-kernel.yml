@@ -227,6 +227,7 @@ jobs:
           BIOS_QEMU_EXIT_CODE: ${{ steps.bios_smoke.outputs.qemu_exit_code || 'not-recorded' }}
           UEFI_SMOKE_OUTCOME: ${{ steps.uefi_smoke.outcome || 'unknown' }}
           UEFI_QEMU_EXIT_CODE: ${{ steps.uefi_smoke.outputs.qemu_exit_code || 'not-recorded' }}
+          QEMU_CPU_MODEL: ${{ matrix.qemu_cpu }}
         run: |
           set -u
           mkdir -p target/boot-evidence
@@ -241,6 +242,8 @@ jobs:
             echo "run_attempt=${GITHUB_RUN_ATTEMPT:-unknown}"
             echo "job=${GITHUB_JOB:-unknown}"
             echo "matrix_cpu=${{ matrix.cpu }}"
+            echo "requested_qemu_cpu_model=$QEMU_CPU_MODEL"
+            echo "qemu_version=$(qemu-system-x86_64 --version | head -n 1)"
             echo "runner_os=${RUNNER_OS:-unknown}"
             echo "build_kernel_outcome=$BUILD_KERNEL_OUTCOME"
             echo "build_images_outcome=$BUILD_IMAGES_OUTCOME"
