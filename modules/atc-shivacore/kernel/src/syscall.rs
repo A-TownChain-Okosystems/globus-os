@@ -430,6 +430,16 @@ mod tests {
         assert_eq!(sent.value, 5);
         assert_eq!(ipc.pending_messages(channel), Some(1));
 
+        let malformed_receive = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(read_cap.0)),
+            arg0: channel.0,
+            arg1: 5,
+            payload_len: 1,
+            ..request(Syscall::IpcReceive)
+        }, &mut caps, &mut ipc, b"x", &mut received);
+        assert_eq!(malformed_receive.error, Some(AbiError::InvalidPayload));
+        assert_eq!(ipc.pending_messages(channel), Some(1));
+
         let too_small = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
             capability: Some(CapabilityHandle(read_cap.0)),
             arg0: channel.0,
