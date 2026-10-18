@@ -1360,4 +1360,24 @@ mod tests {
         assert!(parser.code_segment().is_some());
         assert!(parser.data_segment().is_some());
     }
+    #[test]
+    fn parser_rejects_overflowing_program_header_offset() {
+        let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0x90]);
+        elf[32..40].copy_from_slice(&u64::MAX.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidOffset)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_dynamic_interpreter_segments() {
+        let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0x90]);
+        elf[64..68].copy_from_slice(&PT_INTERP.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::UnsupportedSegment)
+        ));
+    }
+
 }
