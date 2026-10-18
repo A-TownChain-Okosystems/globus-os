@@ -6,7 +6,7 @@
 //! and the actual IRETQ entry point.
 
 use crate::ats1000::{ExitCode, Pid};
-use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use crate::capability::{CapId, CapabilityError, CapabilityTable, ResourceType, Rights};
 use crate::elf_loader::{ElfLoadError, ElfLoader};
 use crate::user_copy::{copy_from_user, CopyInError, UserMemoryReader};
 use crate::user_sched::UserScheduler;
@@ -23,6 +23,16 @@ pub enum ProcessRuntimeError {
     Userspace(UserspaceError),
     NotFound,
     AlreadyExited,
+    Capability(CapabilityError),
+}
+
+/// Trusted kernel-side capability grant selected by the init/service policy.
+/// Never populate `policy_ceiling` from an untrusted ProcessStart payload.
+#[derive(Debug, Clone, Copy)]
+pub struct InitialCapabilityGrant {
+    pub source: CapId,
+    pub rights: Rights,
+    pub policy_ceiling: Rights,
 }
 
 pub struct ProcessRuntime {
@@ -212,9 +222,46 @@ impl ProcessRuntime {
             ProcessRuntimeError::Load(ElfLoadError::Userspace(UserspaceError::MaxProcessesReached)) => {
                 AbiError::ResourceExhausted
             }
+            ProcessRuntimeError::Capability(_) => AbiError::PermissionDenied,
             ProcessRuntimeError::Load(_)
             | ProcessRuntimeError::Userspace(_) => AbiError::InvalidPayload,
         }
+    }
+
+    /// Transfer policy-approved initial capabilities to a newly launched process.
+    /// Each grant is attenuated against both the source capability and the policy
+    /// ceiling. A partial failure revokes grants already made and marks the child
+    /// failed, rather than leaving a half-initialized service alive.
+    pub fn grant_initial_capabilities(
+        &mut self,
+        caller: Pid,
+        child: ProcessId,
+        grants: &[InitialCapabilityGrant],
+        capabilities: &mut CapabilityTable,
+    ) -> Result<alloc::vec::Vec<CapId>, ProcessRuntimeError> {
+        if self.scheduler.process_status(Pid(child.0)).is_none() {
+            return Err(ProcessRuntimeError::NotFound);
+        }
+        let mut delegated = alloc::vec::Vec::new();
+        for grant in grants {
+            match capabilities.delegate_authorized(
+                caller,
+                grant.source,
+                Pid(child.0),
+                grant.rights,
+                grant.policy_ceiling,
+            ) {
+                Ok(id) => delegated.push(id),
+                Err(error) => {
+                    for id in delegated.iter().copied() {
+                        capabilities.revoke(id);
+                    }
+                    let _ = self.terminate(child, 1, capabilities);
+                    return Err(ProcessRuntimeError::Capability(error));
+                }
+            }
+        }
+        Ok(delegated)
     }
 
     /// Report the status from the scheduler's authoritative process entry.
