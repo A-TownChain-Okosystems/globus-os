@@ -224,7 +224,6 @@ pub const fn validate_abi_version(version: u32) -> bool {
     (version >> 16) as u16 == ABI_MAJOR
 }
 
-
 /// x86-64 software-interrupt register contract for ABI v1.
 ///
 /// Entry registers: RAX=syscall id, RDI=ABI_VERSION, RSI=capability handle
