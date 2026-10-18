@@ -163,16 +163,31 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
-    let user_binary = userspace::UserBinary::from_bytes(
-        "ring3-smoke",
-        alloc::vec![
-            0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x1000
-            0x48, 0xBB, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x1001
-            0x49, 0xBC, 0x12, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x1012
-            0xEB, 0xFE, // loop forever until timer preemption
-        ],
+    // Real Ring-3 sender: invoke ABI-v1 IPC_SEND through int 0x80.
+    // Constants come from libshivacore's public ABI; payload is in the mapped
+    // writable data region so the kernel must validate/copy a real user span.
+    let mut sender_code = alloc::vec::Vec::new();
+    sender_code.extend_from_slice(&[0x48, 0xB8]); // movabs rax, syscall id
+    sender_code.extend_from_slice(&(libshivacore::Syscall::IpcSend.id() as u64).to_le_bytes());
+    sender_code.extend_from_slice(&[0x48, 0xBF]); // movabs rdi, ABI version
+    sender_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+    sender_code.extend_from_slice(&[0x48, 0xBE]); // movabs rsi, sender capability
+    sender_code.extend_from_slice(&ring3_sender_cap.0.to_le_bytes());
+    sender_code.extend_from_slice(&[0x48, 0xBA]); // movabs rdx, channel id
+    sender_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+    sender_code.extend_from_slice(&[0x49, 0xB8]); // movabs r8, user payload address
+    sender_code.extend_from_slice(&0x0050_0000u64.to_le_bytes());
+    sender_code.extend_from_slice(&[0x49, 0xB9]); // movabs r9, payload length
+    let sender_payload = b"ring3-ipc-ok";
+    sender_code.extend_from_slice(&(sender_payload.len() as u64).to_le_bytes());
+    sender_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR, 0xEB, 0xFE]); // int 0x80; loop
+
+    let mut user_binary = userspace::UserBinary::from_bytes(
+        "ring3-ipc-sender",
+        sender_code,
         0x0040_0000,
     );
+    user_binary.data = sender_payload.to_vec();
     let user_addr_space = userspace::UserAddressSpace::default();
     unsafe {
         userspace::map_user_binary(
@@ -196,16 +211,28 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Second real Ring-3 image. Both processes intentionally share the current
     // kernel page table for this first scheduler gate; the scheduler switches
     // the CPU IRET frame while CR3/address-space switching remains a later gate.
-    let user_binary_2 = userspace::UserBinary::from_bytes(
-        "ring3-smoke-2",
-        alloc::vec![
-            0x48, 0xB8, 0x00, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x2000
-            0x48, 0xBB, 0x01, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x2001
-            0x49, 0xBC, 0x12, 0x20, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x2012
-            0xEB, 0xFE, // loop forever until timer preemption
-        ],
+    // Real Ring-3 receiver: invoke ABI-v1 IPC_RECEIVE into its mapped data.
+    let mut receiver_code = alloc::vec::Vec::new();
+    receiver_code.extend_from_slice(&[0x48, 0xB8]);
+    receiver_code.extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+    receiver_code.extend_from_slice(&[0x48, 0xBF]);
+    receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+    receiver_code.extend_from_slice(&[0x48, 0xBE]);
+    receiver_code.extend_from_slice(&ring3_receiver_cap.0.to_le_bytes());
+    receiver_code.extend_from_slice(&[0x48, 0xBA]);
+    receiver_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+    receiver_code.extend_from_slice(&[0x49, 0xB8]);
+    receiver_code.extend_from_slice(&0x0150_0000u64.to_le_bytes());
+    receiver_code.extend_from_slice(&[0x49, 0xB9]);
+    receiver_code.extend_from_slice(&64u64.to_le_bytes());
+    receiver_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR, 0xEB, 0xFE]);
+
+    let mut user_binary_2 = userspace::UserBinary::from_bytes(
+        "ring3-ipc-receiver",
+        receiver_code,
         0x0040_1000,
     );
+    user_binary_2.data = alloc::vec![0u8; 64];
     // Keep the first scheduler gate on the current shared CR3, but allocate
     // a disjoint virtual region for PID 1001. This prevents the second mapping
     // from colliding with PID 1000's code/data/stack pages. Full CR3 switching
