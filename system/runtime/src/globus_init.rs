@@ -55,20 +55,29 @@ mod tests {
             Ok(AbiHandshake::CURRENT)
         }
 
+        fn launch(
+            &mut self,
+            service: &ServiceSpec,
+        ) -> Result<libshivacore::ProcessId, String> {
+            self.launched.push(service.name.clone());
+            Ok(libshivacore::ProcessId(self.launched.len() as u32 + 1000))
+        }
+
         fn initial_capabilities(
             &mut self,
             _service: &str,
+            _process: libshivacore::ProcessId,
         ) -> Result<Vec<CapabilityHandle>, String> {
             Ok(Vec::new())
         }
 
-        fn launch(
+        fn activate(
             &mut self,
-            service: &ServiceSpec,
+            _service: &ServiceSpec,
+            _process: libshivacore::ProcessId,
             _capabilities: &[CapabilityHandle],
-        ) -> Result<libshivacore::ProcessId, String> {
-            self.launched.push(service.name.clone());
-            Ok(libshivacore::ProcessId(self.launched.len() as u32 + 1000))
+        ) -> Result<(), String> {
+            Ok(())
         }
 
         fn is_healthy(
