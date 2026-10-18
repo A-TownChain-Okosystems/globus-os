@@ -245,9 +245,9 @@ shivacore_page_fault_trampoline:
     push rcx
     push rbx
     push rax
-    // CS is at 17 qwords from the saved-register base (15 registers,
-    // hardware error code, RIP). Ring 0 has no hardware-pushed RSP/SS, so
-    // route it to a raw-pointer handler without constructing a full user frame.
+    # CS is at 17 qwords from the saved-register base (15 registers,
+    # hardware error code, RIP). Ring 0 has no hardware-pushed RSP/SS, so
+    # route it to a raw-pointer handler without constructing a full user frame.
     mov rax, [rsp + 136]
     and rax, 3
     cmp rax, 3
