@@ -18,13 +18,15 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     &mut *virt.as_mut_ptr()
 }
 
-/// Create an isolated lower-half page-table root while sharing only the
-/// supervisor-owned upper-half kernel mappings from the currently active root.
+/// Create an isolated user page-table root while preserving supervisor mappings.
 ///
-/// User virtual addresses must stay in the lower canonical half. Kernel entries
-/// are copied by value at PML4 level; the lower-half entries start empty, so
-/// user mappings cannot leak between roots. The caller must serialize frame
-/// allocation and must not mutate shared kernel mappings after this operation.
+/// The kernel image is linked in the lower canonical half (currently around
+/// 1 TiB, PML4 index 2), while user mappings occupy PML4 index 0. Copying only
+/// indices 256..512 therefore drops the kernel's own code/data mappings and
+/// faults as soon as CR3 switches to the new root. Preserve every supervisor
+/// root entry except index 0, which is reserved for the user address layout.
+/// The caller must serialize frame allocation and must not mutate shared kernel
+/// mappings after this operation.
 pub unsafe fn create_user_mapper(
     physical_memory_offset: VirtAddr,
     frame_allocator: &mut impl FrameAllocator<Size4KiB>,
@@ -33,10 +35,9 @@ pub unsafe fn create_user_mapper(
 
     let active_root = active_level_4_table(physical_memory_offset);
 
-    // Validate the complete upper-half root before allocating a frame. If an
-    // inherited entry is user-accessible, fail without leaking a page-table
-    // frame from the boot allocator.
-    for index in 256..512 {
+    // Index 0 is dedicated to user mappings. Every copied entry must remain
+    // supervisor-only; otherwise a user process could inherit privileged memory.
+    for index in 1..512 {
         let entry = &active_root[index];
         if !entry.is_unused() && entry.flags().contains(PageTableFlags::USER_ACCESSIBLE) {
             return None;
@@ -51,7 +52,7 @@ pub unsafe fn create_user_mapper(
     // allocated usable frame; the allocator grants exclusive ownership here.
     unsafe { core::ptr::write(root_ptr, PageTable::new()) };
 
-    for index in 256..512 {
+    for index in 1..512 {
         // SAFETY: root_ptr is a valid, exclusively owned 4-KiB page-table frame.
         unsafe { (&mut *root_ptr)[index] = active_root[index].clone() };
     }
