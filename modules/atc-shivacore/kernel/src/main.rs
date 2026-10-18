@@ -187,8 +187,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     };
     emit_send(ring3_receiver_cap.0, 0x0050_0000, sender_payload.len());
     emit_send(0, 0x0050_0000, sender_payload.len());
-    emit_send(ring3_sender_cap.0, 0xDEAD_0000, sender_payload.len());
+    emit_send(ring3_sender_cap.0, 0x0050_1000, sender_payload.len()); // valid region, unmapped page
     emit_send(ring3_sender_cap.0, 0x0050_0000, sender_payload.len());
+    // The receiver consumes at most one message. Nine further sends force at
+    // least one ResourceExhausted result even if timer scheduling interleaves.
+    for _ in 0..9 {
+        emit_send(ring3_sender_cap.0, 0x0050_0000, sender_payload.len());
+    }
     sender_code.extend_from_slice(&[0xEB, 0xFE]); // park until timer preemption
 
     let mut user_binary = userspace::UserBinary::from_bytes(
