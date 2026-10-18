@@ -22,7 +22,9 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use libshivacore::{CapabilityClient, CapabilityHandle, CapabilityResource, CapabilityRights, ProcessId};
+use libshivacore::{
+    CapabilityClient, CapabilityHandle, CapabilityResource, CapabilityRights, ProcessId,
+};
 
 /// Eindeutige Entity-ID im Knowledge Graph
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -127,7 +129,8 @@ impl KnowledgeGraph {
             CapabilityResource::KnowledgeGraphEntity,
             resource_id,
             CapabilityRights::READ | CapabilityRights::WRITE | CapabilityRights::DELEGATE,
-        ).map_err(|_| KgError::CapabilityRevoked)?;
+        )
+        .map_err(|_| KgError::CapabilityRevoked)?;
 
         let entity = Entity {
             id,
@@ -155,7 +158,12 @@ impl KnowledgeGraph {
         }
 
         // Capability-Check: Caller braucht WRITE auf Subject-Entity
-        if !caps.check_capability(caller, CapabilityResource::KnowledgeGraphEntity, subject.0, CapabilityRights::WRITE) {
+        if !caps.check_capability(
+            caller,
+            CapabilityResource::KnowledgeGraphEntity,
+            subject.0,
+            CapabilityRights::WRITE,
+        ) {
             return Err(KgError::NoWriteCapability);
         }
 
@@ -219,7 +227,12 @@ impl KnowledgeGraph {
             }
 
             // Capability-Check: Caller braucht READ auf Subject
-            if !caps.check_capability(caller, CapabilityResource::KnowledgeGraphEntity, triple.subject.0, CapabilityRights::READ) {
+            if !caps.check_capability(
+                caller,
+                CapabilityResource::KnowledgeGraphEntity,
+                triple.subject.0,
+                CapabilityRights::READ,
+            ) {
                 continue;
             }
 
@@ -230,7 +243,12 @@ impl KnowledgeGraph {
     }
 
     /// Holt alle ausgehenden Tripel einer Entity (Subject-Lookup).
-    pub fn outgoing(&self, caps: &impl CapabilityClient, caller: ProcessId, entity: EntityId) -> Vec<Triple> {
+    pub fn outgoing(
+        &self,
+        caps: &impl CapabilityClient,
+        caller: ProcessId,
+        entity: EntityId,
+    ) -> Vec<Triple> {
         self.query(
             caps,
             caller,
@@ -244,14 +262,24 @@ impl KnowledgeGraph {
 
     /// Holt alle eingehenden Tripel einer Entity (Object-Lookup).
     /// "Wer referenziert mich?"
-    pub fn incoming(&self, caps: &impl CapabilityClient, caller: ProcessId, entity: EntityId) -> Vec<Triple> {
+    pub fn incoming(
+        &self,
+        caps: &impl CapabilityClient,
+        caller: ProcessId,
+        entity: EntityId,
+    ) -> Vec<Triple> {
         let mut results = Vec::new();
 
         if let Some(indices) = self.osp_index.get(&entity) {
             for &idx in indices {
                 let triple = &self.triples[idx];
                 // Capability-Check
-                if caps.check_capability(caller, CapabilityResource::KnowledgeGraphEntity, triple.subject.0, CapabilityRights::READ) {
+                if caps.check_capability(
+                    caller,
+                    CapabilityResource::KnowledgeGraphEntity,
+                    triple.subject.0,
+                    CapabilityRights::READ,
+                ) {
                     results.push(triple.clone());
                 }
             }
@@ -313,7 +341,12 @@ impl KnowledgeGraph {
         predicate: &str,
         object: &ObjectValue,
     ) -> Result<(), KgError> {
-        if !caps.check_capability(caller, CapabilityResource::KnowledgeGraphEntity, subject.0, CapabilityRights::WRITE) {
+        if !caps.check_capability(
+            caller,
+            CapabilityResource::KnowledgeGraphEntity,
+            subject.0,
+            CapabilityRights::WRITE,
+        ) {
             return Err(KgError::NoWriteCapability);
         }
 
@@ -346,7 +379,12 @@ impl KnowledgeGraph {
         if !self.entities.contains_key(&entity) {
             return Err(KgError::EntityNotFound);
         }
-        if !caps.check_capability(caller, CapabilityResource::KnowledgeGraphEntity, entity.0, CapabilityRights::WRITE) {
+        if !caps.check_capability(
+            caller,
+            CapabilityResource::KnowledgeGraphEntity,
+            entity.0,
+            CapabilityRights::WRITE,
+        ) {
             return Err(KgError::NoWriteCapability);
         }
 
@@ -396,7 +434,8 @@ impl KnowledgeGraph {
             entity.0,
             target,
             CapabilityRights::READ,
-        ).map_err(|_| KgError::CapabilityRevoked)
+        )
+        .map_err(|_| KgError::CapabilityRevoked)
     }
 
     /// Indices neu aufbauen (nach Loeschungen)
@@ -421,8 +460,8 @@ impl KnowledgeGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use shivacore::capability::{CapabilityTable, CapId, Pid, ResourceType, Rights};
     use core::ops::{Deref, DerefMut};
+    use shivacore::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
 
     // Local test adapter: implementing the external CapabilityClient trait
     // directly for the dependency's CapabilityTable violates Rust's orphan rule.
@@ -436,29 +475,93 @@ mod tests {
 
     impl Deref for TestCapabilityTable {
         type Target = CapabilityTable;
-        fn deref(&self) -> &Self::Target { &self.0 }
+        fn deref(&self) -> &Self::Target {
+            &self.0
+        }
     }
 
     impl DerefMut for TestCapabilityTable {
-        fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+        fn deref_mut(&mut self) -> &mut Self::Target {
+            &mut self.0
+        }
     }
 
     impl CapabilityClient for TestCapabilityTable {
-        fn create_capability(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, rights: CapabilityRights) -> Result<CapabilityHandle, libshivacore::AbiError> {
-            let id = self.create(Pid(owner.0 as u32), ResourceType::KnowledgeGraphEntity, resource_id, Rights(rights.bits()));
+        fn create_capability(
+            &mut self,
+            owner: ProcessId,
+            _resource: CapabilityResource,
+            resource_id: u64,
+            rights: CapabilityRights,
+        ) -> Result<CapabilityHandle, libshivacore::AbiError> {
+            let id = self.create(
+                Pid(owner.0 as u32),
+                ResourceType::KnowledgeGraphEntity,
+                resource_id,
+                Rights(rights.bits()),
+            );
             Ok(CapabilityHandle(id.0))
         }
-        fn check_capability(&self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, rights: CapabilityRights) -> bool {
-            self.check(Pid(owner.0 as u32), ResourceType::KnowledgeGraphEntity, resource_id, Rights(rights.bits()))
+        fn check_capability(
+            &self,
+            owner: ProcessId,
+            _resource: CapabilityResource,
+            resource_id: u64,
+            rights: CapabilityRights,
+        ) -> bool {
+            self.check(
+                Pid(owner.0 as u32),
+                ResourceType::KnowledgeGraphEntity,
+                resource_id,
+                Rights(rights.bits()),
+            )
         }
-        fn delegate_resource(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, target: ProcessId, rights: CapabilityRights) -> Result<CapabilityHandle, libshivacore::AbiError> {
-            let source_id = self.list_for(Pid(owner.0 as u32)).into_iter().find(|cap| cap.resource_type == ResourceType::KnowledgeGraphEntity && cap.resource_id == resource_id && cap.rights.has(Rights(rights.bits() | Rights::DELEGATE.0))).map(|cap| cap.id).ok_or(libshivacore::AbiError::PermissionDenied)?;
-            let child = self.delegate(Pid(owner.0 as u32), source_id, Pid(target.0 as u32), Rights(rights.bits())).map_err(|_| libshivacore::AbiError::PermissionDenied)?;
+        fn delegate_resource(
+            &mut self,
+            owner: ProcessId,
+            _resource: CapabilityResource,
+            resource_id: u64,
+            target: ProcessId,
+            rights: CapabilityRights,
+        ) -> Result<CapabilityHandle, libshivacore::AbiError> {
+            let source_id = self
+                .list_for(Pid(owner.0 as u32))
+                .into_iter()
+                .find(|cap| {
+                    cap.resource_type == ResourceType::KnowledgeGraphEntity
+                        && cap.resource_id == resource_id
+                        && cap.rights.has(Rights(rights.bits() | Rights::DELEGATE.0))
+                })
+                .map(|cap| cap.id)
+                .ok_or(libshivacore::AbiError::PermissionDenied)?;
+            let child = self
+                .delegate(
+                    Pid(owner.0 as u32),
+                    source_id,
+                    Pid(target.0 as u32),
+                    Rights(rights.bits()),
+                )
+                .map_err(|_| libshivacore::AbiError::PermissionDenied)?;
             Ok(CapabilityHandle(child.0))
         }
-        fn revoke_resource(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64) -> Result<(), libshivacore::AbiError> {
-            let ids: alloc::vec::Vec<CapId> = self.list_for(Pid(owner.0 as u32)).into_iter().filter(|cap| cap.resource_type == ResourceType::KnowledgeGraphEntity && cap.resource_id == resource_id).map(|cap| cap.id).collect();
-            for id in ids { self.revoke(id); }
+        fn revoke_resource(
+            &mut self,
+            owner: ProcessId,
+            _resource: CapabilityResource,
+            resource_id: u64,
+        ) -> Result<(), libshivacore::AbiError> {
+            let ids: alloc::vec::Vec<CapId> = self
+                .list_for(Pid(owner.0 as u32))
+                .into_iter()
+                .filter(|cap| {
+                    cap.resource_type == ResourceType::KnowledgeGraphEntity
+                        && cap.resource_id == resource_id
+                })
+                .map(|cap| cap.id)
+                .collect();
+            for id in ids {
+                self.revoke(id);
+            }
             Ok(())
         }
     }
