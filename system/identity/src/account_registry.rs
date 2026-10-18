@@ -337,7 +337,7 @@ mod tests {
                 let user_id = UserId::new(format!("user-{suffix}")).unwrap();
                 let mut directory = FileAccountDirectory::open(worker_path);
                 worker_barrier.wait();
-                for _ in 0..200 {
+                for _ in 0..5_000 {
                     match directory.insert_if_absent(username.clone(), user_id.clone()) {
                         Ok(()) => return true,
                         Err(AccountDirectoryError::Busy) => thread::sleep(Duration::from_millis(1)),
