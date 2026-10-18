@@ -422,8 +422,28 @@ impl KnowledgeGraph {
 mod tests {
     use super::*;
     use shivacore::capability::{CapabilityTable, CapId, Pid, ResourceType, Rights};
+    use core::ops::{Deref, DerefMut};
 
-    impl CapabilityClient for CapabilityTable {
+    // Local test adapter: implementing the external CapabilityClient trait
+    // directly for the dependency's CapabilityTable violates Rust's orphan rule.
+    struct TestCapabilityTable(CapabilityTable);
+
+    impl TestCapabilityTable {
+        fn new() -> Self {
+            Self(CapabilityTable::new())
+        }
+    }
+
+    impl Deref for TestCapabilityTable {
+        type Target = CapabilityTable;
+        fn deref(&self) -> &Self::Target { &self.0 }
+    }
+
+    impl DerefMut for TestCapabilityTable {
+        fn deref_mut(&mut self) -> &mut Self::Target { &mut self.0 }
+    }
+
+    impl CapabilityClient for TestCapabilityTable {
         fn create_capability(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, rights: CapabilityRights) -> Result<CapabilityHandle, libshivacore::AbiError> {
             let id = self.create(Pid(owner.0 as u32), ResourceType::KnowledgeGraphEntity, resource_id, Rights(rights.bits()));
             Ok(CapabilityHandle(id.0))
@@ -447,8 +467,8 @@ mod tests {
         ProcessId(n as u64)
     }
 
-    fn setup() -> (CapabilityTable, KnowledgeGraph) {
-        (CapabilityTable::new(), KnowledgeGraph::new())
+    fn setup() -> (TestCapabilityTable, KnowledgeGraph) {
+        (TestCapabilityTable::new(), KnowledgeGraph::new())
     }
 
     #[test]
