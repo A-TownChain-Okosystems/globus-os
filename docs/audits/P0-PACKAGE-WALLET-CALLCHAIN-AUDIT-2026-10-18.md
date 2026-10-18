@@ -8,7 +8,7 @@
 ## Executive findings
 
 1. The package verifier now hashes the supplied artifact bytes, verifies Ed25519 metadata against the configured keyring, rejects revoked keys, and returns a `VerifiedArtifact` carrying the exact bytes passed to verification. Tests cover exact-byte preservation, digest mismatch, untrusted/revoked keys, malformed metadata, metadata tampering, and invalid signatures.
-2. The audited tree does not expose a concrete production installer/stager that consumes `VerifiedArtifact`. `system/package/src/lib.rs` contains verification APIs; `system/update/src/lib.rs` exposes `verify_update_package`; neither file demonstrates the actual disk write/slot activation consumer. Therefore the invariant “the exact verified bytes are the bytes installed/activated” is not yet proven end-to-end.
+2. `system/update/src/staging.rs` now defines a fail-closed staging gate that accepts only `VerifiedArtifact`, writes its byte slice to the inactive slot, reads the slot back, compares every byte, and activates only after an exact match. Negative tests cover write failure, readback tampering, and attempts to overwrite the active slot. However, the audited tree still has no concrete production implementation of `UpdateSlotStorage` bound to real disk/partition and boot-selection operations. End-to-end installation/activation is therefore NOT proven.
 3. The visible filesystem recovery code at `system/vfs/src/recovery.rs` replays journaled block writes. It does not parse package artifacts or call the package verifier. No package recovery/rollback consumer joining these paths was identified in the audited tree.
 4. Wallet signing previously accepted caller-created `Grant` values and authorized only by the declared right. The correction removes that trust model: wallet methods accept a capability identifier and require it to resolve in a trusted `CapabilityRegistry`, bound to the wallet-signing resource, with the requested right and no revocation.
 5. ShivaCore's generic IPC/syscall path has kernel-side capability checks in `modules/atc-shivacore/kernel/src/ipc.rs` and `modules/atc-shivacore/kernel/src/syscall.rs`. The audit did not find a concrete adapter connecting the typed `WalletSignMessage` service entry point to that kernel path. Do not treat generic IPC enforcement as proof of end-to-end wallet IPC enforcement until that adapter is traced and tested.
@@ -19,11 +19,12 @@
 
 - Package metadata and byte verification: `system/package/src/lib.rs`
 - Update verification wrapper and state model: `system/update/src/lib.rs`
+- Verified-byte staging contract and in-memory negative tests: `system/update/src/staging.rs`
 - Update boot-state/health/transition modules: `system/update/src/boot_state.rs`, `system/update/src/health.rs`, `system/update/src/transition.rs`
 - Filesystem journal recovery: `system/vfs/src/recovery.rs`
 - Concrete installer/stager and package rollback consumer: NOT FOUND in the audited Rust workspace paths.
 
-Required release gate: identify or implement the actual installation and slot-staging consumers; require them to accept only `VerifiedArtifact`, write only its byte buffer, and prevent reopening/re-fetching the unverified source after verification. Repeat verification after any transformation/delta application and before activation. Add fault-injection tests proving staged bytes equal verified bytes across update and recovery paths.
+Required release gate: implement a concrete `UpdateSlotStorage` adapter over the real inactive-slot write/readback and atomic boot-selection mechanisms. Keep raw bytes out of that API; accept only `VerifiedArtifact`; write only `artifact.bytes()`; do not reopen/re-fetch the source after verification; compare readback byte-for-byte before activation. Repeat verification after any transformation/delta application. Add fault-injection tests against the real adapter and show recovery/rollback cannot activate an unverified slot.
 
 ### Wallet / capability / IPC
 
