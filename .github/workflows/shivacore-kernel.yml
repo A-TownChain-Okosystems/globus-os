@@ -103,12 +103,20 @@ jobs:
           fi
           # Ask QEMU's monitor to quit cleanly after the guest has demonstrated
           # all required behavior. This is a harness shutdown, not a guest shutdown.
+          monitor_sent=0
           for attempt in $(seq 1 20); do
             if { printf 'quit\\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
+              monitor_sent=1
               break
             fi
             sleep 0.1
           done
+          if [ "$monitor_sent" -ne 1 ]; then
+            echo "Could not send QEMU monitor quit command."
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" || true
+            exit 1
+          fi
           set +e
           wait "$qemu_pid"
           status=$?
@@ -248,12 +256,20 @@ jobs:
           fi
           # Ask QEMU's monitor to quit cleanly after the guest has demonstrated
           # all required behavior. This is a harness shutdown, not a guest shutdown.
+          monitor_sent=0
           for attempt in $(seq 1 20); do
             if { printf 'quit\\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
+              monitor_sent=1
               break
             fi
             sleep 0.1
           done
+          if [ "$monitor_sent" -ne 1 ]; then
+            echo "Could not send QEMU monitor quit command."
+            kill "$qemu_pid" 2>/dev/null || true
+            wait "$qemu_pid" || true
+            exit 1
+          fi
           set +e
           wait "$qemu_pid"
           status=$?
