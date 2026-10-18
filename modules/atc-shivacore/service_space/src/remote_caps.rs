@@ -20,7 +20,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 
 use crate::did::{CryptoProvider, Did};
-use shivacore::capability::Rights;
+use libshivacore::CapabilityRights as Rights;
 
 /// Fehler bei Ticket-Operationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
