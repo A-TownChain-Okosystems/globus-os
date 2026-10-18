@@ -114,11 +114,7 @@ mod tests {
             self.active
         }
 
-        fn write_inactive_slot(
-            &mut self,
-            slot: Slot,
-            bytes: &[u8],
-        ) -> Result<(), Self::Error> {
+        fn write_inactive_slot(&mut self, slot: Slot, bytes: &[u8]) -> Result<(), Self::Error> {
             if self.fail_write {
                 return Err("write failed");
             }
