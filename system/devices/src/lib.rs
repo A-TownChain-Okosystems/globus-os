@@ -10,6 +10,7 @@ pub mod block_manager;
 pub mod boot;
 pub mod ethernet;
 pub mod hardware_inventory;
+pub mod hardware_discovery;
 pub mod interrupt;
 pub mod iommu;
 pub mod msi;
