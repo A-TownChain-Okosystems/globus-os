@@ -199,6 +199,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     for _ in 0..9 {
         emit_send(ring3_sender_cap.0, 0x0050_0000, sender_payload.len());
     }
+    // Arm a deterministic register-isolation checkpoint only after all syscalls.
+    // R13 is written last so the timer handler never checks a partially loaded pattern.
+    sender_code.extend_from_slice(&[0x48, 0xB8]);
+    sender_code.extend_from_slice(&0x1000u64.to_le_bytes()); // RAX
+    sender_code.extend_from_slice(&[0x48, 0xBB]);
+    sender_code.extend_from_slice(&0x1001u64.to_le_bytes()); // RBX
+    sender_code.extend_from_slice(&[0x49, 0xBC]);
+    sender_code.extend_from_slice(&0x1012u64.to_le_bytes()); // R12
+    sender_code.extend_from_slice(&[0x49, 0xBD]);
+    sender_code.extend_from_slice(&0x5343_4845_4455_4c31u64.to_le_bytes()); // R13 marker
     sender_code.extend_from_slice(&[0xEB, 0xFE]); // park until timer preemption
 
     let mut user_binary =
@@ -276,6 +286,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     };
     emit_valid_receive(64);
     drop(emit_valid_receive);
+    // Distinct register pattern for the receiver. R13 is the arm marker and is
+    // deliberately written last, after the three checked registers.
+    receiver_code.extend_from_slice(&[0x48, 0xB8]);
+    receiver_code.extend_from_slice(&0x2000u64.to_le_bytes()); // RAX
+    receiver_code.extend_from_slice(&[0x48, 0xBB]);
+    receiver_code.extend_from_slice(&0x2001u64.to_le_bytes()); // RBX
+    receiver_code.extend_from_slice(&[0x49, 0xBC]);
+    receiver_code.extend_from_slice(&0x2012u64.to_le_bytes()); // R12
+    receiver_code.extend_from_slice(&[0x49, 0xBD]);
+    receiver_code.extend_from_slice(&0x5343_4845_4455_4c31u64.to_le_bytes()); // R13 marker
     receiver_code.extend_from_slice(&[0xEB, 0xFE]);
 
     let mut user_binary_2 =
