@@ -56,7 +56,11 @@ impl CpuInfo {
         let ext = __cpuid(0x8000_0000);
         let max_extended_leaf = ext.eax;
 
-        let leaf1 = if max_basic_leaf >= 1 { __cpuid(1) } else { zero_cpuid() };
+        let leaf1 = if max_basic_leaf >= 1 {
+            __cpuid(1)
+        } else {
+            zero_cpuid()
+        };
         let stepping = (leaf1.eax & 0xF) as u8;
         let base_family = ((leaf1.eax >> 8) & 0xF) as u8;
         let base_model = ((leaf1.eax >> 4) & 0xF) as u8;
@@ -73,7 +77,11 @@ impl CpuInfo {
             base_model
         };
 
-        let leaf7 = if max_basic_leaf >= 7 { __cpuid_count(7, 0) } else { zero_cpuid() };
+        let leaf7 = if max_basic_leaf >= 7 {
+            __cpuid_count(7, 0)
+        } else {
+            zero_cpuid()
+        };
         let ext1 = if max_extended_leaf >= 0x8000_0001 {
             __cpuid(0x8000_0001)
         } else {
@@ -175,7 +183,12 @@ fn features_from_leaves(
 }
 
 fn zero_cpuid() -> core::arch::x86_64::CpuidResult {
-    core::arch::x86_64::CpuidResult { eax: 0, ebx: 0, ecx: 0, edx: 0 }
+    core::arch::x86_64::CpuidResult {
+        eax: 0,
+        ebx: 0,
+        ecx: 0,
+        edx: 0,
+    }
 }
 
 fn vendor_from_regs(ebx: u32, ecx: u32, edx: u32) -> CpuVendor {
@@ -204,16 +217,28 @@ mod tests {
     ) {
         (
             core::arch::x86_64::CpuidResult {
-                eax: 0, ebx: 0, ecx: leaf1_ecx, edx: (1 << 26) | (1 << 9),
+                eax: 0,
+                ebx: 0,
+                ecx: leaf1_ecx,
+                edx: (1 << 26) | (1 << 9),
             },
             core::arch::x86_64::CpuidResult {
-                eax: 0, ebx: leaf7_ebx, ecx: 0, edx: 0,
+                eax: 0,
+                ebx: leaf7_ebx,
+                ecx: 0,
+                edx: 0,
             },
             core::arch::x86_64::CpuidResult {
-                eax: 0, ebx: 0, ecx: 0, edx: (1 << 20) | (1 << 11) | (1 << 26),
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: (1 << 20) | (1 << 11) | (1 << 26),
             },
             core::arch::x86_64::CpuidResult {
-                eax: 0, ebx: 0, ecx: 0, edx: 1 << 8,
+                eax: 0,
+                ebx: 0,
+                ecx: 0,
+                edx: 1 << 8,
             },
         )
     }
@@ -227,22 +252,41 @@ mod tests {
 
     #[test]
     fn vendor_parser_accepts_intel_and_amd() {
-        assert_eq!(vendor_from_regs(0x756e6547, 0x6c65746e, 0x49656e69), CpuVendor::Intel);
-        assert_eq!(vendor_from_regs(0x68747541, 0x444d4163, 0x69746e65), CpuVendor::Amd);
+        assert_eq!(
+            vendor_from_regs(0x756e6547, 0x6c65746e, 0x49656e69),
+            CpuVendor::Intel
+        );
+        assert_eq!(
+            vendor_from_regs(0x68747541, 0x444d4163, 0x69746e65),
+            CpuVendor::Amd
+        );
     }
 
     #[test]
     fn absent_feature_leaves_decode_as_unsupported() {
-        let features = features_from_leaves(zero_cpuid(), zero_cpuid(), zero_cpuid(), zero_cpuid(), None);
+        let features =
+            features_from_leaves(zero_cpuid(), zero_cpuid(), zero_cpuid(), zero_cpuid(), None);
         assert_eq!(
             features,
             CpuFeatures {
-                sse2: false, sse41: false, nx: false, apic: false, x2apic: false,
-                syscall: false, one_gib_pages: false, invariant_tsc: false,
-                smep: false, smap: false, xsave: false, osxsave: false,
-                avx_hardware: false, avx_usable: false,
-                avx2_hardware: false, avx2_usable: false,
-                avx512f_hardware: false, avx512f_usable: false,
+                sse2: false,
+                sse41: false,
+                nx: false,
+                apic: false,
+                x2apic: false,
+                syscall: false,
+                one_gib_pages: false,
+                invariant_tsc: false,
+                smep: false,
+                smap: false,
+                xsave: false,
+                osxsave: false,
+                avx_hardware: false,
+                avx_usable: false,
+                avx2_hardware: false,
+                avx2_usable: false,
+                avx512f_hardware: false,
+                avx512f_usable: false,
             }
         );
     }
