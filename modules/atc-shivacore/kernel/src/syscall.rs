@@ -217,13 +217,15 @@ impl SyscallDispatcher {
                     ResourceType::IpcChannel, channel_id.0, Rights::READ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
+                if ipc.next_message_len(channel_id).is_some_and(|len| len > max_payload) {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
                 match ipc.recv(capabilities, pid, channel_id) {
-                    Ok(message) if message.data.len() <= max_payload => {
+                    Ok(message) => {
                         receive_buffer.clear();
                         receive_buffer.extend_from_slice(&message.data);
                         SyscallResponse::ok(message.data.len() as u64)
                     }
-                    Ok(_) => SyscallResponse::err(AbiError::InvalidPayload),
                     Err(IpcError::NoReadCapability) => SyscallResponse::err(AbiError::PermissionDenied),
                     Err(_) => SyscallResponse::err(AbiError::EndpointUnavailable),
                 }
@@ -406,6 +408,81 @@ mod tests {
         }, &mut table);
         assert_eq!(closed.error, None);
         assert!(table.get(cap).is_none());
+    }
+
+    #[test]
+    fn ipc_syscalls_transport_fifo_payloads_and_fail_closed() {
+        let mut caps = CapabilityTable::new();
+        let mut ipc = IpcSubsystem::new();
+        let channel = ipc.create_channel(&mut caps, pid(1), 2);
+        let write_cap = caps.list_for(pid(1)).iter()
+            .find(|cap| cap.resource_type == ResourceType::IpcChannel
+                && cap.resource_id == channel.0 && cap.rights.has(Rights::WRITE))
+            .unwrap().id;
+        let read_cap = caps.list_for(pid(1)).iter()
+            .find(|cap| cap.resource_type == ResourceType::IpcChannel
+                && cap.resource_id == channel.0 && cap.rights.has(Rights::READ))
+            .unwrap().id;
+        let mut dispatcher = SyscallDispatcher::new();
+        let mut received = Vec::new();
+
+        let sent = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(write_cap.0)),
+            arg0: channel.0,
+            payload_len: 5,
+            ..request(Syscall::IpcSend)
+        }, &mut caps, &mut ipc, b"hello", &mut received);
+        assert_eq!(sent.error, None);
+        assert_eq!(sent.value, 5);
+        assert_eq!(ipc.pending_messages(channel), Some(1));
+
+        let too_small = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(read_cap.0)),
+            arg0: channel.0,
+            arg1: 2,
+            ..request(Syscall::IpcReceive)
+        }, &mut caps, &mut ipc, &[], &mut received);
+        assert_eq!(too_small.error, Some(AbiError::InvalidPayload));
+        assert_eq!(ipc.pending_messages(channel), Some(1));
+
+        let received_response = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(read_cap.0)),
+            arg0: channel.0,
+            arg1: 5,
+            ..request(Syscall::IpcReceive)
+        }, &mut caps, &mut ipc, &[], &mut received);
+        assert_eq!(received_response.error, None);
+        assert_eq!(received, b"hello");
+        assert_eq!(ipc.pending_messages(channel), Some(0));
+    }
+
+    #[test]
+    fn ipc_syscall_rejects_foreign_capability_and_missing_channel() {
+        let mut caps = CapabilityTable::new();
+        let mut ipc = IpcSubsystem::new();
+        let channel = ipc.create_channel(&mut caps, pid(1), 1);
+        let write_cap = caps.list_for(pid(1)).iter()
+            .find(|cap| cap.resource_type == ResourceType::IpcChannel
+                && cap.resource_id == channel.0 && cap.rights.has(Rights::WRITE))
+            .unwrap().id;
+        let mut dispatcher = SyscallDispatcher::new();
+        let mut received = Vec::new();
+        let denied = dispatcher.dispatch_with_ipc(pid(2), SyscallRequest {
+            capability: Some(CapabilityHandle(write_cap.0)),
+            arg0: channel.0,
+            payload_len: 1,
+            ..request(Syscall::IpcSend)
+        }, &mut caps, &mut ipc, b"x", &mut received);
+        assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+        assert_eq!(ipc.pending_messages(channel), Some(0));
+
+        let missing = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(write_cap.0)),
+            arg0: u64::MAX,
+            payload_len: 1,
+            ..request(Syscall::IpcSend)
+        }, &mut caps, &mut ipc, b"x", &mut received);
+        assert_eq!(missing.error, Some(AbiError::PermissionDenied));
     }
 
     #[test]
