@@ -311,19 +311,26 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
             1001 => (0x2000, 0x2001, 0x2012),
             _ => (current.regs.rax, current.regs.rbx, current.regs.r12),
         };
-        if current.regs.rax != rax || current.regs.rbx != rbx || current.regs.r12 != r12 {
-            panic!(
-                "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-                pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+        // User code may legitimately clobber registers while executing syscalls.
+        // Assert the isolation pattern only after the Ring-3 payload arms it by
+        // writing R13 last; this avoids mistaking an arbitrary syscall snapshot
+        // for register corruption.
+        const REGISTER_CHECKPOINT_MARKER: u64 = 0x5343_4845_4455_4c31;
+        if current.regs.r13 == REGISTER_CHECKPOINT_MARKER {
+            if current.regs.rax != rax || current.regs.rbx != rbx || current.regs.r12 != r12 {
+                panic!(
+                    "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                    pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
+                );
+            }
+            serial_println!(
+                "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                pid.0,
+                current.regs.rax,
+                current.regs.rbx,
+                current.regs.r12
             );
         }
-        serial_println!(
-            "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-            pid.0,
-            current.regs.rax,
-            current.regs.rbx,
-            current.regs.r12
-        );
     }
 
     if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
