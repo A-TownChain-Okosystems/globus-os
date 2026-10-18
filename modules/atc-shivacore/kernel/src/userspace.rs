@@ -14,7 +14,7 @@ use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
+    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB, Translate, TranslateResult},
     VirtAddr,
 };
 
@@ -147,6 +147,51 @@ impl UserAddressSpace {
         in_region(self.data_base, self.data_size)
             || stack
             || in_region(self.heap_base, self.heap_size)
+    }
+
+    /// Validate the virtual span and every effective page-table entry before access.
+    ///
+    /// Callers must invoke this while holding exclusive access to the active mapper
+    /// so mappings cannot change between validation and the subsequent copy.
+    #[cfg(feature = "x86-boot")]
+    pub fn validate_mapped_range(
+        &self,
+        mapper: &OffsetPageTable<'static>,
+        addr: u64,
+        len: usize,
+        write: bool,
+    ) -> bool {
+        let layout_ok = if write {
+            self.validate_write_range(addr, len)
+        } else {
+            self.validate_read_range(addr, len)
+        };
+        if !layout_ok || len == 0 {
+            return layout_ok;
+        }
+
+        let Some(end) = addr.checked_add(len as u64) else {
+            return false;
+        };
+        if end <= addr {
+            return false;
+        }
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(addr));
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(end - 1));
+        for page in Page::range_inclusive(first, last) {
+            match mapper.translate(page.start_address()) {
+                TranslateResult::Mapped { flags, .. } => {
+                    if !flags.contains(PageTableFlags::PRESENT)
+                        || !flags.contains(PageTableFlags::USER_ACCESSIBLE)
+                        || (write && !flags.contains(PageTableFlags::WRITABLE))
+                    {
+                        return false;
+                    }
+                }
+                _ => return false,
+            }
+        }
+        true
     }
 
     /// Stack pointer initial value (top of stack)
