@@ -7,6 +7,7 @@ pub mod block_cache;
 pub mod block_manager;
 pub mod boot;
 pub mod ethernet;
+pub mod hardware_inventory;
 pub mod interrupt;
 pub mod iommu;
 pub mod msi;
@@ -19,6 +20,7 @@ pub mod timer;
 
 pub use block_cache::{BlockCache, CacheError};
 pub use block_manager::{BlockDeviceId, BlockDeviceRegistry};
+pub use hardware_inventory::{HardwareInventory, HardwareLocation, HardwareRecord, HardwareStatus, InventoryError};
 pub use registry::DeviceRegistry;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
