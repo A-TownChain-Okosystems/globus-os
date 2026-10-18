@@ -366,8 +366,8 @@ struct SyscallTrapFrame {
     rip: u64, cs: u64, rflags: u64, rsp: u64, ss: u64,
 }
 
-static SYSCALL_KERNEL_STATE: Mutex<Option<crate::kernel_init::KernelState>> = Mutex::new(None);
-static SYSCALL_DISPATCHER: Mutex<crate::syscall::SyscallDispatcher> =
+static SYSCALL_KERNEL_STATE: Mutex<Option<shivacore::kernel_init::KernelState>> = Mutex::new(None);
+static SYSCALL_DISPATCHER: Mutex<shivacore::syscall::SyscallDispatcher> =
     Mutex::new(crate::syscall::SyscallDispatcher::new());
 
 /// Install the canonical, already initialized kernel state for trap dispatch.
