@@ -206,6 +206,14 @@ mod tests {
     }
 
     #[test]
+    fn capability_rights_compose_without_changing_wire_bits() {
+        let rights = CapabilityRights::READ | CapabilityRights::WRITE | CapabilityRights::INSPECT;
+        assert_eq!(rights.bits(), 0b1_0011);
+        assert!(rights.has(CapabilityRights::READ | CapabilityRights::WRITE));
+        assert!(!rights.has(CapabilityRights::EXECUTE));
+    }
+
+    #[test]
     fn handshake_accepts_minor_changes() {
         assert!(
             AbiHandshake {
