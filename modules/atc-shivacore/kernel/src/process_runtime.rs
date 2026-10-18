@@ -23,6 +23,7 @@ pub enum ProcessRuntimeError {
     Userspace(UserspaceError),
     NotFound,
     AlreadyExited,
+    PermissionDenied,
     Capability(CapabilityError),
 }
 
@@ -67,6 +68,7 @@ impl ProcessRuntime {
         request_len: usize,
         vfs: &Vfs,
         fs_capability: u64,
+        process_capabilities: &CapabilityTable,
         max_executable_bytes: usize,
     ) -> Result<ProcessId, ProcessRuntimeError> {
         if request_len != ProcessStartRequest::WIRE_SIZE {
@@ -77,6 +79,9 @@ impl ProcessRuntime {
         copy_from_user(reader, caller, request_address, &mut wire)
             .map_err(ProcessRuntimeError::CopyIn)?;
         let request = ProcessStartRequest::decode_wire(&wire).map_err(ProcessRuntimeError::Abi)?;
+        if !Self::has_spawn_authority(process_capabilities, caller, request.spawn_capability) {
+            return Err(ProcessRuntimeError::PermissionDenied);
+        }
         if request.args_len != 0 {
             return Err(ProcessRuntimeError::Abi(AbiError::UnsupportedOperation));
         }
@@ -133,6 +138,7 @@ impl ProcessRuntime {
                     request.payload_len,
                     vfs,
                     fs_cap.0,
+                    process_capabilities,
                     max_executable_bytes,
                 ) {
                     Ok(pid) => SyscallResponse::ok(pid.0 as u64),
@@ -189,6 +195,22 @@ impl ProcessRuntime {
         }
     }
 
+    fn has_spawn_authority(
+        capabilities: &CapabilityTable,
+        caller: Pid,
+        handle: libshivacore::CapabilityHandle,
+    ) -> bool {
+        capabilities
+            .get(CapId(handle.0))
+            .map(|cap| {
+                cap.owner == caller
+                    && cap.resource_type == ResourceType::Process
+                    && cap.resource_id == 0
+                    && cap.rights.has(Rights::WRITE)
+            })
+            .unwrap_or(false)
+    }
+
     fn has_process_capability(
         capabilities: &CapabilityTable,
         caller: Pid,
@@ -225,7 +247,9 @@ impl ProcessRuntime {
             ProcessRuntimeError::Load(ElfLoadError::Userspace(UserspaceError::MaxProcessesReached)) => {
                 AbiError::ResourceExhausted
             }
-            ProcessRuntimeError::Capability(_) => AbiError::PermissionDenied,
+            ProcessRuntimeError::PermissionDenied | ProcessRuntimeError::Capability(_) => {
+                AbiError::PermissionDenied
+            },
             ProcessRuntimeError::Load(_)
             | ProcessRuntimeError::Userspace(_) => AbiError::InvalidPayload,
         }
