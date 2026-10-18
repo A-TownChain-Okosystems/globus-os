@@ -419,6 +419,26 @@ mod tests {
         assert!(runtime.user_context(pid).unwrap().is_user_mode());
         assert!(runtime.scheduler().get_entry(Pid(pid.0)).is_some());
 
+        let source_cap = process_capabilities.create(
+            Pid(7),
+            ResourceType::IpcChannel,
+            42,
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
+        );
+        let grants = [InitialCapabilityGrant {
+            source: source_cap,
+            rights: Rights::READ,
+            policy_ceiling: Rights::READ,
+        }];
+        let child_caps = runtime
+            .grant_initial_capabilities(Pid(7), pid, &grants, &mut process_capabilities)
+            .unwrap();
+        assert_eq!(child_caps.len(), 1);
+        let delegated = process_capabilities.get(child_caps[0]).unwrap();
+        assert_eq!(delegated.owner, Pid(pid.0));
+        assert_eq!(delegated.rights, Rights::READ);
+        assert!(!delegated.rights.has(Rights::WRITE));
+
         let process_cap = process_capabilities.create(
             Pid(7),
             ResourceType::Process,
