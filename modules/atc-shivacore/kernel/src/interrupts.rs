@@ -155,12 +155,25 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
-) {
+) -> ! {
     use x86_64::registers::control::Cr2;
-    serial_println!("EXCEPTION: PAGE FAULT");
-    serial_println!("Accessed Address: {:?}", Cr2::read());
+
+    let fault_addr = Cr2::read();
+    let from_user = stack_frame.code_segment & 0x3 == 0x3;
+    serial_println!("EXCEPTION: PAGE FAULT (fatal; recovery not implemented)");
+    serial_println!("Accessed Address: {:?}", fault_addr);
     serial_println!("Error Code: {:?}", error_code);
+    serial_println!("Origin: {}", if from_user { "Ring 3" } else { "Ring 0" });
     serial_println!("{:#?}", stack_frame);
+
+    // Do not return to the faulting instruction. Until the kernel has a tested
+    // per-process fault/termination path, returning here can repeat the fault
+    // indefinitely and leave the system in an undefined recovery loop.
+    panic!(
+        "fatal page fault at {:?} (origin: {})",
+        fault_addr,
+        if from_user { "user" } else { "kernel" }
+    );
 }
 
 #[repr(C)]
