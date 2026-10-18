@@ -45,6 +45,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: Kernel-Einstiegspunkt erreicht.");
 
     let cpu = hal::CpuInfo::detect();
+    let boot_apic_id = hal::cpu::current_apic_id();
+    serial_println!("ShivaCore: BSP identity APIC_ID={:#x} (identity only; SMP not enabled)", boot_apic_id);
     serial_println!(
         "ShivaCore: CPU vendor={} family={} model={} stepping={} apic={} x2apic={} nx={} invariant_tsc={}",
         cpu.vendor_name(), cpu.family, cpu.model, cpu.stepping,
