@@ -344,6 +344,35 @@ impl UserScheduler {
         self.entries.iter_mut().find(|e| e.pid == pid)
     }
 
+    /// Mark a scheduled process as exited and prevent it from being selected again.
+    /// This updates scheduler state; platform code must separately reclaim address
+    /// space and revoke process-owned capabilities.
+    pub fn terminate_process(&mut self, pid: Pid, exit_code: ExitCode) -> bool {
+        let Some(entry) = self.get_entry_mut(pid) else {
+            return false;
+        };
+        if entry.state.is_zombie() {
+            return false;
+        }
+        entry.state = SchedState::Zombie(exit_code);
+        if self.current == Some(pid) {
+            self.current = None;
+        }
+        true
+    }
+
+    /// Return lifecycle status from the scheduler's authoritative process entry.
+    pub fn process_status(&self, pid: Pid) -> Option<libshivacore::ProcessStatus> {
+        let entry = self.get_entry(pid)?;
+        Some(match entry.state {
+            SchedState::Ready => libshivacore::ProcessStatus::Ready,
+            SchedState::Running => libshivacore::ProcessStatus::Running,
+            SchedState::Blocked(_) => libshivacore::ProcessStatus::Blocked,
+            SchedState::Zombie(code) if code == 0 => libshivacore::ProcessStatus::Exited,
+            SchedState::Zombie(_) => libshivacore::ProcessStatus::Failed,
+        })
+    }
+
     /// Pick the next process to run (round-robin with priority)
     fn pick_next(&self) -> Option<usize> {
         // Priority: find highest-priority (lowest number) runnable process
