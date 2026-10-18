@@ -14,7 +14,8 @@ use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
     structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB, Translate, TranslateResult},
+    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB, Translate},
+    structures::paging::mapper::TranslateResult,
     VirtAddr,
 };
 
