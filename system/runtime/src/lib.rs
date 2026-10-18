@@ -3,7 +3,6 @@
 mod core_api;
 
 use crate::core_api::RuntimeCore;
-
 use aurora_core::{AuroraError, AuroraRequest, AuroraResponse, RequestStatus, StateMachine};
 use globus_diagnostics::EventLog;
 use globus_identity::{IdentitySession, LoginState, UserId, WalletAddress};
