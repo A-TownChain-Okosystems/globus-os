@@ -134,7 +134,6 @@ impl PerCpuState {
     }
 }
 
-
 /// IA32_GS_BASE in 64-bit mode. The kernel must establish an explicit
 /// `swapgs` entry/exit policy before using this facility across CPL3 traps.
 const IA32_GS_BASE: u32 = 0xC000_0101;
@@ -156,9 +155,7 @@ pub enum PerCpuInitError {
 ///   transition before user mode can run code that relies on kernel GS state.
 /// - Call before enabling local interrupts; this function rejects IF=1.
 /// - Only one initializer may configure GS_BASE on this logical CPU at a time.
-pub unsafe fn install_current(
-    state: &'static PerCpuState,
-) -> Result<(), PerCpuInitError> {
+pub unsafe fn install_current(state: &'static PerCpuState) -> Result<(), PerCpuInitError> {
     if x86_64::instructions::interrupts::are_enabled() {
         return Err(PerCpuInitError::InterruptsEnabled);
     }
@@ -220,7 +217,11 @@ pub fn current_logical_id_gs() -> Option<u32> {
 fn is_canonical_48_bit_address(address: u64) -> bool {
     let upper = address >> 48;
     let sign = (address >> 47) & 1;
-    if sign == 0 { upper == 0 } else { upper == 0xFFFF }
+    if sign == 0 {
+        upper == 0
+    } else {
+        upper == 0xFFFF
+    }
 }
 
 unsafe fn read_msr(msr: u32) -> u64 {
@@ -249,7 +250,6 @@ unsafe fn write_msr(msr: u32, value: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-
 
     #[test]
     fn canonical_address_check_accepts_low_and_high_48_bit_addresses() {
