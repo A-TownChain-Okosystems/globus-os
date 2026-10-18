@@ -272,7 +272,7 @@ pub struct ProcessStartRequest {
 
 impl ProcessStartRequest {
     /// Canonical wire size: path[256] + path_len[u16] + priority[u8] +
-    /// flags[u8] + args_len[u32]. Integers are little-endian on the wire.
+    /// flags[u8] + args_len[u32] + spawn_capability[u64]. Integers are little-endian.
     pub const WIRE_SIZE: usize = MAX_PROCESS_PATH + 2 + 1 + 1 + 4 + 8;
 
     /// Decode an exact-size byte payload without reading user pointers or allocating.
