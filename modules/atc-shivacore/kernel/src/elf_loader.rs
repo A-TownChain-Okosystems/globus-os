@@ -249,6 +249,8 @@ impl<'a> ElfParser<'a> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
+use crate::user_sched::UserScheduler;
+use crate::vfs::{Vfs, VfsError};
 
 pub struct ElfLoader;
 
@@ -275,6 +277,36 @@ impl ElfLoader {
         };
 
         mgr.load_binary(binary).map_err(ElfLoadError::Userspace)
+    }
+
+    /// Read an executable through the capability-gated VFS, parse it, create
+    /// its user context, and register that context with the user scheduler.
+    ///
+    /// This connects the VFS -> ELF loader -> UserspaceManager -> scheduler
+    /// metadata path. The architecture boot path must still map isolated page
+    /// tables and perform the actual IRETQ transition before claiming execution.
+    pub fn load_elf_from_vfs(
+        mgr: &mut UserspaceManager,
+        scheduler: &mut UserScheduler,
+        vfs: &Vfs,
+        path: &str,
+        caller_pid: u64,
+        fs_capability: u64,
+        priority: u8,
+        max_bytes: usize,
+    ) -> Result<Pid, ElfLoadError> {
+        let elf_data = vfs
+            .read_executable(path, caller_pid, fs_capability, max_bytes)
+            .map_err(ElfLoadError::Vfs)?;
+        let pid = Self::load_elf(mgr, &elf_data)?;
+        let context = mgr
+            .get_context(pid)
+            .ok_or(ElfLoadError::Userspace(UserspaceError::ProcessNotFound))?;
+        if !context.is_user_mode() || !context.valid_address(context.rip) || !context.valid_address(context.rsp) {
+            return Err(ElfLoadError::Userspace(UserspaceError::InvalidAddress));
+        }
+        scheduler.add_process(pid, context, priority);
+        Ok(pid)
     }
 
     /// Create a minimal valid ELF64 binary for testing
@@ -339,6 +371,7 @@ pub enum ElfLoadError {
     Parse(ElfParseError),
     NoCodeSegment,
     Userspace(UserspaceError),
+    Vfs(VfsError),
 }
 
 impl From<ElfParseError> for ElfLoadError {
@@ -358,6 +391,7 @@ impl core::fmt::Display for ElfLoadError {
             ElfLoadError::Parse(e) => write!(f, "ELF parse error: {}", e),
             ElfLoadError::NoCodeSegment => write!(f, "no executable code segment"),
             ElfLoadError::Userspace(e) => write!(f, "userspace error: {}", e),
+            ElfLoadError::Vfs(e) => write!(f, "VFS error: {:?}", e),
         }
     }
 }
