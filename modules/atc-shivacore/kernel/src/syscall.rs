@@ -480,13 +480,16 @@ mod tests {
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
         assert_eq!(ipc.pending_messages(channel), Some(0));
 
+        let missing_channel_cap = caps.create(
+            pid(1), ResourceType::IpcChannel, u64::MAX, Rights::WRITE
+        );
         let missing = dispatcher.dispatch_with_ipc(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(write_cap.0)),
+            capability: Some(CapabilityHandle(missing_channel_cap.0)),
             arg0: u64::MAX,
             payload_len: 1,
             ..request(Syscall::IpcSend)
         }, &mut caps, &mut ipc, b"x", &mut received);
-        assert_eq!(missing.error, Some(AbiError::PermissionDenied));
+        assert_eq!(missing.error, Some(AbiError::EndpointUnavailable));
     }
 
     #[test]
