@@ -207,6 +207,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         memory::create_user_mapper(phys_mem_offset, &mut frame_allocator)
             .expect("ShivaCore: could not create isolated PML4 for PID=1000")
     };
+    // Image bytes are copied through their user virtual addresses, so make
+    // the destination root active while populating the freshly mapped pages.
+    unsafe { memory::switch_to_page_table(user_root_1) };
     unsafe {
         userspace::map_user_binary(
             &mut user_mapper_1,
@@ -300,6 +303,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         memory::create_user_mapper(phys_mem_offset, &mut frame_allocator)
             .expect("ShivaCore: could not create isolated PML4 for PID=1001")
     };
+    unsafe { memory::switch_to_page_table(user_root_2) };
     unsafe {
         userspace::map_user_binary(
             &mut user_mapper_2,
@@ -313,6 +317,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_pid_2 = ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
+    // Return to the sender root before registering both spaces; all later
+    // kernel execution uses shared supervisor mappings, and timer preemption
+    // performs the per-process CR3 switch.
+    unsafe { memory::switch_to_page_table(user_root_1) };
     interrupts::init_user_scheduler(
         &user_ctx,
         user_root_1,
