@@ -90,6 +90,54 @@ pub struct IpcReceiveRequest {
     pub max_payload: u32,
 }
 
+/// Stable process identity used by userspace service contracts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[repr(transparent)]
+pub struct ProcessId(pub u64);
+
+/// Resource namespace understood by the stable capability service contract.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[repr(u8)]
+pub enum CapabilityResource {
+    KnowledgeGraphEntity = 1,
+}
+
+/// Authorization operations supplied by the trusted kernel IPC/syscall client.
+/// This is a contract, not a userspace-owned capability database.
+pub trait CapabilityClient {
+    fn create_capability(
+        &mut self,
+        owner: ProcessId,
+        resource: CapabilityResource,
+        resource_id: u64,
+        rights: CapabilityRights,
+    ) -> Result<CapabilityHandle, AbiError>;
+
+    fn check_capability(
+        &self,
+        owner: ProcessId,
+        resource: CapabilityResource,
+        resource_id: u64,
+        rights: CapabilityRights,
+    ) -> bool;
+
+    fn delegate_resource(
+        &mut self,
+        owner: ProcessId,
+        resource: CapabilityResource,
+        resource_id: u64,
+        target: ProcessId,
+        rights: CapabilityRights,
+    ) -> Result<CapabilityHandle, AbiError>;
+
+    fn revoke_resource(
+        &mut self,
+        owner: ProcessId,
+        resource: CapabilityResource,
+        resource_id: u64,
+    ) -> Result<(), AbiError>;
+}
+
 /// Stable 32-byte digest exchanged across the kernel/service boundary.
 pub type Hash32 = [u8; 32];
 
