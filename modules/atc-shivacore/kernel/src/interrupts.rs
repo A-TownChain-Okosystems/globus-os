@@ -471,6 +471,12 @@ shivacore_syscall_trampoline:
     push rcx
     push rbx
     push rax
+    # CPL0-origin INT 0x80 has no saved RSP/SS pair. Reject it before Rust
+    # can interpret the stack as the five-word CPL3 privilege-transition frame.
+    mov rax, qword ptr [rsp + 128]
+    and eax, 3
+    cmp eax, 3
+    jne .Lshivacore_syscall_bad_privilege
     mov r12, rsp
     mov rdi, rsp
     and rsp, -16
@@ -492,12 +498,24 @@ shivacore_syscall_trampoline:
     pop r14
     pop r15
     iretq
+
+.Lshivacore_syscall_bad_privilege:
+    and rsp, -16
+    call {bad_handler}
+    ud2
 "#,
-    handler = sym syscall_trap_rust
+    handler = sym syscall_trap_rust,
+    bad_handler = sym syscall_privilege_violation
 );
 
 fn syscall_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_syscall_trampoline as usize as u64)
+}
+
+/// Fail closed if a CPL0 caller attempts to use the Ring-3-only syscall gate.
+/// The assembly checks CS before building a full privilege-transition frame.
+extern "C" fn syscall_privilege_violation() -> ! {
+    panic!("ShivaCore: rejected INT 0x80 from non-Ring-3 context");
 }
 
 /// Trap ABI (x86-64): RAX=syscall id, RDI=ABI version, RSI=capability
@@ -510,6 +528,14 @@ fn syscall_interrupt_entry_addr() -> VirtAddr {
 /// global, there is no remote TLB shootdown protocol, and frame allocation and
 /// address-space teardown do not yet have a complete concurrent lifecycle.
 extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
+    // CS was checked in assembly before interpreting RSP/SS. Recheck the
+    // complete frame so a malformed user SS selector fails closed as well.
+    if !shivacore::hal::privilege::is_user_trap_frame(frame.cs, frame.ss) {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    }
+
     let Some(pid) = USER_SCHEDULER.lock().as_ref().and_then(|s| s.current_pid()) else {
         frame.rax = 0;
         frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
