@@ -23,6 +23,7 @@ pub enum ProcessRuntimeError {
     Userspace(UserspaceError),
     NotFound,
     AlreadyExited,
+    InvalidState,
     PermissionDenied,
     Capability(CapabilityError),
 }
@@ -89,6 +90,48 @@ impl ProcessRuntime {
         let path = core::str::from_utf8(&request.path[..request.path_len as usize])
             .map_err(|_| ProcessRuntimeError::Abi(AbiError::InvalidPayload))?;
         let pid = ElfLoader::load_elf_from_vfs(
+            &mut self.userspace,
+            &mut self.scheduler,
+            vfs,
+            path,
+            caller.0 as u64,
+            fs_capability,
+            request.priority,
+            max_executable_bytes,
+        )
+        .map_err(ProcessRuntimeError::Load)?;
+        Ok(ProcessId(pid.0))
+    }
+
+    /// Trusted init path: create the process in a non-runnable startup gate.
+    /// After policy-approved grants, `grant_initial_capabilities` activates it.
+    pub fn start_staged_from_user(
+        &mut self,
+        reader: &impl UserMemoryReader,
+        caller: Pid,
+        request_address: u64,
+        request_len: usize,
+        vfs: &Vfs,
+        fs_capability: u64,
+        process_capabilities: &CapabilityTable,
+        max_executable_bytes: usize,
+    ) -> Result<ProcessId, ProcessRuntimeError> {
+        if request_len != ProcessStartRequest::WIRE_SIZE {
+            return Err(ProcessRuntimeError::Abi(AbiError::InvalidPayload));
+        }
+        let mut wire = [0u8; ProcessStartRequest::WIRE_SIZE];
+        copy_from_user(reader, caller, request_address, &mut wire)
+            .map_err(ProcessRuntimeError::CopyIn)?;
+        let request = ProcessStartRequest::decode_wire(&wire).map_err(ProcessRuntimeError::Abi)?;
+        if !Self::has_spawn_authority(process_capabilities, caller, request.spawn_capability) {
+            return Err(ProcessRuntimeError::PermissionDenied);
+        }
+        if request.args_len != 0 {
+            return Err(ProcessRuntimeError::Abi(AbiError::UnsupportedOperation));
+        }
+        let path = core::str::from_utf8(&request.path[..request.path_len as usize])
+            .map_err(|_| ProcessRuntimeError::Abi(AbiError::InvalidPayload))?;
+        let pid = ElfLoader::load_elf_from_vfs_staged(
             &mut self.userspace,
             &mut self.scheduler,
             vfs,
@@ -247,6 +290,7 @@ impl ProcessRuntime {
             ProcessRuntimeError::Load(ElfLoadError::Userspace(UserspaceError::MaxProcessesReached)) => {
                 AbiError::ResourceExhausted
             }
+            ProcessRuntimeError::InvalidState => AbiError::UnsupportedOperation,
             ProcessRuntimeError::PermissionDenied | ProcessRuntimeError::Capability(_) => {
                 AbiError::PermissionDenied
             },
@@ -288,7 +332,26 @@ impl ProcessRuntime {
                 }
             }
         }
-        Ok(delegated)
+        if self.scheduler.activate_staged_process(Pid(child.0)) {
+            return Ok(delegated);
+        }
+        match self.scheduler.process_status(Pid(child.0)) {
+            Some(ProcessStatus::Ready | ProcessStatus::Running) => Ok(delegated),
+            Some(ProcessStatus::Blocked) => {
+                for id in delegated.iter().copied() {
+                    capabilities.revoke(id);
+                }
+                let _ = self.terminate(child, 1, capabilities);
+                Err(ProcessRuntimeError::InvalidState)
+            }
+            Some(ProcessStatus::Exited | ProcessStatus::Failed) => {
+                for id in delegated.iter().copied() {
+                    capabilities.revoke(id);
+                }
+                Err(ProcessRuntimeError::AlreadyExited)
+            }
+            Some(ProcessStatus::Starting) | None => Err(ProcessRuntimeError::InvalidState),
+        }
     }
 
     /// Report the status from the scheduler's authoritative process entry.
