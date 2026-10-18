@@ -327,7 +327,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_root_2,
         user_mapper_2,
     );
-    serial_println!("ShivaCore: USER-001 isolated PML4 roots installed for PID=1000 and PID=1001.");
+    serial_println!(
+        "ShivaCore: USER-001 isolated page-table roots PID=1000 CR3={:#x} PID=1001 CR3={:#x}",
+        user_root_1.start_address().as_u64(),
+        user_root_2.start_address().as_u64()
+    );
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
