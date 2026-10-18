@@ -6,7 +6,10 @@
 
 use crate::gdt;
 use crate::serial_println;
+use alloc::vec::Vec;
 use core::arch::global_asm;
+use core::sync::atomic::{AtomicPtr, Ordering};
+use x86_64::structures::paging::OffsetPageTable;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
 use shivacore::user_sched::{SavedContext, UserScheduler};
@@ -25,8 +28,11 @@ pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
+static USER_ADDRESS_SPACES: Mutex<Vec<(shivacore::ats1000::Pid, UserContext)>> = Mutex::new(Vec::new());
+static ACTIVE_MAPPER: AtomicPtr<OffsetPageTable<'static>> = AtomicPtr::new(core::ptr::null_mut());
 
 pub fn init_user_scheduler(first: &UserContext, second: &UserContext) {
+    *USER_ADDRESS_SPACES.lock() = alloc::vec![(first.pid, first.clone()), (second.pid, second.clone())];
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
@@ -339,6 +345,78 @@ pub fn install_syscall_kernel(state: crate::kernel_init::KernelState) {
     *slot = Some(state);
 }
 
+/// The mapper is installed after all boot-time mappings are complete. Ring-3
+/// syscall handling is the only consumer while user execution is active.
+pub fn install_active_mapper(mapper: &mut OffsetPageTable<'static>) {
+    ACTIVE_MAPPER.store(mapper as *mut _, Ordering::Release);
+}
+
+fn user_address_space(pid: shivacore::ats1000::Pid) -> Option<UserContext> {
+    USER_ADDRESS_SPACES
+        .lock()
+        .iter()
+        .find(|(registered_pid, _)| *registered_pid == pid)
+        .map(|(_, context)| context.clone())
+}
+
+fn validate_user_buffer(
+    pid: shivacore::ats1000::Pid,
+    address: u64,
+    len: usize,
+    write: bool,
+) -> bool {
+    if len == 0 {
+        return true;
+    }
+    let Some(context) = user_address_space(pid) else { return false };
+    let mapper = ACTIVE_MAPPER.load(Ordering::Acquire);
+    if mapper.is_null() {
+        return false;
+    }
+    // SAFETY: mapper is installed before Ring 3 starts and no mapper mutation
+    // occurs while the user scheduler is running on this single boot CPU.
+    unsafe {
+        context.address_space.validate_mapped_range(&*mapper, address, len, write)
+    }
+}
+
+fn copy_from_user(
+    pid: shivacore::ats1000::Pid,
+    address: u64,
+    len: usize,
+) -> Option<Vec<u8>> {
+    if !validate_user_buffer(pid, address, len, false) {
+        return None;
+    }
+    let mut bytes = alloc::vec![0u8; len];
+    if len != 0 {
+        // SAFETY: every page in the complete source span was validated PRESENT
+        // and USER_ACCESSIBLE; zero length never dereferences the pointer.
+        unsafe {
+            core::ptr::copy_nonoverlapping(address as *const u8, bytes.as_mut_ptr(), len);
+        }
+    }
+    Some(bytes)
+}
+
+fn copy_to_user(
+    pid: shivacore::ats1000::Pid,
+    address: u64,
+    bytes: &[u8],
+) -> bool {
+    if !validate_user_buffer(pid, address, bytes.len(), true) {
+        return false;
+    }
+    if !bytes.is_empty() {
+        // SAFETY: every destination page was validated PRESENT, USER_ACCESSIBLE
+        // and WRITABLE before the copy; no mapping changes occur in this path.
+        unsafe {
+            core::ptr::copy_nonoverlapping(bytes.as_ptr(), address as *mut u8, bytes.len());
+        }
+    }
+    true
+}
+
 extern "C" {
     fn shivacore_syscall_trampoline();
 }
@@ -404,6 +482,46 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         return;
     };
 
+    let syscall_id = frame.rax as u16;
+    let is_send = syscall_id == libshivacore::Syscall::IpcSend.id();
+    let is_receive = syscall_id == libshivacore::Syscall::IpcReceive.id();
+    let payload_len = if is_receive { 0 } else { frame.r9 as usize };
+    let receive_capacity = if is_receive { frame.r9 as usize } else { 0 };
+
+    // Copy-in/copy-out is only performed after validating the full span against
+    // the process layout and every effective PTE. IPC receive validates the
+    // entire destination before dequeueing, so a bad buffer cannot consume data.
+    let payload = if is_send {
+        match copy_from_user(pid, frame.r8, payload_len) {
+            Some(bytes) => bytes,
+            None => {
+                frame.rax = 0;
+                frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+                return;
+            }
+        }
+    } else {
+        Vec::new()
+    };
+    if is_receive && !validate_user_buffer(pid, frame.r8, receive_capacity, true) {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+        return;
+    }
+
+    let request = crate::syscall::SyscallRequest {
+        abi_version: frame.rdi as u32,
+        syscall_id,
+        capability: if frame.rsi == 0 {
+            None
+        } else {
+            Some(libshivacore::CapabilityHandle(frame.rsi))
+        },
+        arg0: frame.rdx,
+        arg1: if is_receive { receive_capacity as u64 } else { frame.r10 },
+        payload_len,
+    };
+
     let mut state_guard = SYSCALL_KERNEL_STATE.lock();
     let Some(state) = state_guard.as_mut() else {
         frame.rax = 0;
@@ -411,24 +529,27 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         return;
     };
 
-    let request = crate::syscall::SyscallRequest {
-        abi_version: frame.rdi as u32,
-        syscall_id: frame.rax as u16,
-        capability: if frame.rsi == 0 {
-            None
-        } else {
-            Some(libshivacore::CapabilityHandle(frame.rsi))
-        },
-        arg0: frame.rdx,
-        arg1: frame.r10,
-        payload_len: frame.r9 as usize,
-    };
+    let mut receive_buffer = Vec::new();
+    let response = SYSCALL_DISPATCHER.lock().dispatch_with_ipc(
+        pid,
+        request,
+        &mut state.processes.caps,
+        &mut state.ipc,
+        &payload,
+        &mut receive_buffer,
+    );
 
-    // Never dereference R8 here. Until page-table-backed copy-in/copy-out is
-    // connected, the dispatcher's IPC-only fallback returns EndpointUnavailable.
-    let response = SYSCALL_DISPATCHER
-        .lock()
-        .dispatch(pid, request, &mut state.processes.caps);
+    if response.error.is_none() && is_receive {
+        if receive_buffer.len() > receive_capacity
+            || !copy_to_user(pid, frame.r8, &receive_buffer)
+        {
+            // The pre-validation and single-CPU mapping invariant should make
+            // this unreachable. Fail closed if that invariant is ever broken.
+            frame.rax = 0;
+            frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+            return;
+        }
+    }
     frame.rax = response.value;
     frame.rdx = response.error.map(|error| error as u64).unwrap_or(0);
 }
