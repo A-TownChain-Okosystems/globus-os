@@ -245,7 +245,7 @@ impl ProcessStartRequest {
     /// Validates bounds and path encoding without allocating.
     pub fn validate(&self) -> Result<(), AbiError> {
         let path_len = self.path_len as usize;
-        if path_len == 0 || path_len >= MAX_PROCESS_PATH || self.args_len as usize > MAX_PROCESS_ARGS {
+        if path_len == 0 || path_len > MAX_PROCESS_PATH || self.args_len as usize > MAX_PROCESS_ARGS {
             return Err(AbiError::InvalidPayload);
         }
         let path = &self.path[..path_len];
