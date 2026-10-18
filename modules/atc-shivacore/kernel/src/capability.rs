@@ -322,11 +322,12 @@ impl libshivacore::CapabilityClient for KernelCapabilityClient<'_> {
             return Err(libshivacore::AbiError::InvalidPayload);
         }
         let required = Rights(rights.bits() | Rights::DELEGATE.bits());
-        let source = self.table.list_for(owner_pid).into_iter()
+        let source_id = self.table.list_for(owner_pid).into_iter()
             .find(|cap| cap.resource_type == Self::resource(resource)
                 && cap.resource_id == resource_id && cap.rights.has(required))
+            .map(|cap| cap.id)
             .ok_or(libshivacore::AbiError::PermissionDenied)?;
-        let child = self.table.delegate(owner_pid, source.id, target_pid, Rights(rights.bits()))
+        let child = self.table.delegate(owner_pid, source_id, target_pid, Rights(rights.bits()))
             .map_err(|_| libshivacore::AbiError::PermissionDenied)?;
         Ok(libshivacore::CapabilityHandle(child.0))
     }
