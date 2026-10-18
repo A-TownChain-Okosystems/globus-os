@@ -2,4 +2,5 @@
 //! ShivaCore hardware abstraction layer.
 pub mod cpu;
 pub mod percpu;
+pub mod privilege;
 pub use cpu::CpuInfo;
