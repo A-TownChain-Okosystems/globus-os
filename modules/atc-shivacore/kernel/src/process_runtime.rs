@@ -406,12 +406,20 @@ mod tests {
         vfs.set_file_permissions("/init", 7, fs_cap.0, Rights::READ | Rights::EXEC)
             .unwrap();
 
+        let mut process_capabilities = CapabilityTable::new();
+        let spawn_cap = process_capabilities.create(
+            Pid(7),
+            ResourceType::Process,
+            0,
+            Rights::WRITE | Rights::DELEGATE,
+        );
         let mut wire = [0u8; ProcessStartRequest::WIRE_SIZE];
         wire[..5].copy_from_slice(b"/init");
         let offset = libshivacore::MAX_PROCESS_PATH;
         wire[offset..offset + 2].copy_from_slice(&5u16.to_le_bytes());
         wire[offset + 2] = 10;
         wire[offset + 4..offset + 8].copy_from_slice(&0u32.to_le_bytes());
+        wire[offset + 8..offset + 16].copy_from_slice(&spawn_cap.0.to_le_bytes());
         let memory = TestMemory {
             base: 0x2000,
             bytes: wire.to_vec(),
@@ -420,7 +428,6 @@ mod tests {
 
         let mut runtime = ProcessRuntime::new();
         let general_capabilities = CapabilityTable::new();
-        let mut process_capabilities = CapabilityTable::new();
         let mut dispatcher = crate::syscall::SyscallDispatcher::new();
         let start_response = dispatcher.dispatch_with_process_runtime(
             Pid(7),
@@ -523,17 +530,22 @@ mod tests {
             Rights::READ | Rights::WRITE | Rights::EXEC,
         );
         let vfs = Vfs::new(caps);
+        let mut process_capabilities = CapabilityTable::new();
+        let spawn_cap = process_capabilities.create(
+            Pid(7), ResourceType::Process, 0, Rights::WRITE
+        );
         let mut wire = [0u8; ProcessStartRequest::WIRE_SIZE];
         wire[..5].copy_from_slice(b"/init");
         let offset = libshivacore::MAX_PROCESS_PATH;
         wire[offset..offset + 2].copy_from_slice(&5u16.to_le_bytes());
         wire[offset + 4..offset + 8].copy_from_slice(&1u32.to_le_bytes());
+        wire[offset + 8..offset + 16].copy_from_slice(&spawn_cap.0.to_le_bytes());
         let memory = TestMemory { base: 0x2000, bytes: wire.to_vec(), owner: Pid(7) };
         let mut runtime = ProcessRuntime::new();
         assert!(matches!(
             runtime.start_from_user(
                 &memory, Pid(7), 0x2000, ProcessStartRequest::WIRE_SIZE,
-                &vfs, fs_cap.0, 1024
+                &vfs, fs_cap.0, &process_capabilities, 1024
             ),
             Err(ProcessRuntimeError::Abi(AbiError::UnsupportedOperation))
         ));
