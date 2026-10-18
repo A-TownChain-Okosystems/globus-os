@@ -13,9 +13,11 @@ use alloc::vec::Vec;
 use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
-    structures::paging::OffsetPageTable,
-    structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB, Translate},
     structures::paging::mapper::TranslateResult,
+    structures::paging::OffsetPageTable,
+    structures::paging::{
+        FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB, Translate,
+    },
     VirtAddr,
 };
 
@@ -127,7 +129,9 @@ impl UserAddressSpace {
                 .map(|region_end| addr >= base && end <= region_end)
                 .unwrap_or(false)
         };
-        let stack = self.stack_base.checked_sub(self.stack_size)
+        let stack = self
+            .stack_base
+            .checked_sub(self.stack_size)
             .zip(self.stack_base.checked_add(1))
             .map(|(base, region_end)| addr >= base && end <= region_end)
             .unwrap_or(false);
@@ -784,13 +788,34 @@ mod tests {
         let asp = UserAddressSpace::default();
 
         assert!(asp.validate_read_range(0x00400000, 16));
-        assert!(!asp.validate_write_range(0x00400000, 1), "code is read-only");
-        assert!(asp.validate_write_range(0x7FFFE000, 32), "mapped stack span is writable");
-        assert!(!asp.validate_read_range(0x004FFFF8, 16), "span must not cross region boundary");
-        assert!(!asp.validate_write_range(u64::MAX - 3, 8), "addition must not wrap");
-        assert!(!asp.validate_read_range(0x1000, 1), "kernel/unmapped address is outside user regions");
-        assert!(asp.validate_read_range(0, 0), "zero-byte operation does not dereference pointer");
-        assert!(asp.validate_write_range(u64::MAX, 0), "zero-byte operation does not dereference pointer");
+        assert!(
+            !asp.validate_write_range(0x00400000, 1),
+            "code is read-only"
+        );
+        assert!(
+            asp.validate_write_range(0x7FFFE000, 32),
+            "mapped stack span is writable"
+        );
+        assert!(
+            !asp.validate_read_range(0x004FFFF8, 16),
+            "span must not cross region boundary"
+        );
+        assert!(
+            !asp.validate_write_range(u64::MAX - 3, 8),
+            "addition must not wrap"
+        );
+        assert!(
+            !asp.validate_read_range(0x1000, 1),
+            "kernel/unmapped address is outside user regions"
+        );
+        assert!(
+            asp.validate_read_range(0, 0),
+            "zero-byte operation does not dereference pointer"
+        );
+        assert!(
+            asp.validate_write_range(u64::MAX, 0),
+            "zero-byte operation does not dereference pointer"
+        );
     }
 
     #[test]
