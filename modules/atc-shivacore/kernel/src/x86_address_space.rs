@@ -9,7 +9,7 @@
 
 use x86_64::{
     registers::control::{Cr3, Cr3Flags},
-    structures::paging::{FrameAllocator, Mapper, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB},
+    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PageTableFlags, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
 };
 
@@ -98,7 +98,7 @@ impl UserAddressSpaceRoot {
     /// All kernel mappings needed by the current execution path, stacks, IDT,
     /// GDT/TSS, interrupt handlers, and per-CPU data must be valid in this root.
     pub unsafe fn activate(&self) {
-        Cr3::write(self.root, Cr3Flags::empty());
+        unsafe { Cr3::write(self.root, Cr3Flags::empty()) };
     }
 
     /// Build a mapper over this root for constructing this process's mappings.
