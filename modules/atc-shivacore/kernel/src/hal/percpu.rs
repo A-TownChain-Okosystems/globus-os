@@ -171,10 +171,10 @@ pub unsafe fn install_current(
         return Err(PerCpuInitError::NonCanonicalAddress);
     }
 
-    let previous = read_msr(IA32_GS_BASE);
-    write_msr(IA32_GS_BASE, address);
-    if read_msr(IA32_GS_BASE) != address {
-        write_msr(IA32_GS_BASE, previous);
+    let previous = unsafe { read_msr(IA32_GS_BASE) };
+    unsafe { write_msr(IA32_GS_BASE, address) };
+    if unsafe { read_msr(IA32_GS_BASE) } != address {
+        unsafe { write_msr(IA32_GS_BASE, previous) };
         return Err(PerCpuInitError::ReadbackMismatch);
     }
     Ok(())
@@ -187,7 +187,7 @@ pub fn current_apic_id_gs() -> Option<u32> {
     let value: u32;
     // SAFETY: caller-facing contract relies on GS_BASE being installed by
     // install_current; a null base is checked through the MSR first.
-    if read_msr(IA32_GS_BASE) == 0 {
+    if unsafe { read_msr(IA32_GS_BASE) } == 0 {
         return None;
     }
     unsafe {
