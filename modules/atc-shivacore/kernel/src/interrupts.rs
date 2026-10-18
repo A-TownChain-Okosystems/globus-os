@@ -504,6 +504,11 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         match copy_from_user(pid, frame.r8, payload_len) {
             Some(bytes) => bytes,
             None => {
+                serial_println!(
+                    "ShivaCore: RING3_IPC pid={} syscall={} result=0 error=InvalidPayload reason=unreadable-or-unmapped-user-span",
+                    pid.0,
+                    syscall_id
+                );
                 frame.rax = 0;
                 frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
                 return;
@@ -513,6 +518,11 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
         Vec::new()
     };
     if is_receive && !validate_user_buffer(pid, frame.r8, receive_capacity, true) {
+        serial_println!(
+            "ShivaCore: RING3_IPC pid={} syscall={} result=0 error=InvalidPayload reason=unwritable-or-unmapped-user-span",
+            pid.0,
+            syscall_id
+        );
         frame.rax = 0;
         frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
         return;
