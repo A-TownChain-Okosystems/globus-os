@@ -105,10 +105,57 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     println!("K-Sprint 2: Paging/Heap OK (Box+Vec getestet)");
     // Real kernel integration gate: execute the canonical kernel initialization
     // from the same UEFI -> kernel_main path after paging/heap are live.
-    let kernel_state = shivacore::kernel_init::KernelState::boot()
+    let mut kernel_state = shivacore::kernel_init::KernelState::boot()
         .expect("ShivaCore: canonical KernelState::boot() failed");
     serial_println!("ShivaCore: KernelState::boot() -> Done.");
     serial_println!("{}", kernel_state.boot_log());
+
+    // Trusted boot-time IPC bootstrap for the two Ring-3 smoke identities.
+    // PID 1001 owns the channel and receives READ; PID 1000 receives only a
+    // delegated WRITE capability. These grants live in the canonical kernel
+    // capability table and are not user-created or inferred from the PID.
+    let ring3_channel = kernel_state.ipc.create_channel(
+        &mut kernel_state.processes.caps,
+        ats1000::Pid(1001),
+        8,
+    );
+    let owner_send_cap = kernel_state.processes.caps
+        .list_for(ats1000::Pid(1001))
+        .iter()
+        .find(|cap| {
+            cap.resource_type == shivacore::capability::ResourceType::IpcChannel
+                && cap.resource_id == ring3_channel.0
+                && cap.rights.has(
+                    shivacore::capability::Rights::WRITE
+                        | shivacore::capability::Rights::DELEGATE,
+                )
+        })
+        .map(|cap| cap.id)
+        .expect("Ring-3 IPC bootstrap did not create owner WRITE/DELEGATE capability");
+    let ring3_sender_cap = kernel_state.processes.caps
+        .delegate(
+            ats1000::Pid(1001),
+            owner_send_cap,
+            ats1000::Pid(1000),
+            shivacore::capability::Rights::WRITE,
+        )
+        .expect("Ring-3 sender capability delegation failed");
+    let ring3_receiver_cap = kernel_state.processes.caps
+        .list_for(ats1000::Pid(1001))
+        .iter()
+        .find(|cap| {
+            cap.resource_type == shivacore::capability::ResourceType::IpcChannel
+                && cap.resource_id == ring3_channel.0
+                && cap.rights.has(shivacore::capability::Rights::READ)
+        })
+        .map(|cap| cap.id)
+        .expect("Ring-3 receiver READ capability missing");
+    serial_println!(
+        "ShivaCore: Ring-3 IPC bootstrap channel={} sender_pid=1000 sender_cap={} receiver_pid=1001 receiver_cap={} capacity=8",
+        ring3_channel.0,
+        ring3_sender_cap.0,
+        ring3_receiver_cap.0
+    );
     // Move the canonical state into the syscall runtime before Ring 3 starts.
     // No shadow capability table or IPC registry is created for trap handling.
     interrupts::install_syscall_kernel(kernel_state);
