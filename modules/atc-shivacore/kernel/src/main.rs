@@ -46,9 +46,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     let cpu = hal::CpuInfo::detect();
     serial_println!(
-        "ShivaCore: CPU vendor={} family={} model={} stepping={} apic={} x2apic={} nx={} invariant_tsc={}",
+        "ShivaCore: CPU vendor={} family={} model={} stepping={} sse2={} sse41={} apic={} x2apic={} nx={} syscall={} one_gib_pages={} invariant_tsc={} smep={} smap={} xsave={} osxsave={} avx_hw={} avx_usable={} avx2_hw={} avx2_usable={} avx512f_hw={} avx512f_usable={} xcr0={:?}",
         cpu.vendor_name(), cpu.family, cpu.model, cpu.stepping,
-        cpu.features.apic, cpu.features.x2apic, cpu.features.nx, cpu.features.invariant_tsc
+        cpu.features.sse2, cpu.features.sse41, cpu.features.apic, cpu.features.x2apic,
+        cpu.features.nx, cpu.features.syscall, cpu.features.one_gib_pages, cpu.features.invariant_tsc,
+        cpu.features.smep, cpu.features.smap, cpu.features.xsave, cpu.features.osxsave,
+        cpu.features.avx_hardware, cpu.features.avx_usable, cpu.features.avx2_hardware,
+        cpu.features.avx2_usable, cpu.features.avx512f_hardware, cpu.features.avx512f_usable, cpu.xcr0
     );
     if !cpu.boot_compatible() {
         panic!("ShivaCore: CPU lacks required x86-64 boot features (SSE2/NX/APIC)");
