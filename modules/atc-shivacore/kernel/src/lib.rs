@@ -29,6 +29,7 @@ pub mod syscall;
 pub mod system;
 pub mod timer;
 pub mod user_sched;
+pub mod user_copy;
 pub mod userspace;
 pub mod vfs;
 pub mod vmm;
