@@ -134,9 +134,130 @@ impl PerCpuState {
     }
 }
 
+
+/// IA32_GS_BASE in 64-bit mode. The kernel must establish an explicit
+/// `swapgs` entry/exit policy before using this facility across CPL3 traps.
+const IA32_GS_BASE: u32 = 0xC000_0101;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PerCpuInitError {
+    InterruptsEnabled,
+    NullPointer,
+    NonCanonicalAddress,
+    ReadbackMismatch,
+}
+
+/// Install the current CPU's state as its GS base.
+///
+/// # Safety
+/// - `state` must remain pinned, mapped, and alive for the lifetime of this
+///   CPU's use of GS-relative access.
+/// - The caller must arrange a correct `swapgs` policy for every privilege
+///   transition before user mode can run code that relies on kernel GS state.
+/// - Call before enabling local interrupts; this function rejects IF=1.
+/// - Only one initializer may configure GS_BASE on this logical CPU at a time.
+pub unsafe fn install_current(
+    state: &'static PerCpuState,
+) -> Result<(), PerCpuInitError> {
+    if x86_64::instructions::interrupts::are_enabled() {
+        return Err(PerCpuInitError::InterruptsEnabled);
+    }
+
+    let address = state as *const PerCpuState as u64;
+    if address == 0 {
+        return Err(PerCpuInitError::NullPointer);
+    }
+    if !is_canonical_48_bit_address(address) {
+        return Err(PerCpuInitError::NonCanonicalAddress);
+    }
+
+    let previous = read_msr(IA32_GS_BASE);
+    write_msr(IA32_GS_BASE, address);
+    if read_msr(IA32_GS_BASE) != address {
+        write_msr(IA32_GS_BASE, previous);
+        return Err(PerCpuInitError::ReadbackMismatch);
+    }
+    Ok(())
+}
+
+/// Read the APIC ID from the currently installed GS-based per-CPU block.
+/// Returns `None` when GS_BASE has not been initialized to a non-null block.
+#[inline]
+pub fn current_apic_id_gs() -> Option<u32> {
+    let value: u32;
+    // SAFETY: caller-facing contract relies on GS_BASE being installed by
+    // install_current; a null base is checked through the MSR first.
+    if read_msr(IA32_GS_BASE) == 0 {
+        return None;
+    }
+    unsafe {
+        core::arch::asm!(
+            "mov {value:e}, gs:[0]",
+            value = out(reg) value,
+            options(nostack, readonly, preserves_flags)
+        );
+    }
+    Some(value)
+}
+
+/// Read the logical CPU ID via a GS-relative memory operand.
+#[inline]
+pub fn current_logical_id_gs() -> Option<u32> {
+    if read_msr(IA32_GS_BASE) == 0 {
+        return None;
+    }
+    let value: u32;
+    unsafe {
+        core::arch::asm!(
+            "mov {value:e}, gs:[4]",
+            value = out(reg) value,
+            options(nostack, readonly, preserves_flags)
+        );
+    }
+    Some(value)
+}
+
+fn is_canonical_48_bit_address(address: u64) -> bool {
+    let upper = address >> 48;
+    let sign = (address >> 47) & 1;
+    if sign == 0 { upper == 0 } else { upper == 0xFFFF }
+}
+
+unsafe fn read_msr(msr: u32) -> u64 {
+    let low: u32;
+    let high: u32;
+    core::arch::asm!(
+        "rdmsr",
+        in("ecx") msr,
+        out("eax") low,
+        out("edx") high,
+        options(nomem, nostack, preserves_flags)
+    );
+    ((high as u64) << 32) | low as u64
+}
+
+unsafe fn write_msr(msr: u32, value: u64) {
+    core::arch::asm!(
+        "wrmsr",
+        in("ecx") msr,
+        in("eax") value as u32,
+        in("edx") (value >> 32) as u32,
+        options(nomem, nostack, preserves_flags)
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+
+    #[test]
+    fn canonical_address_check_accepts_low_and_high_48_bit_addresses() {
+        assert!(is_canonical_48_bit_address(0x0000_7fff_ffff_ffff));
+        assert!(is_canonical_48_bit_address(0xffff_8000_0000_0000));
+        assert!(!is_canonical_48_bit_address(0x0000_8000_0000_0000));
+        assert!(!is_canonical_48_bit_address(0xffff_7fff_ffff_ffff));
+    }
 
     #[test]
     fn cpu_must_complete_initialization_before_becoming_online() {
