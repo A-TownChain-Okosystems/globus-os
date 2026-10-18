@@ -1,15 +1,12 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 //! Minimal x86 CPU HAL. Detects Intel/AMD at runtime using CPUID.
-
 use core::arch::x86_64::{__cpuid, __cpuid_count};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuVendor {
     Intel,
     Amd,
     Other,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuFeatures {
     pub sse2: bool,
@@ -20,7 +17,6 @@ pub struct CpuFeatures {
     pub one_gib_pages: bool,
     pub invariant_tsc: bool,
 }
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuInfo {
     pub vendor: CpuVendor,
