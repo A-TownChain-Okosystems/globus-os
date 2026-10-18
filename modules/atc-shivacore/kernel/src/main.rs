@@ -229,9 +229,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_ctx.rsp
     );
 
-    // Second real Ring-3 image. Both processes intentionally share the current
-    // kernel page table for this first scheduler gate; the scheduler switches
-    // the CPU IRET frame while CR3/address-space switching remains a later gate.
+    // Second real Ring-3 image. It receives a separate PML4 root with its own
+    // lower-half user mappings and the same supervisor-only kernel upper half.
     // Real Ring-3 receiver: invoke ABI-v1 IPC_RECEIVE into its mapped data.
     let mut receiver_code = alloc::vec::Vec::new();
     let mut emit_receive = |capacity: u64| {
@@ -281,10 +280,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         0x0040_1000,
     );
     user_binary_2.data = alloc::vec![0u8; 64];
-    // Keep the first scheduler gate on the current shared CR3, but allocate
-    // a disjoint virtual region for PID 1001. This prevents the second mapping
-    // from colliding with PID 1000's code/data/stack pages. Full CR3 switching
-    // remains the next isolation gate.
+    // The roots have independent lower halves, so the processes may reuse the
+    // same user virtual layout. Keep distinct addresses here for easier QEMU
+    // diagnostics while validating the isolation mechanism.
     let user_addr_space_2 = userspace::UserAddressSpace {
         code_base: 0x0140_0000,
         code_size: 0x0010_0000,
