@@ -6,7 +6,7 @@
 //! the init layer does not simulate successful launches itself.
 
 use globus_services::{ServiceSpec, ServiceSupervisor, SupervisorError};
-use crate::service_boot::{start_ready_services, ServiceBootError, ServiceProcessAdapter};
+use crate::service_boot::{start_ready_services, ServiceBootError, ServiceProcessAdapter, StartedService};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum GlobusInitError {
@@ -18,7 +18,7 @@ pub enum GlobusInitError {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct InitReport {
     /// Services which passed both launch and readiness checks, in startup order.
-    pub ready_services: Vec<String>,
+    pub ready_services: Vec<StartedService>,
 }
 
 /// Run the GlobusOS service init sequence using a real platform process adapter.
@@ -92,7 +92,13 @@ mod tests {
         ];
         let mut adapter = TestAdapter { launched: Vec::new() };
         let report = run_globus_init(&specs, &mut adapter).unwrap();
-        assert_eq!(report.ready_services, vec!["ipc", "globusd"]);
-        assert_eq!(adapter.launched, report.ready_services);
+        assert_eq!(
+            report.ready_services.iter().map(|service| service.name.as_str()).collect::<Vec<_>>(),
+            vec!["ipc", "globusd"]
+        );
+        assert_eq!(
+            adapter.launched,
+            report.ready_services.iter().map(|service| service.name.clone()).collect::<Vec<_>>()
+        );
     }
 }
