@@ -488,6 +488,15 @@ extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
     let payload_len = if is_receive { 0 } else { frame.r9 as usize };
     let receive_capacity = if is_receive { frame.r9 as usize } else { 0 };
 
+    // Enforce the ABI ceiling before allocating or walking a user-controlled span.
+    if (is_send && payload_len > libshivacore::MAX_SYSCALL_PAYLOAD)
+        || (is_receive && receive_capacity > libshivacore::MAX_SYSCALL_PAYLOAD)
+    {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::InvalidPayload as u64;
+        return;
+    }
+
     // Copy-in/copy-out is only performed after validating the full span against
     // the process layout and every effective PTE. IPC receive validates the
     // entire destination before dequeueing, so a bad buffer cannot consume data.
