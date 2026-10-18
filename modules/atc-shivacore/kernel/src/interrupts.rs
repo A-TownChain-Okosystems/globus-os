@@ -494,9 +494,10 @@ fn syscall_interrupt_entry_addr() -> VirtAddr {
 /// R9=payload length. Return: RAX=value, RDX=0 on success or AbiError code.
 ///
 /// IPC pointer spans are validated against the registered process layout and
-/// active page table before copy-in/copy-out. This implementation still relies
-/// on the boot path's shared CR3 and single-CPU/no-concurrent-remap invariant;
-/// it does not establish address-space isolation or SMP safety.
+/// that process's mapper before copy-in/copy-out. Processes have distinct CR3
+/// roots, but this path is not yet SMP-safe: current PID/scheduler state is
+/// global, there is no remote TLB shootdown protocol, and frame allocation and
+/// address-space teardown do not yet have a complete concurrent lifecycle.
 extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
     let Some(pid) = USER_SCHEDULER.lock().as_ref().and_then(|s| s.current_pid()) else {
         frame.rax = 0;
