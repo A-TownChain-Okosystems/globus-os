@@ -20,6 +20,10 @@ pub enum Syscall {
     CapabilityQuery = 0x0020,
     HandleClose = 0x0030,
     MonotonicTime = 0x0040,
+    /// Process operations are reserved in ABI v1 but may be unsupported by a kernel.
+    ProcessStart = 0x0050,
+    ProcessTerminate = 0x0051,
+    ProcessStatus = 0x0052,
 }
 
 impl Syscall {
@@ -56,6 +60,7 @@ pub enum AbiError {
     EndpointUnavailable = 5,
     ResourceExhausted = 6,
     AbiVersionMismatch = 7,
+    UnsupportedOperation = 8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -168,6 +173,27 @@ mod tests {
     fn syscall_ids_are_stable() {
         assert_eq!(Syscall::IpcSend.id(), 0x0010);
         assert_eq!(Syscall::MonotonicTime.id(), 0x0040);
+        assert_eq!(Syscall::ProcessStart.id(), 0x0050);
+        assert_eq!(Syscall::ProcessTerminate.id(), 0x0051);
+        assert_eq!(Syscall::ProcessStatus.id(), 0x0052);
+    }
+
+    #[test]
+    fn process_start_request_rejects_invalid_bounds_and_paths() {
+        let mut request = ProcessStartRequest {
+            path: [0; MAX_PROCESS_PATH],
+            path_len: 5,
+            priority: 10,
+            flags: 0,
+            args_len: 0,
+        };
+        request.path[..5].copy_from_slice(b"/init");
+        assert_eq!(request.validate(), Ok(()));
+        request.path_len = (MAX_PROCESS_PATH + 1) as u16;
+        assert_eq!(request.validate(), Err(AbiError::InvalidPayload));
+        request.path_len = 5;
+        request.path[1] = 0;
+        assert_eq!(request.validate(), Err(AbiError::InvalidPayload));
     }
 
     #[test]
@@ -194,4 +220,58 @@ mod tests {
         );
         assert!(!AbiHandshake { major: 2, minor: 0 }.compatible());
     }
+}
+
+
+/// Maximum UTF-8 executable path length accepted by the process-start ABI.
+pub const MAX_PROCESS_PATH: usize = 256;
+/// Maximum argument block accepted by the process-start ABI.
+pub const MAX_PROCESS_ARGS: usize = 4096;
+
+/// Fixed-size request shape for a process start operation.
+///
+/// This is a wire contract only: it does not imply that the running kernel
+/// implements process creation. Callers must check the syscall result.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ProcessStartRequest {
+    pub path: [u8; MAX_PROCESS_PATH],
+    pub path_len: u16,
+    pub priority: u8,
+    pub flags: u8,
+    pub args_len: u32,
+}
+
+impl ProcessStartRequest {
+    /// Validates bounds and path encoding without allocating.
+    pub fn validate(&self) -> Result<(), AbiError> {
+        let path_len = self.path_len as usize;
+        if path_len == 0 || path_len >= MAX_PROCESS_PATH || self.args_len as usize > MAX_PROCESS_ARGS {
+            return Err(AbiError::InvalidPayload);
+        }
+        let path = &self.path[..path_len];
+        if path[0] != b'/' || path.iter().any(|byte| *byte == 0) {
+            return Err(AbiError::InvalidPayload);
+        }
+        core::str::from_utf8(path).map_err(|_| AbiError::InvalidPayload)?;
+        if self.flags != 0 {
+            return Err(AbiError::InvalidPayload);
+        }
+        Ok(())
+    }
+}
+
+/// Stable process identifier returned by a future supported ProcessStart syscall.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(transparent)]
+pub struct ProcessId(pub u32);
+
+/// Process lifecycle as reported by a supported ProcessStatus syscall.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum ProcessStatus {
+    Starting = 0,
+    Ready = 1,
+    Running = 2,
+    Exited = 3,
+    Failed = 4,
 }
