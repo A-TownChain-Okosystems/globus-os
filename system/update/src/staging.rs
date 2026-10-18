@@ -73,7 +73,6 @@ mod tests {
     use sha2::{Digest, Sha256};
     use std::collections::HashMap;
 
-    #[derive(Default)]
     struct MemorySlots {
         active: Slot,
         slots: HashMap<SlotKey, Vec<u8>>,
