@@ -153,7 +153,6 @@ impl core::ops::BitAnd for CapabilityRights {
         Self(self.0 & rhs.0)
     }
 }
-}
 
 /// Stable boot phases visible to services without exposing KernelState.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
