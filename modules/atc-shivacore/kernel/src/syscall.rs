@@ -209,6 +209,9 @@ impl SyscallDispatcher {
                 }
             }
             Syscall::IpcReceive => {
+                if request.payload_len != 0 || !payload.is_empty() {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
                 let max_payload = request.arg1 as usize;
                 if max_payload > MAX_SYSCALL_PAYLOAD {
                     return SyscallResponse::err(AbiError::InvalidPayload);
