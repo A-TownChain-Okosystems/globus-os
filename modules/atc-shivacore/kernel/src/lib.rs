@@ -32,6 +32,8 @@ pub mod timer;
 pub mod user_sched;
 pub mod user_copy;
 pub mod userspace;
+#[cfg(feature = "x86-boot")]
+pub mod x86_address_space;
 pub mod vfs;
 pub mod vmm;
 
