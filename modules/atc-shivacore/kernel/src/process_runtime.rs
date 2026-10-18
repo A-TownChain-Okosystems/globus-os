@@ -345,6 +345,7 @@ mod tests {
         };
 
         let mut runtime = ProcessRuntime::new();
+        let general_capabilities = CapabilityTable::new();
         let mut process_capabilities = CapabilityTable::new();
         let mut dispatcher = crate::syscall::SyscallDispatcher::new();
         let start_response = dispatcher.dispatch_with_process_runtime(
@@ -357,7 +358,7 @@ mod tests {
                 arg1: 0,
                 payload_len: ProcessStartRequest::WIRE_SIZE,
             },
-            &process_capabilities,
+            &general_capabilities,
             &mut runtime,
             &memory,
             &vfs,
@@ -387,7 +388,7 @@ mod tests {
                 arg1: 0,
                 payload_len: 0,
             },
-            &process_capabilities,
+            &general_capabilities,
             &mut runtime,
             &memory,
             &vfs,
@@ -407,7 +408,7 @@ mod tests {
                 arg1: 0,
                 payload_len: 0,
             },
-            &process_capabilities,
+            &general_capabilities,
             &mut runtime,
             &memory,
             &vfs,
