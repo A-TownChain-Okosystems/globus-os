@@ -540,6 +540,10 @@
     {
       "path": "system/shivacore-api/src/lib.rs",
       "finding": "Versioned ABI and wire-safe syscall/capability types exist; existence does not prove end-to-end runtime isolation."
+    },
+    {
+      "path": "modules/atc-shivacore/service_space/src/{atcnet,remote_caps,p2p_secure,knowledge_graph}.rs",
+      "finding": "Direct kernel-crate imports remain: atcnet imports shivacore::ats1000::NetworkStack; remote_caps imports shivacore::capability::Rights; p2p_secure imports shivacore::security::TokenBucket; knowledge_graph imports CapId, CapabilityTable, Pid, ResourceType and Rights. service_init mentions KernelState::boot in comments but no active call was identified in that file. Several hash-dependent service modules already use libshivacore::simple_hash; that function is explicitly non-cryptographic."
     }
   ],
   "next_pull_requests": [
