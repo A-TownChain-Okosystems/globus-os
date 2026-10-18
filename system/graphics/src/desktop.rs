@@ -154,7 +154,8 @@ impl DesktopSession {
             return Err(error.into());
         }
         self.windows.focus(id)?;
-        self.compositor.focus(id)
+        self.compositor
+            .focus(id)
             .map_err(|_| DesktopError::Window(WindowError::Missing))?;
         self.input.set_pointer_focus(Some(id));
         self.input.set_keyboard_focus(Some(id));
@@ -174,13 +175,20 @@ impl DesktopSession {
 
     pub fn move_window(&mut self, surface: SurfaceId, x: i32, y: i32) -> Result<(), DesktopError> {
         self.require_active()?;
-        self.windows.move_window(surface, x, y, self.viewport.rect())?;
+        self.windows
+            .move_window(surface, x, y, self.viewport.rect())?;
         self.sync_compositor()
     }
 
-    pub fn resize_window(&mut self, surface: SurfaceId, width: u32, height: u32) -> Result<(), DesktopError> {
+    pub fn resize_window(
+        &mut self,
+        surface: SurfaceId,
+        width: u32,
+        height: u32,
+    ) -> Result<(), DesktopError> {
         self.require_active()?;
-        self.windows.resize_window(surface, width, height, self.viewport.rect())?;
+        self.windows
+            .resize_window(surface, width, height, self.viewport.rect())?;
         self.sync_compositor()
     }
 
@@ -232,7 +240,8 @@ impl DesktopSession {
                 z: index as u32 + 1,
                 visible: window.state != WindowState::Minimized,
             };
-            self.compositor.set_placement(placement)
+            self.compositor
+                .set_placement(placement)
                 .map_err(|_| DesktopError::Window(WindowError::Missing))?;
         }
         Ok(())
@@ -243,7 +252,8 @@ impl DesktopSession {
             return Err(DesktopError::Shutdown);
         }
         self.windows.close(surface)?;
-        self.compositor.remove(surface)
+        self.compositor
+            .remove(surface)
             .map_err(|_| DesktopError::Window(WindowError::Missing))?;
         if self.input.keyboard_focus() == Some(surface) {
             self.input.set_keyboard_focus(None);
@@ -266,7 +276,9 @@ impl DesktopSession {
         match state {
             WindowState::Minimized => self.windows.minimize(surface)?,
             WindowState::Maximized => self.windows.maximize(surface, self.viewport.rect())?,
-            WindowState::Normal | WindowState::Fullscreen => self.windows.set_state(surface, state)?,
+            WindowState::Normal | WindowState::Fullscreen => {
+                self.windows.set_state(surface, state)?
+            }
             WindowState::Closed => unreachable!("closed state handled above"),
         }
         self.sync_compositor()
@@ -300,14 +312,20 @@ mod tests {
     use super::*;
 
     fn desktop() -> DesktopSession {
-        let mut desktop = DesktopSession::new(DesktopViewport { width: 1920, height: 1080 });
+        let mut desktop = DesktopSession::new(DesktopViewport {
+            width: 1920,
+            height: 1080,
+        });
         desktop.unlock();
         desktop
     }
 
     #[test]
     fn locked_desktop_cannot_open_windows() {
-        let mut desktop = DesktopSession::new(DesktopViewport { width: 1920, height: 1080 });
+        let mut desktop = DesktopSession::new(DesktopViewport {
+            width: 1920,
+            height: 1080,
+        });
         assert!(matches!(
             desktop.open_window("Shell", Rect::new(0, 0, 100, 100)),
             Err(DesktopError::Locked)
@@ -317,15 +335,21 @@ mod tests {
     #[test]
     fn active_session_routes_input_to_open_window() {
         let mut desktop = desktop();
-        let surface = desktop.open_window("Shell", Rect::new(0, 0, 500, 500)).unwrap();
-        let routed = desktop.route_input(InputEvent::PointerMove { x: 10, y: 10 }).unwrap();
+        let surface = desktop
+            .open_window("Shell", Rect::new(0, 0, 500, 500))
+            .unwrap();
+        let routed = desktop
+            .route_input(InputEvent::PointerMove { x: 10, y: 10 })
+            .unwrap();
         assert_eq!(routed.target, Some(surface));
     }
 
     #[test]
     fn move_resize_minimize_restore_and_close_update_compositor() {
         let mut desktop = desktop();
-        let surface = desktop.open_window("Editor", Rect::new(20, 30, 640, 480)).unwrap();
+        let surface = desktop
+            .open_window("Editor", Rect::new(20, 30, 640, 480))
+            .unwrap();
         desktop.move_window(surface, 100, 120).unwrap();
         desktop.resize_window(surface, 800, 600).unwrap();
         assert_eq!(desktop.hit_test(110, 130), Some(surface));
@@ -340,12 +364,19 @@ mod tests {
     #[test]
     fn maximize_restore_and_display_change_preserve_reachable_geometry() {
         let mut desktop = desktop();
-        let surface = desktop.open_window("Editor", Rect::new(20, 30, 640, 480)).unwrap();
+        let surface = desktop
+            .open_window("Editor", Rect::new(20, 30, 640, 480))
+            .unwrap();
         desktop.maximize_window(surface).unwrap();
         assert_eq!(desktop.windows()[0].bounds, Rect::new(0, 0, 1920, 1080));
         desktop.restore_window(surface).unwrap();
         assert_eq!(desktop.windows()[0].bounds, Rect::new(20, 30, 640, 480));
-        desktop.set_viewport(DesktopViewport { width: 800, height: 600 }).unwrap();
+        desktop
+            .set_viewport(DesktopViewport {
+                width: 800,
+                height: 600,
+            })
+            .unwrap();
         assert!(desktop.windows()[0].bounds.x <= 800 - 24);
         assert!(desktop.windows()[0].bounds.y <= 600 - 24);
     }
@@ -353,9 +384,14 @@ mod tests {
     #[test]
     fn non_active_desktop_does_not_hit_test_or_mutate_windows() {
         let mut desktop = desktop();
-        let surface = desktop.open_window("Editor", Rect::new(20, 30, 640, 480)).unwrap();
+        let surface = desktop
+            .open_window("Editor", Rect::new(20, 30, 640, 480))
+            .unwrap();
         desktop.suspend();
         assert_eq!(desktop.hit_test(30, 40), None);
-        assert!(matches!(desktop.move_window(surface, 0, 0), Err(DesktopError::Locked)));
+        assert!(matches!(
+            desktop.move_window(surface, 0, 0),
+            Err(DesktopError::Locked)
+        ));
     }
 }

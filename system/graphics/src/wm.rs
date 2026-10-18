@@ -59,7 +59,11 @@ impl WindowManager {
         if bounds.width < MIN_WINDOW_WIDTH || bounds.height < MIN_WINDOW_HEIGHT {
             return Err(WindowError::InvalidSize);
         }
-        if self.windows.iter().any(|w| w.surface == surface && w.state != WindowState::Closed) {
+        if self
+            .windows
+            .iter()
+            .any(|w| w.surface == surface && w.state != WindowState::Closed)
+        {
             return Err(WindowError::Exists);
         }
         self.windows.push(Window {
@@ -76,7 +80,10 @@ impl WindowManager {
     }
 
     pub fn focus(&mut self, surface: SurfaceId) -> Result<(), WindowError> {
-        let index = self.windows.iter().position(|w| w.surface == surface && w.state != WindowState::Closed)
+        let index = self
+            .windows
+            .iter()
+            .position(|w| w.surface == surface && w.state != WindowState::Closed)
             .ok_or(WindowError::Missing)?;
         if self.windows[index].state == WindowState::Minimized {
             self.windows[index].state = self.windows[index].state_before_minimize;
@@ -102,12 +109,18 @@ impl WindowManager {
         if window.state != WindowState::Normal {
             return Err(WindowError::Closed);
         }
-        let max_x = viewport.x.saturating_add(viewport.width.min(i32::MAX as u32) as i32)
+        let max_x = viewport
+            .x
+            .saturating_add(viewport.width.min(i32::MAX as u32) as i32)
             .saturating_sub(REACHABLE_TITLEBAR_HEIGHT);
-        let min_x = viewport.x.saturating_sub(window.bounds.width.min(i32::MAX as u32) as i32)
+        let min_x = viewport
+            .x
+            .saturating_sub(window.bounds.width.min(i32::MAX as u32) as i32)
             .saturating_add(REACHABLE_TITLEBAR_HEIGHT);
         let min_y = viewport.y;
-        let max_y = viewport.y.saturating_add(viewport.height.min(i32::MAX as u32) as i32)
+        let max_y = viewport
+            .y
+            .saturating_add(viewport.height.min(i32::MAX as u32) as i32)
             .saturating_sub(REACHABLE_TITLEBAR_HEIGHT);
         window.bounds.x = x.clamp(min_x.min(max_x), max_x.max(min_x));
         window.bounds.y = y.clamp(min_y, max_y.max(min_y));
@@ -136,11 +149,20 @@ impl WindowManager {
         window.bounds.width = width.min(max_width);
         window.bounds.height = height.min(max_height);
         // Keep the top-left inside the current work area after display changes.
-        let max_x = viewport.x.saturating_add(viewport.width.min(i32::MAX as u32) as i32)
+        let max_x = viewport
+            .x
+            .saturating_add(viewport.width.min(i32::MAX as u32) as i32)
             .saturating_sub(REACHABLE_TITLEBAR_HEIGHT);
-        let max_y = viewport.y.saturating_add(viewport.height.min(i32::MAX as u32) as i32)
+        let max_y = viewport
+            .y
+            .saturating_add(viewport.height.min(i32::MAX as u32) as i32)
             .saturating_sub(REACHABLE_TITLEBAR_HEIGHT);
-        window.bounds.x = window.bounds.x.clamp(viewport.x.saturating_sub(window.bounds.width as i32 - REACHABLE_TITLEBAR_HEIGHT), max_x.max(viewport.x));
+        window.bounds.x = window.bounds.x.clamp(
+            viewport
+                .x
+                .saturating_sub(window.bounds.width as i32 - REACHABLE_TITLEBAR_HEIGHT),
+            max_x.max(viewport.x),
+        );
         window.bounds.y = window.bounds.y.clamp(viewport.y, max_y.max(viewport.y));
         Ok(())
     }
@@ -179,7 +201,8 @@ impl WindowManager {
         let window = self.active_window_mut(surface)?;
         if window.state == WindowState::Minimized {
             window.state = window.state_before_minimize;
-        } else if window.state == WindowState::Maximized || window.state == WindowState::Fullscreen {
+        } else if window.state == WindowState::Maximized || window.state == WindowState::Fullscreen
+        {
             if let Some(bounds) = window.restore_bounds.take() {
                 window.bounds = bounds;
             }
@@ -189,7 +212,11 @@ impl WindowManager {
     }
 
     pub fn set_state(&mut self, surface: SurfaceId, state: WindowState) -> Result<(), WindowError> {
-        let window = self.windows.iter_mut().find(|w| w.surface == surface).ok_or(WindowError::Missing)?;
+        let window = self
+            .windows
+            .iter_mut()
+            .find(|w| w.surface == surface)
+            .ok_or(WindowError::Missing)?;
         if window.state == WindowState::Closed {
             return Err(WindowError::Closed);
         }
@@ -208,7 +235,11 @@ impl WindowManager {
     }
 
     fn active_window_mut(&mut self, surface: SurfaceId) -> Result<&mut Window, WindowError> {
-        let window = self.windows.iter_mut().find(|w| w.surface == surface).ok_or(WindowError::Missing)?;
+        let window = self
+            .windows
+            .iter_mut()
+            .find(|w| w.surface == surface)
+            .ok_or(WindowError::Missing)?;
         if window.state == WindowState::Closed {
             return Err(WindowError::Closed);
         }
@@ -249,8 +280,10 @@ mod tests {
     #[test]
     fn focus_is_exclusive_and_updates_z_order() {
         let mut wm = WindowManager::new();
-        wm.open(SurfaceId(1), "one", Rect::new(0, 0, 100, 100)).unwrap();
-        wm.open(SurfaceId(2), "two", Rect::new(10, 10, 100, 100)).unwrap();
+        wm.open(SurfaceId(1), "one", Rect::new(0, 0, 100, 100))
+            .unwrap();
+        wm.open(SurfaceId(2), "two", Rect::new(10, 10, 100, 100))
+            .unwrap();
         assert_eq!(wm.focused().unwrap().surface, SurfaceId(2));
         wm.focus(SurfaceId(1)).unwrap();
         assert_eq!(wm.focused().unwrap().surface, SurfaceId(1));
@@ -261,8 +294,10 @@ mod tests {
     #[test]
     fn move_clamps_titlebar_to_reachable_viewport() {
         let mut wm = WindowManager::new();
-        wm.open(SurfaceId(1), "one", Rect::new(10, 10, 400, 300)).unwrap();
-        wm.move_window(SurfaceId(1), i32::MAX, i32::MAX, viewport()).unwrap();
+        wm.open(SurfaceId(1), "one", Rect::new(10, 10, 400, 300))
+            .unwrap();
+        wm.move_window(SurfaceId(1), i32::MAX, i32::MAX, viewport())
+            .unwrap();
         let bounds = wm.windows()[0].bounds;
         assert!(bounds.x <= 1920 - REACHABLE_TITLEBAR_HEIGHT);
         assert!(bounds.y <= 1080 - REACHABLE_TITLEBAR_HEIGHT);
@@ -283,7 +318,8 @@ mod tests {
     #[test]
     fn minimize_hides_from_placements_and_restore_reveals() {
         let mut wm = WindowManager::new();
-        wm.open(SurfaceId(1), "one", Rect::new(20, 30, 640, 480)).unwrap();
+        wm.open(SurfaceId(1), "one", Rect::new(20, 30, 640, 480))
+            .unwrap();
         wm.minimize(SurfaceId(1)).unwrap();
         assert!(wm.placements().next().is_none());
         wm.restore(SurfaceId(1)).unwrap();
@@ -293,8 +329,15 @@ mod tests {
     #[test]
     fn rejects_too_small_window_geometry() {
         let mut wm = WindowManager::new();
-        assert_eq!(wm.open(SurfaceId(1), "tiny", Rect::new(0, 0, 1, 1)), Err(WindowError::InvalidSize));
-        wm.open(SurfaceId(1), "one", Rect::new(0, 0, 100, 100)).unwrap();
-        assert_eq!(wm.resize_window(SurfaceId(1), 1, 100, viewport()), Err(WindowError::InvalidSize));
+        assert_eq!(
+            wm.open(SurfaceId(1), "tiny", Rect::new(0, 0, 1, 1)),
+            Err(WindowError::InvalidSize)
+        );
+        wm.open(SurfaceId(1), "one", Rect::new(0, 0, 100, 100))
+            .unwrap();
+        assert_eq!(
+            wm.resize_window(SurfaceId(1), 1, 100, viewport()),
+            Err(WindowError::InvalidSize)
+        );
     }
 }

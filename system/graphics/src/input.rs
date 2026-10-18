@@ -112,7 +112,12 @@ mod tests {
         let key = r.route(InputEvent::Key {
             code: KeyCode::Enter,
             pressed: true,
-            modifiers: Modifiers { shift: false, ctrl: false, alt: false, meta: false },
+            modifiers: Modifiers {
+                shift: false,
+                ctrl: false,
+                alt: false,
+                meta: false,
+            },
         });
         assert_eq!(pointer.target, Some(SurfaceId(1)));
         assert_eq!(key.target, Some(SurfaceId(2)));

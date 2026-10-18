@@ -23,8 +23,12 @@ impl Rect {
     pub fn contains(self, x: i32, y: i32) -> bool {
         x >= self.x
             && y >= self.y
-            && x < self.x.saturating_add(self.width.min(i32::MAX as u32) as i32)
-            && y < self.y.saturating_add(self.height.min(i32::MAX as u32) as i32)
+            && x < self
+                .x
+                .saturating_add(self.width.min(i32::MAX as u32) as i32)
+            && y < self
+                .y
+                .saturating_add(self.height.min(i32::MAX as u32) as i32)
     }
 }
 
@@ -52,7 +56,10 @@ pub struct Compositor {
 
 impl Compositor {
     pub fn new() -> Self {
-        Self { surfaces: Vec::new(), next_z: 1 }
+        Self {
+            surfaces: Vec::new(),
+            next_z: 1,
+        }
     }
 
     pub fn create(&mut self, surface: SurfaceId, bounds: Rect) -> Result<(), CompositorError> {
@@ -66,7 +73,10 @@ impl Compositor {
             return Err(CompositorError::TooManySurfaces);
         }
         let placement = SurfacePlacement {
-            surface, bounds, z: self.next_z, visible: true,
+            surface,
+            bounds,
+            z: self.next_z,
+            visible: true,
         };
         self.next_z = self.next_z.saturating_add(1);
         self.surfaces.push(placement);
@@ -79,7 +89,9 @@ impl Compositor {
         if placement.bounds.width == 0 || placement.bounds.height == 0 {
             return Err(CompositorError::InvalidSize);
         }
-        let item = self.surfaces.iter_mut()
+        let item = self
+            .surfaces
+            .iter_mut()
             .find(|s| s.surface == placement.surface)
             .ok_or(CompositorError::SurfaceMissing)?;
         *item = placement;
@@ -88,7 +100,10 @@ impl Compositor {
     }
 
     pub fn remove(&mut self, surface: SurfaceId) -> Result<(), CompositorError> {
-        let index = self.surfaces.iter().position(|s| s.surface == surface)
+        let index = self
+            .surfaces
+            .iter()
+            .position(|s| s.surface == surface)
             .ok_or(CompositorError::SurfaceMissing)?;
         self.surfaces.remove(index);
         Ok(())
@@ -96,7 +111,10 @@ impl Compositor {
 
     pub fn focus(&mut self, surface: SurfaceId) -> Result<(), CompositorError> {
         let max_z = self.next_z;
-        let item = self.surfaces.iter_mut().find(|s| s.surface == surface)
+        let item = self
+            .surfaces
+            .iter_mut()
+            .find(|s| s.surface == surface)
             .ok_or(CompositorError::SurfaceMissing)?;
         item.z = max_z;
         item.visible = true;
@@ -105,7 +123,8 @@ impl Compositor {
     }
 
     pub fn hit_test(&self, x: i32, y: i32) -> Option<SurfaceId> {
-        self.surfaces.iter()
+        self.surfaces
+            .iter()
             .filter(|s| s.visible && s.bounds.contains(x, y))
             .max_by_key(|s| s.z)
             .map(|s| s.surface)
@@ -139,7 +158,8 @@ mod tests {
             bounds: Rect::new(20, 30, 200, 120),
             z: 4,
             visible: false,
-        }).unwrap();
+        })
+        .unwrap();
         assert_eq!(c.hit_test(30, 40), None);
         assert_eq!(c.surfaces()[0].bounds, Rect::new(20, 30, 200, 120));
     }
