@@ -156,7 +156,7 @@ pub enum PerCpuInitError {
 /// - Call before enabling local interrupts; this function rejects IF=1.
 /// - Only one initializer may configure GS_BASE on this logical CPU at a time.
 pub unsafe fn install_current(state: &'static PerCpuState) -> Result<(), PerCpuInitError> {
-    if x86_64::instructions::interrupts::are_enabled() {
+    if interrupts_enabled() {
         return Err(PerCpuInitError::InterruptsEnabled);
     }
 
@@ -212,6 +212,18 @@ pub fn current_logical_id_gs() -> Option<u32> {
         );
     }
     Some(value)
+}
+
+
+#[inline]
+fn interrupts_enabled() -> bool {
+    let flags: u64;
+    // Read RFLAGS.IF without depending on the optional x86_64 crate, so the
+    // state-machine library remains testable without the boot feature.
+    unsafe {
+        core::arch::asm!("pushfq", "pop {}", out(reg) flags, options(nomem));
+    }
+    (flags & (1 << 9)) != 0
 }
 
 fn is_canonical_48_bit_address(address: u64) -> bool {
