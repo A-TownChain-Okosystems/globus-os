@@ -271,11 +271,11 @@ impl<'a> KernelCapabilityClient<'a> {
             .map_err(|_| libshivacore::AbiError::InvalidHandle)
     }
 
-    fn resource(
-        resource: libshivacore::CapabilityResource,
-    ) -> ResourceType {
+    fn resource(resource: libshivacore::CapabilityResource) -> ResourceType {
         match resource {
-            libshivacore::CapabilityResource::KnowledgeGraphEntity => ResourceType::KnowledgeGraphEntity,
+            libshivacore::CapabilityResource::KnowledgeGraphEntity => {
+                ResourceType::KnowledgeGraphEntity
+            }
         }
     }
 }
@@ -292,7 +292,12 @@ impl libshivacore::CapabilityClient for KernelCapabilityClient<'_> {
         if rights.bits() & !libshivacore::CapabilityRights::DEFINED_MASK != 0 {
             return Err(libshivacore::AbiError::InvalidPayload);
         }
-        let id = self.table.create(pid, Self::resource(resource), resource_id, Rights(rights.bits()));
+        let id = self.table.create(
+            pid,
+            Self::resource(resource),
+            resource_id,
+            Rights(rights.bits()),
+        );
         Ok(libshivacore::CapabilityHandle(id.0))
     }
 
@@ -303,11 +308,18 @@ impl libshivacore::CapabilityClient for KernelCapabilityClient<'_> {
         resource_id: u64,
         rights: libshivacore::CapabilityRights,
     ) -> bool {
-        let Ok(pid) = Self::pid(owner) else { return false };
+        let Ok(pid) = Self::pid(owner) else {
+            return false;
+        };
         if rights.bits() & !libshivacore::CapabilityRights::DEFINED_MASK != 0 {
             return false;
         }
-        self.table.check(pid, Self::resource(resource), resource_id, Rights(rights.bits()))
+        self.table.check(
+            pid,
+            Self::resource(resource),
+            resource_id,
+            Rights(rights.bits()),
+        )
     }
 
     fn delegate_resource(
@@ -324,12 +336,20 @@ impl libshivacore::CapabilityClient for KernelCapabilityClient<'_> {
             return Err(libshivacore::AbiError::InvalidPayload);
         }
         let required = Rights(rights.bits() | Rights::DELEGATE.bits());
-        let source_id = self.table.list_for(owner_pid).into_iter()
-            .find(|cap| cap.resource_type == Self::resource(resource)
-                && cap.resource_id == resource_id && cap.rights.has(required))
+        let source_id = self
+            .table
+            .list_for(owner_pid)
+            .into_iter()
+            .find(|cap| {
+                cap.resource_type == Self::resource(resource)
+                    && cap.resource_id == resource_id
+                    && cap.rights.has(required)
+            })
             .map(|cap| cap.id)
             .ok_or(libshivacore::AbiError::PermissionDenied)?;
-        let child = self.table.delegate(owner_pid, source_id, target_pid, Rights(rights.bits()))
+        let child = self
+            .table
+            .delegate(owner_pid, source_id, target_pid, Rights(rights.bits()))
             .map_err(|_| libshivacore::AbiError::PermissionDenied)?;
         Ok(libshivacore::CapabilityHandle(child.0))
     }
@@ -341,8 +361,13 @@ impl libshivacore::CapabilityClient for KernelCapabilityClient<'_> {
         resource_id: u64,
     ) -> Result<(), libshivacore::AbiError> {
         let owner_pid = Self::pid(owner)?;
-        let ids: Vec<CapId> = self.table.list_for(owner_pid).into_iter()
-            .filter(|cap| cap.resource_type == Self::resource(resource) && cap.resource_id == resource_id)
+        let ids: Vec<CapId> = self
+            .table
+            .list_for(owner_pid)
+            .into_iter()
+            .filter(|cap| {
+                cap.resource_type == Self::resource(resource) && cap.resource_id == resource_id
+            })
             .map(|cap| cap.id)
             .collect();
         if ids.is_empty() {
@@ -368,32 +393,55 @@ mod tests {
 
         let mut table = CapabilityTable::new();
         let mut client = KernelCapabilityClient::new(&mut table);
-        let root = client.create_capability(
+        let root = client
+            .create_capability(
+                ProcessId(1),
+                CapabilityResource::KnowledgeGraphEntity,
+                77,
+                CapabilityRights::READ | CapabilityRights::WRITE | CapabilityRights::DELEGATE,
+            )
+            .unwrap();
+        assert!(client.check_capability(
             ProcessId(1),
             CapabilityResource::KnowledgeGraphEntity,
             77,
-            CapabilityRights::READ | CapabilityRights::WRITE | CapabilityRights::DELEGATE,
-        ).unwrap();
+            CapabilityRights::WRITE
+        ));
+        let child = client
+            .delegate_resource(
+                ProcessId(1),
+                CapabilityResource::KnowledgeGraphEntity,
+                77,
+                ProcessId(2),
+                CapabilityRights::READ,
+            )
+            .unwrap();
         assert!(client.check_capability(
-            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::WRITE
-        ));
-        let child = client.delegate_resource(
-            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77, ProcessId(2), CapabilityRights::READ
-        ).unwrap();
-        assert!(client.check_capability(
-            ProcessId(2), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::READ
+            ProcessId(2),
+            CapabilityResource::KnowledgeGraphEntity,
+            77,
+            CapabilityRights::READ
         ));
         assert!(!client.check_capability(
-            ProcessId(2), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::WRITE
+            ProcessId(2),
+            CapabilityResource::KnowledgeGraphEntity,
+            77,
+            CapabilityRights::WRITE
         ));
-        client.revoke_resource(
-            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77
-        ).unwrap();
+        client
+            .revoke_resource(ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77)
+            .unwrap();
         assert!(!client.check_capability(
-            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::READ
+            ProcessId(1),
+            CapabilityResource::KnowledgeGraphEntity,
+            77,
+            CapabilityRights::READ
         ));
         assert!(!client.check_capability(
-            ProcessId(2), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::READ
+            ProcessId(2),
+            CapabilityResource::KnowledgeGraphEntity,
+            77,
+            CapabilityRights::READ
         ));
         assert!(client.table.get(CapId(root.0)).is_none());
         assert!(client.table.get(CapId(child.0)).is_none());
@@ -407,13 +455,19 @@ mod tests {
         let mut client = KernelCapabilityClient::new(&mut table);
         assert_eq!(
             client.create_capability(
-                ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 1, CapabilityRights(0x80)
+                ProcessId(1),
+                CapabilityResource::KnowledgeGraphEntity,
+                1,
+                CapabilityRights(0x80)
             ),
             Err(libshivacore::AbiError::InvalidPayload)
         );
         assert_eq!(
             client.create_capability(
-                ProcessId(u64::MAX), CapabilityResource::KnowledgeGraphEntity, 1, CapabilityRights::READ
+                ProcessId(u64::MAX),
+                CapabilityResource::KnowledgeGraphEntity,
+                1,
+                CapabilityRights::READ
             ),
             Err(libshivacore::AbiError::InvalidHandle)
         );
@@ -421,13 +475,19 @@ mod tests {
 
     #[test]
     fn inspect_right_survives_bitfield_truncation() {
-        assert_eq!(Rights::from_bits_truncate(Rights::INSPECT.bits()), Rights::INSPECT);
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::INSPECT.bits()),
+            Rights::INSPECT
+        );
         assert!(Rights::from_bits_truncate(Rights::INSPECT.bits()).has(Rights::INSPECT));
     }
 
     #[test]
     fn unknown_right_bits_are_rejected_by_truncation() {
-        assert_eq!(Rights::from_bits_truncate(0x80 | Rights::READ.bits()), Rights::READ);
+        assert_eq!(
+            Rights::from_bits_truncate(0x80 | Rights::READ.bits()),
+            Rights::READ
+        );
     }
 
     #[test]
