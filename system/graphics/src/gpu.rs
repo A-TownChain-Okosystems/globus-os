@@ -8,21 +8,39 @@
 use globus_devices::pci::PciId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuVendor { Amd, Intel, Nvidia, Other(u16) }
+pub enum GpuVendor {
+    Amd,
+    Intel,
+    Nvidia,
+    Other(u16),
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpuFamily {
     /// Vendor known, but the PCI device ID is not in the curated family table.
     Unclassified,
+    AmdIntegrated,
     AmdRadeonRx5000,
+    AmdRadeonRx6000,
     AmdRadeonRx7000,
+    AmdRadeonRx9000,
+    IntelUhd,
+    IntelIrisXe,
     IntelArcA,
+    IntelArcB,
     NvidiaGeForceGtx,
     NvidiaGeForceRtx,
+    NvidiaProfessional,
+    NvidiaDatacenter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum DriverReference { Amdgpu, IntelI915OrXe, NouveauOrVendorNvidia, GenericDisplay }
+pub enum DriverReference {
+    Amdgpu,
+    IntelI915OrXe,
+    NouveauOrVendorNvidia,
+    GenericDisplay,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriverState {
@@ -34,7 +52,11 @@ pub enum DriverState {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum FeatureState { Unknown, Unsupported, Supported }
+pub enum FeatureState {
+    Unknown,
+    Unsupported,
+    Supported,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GpuCapabilities {
@@ -77,7 +99,11 @@ pub struct GpuProfile {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum GpuBackend { Framebuffer, Vulkan, OpenGl }
+pub enum GpuBackend {
+    Framebuffer,
+    Vulkan,
+    OpenGl,
+}
 
 /// Classifies PCI display-class devices (VGA, 3D, or other display controller).
 /// The revision ID comes from PCI config-space offset 0x08; it is supplied by
@@ -95,11 +121,19 @@ pub fn classify_pci_device(id: PciId, revision_id: u8) -> Option<GpuProfile> {
     };
 
     let family = match (id.vendor, id.device) {
+        (0x1002, 0x15d8 | 0x1638 | 0x164c) => GpuFamily::AmdIntegrated,
         (0x1002, 0x731f) => GpuFamily::AmdRadeonRx5000, // Radeon RX 5700 XT
-        (0x1002, 0x744c | 0x747e) => GpuFamily::AmdRadeonRx7000, // RX 7900 XTX / RX 7800 XT
-        (0x8086, 0x56a0 | 0x56a1) => GpuFamily::IntelArcA, // Arc A770 / A750
+        (0x1002, 0x73bf | 0x73df | 0x73ff) => GpuFamily::AmdRadeonRx6000,
+        (0x1002, 0x744c | 0x747e | 0x7480) => GpuFamily::AmdRadeonRx7000,
+        (0x1002, 0x7550 | 0x7551 | 0x7590) => GpuFamily::AmdRadeonRx9000,
+        (0x8086, 0x3e92 | 0x4680 | 0x4690) => GpuFamily::IntelUhd,
+        (0x8086, 0x9a40 | 0x9a49 | 0x9a60) => GpuFamily::IntelIrisXe,
+        (0x8086, 0x56a0 | 0x56a1) => GpuFamily::IntelArcA,
+        (0x8086, 0xe209 | 0xe20b | 0xe20c) => GpuFamily::IntelArcB,
         (0x10de, 0x1b80) => GpuFamily::NvidiaGeForceGtx, // GeForce GTX 1080
         (0x10de, 0x2484 | 0x2684) => GpuFamily::NvidiaGeForceRtx, // RTX 3070 / RTX 4090
+        (0x10de, 0x2230 | 0x26b1) => GpuFamily::NvidiaProfessional,
+        (0x10de, 0x20b0 | 0x2330) => GpuFamily::NvidiaDatacenter,
         _ => GpuFamily::Unclassified,
     };
 
@@ -140,6 +174,7 @@ mod tests {
         let amd = classify_pci_device(decode_id(3, 0, 0, 0x1002, 0x747e), 1).unwrap();
         let intel = classify_pci_device(decode_id(3, 0, 0, 0x8086, 0x56a0), 2).unwrap();
         let nvidia = classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x2684), 3).unwrap();
+
         assert_eq!(amd.vendor, GpuVendor::Amd);
         assert_eq!(amd.family, GpuFamily::AmdRadeonRx7000);
         assert_eq!(amd.driver_reference, DriverReference::Amdgpu);
@@ -149,6 +184,26 @@ mod tests {
         assert_eq!(nvidia.vendor, GpuVendor::Nvidia);
         assert_eq!(nvidia.family, GpuFamily::NvidiaGeForceRtx);
         assert_eq!(nvidia.pci_revision_id, 3);
+    }
+
+    #[test]
+    fn recognizes_additional_gpu_families_by_exact_device_id() {
+        assert_eq!(
+            classify_pci_device(decode_id(3, 0, 0, 0x1002, 0x7550), 0).unwrap().family,
+            GpuFamily::AmdRadeonRx9000
+        );
+        assert_eq!(
+            classify_pci_device(decode_id(3, 0, 0, 0x8086, 0xe20b), 0).unwrap().family,
+            GpuFamily::IntelArcB
+        );
+        assert_eq!(
+            classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x2230), 0).unwrap().family,
+            GpuFamily::NvidiaProfessional
+        );
+        assert_eq!(
+            classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x20b0), 0).unwrap().family,
+            GpuFamily::NvidiaDatacenter
+        );
     }
 
     #[test]
