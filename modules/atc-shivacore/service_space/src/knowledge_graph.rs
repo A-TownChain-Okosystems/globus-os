@@ -432,8 +432,8 @@ mod tests {
             self.check(Pid(owner.0 as u32), ResourceType::Memory, resource_id, Rights(rights.bits()))
         }
         fn delegate_resource(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64, target: ProcessId, rights: CapabilityRights) -> Result<CapabilityHandle, libshivacore::AbiError> {
-            let source = self.list_for(Pid(owner.0 as u32)).into_iter().find(|cap| cap.resource_type == ResourceType::Memory && cap.resource_id == resource_id && cap.rights.has(Rights(rights.bits() | Rights::DELEGATE.0))).ok_or(libshivacore::AbiError::PermissionDenied)?;
-            let child = self.delegate(Pid(owner.0 as u32), source.id, Pid(target.0 as u32), Rights(rights.bits())).map_err(|_| libshivacore::AbiError::PermissionDenied)?;
+            let source_id = self.list_for(Pid(owner.0 as u32)).into_iter().find(|cap| cap.resource_type == ResourceType::Memory && cap.resource_id == resource_id && cap.rights.has(Rights(rights.bits() | Rights::DELEGATE.0))).map(|cap| cap.id).ok_or(libshivacore::AbiError::PermissionDenied)?;
+            let child = self.delegate(Pid(owner.0 as u32), source_id, Pid(target.0 as u32), Rights(rights.bits())).map_err(|_| libshivacore::AbiError::PermissionDenied)?;
             Ok(CapabilityHandle(child.0))
         }
         fn revoke_resource(&mut self, owner: ProcessId, _resource: CapabilityResource, resource_id: u64) -> Result<(), libshivacore::AbiError> {
