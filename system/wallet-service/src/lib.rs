@@ -1,13 +1,18 @@
 //! Capability-gated wallet service boundary for GlobusOS.
 //!
 //! The service never exposes private keys. Signing is delegated to the configured
-//! keystore and requires an authenticated identity plus an explicit signing capability.
+//! keystore and requires an authenticated identity plus a kernel/security-registry
+//! capability. IPC callers supply only a capability identifier; the service resolves
+//! authority against its trusted registry and never accepts a caller-built Grant.
 
 use globus_identity::{
     IdentitySession, KeyId, KeyStore, KeystoreError, LoginState, SignRequest, Signature,
 };
 use globus_ipc::{WalletSignMessage, WalletSignResponse};
-use globus_security::{Authorization, Grant, Right, authorize};
+use globus_security::{Authorization, Capability, CapabilityRegistry, Right, authorize};
+
+/// Registry object ID representing the wallet-signing operation.
+pub const WALLET_SIGN_RESOURCE_ID: u64 = 0x5741_4c4c_4554_5347;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AuditEvidence {
@@ -36,20 +41,24 @@ impl From<KeystoreError> for WalletServiceError {
 
 pub struct WalletService<K> {
     keystore: K,
+    capabilities: CapabilityRegistry,
 }
 
 impl<K: KeyStore> WalletService<K> {
-    pub fn new(keystore: K) -> Self {
-        Self { keystore }
+    /// Construct the service with a trusted capability registry. The registry must
+    /// be supplied by the privileged security/kernel integration, not from an IPC
+    /// request or other untrusted caller-controlled payload.
+    pub fn new(keystore: K, capabilities: CapabilityRegistry) -> Self {
+        Self { keystore, capabilities }
     }
 
     /// Handle the typed IPC signing boundary. Recovery phrases and private keys are not
-    /// representable by this IPC request type.
+    /// representable by this IPC request type. Only a capability ID crosses this boundary.
     pub fn sign_ipc(
         &self,
         session: &IdentitySession,
         now_unix: u64,
-        grant: Option<Grant>,
+        capability: Capability,
         request: WalletSignMessage,
     ) -> Result<(WalletSignResponse, AuditEvidence), WalletServiceError> {
         if request.user_id != session.user_id.as_str() {
@@ -61,7 +70,7 @@ impl<K: KeyStore> WalletService<K> {
             domain: request.domain,
             message: request.message,
         };
-        let (signature, evidence) = self.sign(session, now_unix, grant, sign_request)?;
+        let (signature, evidence) = self.sign(session, now_unix, capability, sign_request)?;
         Ok((
             WalletSignResponse {
                 algorithm: signature.algorithm,
@@ -72,12 +81,13 @@ impl<K: KeyStore> WalletService<K> {
         ))
     }
 
-    /// Sign a domain-separated message without exposing private-key material.
+    /// Sign a domain-separated message only when the trusted registry authorizes the
+    /// supplied capability ID for the wallet-signing resource.
     pub fn sign(
         &self,
         session: &IdentitySession,
         now_unix: u64,
-        grant: Option<Grant>,
+        capability: Capability,
         request: SignRequest,
     ) -> Result<(Signature, AuditEvidence), WalletServiceError> {
         if !session.is_active(now_unix) || session.state != LoginState::Authenticated {
@@ -89,7 +99,13 @@ impl<K: KeyStore> WalletService<K> {
         {
             return Err(WalletServiceError::InvalidRequest);
         }
-        if authorize(grant, Right::Sign) != Authorization::Allowed {
+        if authorize(
+            &self.capabilities,
+            capability,
+            WALLET_SIGN_RESOURCE_ID,
+            Right::Sign,
+        ) != Authorization::Allowed
+        {
             return Err(WalletServiceError::Unauthorized);
         }
 
@@ -158,60 +174,69 @@ mod tests {
         }
     }
 
-    #[test]
-    fn signing_requires_dedicated_capability() {
-        let session = session();
-        let key_id = KeyId::new("wallet-primary").unwrap();
-        let request = SignRequest {
-            key_id,
+    fn registry_with_sign_capability() -> CapabilityRegistry {
+        let mut registry = CapabilityRegistry::new();
+        assert!(registry.grant(
+            Capability(2),
+            WALLET_SIGN_RESOURCE_ID,
+            Right::Sign,
+        ));
+        registry
+    }
+
+    fn request() -> SignRequest {
+        SignRequest {
+            key_id: KeyId::new("wallet-primary").unwrap(),
             domain: "ATC-TX-V1".into(),
             message: b"payload".to_vec(),
-        };
-        let service = WalletService::new(TestStore);
-        assert_eq!(
-            service
-                .sign(&session, 10, None, request.clone())
-                .unwrap_err(),
-            WalletServiceError::Unauthorized
-        );
-        let execute_grant = Grant {
-            capability: globus_security::Capability(1),
-            right: Right::Execute,
-        };
-        assert_eq!(
-            service
-                .sign(&session, 10, Some(execute_grant), request.clone())
-                .unwrap_err(),
-            WalletServiceError::Unauthorized
-        );
-        let sign_grant = Grant {
-            capability: globus_security::Capability(2),
-            right: Right::Sign,
-        };
-        let (signature, evidence) = service
-            .sign(&session, 10, Some(sign_grant), request)
-            .unwrap();
+        }
+    }
+
+    #[test]
+    fn signing_requires_registry_backed_capability() {
+        let service = WalletService::new(TestStore, registry_with_sign_capability());
+        let (signature, evidence) = service.sign(&session(), 10, Capability(2), request()).unwrap();
         assert_eq!(signature.bytes, b"payload");
         assert!(evidence.authorized);
     }
 
     #[test]
+    fn forged_or_unknown_capability_is_rejected() {
+        let service = WalletService::new(TestStore, CapabilityRegistry::new());
+        assert_eq!(
+            service.sign(&session(), 10, Capability(2), request()).unwrap_err(),
+            WalletServiceError::Unauthorized
+        );
+    }
+
+    #[test]
+    fn wrong_right_and_revoked_capabilities_are_rejected() {
+        let mut registry = CapabilityRegistry::new();
+        assert!(registry.grant(Capability(3), WALLET_SIGN_RESOURCE_ID, Right::Execute));
+        assert!(registry.grant(Capability(4), WALLET_SIGN_RESOURCE_ID, Right::Sign));
+        assert!(registry.revoke(Capability(4)));
+        let service = WalletService::new(TestStore, registry);
+        assert_eq!(
+            service.sign(&session(), 10, Capability(3), request()).unwrap_err(),
+            WalletServiceError::Unauthorized
+        );
+        assert_eq!(
+            service.sign(&session(), 10, Capability(4), request()).unwrap_err(),
+            WalletServiceError::Unauthorized
+        );
+    }
+
+    #[test]
     fn ipc_rejects_cross_identity_requests() {
-        let service = WalletService::new(TestStore);
+        let service = WalletService::new(TestStore, registry_with_sign_capability());
         let request = WalletSignMessage {
             user_id: "other-user".into(),
             key_id: "wallet-primary".into(),
             domain: "ATC-TX-V1".into(),
             message: b"payload".to_vec(),
         };
-        let grant = Grant {
-            capability: globus_security::Capability(1),
-            right: Right::Sign,
-        };
         assert_eq!(
-            service
-                .sign_ipc(&session(), 10, Some(grant), request)
-                .unwrap_err(),
+            service.sign_ipc(&session(), 10, Capability(2), request).unwrap_err(),
             WalletServiceError::IdentityMismatch
         );
     }
