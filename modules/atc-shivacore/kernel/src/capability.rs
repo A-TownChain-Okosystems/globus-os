@@ -361,6 +361,63 @@ mod tests {
     }
 
     #[test]
+    fn stable_client_uses_kernel_table_for_create_check_delegate_and_revoke() {
+        use libshivacore::{CapabilityClient, CapabilityResource, CapabilityRights, ProcessId};
+
+        let mut table = CapabilityTable::new();
+        let mut client = KernelCapabilityClient::new(&mut table);
+        let root = client.create_capability(
+            ProcessId(1),
+            CapabilityResource::KnowledgeGraphEntity,
+            77,
+            CapabilityRights::READ | CapabilityRights::WRITE | CapabilityRights::DELEGATE,
+        ).unwrap();
+        assert!(client.check_capability(
+            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::WRITE
+        ));
+        let child = client.delegate_resource(
+            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77, ProcessId(2), CapabilityRights::READ
+        ).unwrap();
+        assert!(client.check_capability(
+            ProcessId(2), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::READ
+        ));
+        assert!(!client.check_capability(
+            ProcessId(2), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::WRITE
+        ));
+        client.revoke_resource(
+            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77
+        ).unwrap();
+        assert!(!client.check_capability(
+            ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::READ
+        ));
+        assert!(!client.check_capability(
+            ProcessId(2), CapabilityResource::KnowledgeGraphEntity, 77, CapabilityRights::READ
+        ));
+        assert!(client.table.get(CapId(root.0)).is_none());
+        assert!(client.table.get(CapId(child.0)).is_none());
+    }
+
+    #[test]
+    fn stable_client_rejects_unknown_right_bits_and_unrepresentable_process_ids() {
+        use libshivacore::{CapabilityClient, CapabilityResource, CapabilityRights, ProcessId};
+
+        let mut table = CapabilityTable::new();
+        let mut client = KernelCapabilityClient::new(&mut table);
+        assert_eq!(
+            client.create_capability(
+                ProcessId(1), CapabilityResource::KnowledgeGraphEntity, 1, CapabilityRights(0x80)
+            ),
+            Err(libshivacore::AbiError::InvalidPayload)
+        );
+        assert_eq!(
+            client.create_capability(
+                ProcessId(u64::MAX), CapabilityResource::KnowledgeGraphEntity, 1, CapabilityRights::READ
+            ),
+            Err(libshivacore::AbiError::InvalidHandle)
+        );
+    }
+
+    #[test]
     fn inspect_right_survives_bitfield_truncation() {
         assert_eq!(Rights::from_bits_truncate(Rights::INSPECT.bits()), Rights::INSPECT);
         assert!(Rights::from_bits_truncate(Rights::INSPECT.bits()).has(Rights::INSPECT));
