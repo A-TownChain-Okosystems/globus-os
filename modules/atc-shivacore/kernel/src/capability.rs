@@ -26,6 +26,8 @@ pub enum ResourceType {
     Accelerator,
     FileSystem,
     Network,
+    /// Authority over a specific process lifecycle object.
+    Process,
 }
 
 /// Zugriffsrechte als Bitfield
