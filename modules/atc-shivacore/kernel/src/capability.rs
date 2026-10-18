@@ -26,6 +26,8 @@ pub enum ResourceType {
     Accelerator,
     FileSystem,
     Network,
+    /// Knowledge-graph entities use a distinct namespace from physical memory.
+    KnowledgeGraphEntity,
 }
 
 /// Zugriffsrechte als Bitfield
@@ -273,7 +275,7 @@ impl<'a> KernelCapabilityClient<'a> {
         resource: libshivacore::CapabilityResource,
     ) -> ResourceType {
         match resource {
-            libshivacore::CapabilityResource::KnowledgeGraphEntity => ResourceType::Memory,
+            libshivacore::CapabilityResource::KnowledgeGraphEntity => ResourceType::KnowledgeGraphEntity,
         }
     }
 }
