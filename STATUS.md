@@ -7,11 +7,15 @@ owner: A-TownChain-Okosystems
 copyright: Michael Wroblewski
 license: Apache-2.0
 created: 2026-09-10
-updated: 2026-09-15
+updated: 2026-10-09
 standard: ATC-STD-MD-001
 ---
 
 # Project Status — GlobusOS
+
+> **Current evidence snapshot (2026-10-09):** main HEAD `aad164fb21f82025043ade4e1dad8740fcc65b69`. The latest recorded `ATC Test Suite` run is [37802810445](https://github.com/A-TownChain-Okosystems/globus-os/actions/runs/37802810445), **PASS** on code SHA `ba03df334f28bcef664acea0fd37db7da9436dba` (Cargo tests, npm tests and evidence-binding job succeeded). The evidence-only follow-up commit binds that run; the test run itself is not an execution on the exact current HEAD. This supports only the tested commands on the bound SHA, not complete OS verification.
+>
+> **Overall state remains:** `development` / implementation `partial` / security `not_audited` / conformance `not_verified` / release `development` / `NOT_READY`. The evidence registry has `latest_verified: null`. Do not infer production readiness, real-hardware boot, or a completed security audit from the passing test run.
 
 | Property | Value |
 |---|---|
@@ -22,11 +26,11 @@ standard: ATC-STD-MD-001
 | Security audit | `not completed` |
 | Hardware validation | `not completed on target hardware` |
 | Production readiness | `NOT_READY` |
-| Last documentation review | `2026-09-15` |
+| Last documentation review | `2026-10-09` (content/evidence review; not a hardware audit) |
 
 ## Current implementation state
 
-The repository contains an active Rust workspace with explicit subsystem crates for core lifecycle, IPC, security, process/thread management, memory policy, VFS, networking, devices, services, graphics, audio, package verification, update/rollback, runtime, identity, wallet-service and settings.
+The repository contains an active Rust workspace with subsystem crates and contracts for core lifecycle, IPC, security, process/thread management, memory policy, VFS, networking, devices, services, graphics, audio, package verification, update/rollback, runtime, identity, wallet-service and settings. This inventory is a source-tree description; it does not assert that each subsystem is complete or independently verified.
 
 The following foundation areas are implemented as repository-level contracts/components:
 
