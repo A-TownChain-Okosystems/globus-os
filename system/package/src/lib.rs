@@ -173,14 +173,17 @@ fn verify_with_keyring(
                 if keyring.is_revoked(key) {
                     continue;
                 }
-                if let Ok(verifying_key) = VerifyingKey::from_bytes(key) {
-                    if let Ok(signature_bytes) = hex::decode(&pkg.signature) {
-                        if let Ok(signature) = Signature::from_slice(&signature_bytes) {
-                            if verifying_key.verify(&message, &signature).is_ok() {
-                                return Err(VerifyError::UntrustedSigningKey);
-                            }
-                        }
-                    }
+                let Ok(verifying_key) = VerifyingKey::from_bytes(key) else {
+                    continue;
+                };
+                let Ok(signature_bytes) = hex::decode(&pkg.signature) else {
+                    continue;
+                };
+                let Ok(signature) = Signature::from_slice(&signature_bytes) else {
+                    continue;
+                };
+                if verifying_key.verify(&message, &signature).is_ok() {
+                    return Err(VerifyError::UntrustedSigningKey);
                 }
             }
             if keyring
