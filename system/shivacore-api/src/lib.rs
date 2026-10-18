@@ -244,6 +244,9 @@ pub mod trap_abi {
 }
 
 /// Invoke the ABI-v1 x86-64 interrupt gate.
+// SAFETY BOUNDARY: this is the small architecture-specific trap wrapper; callers
+// must meet the documented Ring-3 contract and the kernel revalidates all spans.
+#[allow(unsafe_code)]
 ///
 /// # Safety
 /// This is valid only in the intended Ring-3 execution environment after the
@@ -289,6 +292,7 @@ pub unsafe fn invoke_syscall(
 pub struct SyscallClient;
 
 #[cfg(target_arch = "x86_64")]
+#[allow(unsafe_code)] // SAFETY: methods forward the documented Ring-3 preconditions to invoke_syscall.
 impl SyscallClient {
     /// Send bytes to a channel using a kernel-validated user pointer.
     ///
