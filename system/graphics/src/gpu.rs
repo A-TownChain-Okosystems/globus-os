@@ -189,19 +189,27 @@ mod tests {
     #[test]
     fn recognizes_additional_gpu_families_by_exact_device_id() {
         assert_eq!(
-            classify_pci_device(decode_id(3, 0, 0, 0x1002, 0x7550), 0).unwrap().family,
+            classify_pci_device(decode_id(3, 0, 0, 0x1002, 0x7550), 0)
+                .unwrap()
+                .family,
             GpuFamily::AmdRadeonRx9000
         );
         assert_eq!(
-            classify_pci_device(decode_id(3, 0, 0, 0x8086, 0xe20b), 0).unwrap().family,
+            classify_pci_device(decode_id(3, 0, 0, 0x8086, 0xe20b), 0)
+                .unwrap()
+                .family,
             GpuFamily::IntelArcB
         );
         assert_eq!(
-            classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x2230), 0).unwrap().family,
+            classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x2230), 0)
+                .unwrap()
+                .family,
             GpuFamily::NvidiaProfessional
         );
         assert_eq!(
-            classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x20b0), 0).unwrap().family,
+            classify_pci_device(decode_id(3, 0, 0, 0x10de, 0x20b0), 0)
+                .unwrap()
+                .family,
             GpuFamily::NvidiaDatacenter
         );
     }
