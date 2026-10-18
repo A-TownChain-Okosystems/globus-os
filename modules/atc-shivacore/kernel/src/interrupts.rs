@@ -376,7 +376,7 @@ fn validate_user_buffer(
     // SAFETY: mapper is installed before Ring 3 starts and no mapper mutation
     // occurs while the user scheduler is running on this single boot CPU.
     unsafe {
-        context.address_space.validate_mapped_range(&*mapper, address, len, write)
+        context.addr_space.validate_mapped_range(&*mapper, address, len, write)
     }
 }
 
