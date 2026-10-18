@@ -7,6 +7,8 @@
 
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use crate::ipc::{ChannelId, IpcError, IpcSubsystem};
+use alloc::vec::Vec;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
 };
@@ -93,34 +95,10 @@ impl SyscallDispatcher {
 
         match syscall {
             Syscall::Yield => SyscallResponse::ok(0),
-            Syscall::IpcSend => {
-                if !self.check_capability(
-                    pid,
-                    request.capability,
-                    capabilities,
-                    ResourceType::IpcChannel,
-                    request.arg0,
-                    Rights::WRITE,
-                ) {
-                    return SyscallResponse::err(AbiError::PermissionDenied);
-                }
-                SyscallResponse::ok(0)
-            }
-            Syscall::IpcReceive => {
-                if request.arg1 as usize > MAX_SYSCALL_PAYLOAD {
-                    return SyscallResponse::err(AbiError::InvalidPayload);
-                }
-                if !self.check_capability(
-                    pid,
-                    request.capability,
-                    capabilities,
-                    ResourceType::IpcChannel,
-                    request.arg0,
-                    Rights::READ,
-                ) {
-                    return SyscallResponse::err(AbiError::PermissionDenied);
-                }
-                SyscallResponse::ok(request.arg1)
+            // IPC requires buffers and a live kernel channel registry.
+            // Use dispatch_with_ipc; never report a fake success here.
+            Syscall::IpcSend | Syscall::IpcReceive => {
+                SyscallResponse::err(AbiError::EndpointUnavailable)
             }
             Syscall::CapabilityQuery => {
                 let cap = match request.capability {
@@ -184,6 +162,73 @@ impl SyscallDispatcher {
                 self.monotonic_ticks = self.monotonic_ticks.wrapping_add(1);
                 SyscallResponse::ok(self.monotonic_ticks)
             }
+        }
+    }
+
+    /// Dispatch IPC against the kernel-owned channel subsystem.
+    /// The syscall entry must copy the send payload in from userspace.
+    /// Receive bytes are exposed only after capability and channel checks succeed.
+    pub fn dispatch_with_ipc(
+        &mut self,
+        pid: Pid,
+        request: SyscallRequest,
+        capabilities: &mut CapabilityTable,
+        ipc: &mut IpcSubsystem,
+        payload: &[u8],
+        receive_buffer: &mut Vec<u8>,
+    ) -> SyscallResponse {
+        if !validate_abi_version(request.abi_version) {
+            return SyscallResponse::err(AbiError::AbiVersionMismatch);
+        }
+        if request.payload_len > MAX_SYSCALL_PAYLOAD || payload.len() > MAX_SYSCALL_PAYLOAD {
+            return SyscallResponse::err(AbiError::InvalidPayload);
+        }
+        let syscall = match request.syscall_id {
+            x if x == Syscall::IpcSend.id() => Syscall::IpcSend,
+            x if x == Syscall::IpcReceive.id() => Syscall::IpcReceive,
+            _ => return self.dispatch(pid, request, capabilities),
+        };
+        let Some(handle) = request.capability else {
+            return SyscallResponse::err(AbiError::InvalidHandle);
+        };
+        let channel_id = ChannelId(request.arg0);
+        match syscall {
+            Syscall::IpcSend => {
+                if request.payload_len != payload.len() {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
+                if !self.check_capability(pid, Some(handle), capabilities,
+                    ResourceType::IpcChannel, channel_id.0, Rights::WRITE) {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
+                }
+                match ipc.send(capabilities, pid, channel_id, payload.to_vec()) {
+                    Ok(()) => SyscallResponse::ok(payload.len() as u64),
+                    Err(IpcError::NoWriteCapability) => SyscallResponse::err(AbiError::PermissionDenied),
+                    Err(IpcError::ChannelFull) => SyscallResponse::err(AbiError::ResourceExhausted),
+                    Err(_) => SyscallResponse::err(AbiError::EndpointUnavailable),
+                }
+            }
+            Syscall::IpcReceive => {
+                let max_payload = request.arg1 as usize;
+                if max_payload > MAX_SYSCALL_PAYLOAD {
+                    return SyscallResponse::err(AbiError::InvalidPayload);
+                }
+                if !self.check_capability(pid, Some(handle), capabilities,
+                    ResourceType::IpcChannel, channel_id.0, Rights::READ) {
+                    return SyscallResponse::err(AbiError::PermissionDenied);
+                }
+                match ipc.recv(capabilities, pid, channel_id) {
+                    Ok(message) if message.data.len() <= max_payload => {
+                        receive_buffer.clear();
+                        receive_buffer.extend_from_slice(&message.data);
+                        SyscallResponse::ok(message.data.len() as u64)
+                    }
+                    Ok(_) => SyscallResponse::err(AbiError::InvalidPayload),
+                    Err(IpcError::NoReadCapability) => SyscallResponse::err(AbiError::PermissionDenied),
+                    Err(_) => SyscallResponse::err(AbiError::EndpointUnavailable),
+                }
+            }
+            _ => unreachable!(),
         }
     }
 
