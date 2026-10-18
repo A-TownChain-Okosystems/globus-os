@@ -364,13 +364,31 @@ impl UserScheduler {
     /// Return lifecycle status from the scheduler's authoritative process entry.
     pub fn process_status(&self, pid: Pid) -> Option<libshivacore::ProcessStatus> {
         let entry = self.get_entry(pid)?;
-        Some(match entry.state {
+        Some(match &entry.state {
             SchedState::Ready => libshivacore::ProcessStatus::Ready,
             SchedState::Running => libshivacore::ProcessStatus::Running,
             SchedState::Blocked(_) => libshivacore::ProcessStatus::Blocked,
-            SchedState::Zombie(code) if code == 0 => libshivacore::ProcessStatus::Exited,
+            SchedState::Zombie(code) if *code == 0 => libshivacore::ProcessStatus::Exited,
             SchedState::Zombie(_) => libshivacore::ProcessStatus::Failed,
         })
+    }
+
+    #[test]
+    fn scheduler_status_tracks_ready_running_blocked_and_exit() {
+        let mut manager = crate::userspace::UserspaceManager::new();
+        let binary = crate::userspace::UserBinary::hello_world();
+        let pid = manager.load_binary(binary).unwrap();
+        let context = manager.get_context(pid).unwrap().clone();
+        let mut scheduler = UserScheduler::new();
+        scheduler.add_process(pid, &context, 10);
+
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Ready));
+        scheduler.get_entry_mut(pid).unwrap().state = SchedState::Blocked(BlockReason::IoWait);
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Blocked));
+        assert!(scheduler.terminate_process(pid, 0));
+        assert_eq!(scheduler.process_status(pid), Some(libshivacore::ProcessStatus::Exited));
+        assert!(!scheduler.terminate_process(pid, 1));
+        assert_eq!(scheduler.process_status(crate::ats1000::Pid(9999)), None);
     }
 
     /// Pick the next process to run (round-robin with priority)
