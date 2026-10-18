@@ -134,7 +134,11 @@ fn verify_with_keyring(
     if keyring.trusted_keys.is_empty() {
         return Err(VerifyError::NoTrustedKeys);
     }
-    if keyring.trusted_keys.iter().all(|key| keyring.is_revoked(key)) {
+    if keyring
+        .trusted_keys
+        .iter()
+        .all(|key| keyring.is_revoked(key))
+    {
         return Err(VerifyError::RevokedSigningKey);
     }
     let active = keyring.active_keys();
@@ -147,7 +151,9 @@ fn verify_with_keyring(
             let actual = Sha256::digest(artifact);
             let declared = pkg.digest.strip_prefix("sha256:").unwrap_or_default();
             if declared.len() != 64
-                || !declared.bytes().all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+                || !declared
+                    .bytes()
+                    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
                 || hex::decode(declared).is_err()
             {
                 return Err(VerifyError::InvalidDigest);
@@ -155,7 +161,11 @@ fn verify_with_keyring(
             if hex::decode(declared).ok().as_deref() != Some(actual.as_slice()) {
                 return Err(VerifyError::DigestMismatch);
             }
-            if hex::decode(&pkg.signature).ok().and_then(|bytes| Signature::from_slice(&bytes).ok()).is_none() {
+            if hex::decode(&pkg.signature)
+                .ok()
+                .and_then(|bytes| Signature::from_slice(&bytes).ok())
+                .is_none()
+            {
                 return Err(VerifyError::InvalidSignature);
             }
             let message = signed_metadata(pkg);
@@ -173,7 +183,11 @@ fn verify_with_keyring(
                     }
                 }
             }
-            if keyring.trusted_keys.iter().any(|key| keyring.is_revoked(key)) {
+            if keyring
+                .trusted_keys
+                .iter()
+                .any(|key| keyring.is_revoked(key))
+            {
                 Err(VerifyError::RevokedSigningKey)
             } else {
                 Err(VerifyError::UntrustedSigningKey)
