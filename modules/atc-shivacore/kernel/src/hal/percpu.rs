@@ -5,9 +5,7 @@
 //! GS-relative addressing, AP startup, interrupt entry, or scheduler dispatch.
 //! Callers must keep one instance per logical CPU and publish it only after
 //! that CPU's local architecture state has been initialized.
-
 use core::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum CpuLifecycle {
