@@ -46,7 +46,7 @@ impl Rights {
         (self.0 & other.0) == other.0
     }
     pub fn from_bits_truncate(bits: u8) -> Rights {
-        Rights(bits & 0x0F)
+        Rights(bits & Self::ALL.bits())
     }
     pub fn bits(self) -> u8 {
         self.0
@@ -362,5 +362,32 @@ mod tests {
         assert!(!r.has(Rights::EXEC));
         assert!(!Rights::NONE.has(Rights::READ));
         assert!(Rights::ALL.has(Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE));
+    }
+
+    #[test]
+    fn test_from_bits_truncate_preserves_known_rights_and_discards_unknown_bits() {
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::READ.bits()),
+            Rights::READ
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::WRITE.bits()),
+            Rights::WRITE
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::EXEC.bits()),
+            Rights::EXEC
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::DELEGATE.bits()),
+            Rights::DELEGATE
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::INSPECT.bits()),
+            Rights::INSPECT
+        );
+        assert_eq!(Rights::from_bits_truncate(Rights::ALL.bits()), Rights::ALL);
+        assert_eq!(Rights::from_bits_truncate(0x20), Rights::NONE);
+        assert_eq!(Rights::from_bits_truncate(0xFF), Rights::ALL);
     }
 }
