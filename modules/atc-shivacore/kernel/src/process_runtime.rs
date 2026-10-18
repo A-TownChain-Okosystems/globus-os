@@ -345,21 +345,77 @@ mod tests {
         };
 
         let mut runtime = ProcessRuntime::new();
-        let pid = runtime
-            .start_from_user(
-                &memory,
-                Pid(7),
-                0x2000,
-                ProcessStartRequest::WIRE_SIZE,
-                &vfs,
-                fs_cap.0,
-                1024 * 1024,
-            )
-            .unwrap();
+        let mut process_capabilities = CapabilityTable::new();
+        let mut dispatcher = crate::syscall::SyscallDispatcher::new();
+        let start_response = dispatcher.dispatch_with_process_runtime(
+            Pid(7),
+            SyscallRequest {
+                abi_version: libshivacore::ABI_VERSION,
+                syscall_id: Syscall::ProcessStart.id(),
+                capability: Some(libshivacore::CapabilityHandle(fs_cap.0)),
+                arg0: 0x2000,
+                arg1: 0,
+                payload_len: ProcessStartRequest::WIRE_SIZE,
+            },
+            &process_capabilities,
+            &mut runtime,
+            &memory,
+            &vfs,
+            &mut process_capabilities,
+            1024 * 1024,
+        );
+        assert_eq!(start_response.error, None);
+        let pid = ProcessId(start_response.value as u32);
 
         assert_eq!(runtime.status(pid).unwrap(), ProcessStatus::Ready);
         assert!(runtime.user_context(pid).unwrap().is_user_mode());
         assert!(runtime.scheduler().get_entry(Pid(pid.0)).is_some());
+
+        let process_cap = process_capabilities.create(
+            Pid(7),
+            ResourceType::Process,
+            pid.0 as u64,
+            Rights::INSPECT | Rights::WRITE,
+        );
+        let status_response = dispatcher.dispatch_with_process_runtime(
+            Pid(7),
+            SyscallRequest {
+                abi_version: libshivacore::ABI_VERSION,
+                syscall_id: Syscall::ProcessStatus.id(),
+                capability: Some(libshivacore::CapabilityHandle(process_cap.0)),
+                arg0: pid.0 as u64,
+                arg1: 0,
+                payload_len: 0,
+            },
+            &process_capabilities,
+            &mut runtime,
+            &memory,
+            &vfs,
+            &mut process_capabilities,
+            1024 * 1024,
+        );
+        assert_eq!(status_response.error, None);
+        assert_eq!(status_response.value, ProcessStatus::Ready as u64);
+
+        let terminate_response = dispatcher.dispatch_with_process_runtime(
+            Pid(7),
+            SyscallRequest {
+                abi_version: libshivacore::ABI_VERSION,
+                syscall_id: Syscall::ProcessTerminate.id(),
+                capability: Some(libshivacore::CapabilityHandle(process_cap.0)),
+                arg0: pid.0 as u64,
+                arg1: 0,
+                payload_len: 0,
+            },
+            &process_capabilities,
+            &mut runtime,
+            &memory,
+            &vfs,
+            &mut process_capabilities,
+            1024 * 1024,
+        );
+        assert_eq!(terminate_response.error, None);
+        assert_eq!(runtime.status(pid).unwrap(), ProcessStatus::Exited);
     }
 
     #[test]
