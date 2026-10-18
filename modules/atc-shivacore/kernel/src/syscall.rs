@@ -318,7 +318,7 @@ mod tests {
     }
 
     #[test]
-    fn ipc_requires_matching_capability_and_right() {
+    fn ipc_syscalls_without_transport_fail_closed() {
         let mut table = CapabilityTable::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
         let mut d = SyscallDispatcher::new();
@@ -327,21 +327,12 @@ mod tests {
             SyscallRequest {
                 capability: Some(CapabilityHandle(cap.0)),
                 arg0: 42,
+                payload_len: 1,
                 ..request(Syscall::IpcSend)
             },
             &mut table,
         );
-        assert_eq!(r.error, None);
-        let denied = d.dispatch(
-            pid(2),
-            SyscallRequest {
-                capability: Some(CapabilityHandle(cap.0)),
-                arg0: 42,
-                ..request(Syscall::IpcSend)
-            },
-            &mut table,
-        );
-        assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+        assert_eq!(r.error, Some(AbiError::EndpointUnavailable));
     }
 
     #[test]
