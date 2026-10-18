@@ -36,9 +36,11 @@ pub fn parse_mcfg_windows(bytes: &[u8]) -> Result<Vec<McfgWindow>, DiscoveryErro
     let mut windows = Vec::new();
     for raw in bytes[FIXED..length].chunks_exact(ENTRY) {
         let window = McfgWindow {
-            base_address: u64::from_le_bytes(raw[0..8].try_into().map_err(|_| {
-                DiscoveryError::InvalidMcfg(AcpiError::InvalidLength)
-            })?),
+            base_address: u64::from_le_bytes(
+                raw[0..8]
+                    .try_into()
+                    .map_err(|_| DiscoveryError::InvalidMcfg(AcpiError::InvalidLength))?,
+            ),
             start_bus: raw[8],
             end_bus: raw[9],
             segment: u16::from_le_bytes([raw[10], raw[11]]),
@@ -103,7 +105,11 @@ pub fn discover_pci<A: PciConfigAccess>(
                     continue;
                 }
                 let header = read_config(access, first, 0x0C)?;
-                let functions = if ((header >> 16) as u8) & 0x80 != 0 { 8 } else { 1 };
+                let functions = if ((header >> 16) as u8) & 0x80 != 0 {
+                    8
+                } else {
+                    1
+                };
                 for function in 0..functions {
                     let address = PciAddress::new(window.segment, bus, device, function);
                     let identity = if function == 0 {
@@ -141,7 +147,9 @@ pub fn discover_pci<A: PciConfigAccess>(
                             alloc::format!("pci-class-{class:02x}"),
                         ],
                     };
-                    inventory.register(record).map_err(DiscoveryError::Inventory)?;
+                    inventory
+                        .register(record)
+                        .map_err(DiscoveryError::Inventory)?;
                     discovered += 1;
                 }
             }
@@ -239,7 +247,10 @@ mod tests {
             if !address.valid() || offset >= 4096 || offset & 3 != 0 {
                 return Err(PciError::InvalidAddress);
             }
-            Ok(*self.registers.get(&(address, offset)).unwrap_or(&0xFFFF_FFFF))
+            Ok(*self
+                .registers
+                .get(&(address, offset))
+                .unwrap_or(&0xFFFF_FFFF))
         }
         fn write_u32(&self, _: PciAddress, _: u16, _: u32) -> Result<(), PciError> {
             Err(PciError::MappingDenied)
@@ -269,63 +280,99 @@ mod tests {
         assert_eq!(record.vendor_id, Some(0x8086));
         assert_eq!(record.device_id, Some(0x2922));
         assert_eq!(record.class, DeviceClass::Storage);
-        assert_eq!(discover_pci(&fake, &windows, &mut inventory), Err(
-            DiscoveryError::Inventory(InventoryError::DuplicateDeviceId)
-        ));
+        assert_eq!(
+            discover_pci(&fake, &windows, &mut inventory),
+            Err(DiscoveryError::Inventory(InventoryError::DuplicateDeviceId))
+        );
     }
 
     #[test]
     fn malformed_mcfg_is_rejected_before_scanning() {
-        assert!(matches!(parse_mcfg_windows(b"bad"), Err(DiscoveryError::InvalidMcfg(_))));
+        assert!(matches!(
+            parse_mcfg_windows(b"bad"),
+            Err(DiscoveryError::InvalidMcfg(_))
+        ));
     }
 
     #[test]
     fn overlapping_mcfg_windows_in_same_segment_are_rejected() {
         let windows = [
-            McfgWindow { base_address: 0xE000_0000, segment: 0, start_bus: 0, end_bus: 2 },
-            McfgWindow { base_address: 0xE100_0000, segment: 0, start_bus: 2, end_bus: 3 },
+            McfgWindow {
+                base_address: 0xE000_0000,
+                segment: 0,
+                start_bus: 0,
+                end_bus: 2,
+            },
+            McfgWindow {
+                base_address: 0xE100_0000,
+                segment: 0,
+                start_bus: 2,
+                end_bus: 3,
+            },
         ];
         // Window validation is also performed at discovery entry.
         let mut inventory = HardwareInventory::new();
         let fake = FakePci::default();
-        assert_eq!(discover_pci(&fake, &windows, &mut inventory), Err(DiscoveryError::InvalidWindow));
+        assert_eq!(
+            discover_pci(&fake, &windows, &mut inventory),
+            Err(DiscoveryError::InvalidWindow)
+        );
     }
 
     #[test]
     fn resource_validation_keeps_bar_interrupt_and_dma_checks_separate() {
-        assert!(validate_bar_resource(PciBar {
-            index: 0, kind: BarKind::Memory32, base: 0x1_0000_0000,
-            size: 0x1000, prefetchable: false,
-        }).is_err());
+        assert!(
+            validate_bar_resource(PciBar {
+                index: 0,
+                kind: BarKind::Memory32,
+                base: 0x1_0000_0000,
+                size: 0x1000,
+                prefetchable: false,
+            })
+            .is_err()
+        );
         assert!(validate_interrupt_vector(31).is_err());
         assert!(validate_interrupt_vector(32).is_ok());
-        assert!(validate_dma_region(DmaRegion {
-            iova: u64::MAX - 3, physical: 0x1000, length: 8, writable: true,
-        }).is_err());
+        assert!(
+            validate_dma_region(DmaRegion {
+                iova: u64::MAX - 3,
+                physical: 0x1000,
+                length: 8,
+                writable: true,
+            })
+            .is_err()
+        );
     }
 
     #[test]
     fn failed_driver_initialization_is_recorded_without_marking_device_ready() {
         let address = PciAddress::new(0, 0, 1, 0);
         let mut inventory = HardwareInventory::new();
-        inventory.register(HardwareRecord {
-            id: device_id(address),
-            class: DeviceClass::Network,
-            location: HardwareLocation::Pci {
-                segment: 0, bus: 0, device: 1, function: 0,
-            },
-            vendor_id: Some(0x1234),
-            device_id: Some(0x5678),
-            revision: Some(1),
-            status: HardwareStatus::Discovered,
-            driver: None,
-            capabilities: alloc::vec![String::from("pci")],
-        }).unwrap();
-        inventory.set_status(
-            device_id(address),
-            HardwareStatus::Failed,
-            Some(String::from("test-net")),
-        ).unwrap();
+        inventory
+            .register(HardwareRecord {
+                id: device_id(address),
+                class: DeviceClass::Network,
+                location: HardwareLocation::Pci {
+                    segment: 0,
+                    bus: 0,
+                    device: 1,
+                    function: 0,
+                },
+                vendor_id: Some(0x1234),
+                device_id: Some(0x5678),
+                revision: Some(1),
+                status: HardwareStatus::Discovered,
+                driver: None,
+                capabilities: alloc::vec![String::from("pci")],
+            })
+            .unwrap();
+        inventory
+            .set_status(
+                device_id(address),
+                HardwareStatus::Failed,
+                Some(String::from("test-net")),
+            )
+            .unwrap();
         let record = inventory.get(device_id(address)).unwrap();
         assert_eq!(record.status, HardwareStatus::Failed);
         assert_eq!(record.driver.as_deref(), Some("test-net"));
@@ -360,6 +407,9 @@ mod tests {
             required_capabilities: &["msi"],
         }];
         assert_eq!(match_driver_profile(id, &[], &profiles), None);
-        assert_eq!(match_driver_profile(id, &["msi"], &profiles).unwrap().name, "test-net");
+        assert_eq!(
+            match_driver_profile(id, &["msi"], &profiles).unwrap().name,
+            "test-net"
+        );
     }
 }
