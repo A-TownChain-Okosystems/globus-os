@@ -26,7 +26,7 @@ pub enum HardwareLocation {
 
 impl HardwareLocation {
     /// Reject impossible PCI BDF coordinates before they enter the inventory.
-    pub const fn is_valid(&self) -> bool {
+    pub fn is_valid(&self) -> bool {
         match self {
             Self::Pci { device, function, .. } => *device < 32 && *function < 8,
             Self::Usb { port_path, .. } => !port_path.is_empty(),
