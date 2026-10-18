@@ -17,16 +17,23 @@ pub enum ServiceBootError {
 
 /// Platform-specific operations required by `globus-init`.
 ///
-/// Implementations must validate capabilities against policy before returning
-/// them and must not report healthy until the service's readiness contract passes.
+/// `launch` must create a non-runnable/staged process. The adapter then grants
+/// only policy-approved capabilities to that PID and calls `activate`; it must
+/// not expose the process to the scheduler before capability handoff completes.
 pub trait ServiceProcessAdapter {
     fn abi_handshake(&mut self) -> Result<AbiHandshake, String>;
-    fn initial_capabilities(&mut self, service: &str) -> Result<Vec<CapabilityHandle>, String>;
-    fn launch(
+    fn launch(&mut self, service: &ServiceSpec) -> Result<ProcessId, String>;
+    fn initial_capabilities(
         &mut self,
         service: &ServiceSpec,
+        process: ProcessId,
+    ) -> Result<Vec<CapabilityHandle>, String>;
+    fn activate(
+        &mut self,
+        service: &ServiceSpec,
+        process: ProcessId,
         capabilities: &[CapabilityHandle],
-    ) -> Result<ProcessId, String>;
+    ) -> Result<(), String>;
     fn is_healthy(&mut self, service: &ServiceSpec, process: ProcessId) -> Result<bool, String>;
     fn terminate(&mut self, service: &ServiceSpec, process: ProcessId) -> Result<(), String>;
 }
@@ -71,20 +78,26 @@ pub fn start_ready_services(
             supervisor
                 .begin_start(&name)
                 .map_err(ServiceBootError::Supervisor)?;
-            let capabilities = match adapter.initial_capabilities(&name) {
-                Ok(capabilities) => capabilities,
-                Err(error) => {
-                    supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
-                    return Err(ServiceBootError::Adapter(error));
-                }
-            };
-            let process_id = match adapter.launch(spec, &capabilities) {
+            let process_id = match adapter.launch(spec) {
                 Ok(process_id) => process_id,
                 Err(error) => {
                     supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
                     return Err(ServiceBootError::Adapter(error));
                 }
             };
+            let capabilities = match adapter.initial_capabilities(&name, process_id) {
+                Ok(capabilities) => capabilities,
+                Err(error) => {
+                    let _ = adapter.terminate(spec, process_id);
+                    supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
+                    return Err(ServiceBootError::Adapter(error));
+                }
+            };
+            if let Err(error) = adapter.activate(spec, process_id, &capabilities) {
+                let _ = adapter.terminate(spec, process_id);
+                supervisor.mark_failed(&name).map_err(ServiceBootError::Supervisor)?;
+                return Err(ServiceBootError::Adapter(error));
+            }
             match adapter.is_healthy(spec, process_id) {
                 Ok(true) => {
                     supervisor.mark_ready(&name).map_err(ServiceBootError::Supervisor)?;
@@ -129,17 +142,26 @@ mod tests {
             Ok(self.handshake)
         }
 
-        fn initial_capabilities(&mut self, _service: &str) -> Result<Vec<CapabilityHandle>, String> {
+        fn launch(&mut self, service: &ServiceSpec) -> Result<ProcessId, String> {
+            self.launched.push(service.name.clone());
+            Ok(ProcessId(self.launched.len() as u32 + 1000))
+        }
+
+        fn initial_capabilities(
+            &mut self,
+            _service: &str,
+            _process: ProcessId,
+        ) -> Result<Vec<CapabilityHandle>, String> {
             Ok(Vec::new())
         }
 
-        fn launch(
+        fn activate(
             &mut self,
-            service: &ServiceSpec,
+            _service: &ServiceSpec,
+            _process: ProcessId,
             _capabilities: &[CapabilityHandle],
-        ) -> Result<ProcessId, String> {
-            self.launched.push(service.name.clone());
-            Ok(ProcessId(self.launched.len() as u32 + 1000))
+        ) -> Result<(), String> {
+            Ok(())
         }
 
         fn is_healthy(&mut self, service: &ServiceSpec, _process: ProcessId) -> Result<bool, String> {
