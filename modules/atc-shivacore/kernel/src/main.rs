@@ -167,20 +167,29 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Constants come from libshivacore's public ABI; payload is in the mapped
     // writable data region so the kernel must validate/copy a real user span.
     let mut sender_code = alloc::vec::Vec::new();
-    sender_code.extend_from_slice(&[0x48, 0xB8]); // movabs rax, syscall id
-    sender_code.extend_from_slice(&(libshivacore::Syscall::IpcSend.id() as u64).to_le_bytes());
-    sender_code.extend_from_slice(&[0x48, 0xBF]); // movabs rdi, ABI version
-    sender_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
-    sender_code.extend_from_slice(&[0x48, 0xBE]); // movabs rsi, sender capability
-    sender_code.extend_from_slice(&ring3_sender_cap.0.to_le_bytes());
-    sender_code.extend_from_slice(&[0x48, 0xBA]); // movabs rdx, channel id
-    sender_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
-    sender_code.extend_from_slice(&[0x49, 0xB8]); // movabs r8, user payload address
-    sender_code.extend_from_slice(&0x0050_0000u64.to_le_bytes());
-    sender_code.extend_from_slice(&[0x49, 0xB9]); // movabs r9, payload length
     let sender_payload = b"ring3-ipc-ok";
-    sender_code.extend_from_slice(&(sender_payload.len() as u64).to_le_bytes());
-    sender_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR, 0xEB, 0xFE]); // int 0x80; loop
+    // Emit multiple real traps: foreign cap, absent cap, unmapped pointer, then
+    // a valid send. The kernel's trap log records each return code.
+    let mut emit_send = |capability: u64, payload_ptr: u64, payload_len: usize| {
+        sender_code.extend_from_slice(&[0x48, 0xB8]);
+        sender_code.extend_from_slice(&(libshivacore::Syscall::IpcSend.id() as u64).to_le_bytes());
+        sender_code.extend_from_slice(&[0x48, 0xBF]);
+        sender_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+        sender_code.extend_from_slice(&[0x48, 0xBE]);
+        sender_code.extend_from_slice(&capability.to_le_bytes());
+        sender_code.extend_from_slice(&[0x48, 0xBA]);
+        sender_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+        sender_code.extend_from_slice(&[0x49, 0xB8]);
+        sender_code.extend_from_slice(&payload_ptr.to_le_bytes());
+        sender_code.extend_from_slice(&[0x49, 0xB9]);
+        sender_code.extend_from_slice(&(payload_len as u64).to_le_bytes());
+        sender_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR]);
+    };
+    emit_send(ring3_receiver_cap.0, 0x0050_0000, sender_payload.len());
+    emit_send(0, 0x0050_0000, sender_payload.len());
+    emit_send(ring3_sender_cap.0, 0xDEAD_0000, sender_payload.len());
+    emit_send(ring3_sender_cap.0, 0x0050_0000, sender_payload.len());
+    sender_code.extend_from_slice(&[0xEB, 0xFE]); // park until timer preemption
 
     let mut user_binary = userspace::UserBinary::from_bytes(
         "ring3-ipc-sender",
@@ -213,19 +222,46 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // the CPU IRET frame while CR3/address-space switching remains a later gate.
     // Real Ring-3 receiver: invoke ABI-v1 IPC_RECEIVE into its mapped data.
     let mut receiver_code = alloc::vec::Vec::new();
-    receiver_code.extend_from_slice(&[0x48, 0xB8]);
-    receiver_code.extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
-    receiver_code.extend_from_slice(&[0x48, 0xBF]);
-    receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
-    receiver_code.extend_from_slice(&[0x48, 0xBE]);
-    receiver_code.extend_from_slice(&ring3_receiver_cap.0.to_le_bytes());
-    receiver_code.extend_from_slice(&[0x48, 0xBA]);
-    receiver_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
-    receiver_code.extend_from_slice(&[0x49, 0xB8]);
-    receiver_code.extend_from_slice(&0x0150_0000u64.to_le_bytes());
-    receiver_code.extend_from_slice(&[0x49, 0xB9]);
-    receiver_code.extend_from_slice(&64u64.to_le_bytes());
-    receiver_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR, 0xEB, 0xFE]);
+    let mut emit_receive = |capacity: u64| {
+        receiver_code.extend_from_slice(&[0x48, 0xB8]);
+        receiver_code.extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBF]);
+        receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBE]);
+        receiver_code.extend_from_slice(&ring3_receiver_cap.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBA]);
+        receiver_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB8]);
+        receiver_code.extend_from_slice(&0x0150_0000u64.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB9]);
+        receiver_code.extend_from_slice(&capacity.to_le_bytes());
+        receiver_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR]);
+    };
+    // A too-small receive must fail without dequeuing the queued message.
+    // Retry while the queue is empty (error code 5); once a message exists,
+    // the expected InvalidPayload (4) falls through to the valid receive.
+    emit_receive(2);
+    drop(emit_receive);
+    receiver_code.extend_from_slice(&[0x83, 0xFA, 0x05, 0x74, 0xBD]); // cmp edx,5; je back to first receive
+    // Now receive the same message with sufficient capacity.
+    let mut emit_valid_receive = |capacity: u64| {
+        receiver_code.extend_from_slice(&[0x48, 0xB8]);
+        receiver_code.extend_from_slice(&(libshivacore::Syscall::IpcReceive.id() as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBF]);
+        receiver_code.extend_from_slice(&(libshivacore::ABI_VERSION as u64).to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBE]);
+        receiver_code.extend_from_slice(&ring3_receiver_cap.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x48, 0xBA]);
+        receiver_code.extend_from_slice(&ring3_channel.0.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB8]);
+        receiver_code.extend_from_slice(&0x0150_0000u64.to_le_bytes());
+        receiver_code.extend_from_slice(&[0x49, 0xB9]);
+        receiver_code.extend_from_slice(&capacity.to_le_bytes());
+        receiver_code.extend_from_slice(&[0xCD, libshivacore::trap_abi::VECTOR]);
+    };
+    emit_valid_receive(64);
+    drop(emit_valid_receive);
+    receiver_code.extend_from_slice(&[0xEB, 0xFE]);
 
     let mut user_binary_2 = userspace::UserBinary::from_bytes(
         "ring3-ipc-receiver",
