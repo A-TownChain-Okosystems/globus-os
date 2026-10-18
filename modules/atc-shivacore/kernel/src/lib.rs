@@ -23,6 +23,7 @@ pub mod ipc;
 pub mod kernel_init;
 pub mod memory_manager;
 pub mod process;
+pub mod process_runtime;
 pub mod scheduler;
 pub mod security;
 pub mod syscall;
