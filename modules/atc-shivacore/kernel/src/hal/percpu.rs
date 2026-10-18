@@ -1,0 +1,187 @@
+// Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
+//! Building blocks for per-logical-CPU state.
+//!
+//! This type is storage and state-transition logic only. It is not yet wired to
+//! GS-relative addressing, AP startup, interrupt entry, or scheduler dispatch.
+//! Callers must keep one instance per logical CPU and publish it only after
+//! that CPU's local architecture state has been initialized.
+
+use core::sync::atomic::{AtomicU32, AtomicU64, AtomicU8, Ordering};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[repr(u8)]
+pub enum CpuLifecycle {
+    Offline = 0,
+    Initializing = 1,
+    Online = 2,
+    Failed = 3,
+}
+
+impl CpuLifecycle {
+    fn from_raw(value: u8) -> Self {
+        match value {
+            1 => Self::Initializing,
+            2 => Self::Online,
+            3 => Self::Failed,
+            _ => Self::Offline,
+        }
+    }
+}
+
+/// State intended to be owned by exactly one logical CPU.
+///
+/// `current_pid == 0` means that no process is assigned. PID zero is therefore
+/// reserved as the idle/no-process sentinel for this structure.
+#[repr(C, align(64))]
+pub struct PerCpuState {
+    apic_id: u32,
+    logical_id: u32,
+    lifecycle: AtomicU8,
+    _reserved: [u8; 7],
+    current_pid: AtomicU64,
+    interrupt_count: AtomicU64,
+}
+
+impl PerCpuState {
+    pub const fn new(apic_id: u32, logical_id: u32) -> Self {
+        Self {
+            apic_id,
+            logical_id,
+            lifecycle: AtomicU8::new(CpuLifecycle::Offline as u8),
+            _reserved: [0; 7],
+            current_pid: AtomicU64::new(0),
+            interrupt_count: AtomicU64::new(0),
+        }
+    }
+
+    pub const fn apic_id(&self) -> u32 {
+        self.apic_id
+    }
+
+    pub const fn logical_id(&self) -> u32 {
+        self.logical_id
+    }
+
+    pub fn lifecycle(&self) -> CpuLifecycle {
+        CpuLifecycle::from_raw(self.lifecycle.load(Ordering::Acquire))
+    }
+
+    /// Claim the one-time initialization transition.
+    pub fn begin_initialization(&self) -> bool {
+        self.lifecycle
+            .compare_exchange(
+                CpuLifecycle::Offline as u8,
+                CpuLifecycle::Initializing as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    /// Publish this CPU as usable after its local state is fully initialized.
+    pub fn publish_online(&self) -> bool {
+        self.lifecycle
+            .compare_exchange(
+                CpuLifecycle::Initializing as u8,
+                CpuLifecycle::Online as u8,
+                Ordering::Release,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    /// Mark initialization as failed. Online CPUs cannot be failed via this API.
+    pub fn mark_initialization_failed(&self) -> bool {
+        self.lifecycle
+            .compare_exchange(
+                CpuLifecycle::Initializing as u8,
+                CpuLifecycle::Failed as u8,
+                Ordering::AcqRel,
+                Ordering::Acquire,
+            )
+            .is_ok()
+    }
+
+    pub fn current_pid(&self) -> Option<u64> {
+        if self.lifecycle() != CpuLifecycle::Online {
+            return None;
+        }
+        match self.current_pid.load(Ordering::Acquire) {
+            0 => None,
+            pid => Some(pid),
+        }
+    }
+
+    /// Update the CPU-local process assignment only while the CPU is online.
+    pub fn set_current_pid(&self, pid: Option<u64>) -> bool {
+        if self.lifecycle() != CpuLifecycle::Online {
+            return false;
+        }
+        self.current_pid.store(pid.unwrap_or(0), Ordering::Release);
+        true
+    }
+
+    pub fn record_interrupt(&self) -> bool {
+        if self.lifecycle() != CpuLifecycle::Online {
+            return false;
+        }
+        self.interrupt_count.fetch_add(1, Ordering::Relaxed);
+        true
+    }
+
+    pub fn interrupt_count(&self) -> u64 {
+        self.interrupt_count.load(Ordering::Relaxed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cpu_must_complete_initialization_before_becoming_online() {
+        let cpu = PerCpuState::new(0x1234, 2);
+        assert_eq!(cpu.lifecycle(), CpuLifecycle::Offline);
+        assert!(!cpu.publish_online());
+        assert!(cpu.begin_initialization());
+        assert_eq!(cpu.lifecycle(), CpuLifecycle::Initializing);
+        assert!(cpu.publish_online());
+        assert_eq!(cpu.lifecycle(), CpuLifecycle::Online);
+        assert!(!cpu.begin_initialization());
+    }
+
+    #[test]
+    fn process_assignment_is_rejected_until_cpu_is_online() {
+        let cpu = PerCpuState::new(7, 1);
+        assert!(!cpu.set_current_pid(Some(42)));
+        assert_eq!(cpu.current_pid(), None);
+        assert!(cpu.begin_initialization());
+        assert!(cpu.publish_online());
+        assert!(cpu.set_current_pid(Some(42)));
+        assert_eq!(cpu.current_pid(), Some(42));
+        assert!(cpu.set_current_pid(None));
+        assert_eq!(cpu.current_pid(), None);
+    }
+
+    #[test]
+    fn failed_initialization_cannot_be_published_online() {
+        let cpu = PerCpuState::new(3, 1);
+        assert!(cpu.begin_initialization());
+        assert!(cpu.mark_initialization_failed());
+        assert_eq!(cpu.lifecycle(), CpuLifecycle::Failed);
+        assert!(!cpu.publish_online());
+        assert!(!cpu.set_current_pid(Some(9)));
+    }
+
+    #[test]
+    fn interrupt_counter_changes_only_for_online_cpu() {
+        let cpu = PerCpuState::new(0, 0);
+        assert!(!cpu.record_interrupt());
+        assert_eq!(cpu.interrupt_count(), 0);
+        assert!(cpu.begin_initialization());
+        assert!(cpu.publish_online());
+        assert!(cpu.record_interrupt());
+        assert!(cpu.record_interrupt());
+        assert_eq!(cpu.interrupt_count(), 2);
+    }
+}
