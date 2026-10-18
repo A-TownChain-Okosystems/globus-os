@@ -242,9 +242,12 @@ impl Vfs {
     // ── Capability-Check ───────────────────────────────────────────────────
 
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
+        let Ok(pid32) = u32::try_from(pid) else {
+            return false;
+        };
         let table = self.caps.lock();
         if let Some(cap) = table.get(crate::capability::CapId(cap_handle)) {
-            cap.owner == crate::ats1000::Pid(pid as u32)
+            cap.owner == crate::ats1000::Pid(pid32)
                 && cap.resource_type == ResourceType::FileSystem
                 && cap.rights.has(required)
         } else {
