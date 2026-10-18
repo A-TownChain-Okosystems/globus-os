@@ -90,7 +90,11 @@ lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
-        idt.page_fault.set_handler_fn(page_fault_handler);
+        // Page faults need a dedicated trampoline: unlike timer IRQs, the CPU
+        // pushes an error code before the IRET frame.
+        unsafe {
+            idt.page_fault.set_handler_addr(page_fault_interrupt_entry_addr());
+        }
         unsafe {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
@@ -152,24 +156,167 @@ extern "x86-interrupt" fn double_fault_handler(
     panic!("EXCEPTION: DOUBLE FAULT\n{:#?}", stack_frame);
 }
 
-extern "x86-interrupt" fn page_fault_handler(
-    stack_frame: InterruptStackFrame,
-    error_code: PageFaultErrorCode,
-) -> ! {
+/// Hardware frame for a page fault after the trampoline has saved all
+/// general-purpose registers. The CPU-supplied error code is between the
+/// saved registers and RIP, unlike the timer/syscall frame.
+#[repr(C)]
+struct PageFaultTrapFrame {
+    rax: u64,
+    rbx: u64,
+    rcx: u64,
+    rdx: u64,
+    rsi: u64,
+    rdi: u64,
+    rbp: u64,
+    r8: u64,
+    r9: u64,
+    r10: u64,
+    r11: u64,
+    r12: u64,
+    r13: u64,
+    r14: u64,
+    r15: u64,
+    error_code: u64,
+    rip: u64,
+    cs: u64,
+    rflags: u64,
+    // rsp/ss are present only when the fault crossed privilege levels.
+    // Never read them for a Ring-0 fault.
+    rsp: u64,
+    ss: u64,
+}
+
+impl PageFaultTrapFrame {
+    fn saved_context(&self) -> SavedContext {
+        SavedContext {
+            regs: shivacore::user_sched::SavedRegisters {
+                rax: self.rax, rbx: self.rbx, rcx: self.rcx, rdx: self.rdx,
+                rsi: self.rsi, rdi: self.rdi, rbp: self.rbp, rsp: self.rsp,
+                r8: self.r8, r9: self.r9, r10: self.r10, r11: self.r11,
+                r12: self.r12, r13: self.r13, r14: self.r14, r15: self.r15,
+            },
+            iret: shivacore::user_sched::IretFrame {
+                rip: self.rip,
+                cs: self.cs as u16,
+                rflags: self.rflags,
+                rsp: self.rsp,
+                ss: self.ss as u16,
+            },
+        }
+    }
+
+    fn restore(&mut self, ctx: SavedContext) {
+        self.rax = ctx.regs.rax; self.rbx = ctx.regs.rbx;
+        self.rcx = ctx.regs.rcx; self.rdx = ctx.regs.rdx;
+        self.rsi = ctx.regs.rsi; self.rdi = ctx.regs.rdi;
+        self.rbp = ctx.regs.rbp; self.r8 = ctx.regs.r8;
+        self.r9 = ctx.regs.r9; self.r10 = ctx.regs.r10;
+        self.r11 = ctx.regs.r11; self.r12 = ctx.regs.r12;
+        self.r13 = ctx.regs.r13; self.r14 = ctx.regs.r14;
+        self.r15 = ctx.regs.r15;
+        self.rip = ctx.iret.rip;
+        self.cs = ctx.iret.cs as u64;
+        self.rflags = ctx.iret.rflags;
+        self.rsp = ctx.iret.rsp;
+        self.ss = ctx.iret.ss as u64;
+    }
+}
+
+extern "C" {
+    fn shivacore_page_fault_trampoline();
+}
+
+global_asm!(
+    r#"
+    .global shivacore_page_fault_trampoline
+shivacore_page_fault_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov r12, rsp
+    mov rdi, rsp
+    and rsp, -16
+    call {handler}
+    mov rsp, r12
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    add rsp, 8
+    iretq
+"#,
+    handler = sym page_fault_trap_rust
+);
+
+fn page_fault_interrupt_entry_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_page_fault_trampoline as usize as u64)
+}
+
+/// Ring-3 faults terminate only the current process (exit status 139). A Ring-0
+/// fault remains fatal: the frame is not a user IRET frame and must never be
+/// resumed. If no other process is runnable, stop in a defined fatal path.
+extern "C" fn page_fault_trap_rust(frame: &mut PageFaultTrapFrame) {
     use x86_64::registers::control::Cr2;
 
     let fault_addr = Cr2::read();
-    serial_println!("EXCEPTION: PAGE FAULT (fatal; recovery not implemented)");
-    serial_println!("Accessed Address: {:?}", fault_addr);
-    serial_println!("Error Code: {:?}", error_code);
-    serial_println!("{:#?}", stack_frame);
+    let cpl = frame.cs & 0x3;
+    if cpl != 3 {
+        serial_println!(
+            "EXCEPTION: KERNEL PAGE FAULT addr={:?} error={:#x} RIP={:#x} CS={:#x}",
+            fault_addr, frame.error_code, frame.rip, frame.cs
+        );
+        panic!("fatal Ring-0 page fault at {:?}", fault_addr);
+    }
 
-    // Do not return to the faulting instruction. Until the kernel has a tested
-    // per-process fault/termination path, returning here can repeat the fault
-    // indefinitely and leave the system in an undefined recovery loop.
-    panic!(
-        "fatal page fault at {:?} (origin: {})",
-        fault_addr
+    let mut scheduler_guard = USER_SCHEDULER.lock();
+    let scheduler = scheduler_guard.as_mut()
+        .unwrap_or_else(|| panic!("Ring-3 page fault with no user scheduler"));
+    let pid = scheduler.current_pid()
+        .unwrap_or_else(|| panic!("Ring-3 page fault with no current PID"));
+    serial_println!(
+        "EXCEPTION: USER PAGE FAULT PID={} addr={:?} error={:#x} RIP={:#x}; terminating with status 139",
+        pid.0, fault_addr, frame.error_code, frame.rip
+    );
+
+    let next = scheduler.exit_process(pid, 139, None)
+        .unwrap_or_else(|| panic!("no runnable user process after PID={} page fault", pid.0));
+    let (next_pid, next_context) = next;
+    let next_root = USER_ADDRESS_SPACES.lock().iter()
+        .find(|space| space.pid == next_pid)
+        .map(|space| space.root_frame)
+        .unwrap_or_else(|| panic!("missing page-table root for PID={}", next_pid.0));
+
+    // Each process has a separate root; the kernel/trampoline mappings are
+    // shared supervisor-only mappings. Keep the faulting process's address
+    // space alive until a later, explicit safe-reap implementation exists.
+    unsafe { crate::memory::switch_to_page_table(next_root) };
+    frame.restore(next_context);
+    serial_println!(
+        "ShivaCore: user fault recovery switched to PID={} RIP={:#x}",
+        next_pid.0, next_context.iret.rip
     );
 }
 
