@@ -314,4 +314,50 @@ mod tests {
         assert!(cpu.record_interrupt());
         assert_eq!(cpu.interrupt_count(), 2);
     }
+
+    #[test]
+    fn cpu_local_process_and_interrupt_state_is_isolated() {
+        let cpu0 = PerCpuState::new(0x10, 0);
+        let cpu1 = PerCpuState::new(0x20, 1);
+
+        for cpu in [&cpu0, &cpu1] {
+            assert!(cpu.begin_initialization());
+            assert!(cpu.publish_online());
+        }
+
+        assert!(cpu0.set_current_pid(Some(1000)));
+        assert!(cpu1.set_current_pid(Some(1001)));
+        assert!(cpu0.record_interrupt());
+        assert!(cpu0.record_interrupt());
+        assert!(cpu1.record_interrupt());
+
+        assert_eq!(cpu0.apic_id(), 0x10);
+        assert_eq!(cpu1.apic_id(), 0x20);
+        assert_eq!(cpu0.logical_id(), 0);
+        assert_eq!(cpu1.logical_id(), 1);
+        assert_eq!(cpu0.current_pid(), Some(1000));
+        assert_eq!(cpu1.current_pid(), Some(1001));
+        assert_eq!(cpu0.interrupt_count(), 2);
+        assert_eq!(cpu1.interrupt_count(), 1);
+
+        assert!(cpu0.set_current_pid(None));
+        assert_eq!(cpu0.current_pid(), None);
+        assert_eq!(cpu1.current_pid(), Some(1001));
+        assert_eq!(cpu1.interrupt_count(), 1);
+    }
+
+    #[test]
+    fn cpu_local_state_rejects_duplicate_and_invalid_lifecycle_transitions() {
+        let cpu = PerCpuState::new(7, 3);
+        assert!(!cpu.publish_online());
+        assert!(!cpu.mark_initialization_failed());
+        assert!(cpu.begin_initialization());
+        assert!(!cpu.begin_initialization());
+        assert!(cpu.mark_initialization_failed());
+        assert!(!cpu.publish_online());
+        assert!(!cpu.set_current_pid(Some(77)));
+        assert!(!cpu.record_interrupt());
+        assert_eq!(cpu.current_pid(), None);
+        assert_eq!(cpu.interrupt_count(), 0);
+    }
 }
