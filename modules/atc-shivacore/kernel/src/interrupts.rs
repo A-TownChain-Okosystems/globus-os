@@ -70,9 +70,13 @@ lazy_static! {
                 .set_handler_addr(timer_interrupt_entry_addr())
         };
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
-        // User-mode software interrupt gate. DPL3 permits CPL3 to enter the kernel.
-        idt[0x80].set_handler_fn(syscall_interrupt_handler)
-            .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
+        // User-mode software interrupt gate. The assembly trampoline saves every
+        // general-purpose register before entering Rust and returns with IRETQ.
+        unsafe {
+            idt[0x80]
+                .set_handler_addr(syscall_interrupt_entry_addr())
+                .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
+        }
         idt
     };
 }
@@ -311,13 +315,122 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_timer_trampoline as usize as u64)
 }
 
-extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
-    serial_println!(
-        "ShivaCore: CPL3 syscall gate entered at RIP={:#x}",
-        stack_frame.instruction_pointer.as_u64()
-    );
-    // Return to the interrupted userspace instruction for now. The ABI dispatcher
-    // is wired next; this gate is intentionally observable before SCHED-001/SYS-001.
+/// Register layout produced by shivacore_syscall_trampoline. The first
+/// fifteen fields are pushed by the trampoline; the final five are the CPU's
+/// privilege-transition IRET frame.
+#[repr(C)]
+struct SyscallTrapFrame {
+    r15: u64, r14: u64, r13: u64, r12: u64, r11: u64,
+    r10: u64, r9: u64, r8: u64, rbp: u64, rdi: u64,
+    rsi: u64, rdx: u64, rcx: u64, rbx: u64, rax: u64,
+    rip: u64, cs: u64, rflags: u64, rsp: u64, ss: u64,
+}
+
+static SYSCALL_KERNEL_STATE: Mutex<Option<crate::kernel_init::KernelState>> = Mutex::new(None);
+static SYSCALL_DISPATCHER: Mutex<crate::syscall::SyscallDispatcher> =
+    Mutex::new(crate::syscall::SyscallDispatcher::new());
+
+/// Install the canonical, already initialized kernel state for trap dispatch.
+/// The state is moved here once; syscall handling never constructs a parallel
+/// capability table or IPC subsystem.
+pub fn install_syscall_kernel(state: crate::kernel_init::KernelState) {
+    let mut slot = SYSCALL_KERNEL_STATE.lock();
+    assert!(slot.is_none(), "syscall kernel state installed twice");
+    *slot = Some(state);
+}
+
+extern "C" {
+    fn shivacore_syscall_trampoline();
+}
+
+global_asm!(
+    r#"
+    .global shivacore_syscall_trampoline
+shivacore_syscall_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov r12, rsp
+    mov rdi, rsp
+    and rsp, -16
+    call {handler}
+    mov rsp, r12
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    iretq
+"#,
+    handler = sym syscall_trap_rust
+);
+
+fn syscall_interrupt_entry_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_syscall_trampoline as usize as u64)
+}
+
+/// Trap ABI (x86-64): RAX=syscall id, RDI=ABI version, RSI=capability
+/// handle (zero means absent), RDX=arg0, R10=arg1, R8=payload pointer,
+/// R9=payload length. Return: RAX=value, RDX=0 on success or AbiError code.
+///
+/// Pointer-bearing IPC calls deliberately remain fail-closed in dispatch
+/// until copy-in/copy-out is connected to the active page table.
+extern "C" fn syscall_trap_rust(frame: &mut SyscallTrapFrame) {
+    let Some(pid) = USER_SCHEDULER.lock().as_ref().and_then(|s| s.current_pid()) else {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    };
+
+    let mut state_guard = SYSCALL_KERNEL_STATE.lock();
+    let Some(state) = state_guard.as_mut() else {
+        frame.rax = 0;
+        frame.rdx = libshivacore::AbiError::EndpointUnavailable as u64;
+        return;
+    };
+
+    let request = crate::syscall::SyscallRequest {
+        abi_version: frame.rdi as u32,
+        syscall_id: frame.rax as u16,
+        capability: if frame.rsi == 0 {
+            None
+        } else {
+            Some(libshivacore::CapabilityHandle(frame.rsi))
+        },
+        arg0: frame.rdx,
+        arg1: frame.r10,
+        payload_len: frame.r9 as usize,
+    };
+
+    // Never dereference R8 here. Until page-table-backed copy-in/copy-out is
+    // connected, the dispatcher's IPC-only fallback returns EndpointUnavailable.
+    let response = SYSCALL_DISPATCHER
+        .lock()
+        .dispatch(pid, request, &mut state.processes.caps);
+    frame.rax = response.value;
+    frame.rdx = response.error.map(|error| error as u64).unwrap_or(0);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
