@@ -2,10 +2,12 @@
 
 pub mod boot_state;
 pub mod health;
+pub mod staging;
 pub mod transition;
 
 pub use boot_state::{BootState, BootStateError};
 pub use health::{BootHealth, HealthError};
+pub use staging::{StagingError, UpdateSlotStorage, stage_and_activate};
 pub use transition::TransitionError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

@@ -323,6 +323,21 @@ mod tests {
     }
 
     #[test]
+    fn rejects_a_well_formed_but_cryptographically_invalid_signature() {
+        let key = SigningKey::from_bytes(&[7_u8; 32]);
+        let artifact = b"contents";
+        let mut pkg = signed_package(artifact, &key);
+        // Keep the signature correctly encoded but alter its cryptographic value.
+        let mut signature = hex::decode(&pkg.signature).unwrap();
+        signature[0] ^= 0x80;
+        pkg.signature = hex::encode(signature);
+        assert_eq!(
+            verify_for_install(&pkg, artifact, &keyring(&key)),
+            Err(VerifyError::UntrustedSigningKey)
+        );
+    }
+
+    #[test]
     fn rejects_missing_keys_and_malformed_metadata() {
         let key = SigningKey::from_bytes(&[7_u8; 32]);
         let artifact = b"contents";
