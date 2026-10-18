@@ -105,7 +105,7 @@ jobs:
           # all required behavior. This is a harness shutdown, not a guest shutdown.
           monitor_sent=0
           for attempt in $(seq 1 20); do
-            if { printf 'quit\\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
+            if { printf 'quit\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
               monitor_sent=1
               break
             fi
@@ -258,7 +258,7 @@ jobs:
           # all required behavior. This is a harness shutdown, not a guest shutdown.
           monitor_sent=0
           for attempt in $(seq 1 20); do
-            if { printf 'quit\\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
+            if { printf 'quit\n' > /dev/tcp/127.0.0.1/${monitor_port}; } 2>/dev/null; then
               monitor_sent=1
               break
             fi
