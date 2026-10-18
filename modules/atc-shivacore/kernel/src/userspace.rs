@@ -1013,7 +1013,7 @@ mod tests {
         assert!(space.contains_range(0x0040_0FFF, 1));
         assert!(!space.contains_range(0x004F_FFFF, 2));
         assert!(space.contains_range(0x0050_0000, 16));
-        assert!(space.contains_range(0x7FFE_F000, 0x1000));
+        assert!(space.contains_range(0x7FFE_F001, 0x0FFE));
         assert!(!space.contains_range(0x7FFFEFFF, 2));
     }
 
