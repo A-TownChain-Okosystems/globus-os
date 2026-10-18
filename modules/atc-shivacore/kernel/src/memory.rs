@@ -53,7 +53,7 @@ pub unsafe fn create_user_mapper(
 
     for index in 256..512 {
         // SAFETY: root_ptr is a valid, exclusively owned 4-KiB page-table frame.
-        unsafe { (*root_ptr)[index] = active_root[index].clone() };
+        unsafe { (&mut *root_ptr)[index] = active_root[index].clone() };
     }
 
     // SAFETY: root_ptr refers to a page-table frame kept allocated for the
