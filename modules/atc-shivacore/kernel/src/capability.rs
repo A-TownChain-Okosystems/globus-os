@@ -366,11 +366,26 @@ mod tests {
 
     #[test]
     fn test_from_bits_truncate_preserves_known_rights_and_discards_unknown_bits() {
-        assert_eq!(Rights::from_bits_truncate(Rights::READ.bits()), Rights::READ);
-        assert_eq!(Rights::from_bits_truncate(Rights::WRITE.bits()), Rights::WRITE);
-        assert_eq!(Rights::from_bits_truncate(Rights::EXEC.bits()), Rights::EXEC);
-        assert_eq!(Rights::from_bits_truncate(Rights::DELEGATE.bits()), Rights::DELEGATE);
-        assert_eq!(Rights::from_bits_truncate(Rights::INSPECT.bits()), Rights::INSPECT);
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::READ.bits()),
+            Rights::READ
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::WRITE.bits()),
+            Rights::WRITE
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::EXEC.bits()),
+            Rights::EXEC
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::DELEGATE.bits()),
+            Rights::DELEGATE
+        );
+        assert_eq!(
+            Rights::from_bits_truncate(Rights::INSPECT.bits()),
+            Rights::INSPECT
+        );
         assert_eq!(Rights::from_bits_truncate(Rights::ALL.bits()), Rights::ALL);
         assert_eq!(Rights::from_bits_truncate(0x20), Rights::NONE);
         assert_eq!(Rights::from_bits_truncate(0xFF), Rights::ALL);
