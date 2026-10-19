@@ -15,7 +15,7 @@ use shivacore::userspace::UserContext;
 use spin::Mutex;
 use x86_64::registers::rflags::RFlags;
 use x86_64::structures::idt::{
-    InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode,
+    InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue,
 };
 use x86_64::structures::paging::{OffsetPageTable, PhysFrame, Size4KiB};
 use x86_64::VirtAddr;
@@ -188,36 +188,6 @@ struct PageFaultTrapFrame {
 }
 
 impl PageFaultTrapFrame {
-    fn saved_context(&self) -> SavedContext {
-        SavedContext {
-            regs: shivacore::user_sched::SavedRegisters {
-                rax: self.rax,
-                rbx: self.rbx,
-                rcx: self.rcx,
-                rdx: self.rdx,
-                rsi: self.rsi,
-                rdi: self.rdi,
-                rbp: self.rbp,
-                rsp: self.rsp,
-                r8: self.r8,
-                r9: self.r9,
-                r10: self.r10,
-                r11: self.r11,
-                r12: self.r12,
-                r13: self.r13,
-                r14: self.r14,
-                r15: self.r15,
-            },
-            iret: shivacore::user_sched::IretFrame {
-                rip: self.rip,
-                cs: self.cs as u16,
-                rflags: self.rflags,
-                rsp: self.rsp,
-                ss: self.ss as u16,
-            },
-        }
-    }
-
     fn restore(&mut self, ctx: SavedContext) {
         self.rax = ctx.regs.rax;
         self.rbx = ctx.regs.rbx;
