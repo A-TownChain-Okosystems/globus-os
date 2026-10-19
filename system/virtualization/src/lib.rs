@@ -490,7 +490,9 @@ mod tests {
     #[test]
     fn inspect_requires_permission() {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
-        let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
+        let id = manager
+            .create_vm(config("linux-test"), permissions())
+            .unwrap();
         assert_eq!(
             manager.get_vm_state(id, VmPermissions::default()),
             Err(VmError::PermissionDenied)
