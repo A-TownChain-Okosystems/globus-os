@@ -455,8 +455,10 @@ mod tests {
 
     #[test]
     fn failed_backend_start_keeps_created_state() {
-        let mut backend = FakeBackend::default();
-        backend.fail_start = true;
+        let backend = FakeBackend {
+            fail_start: true,
+            ..FakeBackend::default()
+        };
         let mut manager = VmManager::new(backend, limits()).unwrap();
         let id = manager
             .create_vm(config("linux-test"), permissions())
