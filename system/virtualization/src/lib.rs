@@ -228,7 +228,9 @@ impl<B: VmBackend> VmManager<B> {
         id: VmId,
         permissions: VmPermissions,
     ) -> Result<(), VmError> {
-        if !permissions.start { return Err(VmError::PermissionDenied); }
+        if !permissions.start {
+            return Err(VmError::PermissionDenied);
+        }
         let vm = self.vms.get_mut(&id).ok_or(VmError::UnknownVm(id))?;
         if vm.state != VmState::Paused {
             return Err(VmError::InvalidState {
@@ -294,7 +296,10 @@ impl<B: VmBackend> VmManager<B> {
         if !permissions.inspect {
             return Err(VmError::PermissionDenied);
         }
-        self.vms.get(&id).map(|vm| vm.state).ok_or(VmError::UnknownVm(id))
+        self.vms
+            .get(&id)
+            .map(|vm| vm.state)
+            .ok_or(VmError::UnknownVm(id))
     }
 
     pub fn get_vm_metrics(
@@ -302,7 +307,9 @@ impl<B: VmBackend> VmManager<B> {
         id: VmId,
         permissions: VmPermissions,
     ) -> Result<VmMetrics, VmError> {
-        if !permissions.inspect { return Err(VmError::PermissionDenied); }
+        if !permissions.inspect {
+            return Err(VmError::PermissionDenied);
+        }
         let vm = self.vms.get(&id).ok_or(VmError::UnknownVm(id))?;
         Ok(VmMetrics {
             id,
@@ -313,7 +320,10 @@ impl<B: VmBackend> VmManager<B> {
         })
     }
 
-    pub fn list_vms(&self, permissions: VmPermissions) -> Result<Vec<VmMetrics>, VmError> {
+    pub fn list_vms(
+        &self,
+        permissions: VmPermissions,
+    ) -> Result<Vec<VmMetrics>, VmError> {
         if !permissions.inspect { return Err(VmError::PermissionDenied); }
         Ok(self
             .vms
@@ -328,7 +338,9 @@ impl<B: VmBackend> VmManager<B> {
             .collect())
     }
 
-    pub fn into_backend(self) -> B { self.backend }
+    pub fn into_backend(self) -> B {
+        self.backend
+    }
 
     fn usage(&self) -> (u64, u64, u64) {
         self.vms
@@ -465,7 +477,9 @@ mod tests {
         let mut backend = FakeBackend::default();
         backend.fail_start = true;
         let mut manager = VmManager::new(backend, limits()).unwrap();
-        let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
+        let id = manager
+            .create_vm(config("linux-test"), permissions())
+            .unwrap();
         assert_eq!(
             manager.start_vm(id, permissions()),
             Err(VmError::Backend("injected start failure".into()))
