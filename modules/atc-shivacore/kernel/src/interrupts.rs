@@ -167,10 +167,7 @@ extern "x86-interrupt" fn page_fault_handler(
     // Do not return to the faulting instruction. Until the kernel has a tested
     // per-process fault/termination path, returning here can repeat the fault
     // indefinitely and leave the system in an undefined recovery loop.
-    panic!(
-        "fatal page fault at {:?} (origin: {})",
-        fault_addr
-    );
+    panic!("fatal page fault at {:?} (error code: {:?})", fault_addr, error_code);
 }
 
 #[repr(C)]
