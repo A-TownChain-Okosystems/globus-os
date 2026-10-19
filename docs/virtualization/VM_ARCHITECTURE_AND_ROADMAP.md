@@ -80,43 +80,54 @@ All calls must return typed errors; unknown VM IDs, unsupported guest profiles, 
 
 Multiple guests must be tested concurrently after single-VM acceptance. Guest availability is always conditional on host CPU features, RAM, firmware, backend support, and license requirements.
 
-## 7. Implementation milestones
+## 7. Binding development order
+
+The following sequence is authoritative. Later phases must not be treated as complete merely because their API or documentation exists.
+
+1. **VM manager and API:** implement create, start, pause/resume, stop, destroy, list, state, and metrics operations with typed errors and tested lifecycle transitions.
+2. **Linux first:** establish a reproducible x86_64 Linux guest boot test with pinned image digest, firmware, backend version, command line, serial marker, and exit status.
+3. **Isolation and quotas:** prove memory separation, capability enforcement, host reserve, resource limits, cleanup, and guest/backend failure handling with negative tests.
+4. **Native hardware virtualization:** integrate Intel VT-x and AMD-V/SVM behind one backend interface; require EPT/NPT or equivalent safe second-level translation and robust teardown.
+5. **Windows and macOS qualification:** test each guest family independently against an explicit host/firmware/backend/version matrix; macOS remains conditional on supported Apple hardware and licensing.
+6. **Desktop integration:** integrate VM windows and lifecycle, snapshots, restore/recovery, permissions, and resource monitoring only after core lifecycle, Linux boot, and isolation gates pass.
+
+## 8. Implementation milestones
 
 ### V0 — Source and capability audit
 - Inventory current `kernel/src/vm.rs`, `kernel/src/vmm.rs`, service-space VM code, process/memory/IPC/capability APIs, and device/DMA boundaries.
 - Record canonical crate path, API owner, symbols, dependencies, and test gaps.
 - Keep contract VM naming separate from guest OS virtualization.
 
-### V1 — API and manager state machine
+### V1 — API and manager state machine (order 1)
 - Add one canonical userspace virtualization crate/service and typed configuration/state/error models.
 - Unit-test invalid transitions, duplicate IDs, resource overflow, authorization denial, and cleanup after partial failures.
 - No guest-boot claim at this milestone.
 
-### V2 — Backend contract and emulated integration
+### V2 — Linux boot baseline and backend contract (order 2)
 - Define backend capabilities, VM handles, exit reasons, memory regions, virtual CPU state, virtual devices, and diagnostics.
 - Use QEMU in CI/development only where available; pin arguments and versions in evidence.
 - Run a Linux boot smoke test and record exact image digest, host, backend, command line, serial output, and exit status.
 
-### V3 — Isolation and concurrency
+### V3 — Isolation and concurrency (order 3)
 - Prove VM A cannot access VM B memory, host-only paths, or unauthorized devices.
 - Exercise resource limits, VM termination, backend failure, and simultaneous VM workloads.
 - Add hostile-image tests and fuzz the configuration/image parser.
 
-### V4 — Native acceleration
+### V4 — Native acceleration (order 4)
 - Implement Intel VT-x and AMD-V/SVM capability detection and backend initialization.
 - Require EPT/NPT and safe teardown before exposing hardware-accelerated guests.
 - Test VM-entry failure, invalid guest state, interrupt delivery, memory pressure, and host recovery.
 
-### V5 — Desktop integration and snapshots
-- Integrate VM creation and lifecycle with the native GlobusOS desktop, permissions, notifications, and resource monitor.
-- Add disk snapshots and recovery only with consistency guarantees and interruption tests.
-
-### V6 — Guest compatibility
-- Qualify Linux distributions first, then supported Windows releases.
+### V5 — Windows and macOS qualification (order 5)
+- Qualify supported Windows releases independently, including installer, reboot, storage, network, and display smoke tests.
 - Qualify macOS only against an explicit permitted Apple host/guest matrix.
 - Publish support only for tested profiles; untested profiles remain experimental/unsupported.
 
-## 8. Required automated tests
+### V6 — Desktop integration and snapshots (order 6)
+- Integrate VM windows, lifecycle controls, permissions, notifications, and resource monitoring in the native GlobusOS desktop.
+- Add snapshots and recovery only with explicit consistency guarantees, disk lineage metadata, and interruption/recovery tests.
+
+## 9. Required automated tests
 
 1. Configuration rejects negative/overflowing resource values and unsupported CPU features.
 2. Capability-denied create/start/attach/snapshot operations make no state changes.
@@ -131,7 +142,7 @@ Multiple guests must be tested concurrently after single-VM acceptance. Guest av
 11. Windows and macOS support claims each require their own guest-specific evidence; Linux success is not a proxy.
 12. QEMU CI success does not certify native GlobusOS acceleration or physical hardware.
 
-## 9. Release gates
+## 10. Release gates
 
 The component remains **BLOCKED for production use** until:
 - the backend decision and host/guest compatibility matrix are approved;
