@@ -454,6 +454,23 @@ mod tests {
     }
 
     #[test]
+    fn host_memory_reserve_rejects_create_independently_of_vm_memory_quota() {
+        let mut resource_limits = limits();
+        resource_limits.max_total_memory_mib = 4096;
+        resource_limits.host_memory_reserve_mib = 3584;
+        resource_limits.host_memory_total_mib = 4096;
+
+        let mut manager = VmManager::new(FakeBackend::default(), resource_limits).unwrap();
+        assert_eq!(
+            manager.create_vm(config("reserve-test"), permissions()),
+            Err(VmError::ResourceLimit("total memory / host reserve"))
+        );
+
+        // The reserve constraint alone rejects the request before backend allocation.
+        assert_eq!(manager.into_backend().next, 0);
+    }
+
+    #[test]
     fn failed_backend_start_keeps_created_state() {
         let backend = FakeBackend {
             fail_start: true,
