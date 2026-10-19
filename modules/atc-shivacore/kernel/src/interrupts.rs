@@ -93,7 +93,8 @@ lazy_static! {
         // Page faults need a dedicated trampoline: unlike timer IRQs, the CPU
         // pushes an error code before the IRET frame.
         unsafe {
-            idt.page_fault.set_handler_addr(page_fault_interrupt_entry_addr());
+            idt.page_fault
+                .set_handler_addr(page_fault_interrupt_entry_addr());
         }
         unsafe {
             idt.double_fault
@@ -190,10 +191,22 @@ impl PageFaultTrapFrame {
     fn saved_context(&self) -> SavedContext {
         SavedContext {
             regs: shivacore::user_sched::SavedRegisters {
-                rax: self.rax, rbx: self.rbx, rcx: self.rcx, rdx: self.rdx,
-                rsi: self.rsi, rdi: self.rdi, rbp: self.rbp, rsp: self.rsp,
-                r8: self.r8, r9: self.r9, r10: self.r10, r11: self.r11,
-                r12: self.r12, r13: self.r13, r14: self.r14, r15: self.r15,
+                rax: self.rax,
+                rbx: self.rbx,
+                rcx: self.rcx,
+                rdx: self.rdx,
+                rsi: self.rsi,
+                rdi: self.rdi,
+                rbp: self.rbp,
+                rsp: self.rsp,
+                r8: self.r8,
+                r9: self.r9,
+                r10: self.r10,
+                r11: self.r11,
+                r12: self.r12,
+                r13: self.r13,
+                r14: self.r14,
+                r15: self.r15,
             },
             iret: shivacore::user_sched::IretFrame {
                 rip: self.rip,
@@ -206,13 +219,20 @@ impl PageFaultTrapFrame {
     }
 
     fn restore(&mut self, ctx: SavedContext) {
-        self.rax = ctx.regs.rax; self.rbx = ctx.regs.rbx;
-        self.rcx = ctx.regs.rcx; self.rdx = ctx.regs.rdx;
-        self.rsi = ctx.regs.rsi; self.rdi = ctx.regs.rdi;
-        self.rbp = ctx.regs.rbp; self.r8 = ctx.regs.r8;
-        self.r9 = ctx.regs.r9; self.r10 = ctx.regs.r10;
-        self.r11 = ctx.regs.r11; self.r12 = ctx.regs.r12;
-        self.r13 = ctx.regs.r13; self.r14 = ctx.regs.r14;
+        self.rax = ctx.regs.rax;
+        self.rbx = ctx.regs.rbx;
+        self.rcx = ctx.regs.rcx;
+        self.rdx = ctx.regs.rdx;
+        self.rsi = ctx.regs.rsi;
+        self.rdi = ctx.regs.rdi;
+        self.rbp = ctx.regs.rbp;
+        self.r8 = ctx.regs.r8;
+        self.r9 = ctx.regs.r9;
+        self.r10 = ctx.regs.r10;
+        self.r11 = ctx.regs.r11;
+        self.r12 = ctx.regs.r12;
+        self.r13 = ctx.regs.r13;
+        self.r14 = ctx.regs.r14;
         self.r15 = ctx.regs.r15;
         self.rip = ctx.iret.rip;
         self.cs = ctx.iret.cs as u64;
@@ -304,7 +324,10 @@ extern "C" fn kernel_page_fault_trap_rust(frame: *const u64) -> ! {
     let cs = unsafe { *frame.add(17) };
     serial_println!(
         "EXCEPTION: KERNEL PAGE FAULT addr={:?} error={:#x} RIP={:#x} CS={:#x}",
-        fault_addr, error_code, rip, cs
+        fault_addr,
+        error_code,
+        rip,
+        cs
     );
     panic!("fatal Ring-0 page fault at {:?}", fault_addr);
 }
@@ -318,19 +341,27 @@ extern "C" fn page_fault_trap_rust(frame: &mut PageFaultTrapFrame) {
     // The assembly trampoline only calls this handler after validating that
     // the hardware-saved CS has CPL=3, so RSP/SS are present in this frame.
     let mut scheduler_guard = USER_SCHEDULER.lock();
-    let scheduler = scheduler_guard.as_mut()
+    let scheduler = scheduler_guard
+        .as_mut()
         .unwrap_or_else(|| panic!("Ring-3 page fault with no user scheduler"));
-    let pid = scheduler.current_pid()
+    let pid = scheduler
+        .current_pid()
         .unwrap_or_else(|| panic!("Ring-3 page fault with no current PID"));
     serial_println!(
         "EXCEPTION: USER PAGE FAULT PID={} addr={:?} error={:#x} RIP={:#x}; terminating with status 139",
-        pid.0, fault_addr, frame.error_code, frame.rip
+        pid.0,
+        fault_addr,
+        frame.error_code,
+        frame.rip
     );
 
-    let next = scheduler.exit_process(pid, 139, None)
+    let next = scheduler
+        .exit_process(pid, 139, None)
         .unwrap_or_else(|| panic!("no runnable user process after PID={} page fault", pid.0));
     let (next_pid, next_context) = next;
-    let next_root = USER_ADDRESS_SPACES.lock().iter()
+    let next_root = USER_ADDRESS_SPACES
+        .lock()
+        .iter()
         .find(|space| space.pid == next_pid)
         .map(|space| space.root_frame)
         .unwrap_or_else(|| panic!("missing page-table root for PID={}", next_pid.0));
@@ -342,7 +373,8 @@ extern "C" fn page_fault_trap_rust(frame: &mut PageFaultTrapFrame) {
     frame.restore(next_context);
     serial_println!(
         "ShivaCore: user fault recovery switched to PID={} RIP={:#x}",
-        next_pid.0, next_context.iret.rip
+        next_pid.0,
+        next_context.iret.rip
     );
 }
 
