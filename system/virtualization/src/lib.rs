@@ -24,12 +24,16 @@ pub struct VmConfig {
     pub disk_mib: u64,
 }
 
+/// Last lifecycle state confirmed by a successful backend operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VmState {
     Created,
     Running,
     Paused,
     Stopped,
+    /// Reserved for a future backend-reconciliation path. The current manager
+    /// never sets this variant because an operation error alone cannot prove
+    /// that the guest entered a terminal failed state.
     Failed,
 }
 
@@ -77,6 +81,12 @@ pub enum VmError {
     Backend(String),
 }
 
+/// Backend operations must report errors when the requested transition cannot
+/// be confirmed. An error does not guarantee that the guest or hypervisor made
+/// no partial progress; the manager therefore retains the last confirmed
+/// lifecycle state and returns VmError::Backend. Callers must treat the actual
+/// backend state as potentially uncertain after an error and reconcile it
+/// before retrying or making destructive decisions.
 pub trait VmBackend {
     type Handle: Clone;
 
@@ -193,6 +203,8 @@ impl<B: VmBackend> VmManager<B> {
                 operation: "start",
             });
         }
+        // Update the last-confirmed state only after backend success. On error,
+        // the backend may have made partial progress; callers must reconcile.
         self.backend.start(&vm.handle).map_err(VmError::Backend)?;
         vm.state = VmState::Running;
         Ok(())
