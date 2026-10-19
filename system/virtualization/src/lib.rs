@@ -248,7 +248,7 @@ mod tests {
         VmPermissions { manage: true, start: true, pause: true, stop: true, destroy: true, inspect: true }
     }
     fn limits() -> ResourceLimits {
-        ResourceLimits { max_vms: 2, max_total_vcpus: 4, max_total_memory_mib: 3072,
+        ResourceLimits { max_vms: 2, max_total_vcpus: 4, max_total_memory_mib: 1536,
             max_total_disk_mib: 8192, host_memory_reserve_mib: 1024, host_memory_total_mib: 4096 }
     }
     fn config(name: &str) -> VmConfig {
