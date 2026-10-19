@@ -181,11 +181,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(id)
     }
 
-    pub fn start_vm(
-        &mut self,
-        id: VmId,
-        permissions: VmPermissions,
-    ) -> Result<(), VmError> {
+    pub fn start_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.start {
             return Err(VmError::PermissionDenied);
         }
@@ -202,11 +198,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
-    pub fn pause_vm(
-        &mut self,
-        id: VmId,
-        permissions: VmPermissions,
-    ) -> Result<(), VmError> {
+    pub fn pause_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.pause {
             return Err(VmError::PermissionDenied);
         }
@@ -223,11 +215,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
-    pub fn resume_vm(
-        &mut self,
-        id: VmId,
-        permissions: VmPermissions,
-    ) -> Result<(), VmError> {
+    pub fn resume_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.start {
             return Err(VmError::PermissionDenied);
         }
@@ -244,16 +232,15 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
-    pub fn stop_vm(
-        &mut self,
-        id: VmId,
-        permissions: VmPermissions,
-    ) -> Result<(), VmError> {
+    pub fn stop_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.stop {
             return Err(VmError::PermissionDenied);
         }
         let vm = self.vms.get_mut(&id).ok_or(VmError::UnknownVm(id))?;
-        if !matches!(vm.state, VmState::Running | VmState::Paused | VmState::Created) {
+        if !matches!(
+            vm.state,
+            VmState::Running | VmState::Paused | VmState::Created
+        ) {
             return Err(VmError::InvalidState {
                 id,
                 state: vm.state,
@@ -267,16 +254,15 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
-    pub fn destroy_vm(
-        &mut self,
-        id: VmId,
-        permissions: VmPermissions,
-    ) -> Result<(), VmError> {
+    pub fn destroy_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.destroy {
             return Err(VmError::PermissionDenied);
         }
         let vm = self.vms.get(&id).ok_or(VmError::UnknownVm(id))?;
-        if !matches!(vm.state, VmState::Created | VmState::Stopped | VmState::Failed) {
+        if !matches!(
+            vm.state,
+            VmState::Created | VmState::Stopped | VmState::Failed
+        ) {
             return Err(VmError::InvalidState {
                 id,
                 state: vm.state,
@@ -288,11 +274,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
-    pub fn get_vm_state(
-        &self,
-        id: VmId,
-        permissions: VmPermissions,
-    ) -> Result<VmState, VmError> {
+    pub fn get_vm_state(&self, id: VmId, permissions: VmPermissions) -> Result<VmState, VmError> {
         if !permissions.inspect {
             return Err(VmError::PermissionDenied);
         }
@@ -320,11 +302,10 @@ impl<B: VmBackend> VmManager<B> {
         })
     }
 
-    pub fn list_vms(
-        &self,
-        permissions: VmPermissions,
-    ) -> Result<Vec<VmMetrics>, VmError> {
-        if !permissions.inspect { return Err(VmError::PermissionDenied); }
+    pub fn list_vms(&self, permissions: VmPermissions) -> Result<Vec<VmMetrics>, VmError> {
+        if !permissions.inspect {
+            return Err(VmError::PermissionDenied);
+        }
         Ok(self
             .vms
             .iter()
@@ -493,7 +474,9 @@ mod tests {
     #[test]
     fn running_vm_cannot_be_destroyed_directly() {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
-        let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
+        let id = manager
+            .create_vm(config("linux-test"), permissions())
+            .unwrap();
         manager.start_vm(id, permissions()).unwrap();
         assert!(matches!(
             manager.destroy_vm(id, permissions()),
