@@ -68,7 +68,11 @@ pub enum VmError {
     InvalidConfig(&'static str),
     ResourceLimit(&'static str),
     UnknownVm(VmId),
-    InvalidState { id: VmId, state: VmState, operation: &'static str },
+    InvalidState {
+        id: VmId,
+        state: VmState,
+        operation: &'static str,
+    },
     IdExhausted,
     Backend(String),
 }
@@ -104,76 +108,155 @@ impl<B: VmBackend> VmManager<B> {
         if limits.host_memory_reserve_mib > limits.host_memory_total_mib {
             return Err(VmError::InvalidConfig("host reserve exceeds host memory"));
         }
-        Ok(Self { backend, limits, vms: BTreeMap::new(), next_id: 1 })
+        Ok(Self {
+            backend,
+            limits,
+            vms: BTreeMap::new(),
+            next_id: 1,
+        })
     }
 
-    pub fn create_vm(&mut self, config: VmConfig, permissions: VmPermissions) -> Result<VmId, VmError> {
-        if !permissions.manage { return Err(VmError::PermissionDenied); }
-        if config.name.trim().is_empty() { return Err(VmError::InvalidConfig("name must not be empty")); }
-        if config.vcpus == 0 { return Err(VmError::InvalidConfig("vcpus must be non-zero")); }
-        if config.memory_mib == 0 { return Err(VmError::InvalidConfig("memory must be non-zero")); }
-        if config.disk_mib == 0 { return Err(VmError::InvalidConfig("disk must be non-zero")); }
-        if self.vms.len() >= self.limits.max_vms { return Err(VmError::ResourceLimit("max_vms")); }
+    pub fn create_vm(
+        &mut self,
+        config: VmConfig,
+        permissions: VmPermissions,
+    ) -> Result<VmId, VmError> {
+        if !permissions.manage {
+            return Err(VmError::PermissionDenied);
+        }
+        if config.name.trim().is_empty() {
+            return Err(VmError::InvalidConfig("name must not be empty"));
+        }
+        if config.vcpus == 0 {
+            return Err(VmError::InvalidConfig("vcpus must be non-zero"));
+        }
+        if config.memory_mib == 0 {
+            return Err(VmError::InvalidConfig("memory must be non-zero"));
+        }
+        if config.disk_mib == 0 {
+            return Err(VmError::InvalidConfig("disk must be non-zero"));
+        }
+        if self.vms.len() >= self.limits.max_vms {
+            return Err(VmError::ResourceLimit("max_vms"));
+        }
 
         let (vcpus, memory, disk) = self.usage();
-        if vcpus.checked_add(u64::from(config.vcpus)).filter(|v| *v <= self.limits.max_total_vcpus).is_none() {
+        if vcpus
+            .checked_add(u64::from(config.vcpus))
+            .filter(|v| *v <= self.limits.max_total_vcpus)
+            .is_none()
+        {
             return Err(VmError::ResourceLimit("total vcpus"));
         }
-        if memory.checked_add(config.memory_mib)
+        if memory
+            .checked_add(config.memory_mib)
             .filter(|v| *v <= self.limits.max_total_memory_mib)
-            .filter(|v| v.checked_add(self.limits.host_memory_reserve_mib)
-                .is_some_and(|required| required <= self.limits.host_memory_total_mib)).is_none() {
+            .filter(|v| {
+                v.checked_add(self.limits.host_memory_reserve_mib)
+                    .is_some_and(|required| required <= self.limits.host_memory_total_mib)
+            })
+            .is_none()
+        {
             return Err(VmError::ResourceLimit("total memory / host reserve"));
         }
-        if disk.checked_add(config.disk_mib).filter(|v| *v <= self.limits.max_total_disk_mib).is_none() {
+        if disk
+            .checked_add(config.disk_mib)
+            .filter(|v| *v <= self.limits.max_total_disk_mib)
+            .is_none()
+        {
             return Err(VmError::ResourceLimit("total disk"));
         }
         let id = VmId(self.next_id);
         let next_id = self.next_id.checked_add(1).ok_or(VmError::IdExhausted)?;
         let handle = self.backend.create(&config).map_err(VmError::Backend)?;
-        self.vms.insert(id, ManagedVm { config, state: VmState::Created, handle });
+        self.vms.insert(
+            id,
+            ManagedVm {
+                config,
+                state: VmState::Created,
+                handle,
+            },
+        );
         self.next_id = next_id;
         Ok(id)
     }
 
-    pub fn start_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
-        if !permissions.start { return Err(VmError::PermissionDenied); }
+    pub fn start_vm(
+        &mut self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<(), VmError> {
+        if !permissions.start {
+            return Err(VmError::PermissionDenied);
+        }
         let vm = self.vms.get_mut(&id).ok_or(VmError::UnknownVm(id))?;
         if vm.state != VmState::Created {
-            return Err(VmError::InvalidState { id, state: vm.state, operation: "start" });
+            return Err(VmError::InvalidState {
+                id,
+                state: vm.state,
+                operation: "start",
+            });
         }
         self.backend.start(&vm.handle).map_err(VmError::Backend)?;
         vm.state = VmState::Running;
         Ok(())
     }
 
-    pub fn pause_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
-        if !permissions.pause { return Err(VmError::PermissionDenied); }
+    pub fn pause_vm(
+        &mut self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<(), VmError> {
+        if !permissions.pause {
+            return Err(VmError::PermissionDenied);
+        }
         let vm = self.vms.get_mut(&id).ok_or(VmError::UnknownVm(id))?;
         if vm.state != VmState::Running {
-            return Err(VmError::InvalidState { id, state: vm.state, operation: "pause" });
+            return Err(VmError::InvalidState {
+                id,
+                state: vm.state,
+                operation: "pause",
+            });
         }
         self.backend.pause(&vm.handle).map_err(VmError::Backend)?;
         vm.state = VmState::Paused;
         Ok(())
     }
 
-    pub fn resume_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
+    pub fn resume_vm(
+        &mut self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<(), VmError> {
         if !permissions.start { return Err(VmError::PermissionDenied); }
         let vm = self.vms.get_mut(&id).ok_or(VmError::UnknownVm(id))?;
         if vm.state != VmState::Paused {
-            return Err(VmError::InvalidState { id, state: vm.state, operation: "resume" });
+            return Err(VmError::InvalidState {
+                id,
+                state: vm.state,
+                operation: "resume",
+            });
         }
         self.backend.resume(&vm.handle).map_err(VmError::Backend)?;
         vm.state = VmState::Running;
         Ok(())
     }
 
-    pub fn stop_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
-        if !permissions.stop { return Err(VmError::PermissionDenied); }
+    pub fn stop_vm(
+        &mut self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<(), VmError> {
+        if !permissions.stop {
+            return Err(VmError::PermissionDenied);
+        }
         let vm = self.vms.get_mut(&id).ok_or(VmError::UnknownVm(id))?;
         if !matches!(vm.state, VmState::Running | VmState::Paused | VmState::Created) {
-            return Err(VmError::InvalidState { id, state: vm.state, operation: "stop" });
+            return Err(VmError::InvalidState {
+                id,
+                state: vm.state,
+                operation: "stop",
+            });
         }
         if vm.state != VmState::Created {
             self.backend.stop(&vm.handle).map_err(VmError::Backend)?;
@@ -182,45 +265,81 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
-    pub fn destroy_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
-        if !permissions.destroy { return Err(VmError::PermissionDenied); }
+    pub fn destroy_vm(
+        &mut self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<(), VmError> {
+        if !permissions.destroy {
+            return Err(VmError::PermissionDenied);
+        }
         let vm = self.vms.get(&id).ok_or(VmError::UnknownVm(id))?;
         if !matches!(vm.state, VmState::Created | VmState::Stopped | VmState::Failed) {
-            return Err(VmError::InvalidState { id, state: vm.state, operation: "destroy" });
+            return Err(VmError::InvalidState {
+                id,
+                state: vm.state,
+                operation: "destroy",
+            });
         }
         self.backend.destroy(&vm.handle).map_err(VmError::Backend)?;
         self.vms.remove(&id);
         Ok(())
     }
 
-    pub fn get_vm_state(&self, id: VmId, permissions: VmPermissions) -> Result<VmState, VmError> {
-        if !permissions.inspect { return Err(VmError::PermissionDenied); }
+    pub fn get_vm_state(
+        &self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<VmState, VmError> {
+        if !permissions.inspect {
+            return Err(VmError::PermissionDenied);
+        }
         self.vms.get(&id).map(|vm| vm.state).ok_or(VmError::UnknownVm(id))
     }
 
-    pub fn get_vm_metrics(&self, id: VmId, permissions: VmPermissions) -> Result<VmMetrics, VmError> {
+    pub fn get_vm_metrics(
+        &self,
+        id: VmId,
+        permissions: VmPermissions,
+    ) -> Result<VmMetrics, VmError> {
         if !permissions.inspect { return Err(VmError::PermissionDenied); }
         let vm = self.vms.get(&id).ok_or(VmError::UnknownVm(id))?;
-        Ok(VmMetrics { id, state: vm.state, vcpus: vm.config.vcpus,
-            memory_mib: vm.config.memory_mib, disk_mib: vm.config.disk_mib })
+        Ok(VmMetrics {
+            id,
+            state: vm.state,
+            vcpus: vm.config.vcpus,
+            memory_mib: vm.config.memory_mib,
+            disk_mib: vm.config.disk_mib,
+        })
     }
 
     pub fn list_vms(&self, permissions: VmPermissions) -> Result<Vec<VmMetrics>, VmError> {
         if !permissions.inspect { return Err(VmError::PermissionDenied); }
-        Ok(self.vms.iter().map(|(id, vm)| VmMetrics {
-            id: *id, state: vm.state, vcpus: vm.config.vcpus,
-            memory_mib: vm.config.memory_mib, disk_mib: vm.config.disk_mib
-        }).collect())
+        Ok(self
+            .vms
+            .iter()
+            .map(|(id, vm)| VmMetrics {
+                id: *id,
+                state: vm.state,
+                vcpus: vm.config.vcpus,
+                memory_mib: vm.config.memory_mib,
+                disk_mib: vm.config.disk_mib,
+            })
+            .collect())
     }
 
     pub fn into_backend(self) -> B { self.backend }
 
     fn usage(&self) -> (u64, u64, u64) {
-        self.vms.values().fold((0u64, 0u64, 0u64), |(cpu, mem, disk), vm| {
-            (cpu.saturating_add(u64::from(vm.config.vcpus)),
-             mem.saturating_add(vm.config.memory_mib),
-             disk.saturating_add(vm.config.disk_mib))
-        })
+        self.vms
+            .values()
+            .fold((0u64, 0u64, 0u64), |(cpu, mem, disk), vm| {
+                (
+                    cpu.saturating_add(u64::from(vm.config.vcpus)),
+                    mem.saturating_add(vm.config.memory_mib),
+                    disk.saturating_add(vm.config.disk_mib),
+                )
+            })
     }
 }
 
@@ -229,45 +348,92 @@ mod tests {
     use super::*;
 
     #[derive(Default)]
-    struct FakeBackend { next: u64, fail_start: bool, destroyed: usize }
+    struct FakeBackend {
+        next: u64,
+        fail_start: bool,
+        destroyed: usize,
+    }
     impl VmBackend for FakeBackend {
         type Handle = u64;
         fn create(&mut self, _: &VmConfig) -> Result<u64, String> {
-            self.next += 1; Ok(self.next)
+            self.next += 1;
+            Ok(self.next)
         }
         fn start(&mut self, _: &u64) -> Result<(), String> {
-            if self.fail_start { Err("injected start failure".into()) } else { Ok(()) }
+            if self.fail_start {
+                Err("injected start failure".into())
+            } else {
+                Ok(())
+            }
         }
-        fn pause(&mut self, _: &u64) -> Result<(), String> { Ok(()) }
-        fn resume(&mut self, _: &u64) -> Result<(), String> { Ok(()) }
-        fn stop(&mut self, _: &u64) -> Result<(), String> { Ok(()) }
-        fn destroy(&mut self, _: &u64) -> Result<(), String> { self.destroyed += 1; Ok(()) }
+        fn pause(&mut self, _: &u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn resume(&mut self, _: &u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn stop(&mut self, _: &u64) -> Result<(), String> {
+            Ok(())
+        }
+        fn destroy(&mut self, _: &u64) -> Result<(), String> {
+            self.destroyed += 1;
+            Ok(())
+        }
     }
 
     fn permissions() -> VmPermissions {
-        VmPermissions { manage: true, start: true, pause: true, stop: true, destroy: true, inspect: true }
+        VmPermissions {
+            manage: true,
+            start: true,
+            pause: true,
+            stop: true,
+            destroy: true,
+            inspect: true,
+        }
     }
     fn limits() -> ResourceLimits {
-        ResourceLimits { max_vms: 2, max_total_vcpus: 4, max_total_memory_mib: 1536,
-            max_total_disk_mib: 8192, host_memory_reserve_mib: 1024, host_memory_total_mib: 4096 }
+        ResourceLimits {
+            max_vms: 2,
+            max_total_vcpus: 4,
+            max_total_memory_mib: 1536,
+            max_total_disk_mib: 8192,
+            host_memory_reserve_mib: 1024,
+            host_memory_total_mib: 4096,
+        }
     }
     fn config(name: &str) -> VmConfig {
-        VmConfig { name: name.into(), guest: GuestProfile::LinuxX86_64, vcpus: 2,
-            memory_mib: 1024, disk_mib: 4096 }
+        VmConfig {
+            name: name.into(),
+            guest: GuestProfile::LinuxX86_64,
+            vcpus: 2,
+            memory_mib: 1024,
+            disk_mib: 4096,
+        }
     }
 
     #[test]
     fn lifecycle_transitions_are_enforced() {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
-        let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
-        assert_eq!(manager.get_vm_state(id, permissions()), Ok(VmState::Created));
+        let id = manager
+            .create_vm(config("linux-test"), permissions())
+            .unwrap();
+        assert_eq!(
+            manager.get_vm_state(id, permissions()),
+            Ok(VmState::Created)
+        );
         manager.start_vm(id, permissions()).unwrap();
-        assert_eq!(manager.get_vm_state(id, permissions()), Ok(VmState::Running));
+        assert_eq!(
+            manager.get_vm_state(id, permissions()),
+            Ok(VmState::Running)
+        );
         manager.pause_vm(id, permissions()).unwrap();
         assert_eq!(manager.get_vm_state(id, permissions()), Ok(VmState::Paused));
         manager.resume_vm(id, permissions()).unwrap();
         manager.stop_vm(id, permissions()).unwrap();
-        assert_eq!(manager.get_vm_state(id, permissions()), Ok(VmState::Stopped));
+        assert_eq!(
+            manager.get_vm_state(id, permissions()),
+            Ok(VmState::Stopped)
+        );
         manager.destroy_vm(id, permissions()).unwrap();
         assert_eq!(manager.list_vms(permissions()).unwrap().len(), 0);
     }
@@ -275,8 +441,12 @@ mod tests {
     #[test]
     fn denied_create_does_not_allocate_vm() {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
-        let mut denied = permissions(); denied.manage = false;
-        assert_eq!(manager.create_vm(config("denied"), denied), Err(VmError::PermissionDenied));
+        let mut denied = permissions();
+        denied.manage = false;
+        assert_eq!(
+            manager.create_vm(config("denied"), denied),
+            Err(VmError::PermissionDenied)
+        );
         assert!(manager.list_vms(permissions()).unwrap().is_empty());
     }
 
@@ -284,16 +454,26 @@ mod tests {
     fn resource_limits_reject_overcommit() {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
         manager.create_vm(config("first"), permissions()).unwrap();
-        assert_eq!(manager.create_vm(config("second"), permissions()), Err(VmError::ResourceLimit("total memory / host reserve")));
+        assert_eq!(
+            manager.create_vm(config("second"), permissions()),
+            Err(VmError::ResourceLimit("total memory / host reserve"))
+        );
     }
 
     #[test]
     fn failed_backend_start_keeps_created_state() {
-        let mut backend = FakeBackend::default(); backend.fail_start = true;
+        let mut backend = FakeBackend::default();
+        backend.fail_start = true;
         let mut manager = VmManager::new(backend, limits()).unwrap();
         let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
-        assert_eq!(manager.start_vm(id, permissions()), Err(VmError::Backend("injected start failure".into())));
-        assert_eq!(manager.get_vm_state(id, permissions()), Ok(VmState::Created));
+        assert_eq!(
+            manager.start_vm(id, permissions()),
+            Err(VmError::Backend("injected start failure".into()))
+        );
+        assert_eq!(
+            manager.get_vm_state(id, permissions()),
+            Ok(VmState::Created)
+        );
     }
 
     #[test]
@@ -301,13 +481,22 @@ mod tests {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
         let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
         manager.start_vm(id, permissions()).unwrap();
-        assert!(matches!(manager.destroy_vm(id, permissions()), Err(VmError::InvalidState { operation: "destroy", .. })));
+        assert!(matches!(
+            manager.destroy_vm(id, permissions()),
+            Err(VmError::InvalidState {
+                operation: "destroy",
+                ..
+            })
+        ));
     }
 
     #[test]
     fn inspect_requires_permission() {
         let mut manager = VmManager::new(FakeBackend::default(), limits()).unwrap();
         let id = manager.create_vm(config("linux-test"), permissions()).unwrap();
-        assert_eq!(manager.get_vm_state(id, VmPermissions::default()), Err(VmError::PermissionDenied));
+        assert_eq!(
+            manager.get_vm_state(id, VmPermissions::default()),
+            Err(VmError::PermissionDenied)
+        );
     }
 }
