@@ -155,7 +155,7 @@ extern "x86-interrupt" fn double_fault_handler(
 extern "x86-interrupt" fn page_fault_handler(
     stack_frame: InterruptStackFrame,
     error_code: PageFaultErrorCode,
-) -> ! {
+) {
     use x86_64::registers::control::Cr2;
 
     let fault_addr = Cr2::read();
@@ -167,7 +167,10 @@ extern "x86-interrupt" fn page_fault_handler(
     // Do not return to the faulting instruction. Until the kernel has a tested
     // per-process fault/termination path, returning here can repeat the fault
     // indefinitely and leave the system in an undefined recovery loop.
-    panic!("fatal page fault at {:?} (error code: {:?})", fault_addr, error_code);
+    panic!(
+        "fatal page fault at {:?} (error code: {:?})",
+        fault_addr, error_code
+    );
 }
 
 #[repr(C)]
