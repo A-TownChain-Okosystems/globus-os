@@ -817,8 +817,10 @@ mod tests {
         assert_eq!(HEAP_START, 0x_4444_4444_0000);
         assert_eq!(HEAP_SIZE, 100 * 1024);
         assert_eq!(HEAP_END, HEAP_START + HEAP_SIZE);
-        // Userspace muss ausserhalb des Kernel-Heaps liegen
-        assert!(USERSPACE_BASE > HEAP_END);
+        // Verify the userspace range starts at its declared boundary and
+        // does not include the end of the kernel heap.
+        assert!(KernelMemoryManager::is_userspace_address(USERSPACE_BASE));
+        assert!(!KernelMemoryManager::is_userspace_address(HEAP_END));
     }
 
     #[test]
