@@ -1748,212 +1748,212 @@ impl ModuleBuilder {
 pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
     vec![
         ModuleBuilder::new("kalloc", "1.0.0")
-                    .description("Kernel slab/page allocator")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Core)
-                    .provides(&["kmalloc", "kfree"])
-                    .export("kmalloc", SymbolType::Function)
-                    .export("kfree", SymbolType::Function)
-                    .param(
-                        "slab_size",
-                        ParamType::Uint,
-                        "4096",
-                        "Default slab size in bytes",
-                    )
-                    .param(
-                        "debug",
-                        ParamType::Bool,
-                        "false",
-                        "Enable debug allocations",
-                    )
-                    .auto_load()
-                    .build(),
+            .description("Kernel slab/page allocator")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Core)
+            .provides(&["kmalloc", "kfree"])
+            .export("kmalloc", SymbolType::Function)
+            .export("kfree", SymbolType::Function)
+            .param(
+                "slab_size",
+                ParamType::Uint,
+                "4096",
+                "Default slab size in bytes",
+            )
+            .param(
+                "debug",
+                ParamType::Bool,
+                "false",
+                "Enable debug allocations",
+            )
+            .auto_load()
+            .build(),
         ModuleBuilder::new("ksched", "1.0.0")
-                    .description("Kernel process scheduler (CFS)")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Core)
-                    .depends_on(&["kalloc"])
-                    .provides(&["schedule", "wake_up"])
-                    .export("schedule", SymbolType::Function)
-                    .export("wake_up", SymbolType::Function)
-                    .param(
-                        "timeslice_us",
-                        ParamType::Uint,
-                        "1000",
-                        "Scheduler timeslice in microseconds",
-                    )
-                    .param(
-                        "min_granularity",
-                        ParamType::Uint,
-                        "100",
-                        "Minimum granularity",
-                    )
-                    .auto_load()
-                    .build(),
+            .description("Kernel process scheduler (CFS)")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Core)
+            .depends_on(&["kalloc"])
+            .provides(&["schedule", "wake_up"])
+            .export("schedule", SymbolType::Function)
+            .export("wake_up", SymbolType::Function)
+            .param(
+                "timeslice_us",
+                ParamType::Uint,
+                "1000",
+                "Scheduler timeslice in microseconds",
+            )
+            .param(
+                "min_granularity",
+                ParamType::Uint,
+                "100",
+                "Minimum granularity",
+            )
+            .auto_load()
+            .build(),
         ModuleBuilder::new("blkdev", "1.0.0")
-                    .description("Block device layer with caching")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Driver)
-                    .depends_on(&["kalloc"])
-                    .provides(&["block_read", "block_write"])
-                    .export("block_read", SymbolType::Function)
-                    .export("block_write", SymbolType::Function)
-                    .param(
-                        "cache_size",
-                        ParamType::Uint,
-                        "256",
-                        "Block cache size in blocks",
-                    )
-                    .param(
-                        "writeback",
-                        ParamType::Bool,
-                        "false",
-                        "Enable writeback caching",
-                    )
-                    .auto_load()
-                    .build(),
+            .description("Block device layer with caching")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Driver)
+            .depends_on(&["kalloc"])
+            .provides(&["block_read", "block_write"])
+            .export("block_read", SymbolType::Function)
+            .export("block_write", SymbolType::Function)
+            .param(
+                "cache_size",
+                ParamType::Uint,
+                "256",
+                "Block cache size in blocks",
+            )
+            .param(
+                "writeback",
+                ParamType::Bool,
+                "false",
+                "Enable writeback caching",
+            )
+            .auto_load()
+            .build(),
         ModuleBuilder::new("netdev", "1.0.0")
-                    .description("Network device driver framework")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Driver)
-                    .depends_on(&["kalloc"])
-                    .provides(&["net_send", "net_recv"])
-                    .export("net_send", SymbolType::Function)
-                    .export("net_recv", SymbolType::Function)
-                    .param("mtu", ParamType::Uint, "1500", "Maximum transmission unit")
-                    .param("rx_queue_len", ParamType::Uint, "1000", "RX queue length")
-                    .auto_load()
-                    .build(),
+            .description("Network device driver framework")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Driver)
+            .depends_on(&["kalloc"])
+            .provides(&["net_send", "net_recv"])
+            .export("net_send", SymbolType::Function)
+            .export("net_recv", SymbolType::Function)
+            .param("mtu", ParamType::Uint, "1500", "Maximum transmission unit")
+            .param("rx_queue_len", ParamType::Uint, "1000", "RX queue length")
+            .auto_load()
+            .build(),
         ModuleBuilder::new("atcfs", "1.0.0")
-                    .description("A-TownChain filesystem")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::FileSystem)
-                    .depends_on(&["kalloc", "blkdev"])
-                    .provides(&["atcfs_mount", "atcfs_open", "atcfs_read"])
-                    .export("atcfs_mount", SymbolType::Function)
-                    .export("atcfs_open", SymbolType::Function)
-                    .export("atcfs_read", SymbolType::Function)
-                    .param(
-                        "block_size",
-                        ParamType::Uint,
-                        "4096",
-                        "Filesystem block size",
-                    )
-                    .param("journal", ParamType::Bool, "true", "Enable journaling")
-                    .auto_load()
-                    .build(),
+            .description("A-TownChain filesystem")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::FileSystem)
+            .depends_on(&["kalloc", "blkdev"])
+            .provides(&["atcfs_mount", "atcfs_open", "atcfs_read"])
+            .export("atcfs_mount", SymbolType::Function)
+            .export("atcfs_open", SymbolType::Function)
+            .export("atcfs_read", SymbolType::Function)
+            .param(
+                "block_size",
+                ParamType::Uint,
+                "4096",
+                "Filesystem block size",
+            )
+            .param("journal", ParamType::Bool, "true", "Enable journaling")
+            .auto_load()
+            .build(),
         ModuleBuilder::new("tcpip", "1.0.0")
-                    .description("TCP/IP protocol stack")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Network)
-                    .depends_on(&["kalloc", "netdev"])
-                    .provides(&["tcp_connect", "tcp_send", "udp_send"])
-                    .export("tcp_connect", SymbolType::Function)
-                    .export("tcp_send", SymbolType::Function)
-                    .export("udp_send", SymbolType::Function)
-                    .param("tcp_window", ParamType::Uint, "65535", "TCP window size")
-                    .param(
-                        "tcp_keepalive",
-                        ParamType::Bool,
-                        "true",
-                        "Enable TCP keepalive",
-                    )
-                    .param(
-                        "max_connections",
-                        ParamType::Uint,
-                        "10000",
-                        "Max concurrent connections",
-                    )
-                    .auto_load()
-                    .build(),
+            .description("TCP/IP protocol stack")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Network)
+            .depends_on(&["kalloc", "netdev"])
+            .provides(&["tcp_connect", "tcp_send", "udp_send"])
+            .export("tcp_connect", SymbolType::Function)
+            .export("tcp_send", SymbolType::Function)
+            .export("udp_send", SymbolType::Function)
+            .param("tcp_window", ParamType::Uint, "65535", "TCP window size")
+            .param(
+                "tcp_keepalive",
+                ParamType::Bool,
+                "true",
+                "Enable TCP keepalive",
+            )
+            .param(
+                "max_connections",
+                ParamType::Uint,
+                "10000",
+                "Max concurrent connections",
+            )
+            .auto_load()
+            .build(),
         ModuleBuilder::new("cap", "1.0.0")
-                    .description("Capability-based security module")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Security)
-                    .depends_on(&["kalloc"])
-                    .provides(&["cap_check", "cap_grant", "cap_revoke"])
-                    .export("cap_check", SymbolType::Function)
-                    .export("cap_grant", SymbolType::Function)
-                    .export("cap_revoke", SymbolType::Function)
-                    .param(
-                        "strict_mode",
-                        ParamType::Bool,
-                        "true",
-                        "Enforce strict capability checks",
-                    )
-                    .param(
-                        "audit",
-                        ParamType::Bool,
-                        "true",
-                        "Enable capability audit log",
-                    )
-                    .auto_load()
-                    .build(),
+            .description("Capability-based security module")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Security)
+            .depends_on(&["kalloc"])
+            .provides(&["cap_check", "cap_grant", "cap_revoke"])
+            .export("cap_check", SymbolType::Function)
+            .export("cap_grant", SymbolType::Function)
+            .export("cap_revoke", SymbolType::Function)
+            .param(
+                "strict_mode",
+                ParamType::Bool,
+                "true",
+                "Enforce strict capability checks",
+            )
+            .param(
+                "audit",
+                ParamType::Bool,
+                "true",
+                "Enable capability audit log",
+            )
+            .auto_load()
+            .build(),
         ModuleBuilder::new("kaudit", "1.0.0")
-                    .description("Kernel security audit log")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Security)
-                    .depends_on(&["kalloc"])
-                    .optional_depends_on(&["cap"])
-                    .provides(&["audit_log", "audit_query"])
-                    .export("audit_log", SymbolType::Function)
-                    .export("audit_query", SymbolType::Function)
-                    .param(
-                        "log_size",
-                        ParamType::Uint,
-                        "10000",
-                        "Max audit log entries",
-                    )
-                    .param("log_syscalls", ParamType::Bool, "true", "Log system calls")
-                    .auto_load()
-                    .build(),
+            .description("Kernel security audit log")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Security)
+            .depends_on(&["kalloc"])
+            .optional_depends_on(&["cap"])
+            .provides(&["audit_log", "audit_query"])
+            .export("audit_log", SymbolType::Function)
+            .export("audit_query", SymbolType::Function)
+            .param(
+                "log_size",
+                ParamType::Uint,
+                "10000",
+                "Max audit log entries",
+            )
+            .param("log_syscalls", ParamType::Bool, "true", "Log system calls")
+            .auto_load()
+            .build(),
         ModuleBuilder::new("ktrace", "1.0.0")
-                    .description("Kernel function/syscall tracing")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Utility)
-                    .depends_on(&["kalloc"])
-                    .provides(&["trace_enable", "trace_disable"])
-                    .export("trace_enable", SymbolType::Function)
-                    .export("trace_disable", SymbolType::Function)
-                    .param(
-                        "buffer_size",
-                        ParamType::Uint,
-                        "4096",
-                        "Trace buffer size in events",
-                    )
-                    .param("filter", ParamType::String, "*", "Trace filter pattern")
-                    .build(),
+            .description("Kernel function/syscall tracing")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Utility)
+            .depends_on(&["kalloc"])
+            .provides(&["trace_enable", "trace_disable"])
+            .export("trace_enable", SymbolType::Function)
+            .export("trace_disable", SymbolType::Function)
+            .param(
+                "buffer_size",
+                ParamType::Uint,
+                "4096",
+                "Trace buffer size in events",
+            )
+            .param("filter", ParamType::String, "*", "Trace filter pattern")
+            .build(),
         ModuleBuilder::new("kcontainer", "1.0.0")
-                    .description("Container isolation and runtime")
-                    .author("ShivaCore")
-                    .license(ModuleLicense::Gpl)
-                    .priority(ModulePriority::Utility)
-                    .depends_on(&["kalloc", "ksched", "cap"])
-                    .provides(&["container_create", "container_destroy"])
-                    .export("container_create", SymbolType::Function)
-                    .export("container_destroy", SymbolType::Function)
-                    .param(
-                        "max_containers",
-                        ParamType::Uint,
-                        "100",
-                        "Maximum containers",
-                    )
-                    .param(
-                        "namespace_types",
-                        ParamType::List,
-                        "pid,mount,net,ipc,uts",
-                        "Namespace types to isolate",
-                    )
-                    .build(),
+            .description("Container isolation and runtime")
+            .author("ShivaCore")
+            .license(ModuleLicense::Gpl)
+            .priority(ModulePriority::Utility)
+            .depends_on(&["kalloc", "ksched", "cap"])
+            .provides(&["container_create", "container_destroy"])
+            .export("container_create", SymbolType::Function)
+            .export("container_destroy", SymbolType::Function)
+            .param(
+                "max_containers",
+                ParamType::Uint,
+                "100",
+                "Maximum containers",
+            )
+            .param(
+                "namespace_types",
+                ParamType::List,
+                "pid,mount,net,ipc,uts",
+                "Namespace types to isolate",
+            )
+            .build(),
     ]
 }
 
