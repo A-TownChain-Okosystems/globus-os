@@ -273,7 +273,7 @@ impl ExportedSymbol {
 // MODULE STATISTICS
 // ══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct ModuleStats {
     pub load_count: u64,
     pub unload_count: u64,
@@ -286,24 +286,6 @@ pub struct ModuleStats {
     pub memory_used: u64,
     pub symbols_exported: usize,
     pub symbols_imported: usize,
-}
-
-impl Default for ModuleStats {
-    fn default() -> Self {
-        ModuleStats {
-            load_count: 0,
-            unload_count: 0,
-            init_time_us: 0,
-            exit_time_us: 0,
-            last_load_timestamp: 0,
-            last_unload_timestamp: 0,
-            error_count: 0,
-            last_error: None,
-            memory_used: 0,
-            symbols_exported: 0,
-            symbols_imported: 0,
-        }
-    }
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -583,7 +565,7 @@ impl ModuleEventType {
 // DEPENDENCY GRAPH
 // ══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct DependencyGraph {
     nodes: BTreeSet<String>,
     /// Nodes the graph vouches for: explicitly added via add_node or
@@ -592,17 +574,6 @@ pub struct DependencyGraph {
     declared: BTreeSet<String>,
     edges: HashMap<String, BTreeSet<String>>, // module -> set of dependencies
     reverse_edges: HashMap<String, BTreeSet<String>>, // module -> set of dependents
-}
-
-impl Default for DependencyGraph {
-    fn default() -> Self {
-        DependencyGraph {
-            nodes: BTreeSet::new(),
-            declared: BTreeSet::new(),
-            edges: HashMap::new(),
-            reverse_edges: HashMap::new(),
-        }
-    }
 }
 
 impl DependencyGraph {
@@ -840,19 +811,10 @@ impl DependencyGraph {
 // SYMBOL TABLE
 // ══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct SymbolTable {
     symbols: HashMap<String, ExportedSymbol>,
     by_module: HashMap<u64, Vec<String>>,
-}
-
-impl Default for SymbolTable {
-    fn default() -> Self {
-        SymbolTable {
-            symbols: HashMap::new(),
-            by_module: HashMap::new(),
-        }
-    }
 }
 
 impl SymbolTable {
@@ -1130,14 +1092,13 @@ impl ModuleRegistry {
             (module.id, module.name.clone())
         };
 
-        let load_order = self.dep_graph.load_order(&module_name).map_err(|e| {
+        let load_order = self.dep_graph.load_order(&module_name).inspect_err(|e| {
             self.log_event(
                 ModuleEventType::DependencyMissing,
                 &module_name,
                 module_id,
-                &e,
+                e,
             );
-            e
         })?;
 
         for dep_name in &load_order {
@@ -1199,7 +1160,6 @@ impl ModuleRegistry {
             module.state = ModuleState::Failed;
             module.stats.error_count += 1;
             module.stats.last_error = Some(message.clone());
-            drop(module);
             self.log_event(
                 ModuleEventType::SymbolUnresolved,
                 &module_name,
@@ -1507,7 +1467,7 @@ impl ModuleRegistry {
             .values()
             .filter(|m| m.state.is_active())
             .collect();
-        mods.sort_by(|a, b| a.load_order.cmp(&b.load_order));
+        mods.sort_by_key(|m| m.load_order);
         mods
     }
 
@@ -1784,7 +1744,7 @@ impl ModuleBuilder {
 // ══════════════════════════════════════════════════════════════════════════════
 
 pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
-    let mut modules = Vec::new();
+    let mut modules = Vec::with_capacity(10);
 
     // Core: Memory Allocator
     modules.push(
