@@ -7,7 +7,9 @@ pub struct BootInfo {
 }
 
 impl Default for BootInfo {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BootInfo {
