@@ -1380,12 +1380,13 @@ mod tests {
             )
             .unwrap();
 
-        let mut mapper = HardwareMapper::new(pml4, &mut backend);
-        assert_eq!(
-            mapper.unmap_page(USER_SPACE_BASE),
-            Err(VmmError::HugePageNotSupported)
-        );
-        drop(mapper);
+        {
+            let mut mapper = HardwareMapper::new(pml4, &mut backend);
+            assert_eq!(
+                mapper.unmap_page(USER_SPACE_BASE),
+                Err(VmmError::HugePageNotSupported)
+            );
+        }
         assert_eq!(
             backend.outstanding, 0,
             "kein Frame darf freigegeben worden sein"
