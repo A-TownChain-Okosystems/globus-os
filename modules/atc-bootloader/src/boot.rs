@@ -5,7 +5,9 @@ pub struct BootSequence {
 }
 
 impl Default for BootSequence {
-    fn default() -> Self { Self::new() }
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl BootSequence {
