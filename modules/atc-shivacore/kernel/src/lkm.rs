@@ -1768,7 +1768,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "Enable debug allocations",
                     )
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("ksched", "1.0.0")
                     .description("Kernel process scheduler (CFS)")
                     .author("ShivaCore")
@@ -1791,7 +1791,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "Minimum granularity",
                     )
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("blkdev", "1.0.0")
                     .description("Block device layer with caching")
                     .author("ShivaCore")
@@ -1814,7 +1814,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "Enable writeback caching",
                     )
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("netdev", "1.0.0")
                     .description("Network device driver framework")
                     .author("ShivaCore")
@@ -1827,7 +1827,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                     .param("mtu", ParamType::Uint, "1500", "Maximum transmission unit")
                     .param("rx_queue_len", ParamType::Uint, "1000", "RX queue length")
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("atcfs", "1.0.0")
                     .description("A-TownChain filesystem")
                     .author("ShivaCore")
@@ -1846,7 +1846,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                     )
                     .param("journal", ParamType::Bool, "true", "Enable journaling")
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("tcpip", "1.0.0")
                     .description("TCP/IP protocol stack")
                     .author("ShivaCore")
@@ -1871,7 +1871,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "Max concurrent connections",
                     )
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("cap", "1.0.0")
                     .description("Capability-based security module")
                     .author("ShivaCore")
@@ -1895,7 +1895,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "Enable capability audit log",
                     )
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("kaudit", "1.0.0")
                     .description("Kernel security audit log")
                     .author("ShivaCore")
@@ -1914,7 +1914,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                     )
                     .param("log_syscalls", ParamType::Bool, "true", "Log system calls")
                     .auto_load()
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("ktrace", "1.0.0")
                     .description("Kernel function/syscall tracing")
                     .author("ShivaCore")
@@ -1931,7 +1931,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "Trace buffer size in events",
                     )
                     .param("filter", ParamType::String, "*", "Trace filter pattern")
-                    .build(),,
+                    .build(),
         ModuleBuilder::new("kcontainer", "1.0.0")
                     .description("Container isolation and runtime")
                     .author("ShivaCore")
@@ -1953,7 +1953,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                         "pid,mount,net,ipc,uts",
                         "Namespace types to isolate",
                     )
-                    .build(),,
+                    .build(),
     ]
 }
 
