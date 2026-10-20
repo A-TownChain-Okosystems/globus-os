@@ -10,7 +10,7 @@ This catalog defines the functions that must be independently evidenced. It is *
 
 Each function must be tracked independently:
 
-`SPECIFIED -> DOCUMENTED -> IMPLEMENTED -> TESTED -> CI-VERIFIED -> E2E-VERIFIED -> AUDITED -> RELEASE-READY`
+`UNASSESSED -> SPECIFIED -> DOCUMENTED -> IMPLEMENTED -> TESTED -> CI-VERIFIED -> E2E-VERIFIED -> AUDITED -> RELEASE-READY`
 
 A source file, type, module, or directory alone does not prove implementation or verification.
 
