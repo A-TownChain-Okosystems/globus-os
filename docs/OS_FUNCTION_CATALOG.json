@@ -6,6 +6,7 @@
   "source_branch": "main",
   "generated_date": "2026-09-27",
   "status_model": [
+    "UNASSESSED",
     "SPECIFIED",
     "DOCUMENTED",
     "IMPLEMENTED",
