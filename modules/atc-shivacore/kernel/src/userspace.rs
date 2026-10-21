@@ -333,9 +333,7 @@ pub unsafe fn map_user_binary(
             physical_memory_offset,
             addr_space.data_base,
             data_pages * 0x1000,
-            PageTableFlags::USER_ACCESSIBLE
-                | PageTableFlags::WRITABLE
-                | PageTableFlags::NO_EXECUTE,
+            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
         )?;
     }
 
@@ -347,9 +345,7 @@ pub unsafe fn map_user_binary(
         physical_memory_offset,
         stack_base,
         stack_pages * 0x1000,
-        PageTableFlags::USER_ACCESSIBLE
-            | PageTableFlags::WRITABLE
-            | PageTableFlags::NO_EXECUTE,
+        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE,
     )?;
 
     // Install the user image through the already active address space.
