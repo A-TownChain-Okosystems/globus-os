@@ -1962,7 +1962,6 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                 "Namespace types to isolate",
             )
             .build(),
-
     ]
 }
 
