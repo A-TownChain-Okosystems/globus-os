@@ -1929,7 +1929,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Utility: Kernel Tracing
+        // Utility: Kernel Tracing
         ModuleBuilder::new("ktrace", "1.0.0")
             .description("Kernel function/syscall tracing")
             .author("ShivaCore")
@@ -1948,7 +1948,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .param("filter", ParamType::String, "*", "Trace filter pattern")
             .build(),
 
-    // Utility: Container Runtime
+        // Utility: Container Runtime
         ModuleBuilder::new("kcontainer", "1.0.0")
             .description("Container isolation and runtime")
             .author("ShivaCore")
