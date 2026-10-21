@@ -1744,10 +1744,9 @@ impl ModuleBuilder {
 // ══════════════════════════════════════════════════════════════════════════════
 
 pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
-    let mut modules = Vec::with_capacity(10);
+    let modules = vec![
 
     // Core: Memory Allocator
-    modules.push(
         ModuleBuilder::new("kalloc", "1.0.0")
             .description("Kernel slab/page allocator")
             .author("ShivaCore")
@@ -1770,10 +1769,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .auto_load()
             .build(),
-    );
 
     // Core: Scheduler
-    modules.push(
         ModuleBuilder::new("ksched", "1.0.0")
             .description("Kernel process scheduler (CFS)")
             .author("ShivaCore")
@@ -1797,10 +1794,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .auto_load()
             .build(),
-    );
 
     // Driver: Block Device
-    modules.push(
         ModuleBuilder::new("blkdev", "1.0.0")
             .description("Block device layer with caching")
             .author("ShivaCore")
@@ -1824,10 +1819,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .auto_load()
             .build(),
-    );
 
     // Driver: Network Device
-    modules.push(
         ModuleBuilder::new("netdev", "1.0.0")
             .description("Network device driver framework")
             .author("ShivaCore")
@@ -1841,10 +1834,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .param("rx_queue_len", ParamType::Uint, "1000", "RX queue length")
             .auto_load()
             .build(),
-    );
 
     // Filesystem: ATCFS
-    modules.push(
         ModuleBuilder::new("atcfs", "1.0.0")
             .description("A-TownChain filesystem")
             .author("ShivaCore")
@@ -1864,10 +1855,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .param("journal", ParamType::Bool, "true", "Enable journaling")
             .auto_load()
             .build(),
-    );
 
     // Network: TCP/IP Stack
-    modules.push(
         ModuleBuilder::new("tcpip", "1.0.0")
             .description("TCP/IP protocol stack")
             .author("ShivaCore")
@@ -1893,10 +1882,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .auto_load()
             .build(),
-    );
 
     // Security: Capability System
-    modules.push(
         ModuleBuilder::new("cap", "1.0.0")
             .description("Capability-based security module")
             .author("ShivaCore")
@@ -1921,10 +1908,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .auto_load()
             .build(),
-    );
 
     // Security: Audit Module
-    modules.push(
         ModuleBuilder::new("kaudit", "1.0.0")
             .description("Kernel security audit log")
             .author("ShivaCore")
@@ -1944,10 +1929,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .param("log_syscalls", ParamType::Bool, "true", "Log system calls")
             .auto_load()
             .build(),
-    );
 
     // Utility: Kernel Tracing
-    modules.push(
         ModuleBuilder::new("ktrace", "1.0.0")
             .description("Kernel function/syscall tracing")
             .author("ShivaCore")
@@ -1965,10 +1948,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .param("filter", ParamType::String, "*", "Trace filter pattern")
             .build(),
-    );
 
     // Utility: Container Runtime
-    modules.push(
         ModuleBuilder::new("kcontainer", "1.0.0")
             .description("Container isolation and runtime")
             .author("ShivaCore")
@@ -1991,9 +1972,8 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
                 "Namespace types to isolate",
             )
             .build(),
-    );
 
-    modules
+    ]
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
