@@ -70,7 +70,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Generate exact-SHA test evidence
         env:
-          EVIDENCE_SHA: ${{ github.sha }}
+          EVIDENCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           EVIDENCE_RUN_ID: ${{ github.run_id }}
           EVIDENCE_WORKFLOW: ${{ github.workflow }}
           EVIDENCE_OUTPUT: ${{ runner.temp }}/atc-test-evidence.yaml
