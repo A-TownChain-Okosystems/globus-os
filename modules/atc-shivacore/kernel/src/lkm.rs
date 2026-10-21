@@ -1745,8 +1745,7 @@ impl ModuleBuilder {
 
 pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
     let modules = vec![
-
-    // Core: Memory Allocator
+        // Core: Memory Allocator
         ModuleBuilder::new("kalloc", "1.0.0")
             .description("Kernel slab/page allocator")
             .author("ShivaCore")
@@ -1770,7 +1769,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Core: Scheduler
+        // Core: Scheduler
         ModuleBuilder::new("ksched", "1.0.0")
             .description("Kernel process scheduler (CFS)")
             .author("ShivaCore")
@@ -1795,7 +1794,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Driver: Block Device
+        // Driver: Block Device
         ModuleBuilder::new("blkdev", "1.0.0")
             .description("Block device layer with caching")
             .author("ShivaCore")
@@ -1820,7 +1819,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Driver: Network Device
+        // Driver: Network Device
         ModuleBuilder::new("netdev", "1.0.0")
             .description("Network device driver framework")
             .author("ShivaCore")
@@ -1835,7 +1834,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Filesystem: ATCFS
+        // Filesystem: ATCFS
         ModuleBuilder::new("atcfs", "1.0.0")
             .description("A-TownChain filesystem")
             .author("ShivaCore")
@@ -1856,7 +1855,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Network: TCP/IP Stack
+        // Network: TCP/IP Stack
         ModuleBuilder::new("tcpip", "1.0.0")
             .description("TCP/IP protocol stack")
             .author("ShivaCore")
@@ -1883,7 +1882,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Security: Capability System
+        // Security: Capability System
         ModuleBuilder::new("cap", "1.0.0")
             .description("Capability-based security module")
             .author("ShivaCore")
@@ -1909,7 +1908,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             .auto_load()
             .build(),
 
-    // Security: Audit Module
+        // Security: Audit Module
         ModuleBuilder::new("kaudit", "1.0.0")
             .description("Kernel security audit log")
             .author("ShivaCore")
@@ -1973,7 +1972,7 @@ pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
             )
             .build(),
 
-    ]
+    ];
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
