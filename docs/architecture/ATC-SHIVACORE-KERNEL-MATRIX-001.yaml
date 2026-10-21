@@ -1,0 +1,821 @@
+matrix_id: ATC-SHIVACORE-KERNEL-MATRIX-001
+title: ShivaCore Kernel Subsystem Matrix
+version: "1.0.0"
+status: implemented
+owner: A-TownChain-Okosystems/globus-os
+source_of_truth: globus-os/modules/atc-shivacore/kernel/
+support_repository: A-TownChain-Okosystems/atc-shivacore
+support_repository_must_not_define_kernel_sot: true
+baseline_sha: e28a05542993a9be205a4df9bdd4f56137dbf390
+evidence_rule: "Architecture != Implementation != Evidence; source presence alone never establishes implementation or verification."
+status_model: [UNANALYZED, ANALYZED, FIXED, RERUNNING, VERIFIED, RESIDUAL]
+tc_domains:
+  in_tcb: [Capability Enforcement, Memory/Address-Space Isolation, Scheduling/Context Switching, IPC Authorization, Interrupt/Trap Primitives, Timer Primitives, Controlled Userspace Transition, Required Architecture HAL Mechanisms]
+  outside_tcb: [GlobusOS Services, Aurora AI, Blockchain-State, ATC-VM, ATCLang, Network Policy, Filesystem Policy, UI, Application Policy]
+evidence_fields: [id, domain, function, responsibility, input, output, state, capability, security_boundary, source, test, workflow, exact_sha, run, job, step, exit_code, log, verification, residual]
+ci:
+  workflow: .github/workflows/shivacore-kernel.yml
+  gates: [Exact-SHA, Rust nightly x86_64 build, BIOS/UEFI image, QEMU, Intel Skylake, AMD EPYC, CPU/HAL, Ring-3, Scheduler preemption, Register checkpoints, KernelState::boot(), Artifacts/Logs]
+  exact_sha_required: true
+  verification_requires_function_level_evidence: true
+entries:
+  - id: KRN-001
+    domain: "Boot"
+    function: "Kernel Entry"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Boot → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-002
+    domain: "Boot"
+    function: "Boot Handoff Parsing"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Boot → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-003
+    domain: "Boot"
+    function: "Memory Map Initialization"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Boot → Memory"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-004
+    domain: "Boot"
+    function: "KernelState::boot()"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Entry → Kernel Init"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-005
+    domain: "CPU/HAL"
+    function: "CPU Detection"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "HAL → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-006
+    domain: "CPU/HAL"
+    function: "CPU Initialization"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "HAL → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-007
+    domain: "CPU/HAL"
+    function: "Architecture Context"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "HAL → Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-008
+    domain: "CPU/HAL"
+    function: "Architecture Isolation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "HAL → TCB"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-009
+    domain: "Memory"
+    function: "Physical Memory Management"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → Memory"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-010
+    domain: "Memory"
+    function: "Virtual Memory"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → Address Space"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-011
+    domain: "Memory"
+    function: "Page Table Management"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "MMU → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-012
+    domain: "Memory"
+    function: "Kernel Heap"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → Allocator"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-013
+    domain: "Memory"
+    function: "User/Kernel Isolation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Memory → Security"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-014
+    domain: "Capability"
+    function: "Capability Object Model"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Caller → TCB"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-015
+    domain: "Capability"
+    function: "Capability Validation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Syscall → TCB"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-016
+    domain: "Capability"
+    function: "Handle Validation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "ABI → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-017
+    domain: "Capability"
+    function: "Authority Isolation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Capability → Object"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-018
+    domain: "Scheduler"
+    function: "Thread Creation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-019
+    domain: "Scheduler"
+    function: "Thread State"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Scheduler → Context"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-020
+    domain: "Scheduler"
+    function: "Scheduling Queue"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-021
+    domain: "Scheduler"
+    function: "Context Switching"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "CPU → Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-022
+    domain: "Scheduler"
+    function: "Preemption"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Timer → Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-023
+    domain: "IPC"
+    function: "Endpoint Creation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Capability → IPC"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-024
+    domain: "IPC"
+    function: "Message Send"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "User → Kernel → IPC"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-025
+    domain: "IPC"
+    function: "Message Receive"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "IPC → User"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-026
+    domain: "IPC"
+    function: "IPC Capability Check"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "IPC → Security"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-027
+    domain: "IPC"
+    function: "IPC Isolation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "IPC → Address Space"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-028
+    domain: "Interrupt"
+    function: "Interrupt Entry"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Hardware → HAL"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-029
+    domain: "Interrupt"
+    function: "Interrupt Dispatch"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "HAL → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-030
+    domain: "Timer"
+    function: "Monotonic Timer"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "HAL → Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-031
+    domain: "Timer"
+    function: "Timer Interrupt"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Hardware → Scheduler"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-032
+    domain: "Fault"
+    function: "Trap Handling"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "CPU → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-033
+    domain: "Fault"
+    function: "Kernel Fault Isolation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Fault → TCB"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-034
+    domain: "Fault"
+    function: "Kernel Panic Policy"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → Halt/Recovery"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-035
+    domain: "Userspace"
+    function: "User Address Space Creation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → User"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-036
+    domain: "Userspace"
+    function: "Ring-3 Transition"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → User"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-037
+    domain: "ABI"
+    function: "Syscall Entry"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "User → Kernel"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-038
+    domain: "ABI"
+    function: "Syscall Argument Validation"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "ABI → TCB"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-039
+    domain: "ABI"
+    function: "Syscall Result/Error Contract"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel → User"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
+  - id: KRN-040
+    domain: "ABI"
+    function: "ABI Version Boundary"
+    responsibility: "Kernel/TCB responsibility"
+    input: null
+    output: null
+    state: UNANALYZED
+    capability: null
+    security_boundary: "Kernel ↔ Userspace"
+    source: "modules/atc-shivacore/kernel/"
+    test: null
+    workflow: ".github/workflows/shivacore-kernel.yml"
+    exact_sha: null
+    run: null
+    job: null
+    step: null
+    exit_code: null
+    log: null
+    verification: UNANALYZED
+    residual: "Function-level source/test/Exact-SHA evidence not yet mapped."
