@@ -194,7 +194,7 @@ pub fn validate_mapping_target(virt: u64, flags: MappingFlags) -> Result<(), Vmm
     // A user-accessible mapping outside the user range is a privilege
     // violation even if the address is also non-canonical: the security
     // rule must dominate the address-form check.
-    if flags.user_accessible && !(virt >= USER_SPACE_BASE && virt < USER_SPACE_TOP_EXCLUSIVE) {
+    if flags.user_accessible && !(USER_SPACE_BASE..USER_SPACE_TOP_EXCLUSIVE).contains(&virt) {
         return Err(VmmError::PrivilegeViolation);
     }
 
