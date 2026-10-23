@@ -21,10 +21,18 @@ impl AmdIommu {
     pub const COMMAND_INVALIDATE_IOTLB: u32 = 1 << 3;
     pub const COMMAND_INVALIDATE_DEVICE: u32 = 1 << 2;
 
-    /// `base` must point at the kernel-mapped AMD IOMMU MMIO window.
+    /// Creates an AMD IOMMU accessor for a mapped register window.
+    ///
+    /// # Safety
+    /// `base..base + len` must be a valid kernel mapping of this AMD IOMMU's
+    /// MMIO registers, mapped with device-memory attributes for the lifetime
+    /// of this object. The mapping must be exclusive to the driver or otherwise
+    /// synchronized, and `base + len` must not overflow. The window must cover
+    /// every register accessed by this type.
     pub const unsafe fn new(base: usize, len: usize) -> Self {
+        // SAFETY: the caller contract above is forwarded to MmioWindow.
         Self {
-            regs: MmioWindow::new(base, len),
+            regs: unsafe { MmioWindow::new(base, len) },
         }
     }
 
