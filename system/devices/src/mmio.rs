@@ -9,6 +9,14 @@ pub struct MmioWindow {
 }
 
 impl MmioWindow {
+    /// Creates a window over a kernel-mapped MMIO region.
+    ///
+    /// # Safety
+    /// The caller must ensure that `base..base + len` is a valid, exclusively
+    /// managed MMIO mapping for the lifetime of every copy of this window.
+    /// The region must be mapped as device memory, permit volatile accesses of
+    /// the requested widths, and `base + len` must not overflow. Register
+    /// offsets must satisfy the device's alignment and access-width rules.
     pub const unsafe fn new(base: usize, len: usize) -> Self {
         Self { base, len }
     }
