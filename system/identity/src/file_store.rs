@@ -95,10 +95,10 @@ impl FileBlobStore {
             file.sync_all()
                 .map_err(|_| SecureStoreError::BackendUnavailable)?;
             fs::rename(&tmp, &self.path).map_err(|_| SecureStoreError::BackendUnavailable)?;
-            if let Some(parent) = self.path.parent() {
-                if let Ok(dir) = File::open(parent) {
-                    let _ = dir.sync_all();
-                }
+            if let Some(parent) = self.path.parent()
+                && let Ok(dir) = File::open(parent)
+            {
+                let _ = dir.sync_all();
             }
             Ok(())
         })();
