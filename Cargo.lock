@@ -1697,6 +1697,11 @@ dependencies = [
 [[package]]
 name = "globus-package"
 version = "0.1.0"
+dependencies = [
+ "ed25519-dalek",
+ "hex",
+ "sha2 0.10.9",
+]
 
 [[package]]
 name = "globus-process"
@@ -1749,6 +1754,12 @@ dependencies = [
 [[package]]
 name = "globus-update"
 version = "0.1.0"
+dependencies = [
+ "ed25519-dalek 3.0.0",
+ "globus-package",
+ "hex 0.4.3",
+ "sha2 0.10.9",
+]
 
 [[package]]
 name = "globus-vfs"
