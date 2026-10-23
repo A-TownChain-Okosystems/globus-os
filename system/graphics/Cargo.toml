@@ -5,6 +5,7 @@ edition.workspace = true
 license.workspace = true
 
 [dependencies]
+globus-devices = { path = "../devices" }
 globus-media = { path = "../media" }
 
 [lints]

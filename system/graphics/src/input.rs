@@ -71,12 +71,15 @@ impl InputRouter {
     pub fn new() -> Self {
         Self::default()
     }
+
     pub fn set_pointer_focus(&mut self, target: Option<SurfaceId>) {
         self.pointer_focus = target;
     }
+
     pub fn set_keyboard_focus(&mut self, target: Option<SurfaceId>) {
         self.keyboard_focus = target;
     }
+
     pub fn route(&self, event: InputEvent) -> RoutedEvent {
         let target = match event {
             InputEvent::PointerMove { .. }
@@ -86,6 +89,11 @@ impl InputRouter {
         };
         RoutedEvent { target, event }
     }
+
+    pub fn pointer_focus(&self) -> Option<SurfaceId> {
+        self.pointer_focus
+    }
+
     pub fn keyboard_focus(&self) -> Option<SurfaceId> {
         self.keyboard_focus
     }
@@ -94,6 +102,7 @@ impl InputRouter {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     #[test]
     fn keyboard_and_pointer_have_independent_targets() {
         let mut r = InputRouter::new();
@@ -112,5 +121,6 @@ mod tests {
         });
         assert_eq!(pointer.target, Some(SurfaceId(1)));
         assert_eq!(key.target, Some(SurfaceId(2)));
+        assert_eq!(r.pointer_focus(), Some(SurfaceId(1)));
     }
 }

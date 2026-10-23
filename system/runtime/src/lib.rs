@@ -97,6 +97,56 @@ pub fn devnet_genesis_config() -> GenesisConfig {
     config
 }
 
+/// A desktop session bound to a platform-validated software framebuffer.
+pub struct DesktopRuntime<'a> {
+    display: globus_graphics::display::Framebuffer<'a>,
+    pub session: globus_graphics::desktop::DesktopSession,
+    pub shell: globus_graphics::shell::DesktopShell,
+}
+
+impl DesktopRuntime<'_> {
+    /// Redraws the shell into the provided framebuffer.
+    pub fn render(&mut self) {
+        self.display
+            .render_shell(self.session.windows(), &self.shell);
+    }
+
+    pub fn viewport(&self) -> globus_graphics::desktop::DesktopViewport {
+        self.session.viewport()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DesktopStartError {
+    ServicesUnavailable,
+}
+
+/// Starts the desktop only after core services report Ready and the caller has
+/// supplied a validated framebuffer. Hardware discovery and physical mapping
+/// remain the responsibility of the platform boot/display driver.
+pub fn start_desktop<'a>(
+    runtime: &BootedRuntime,
+    display: globus_graphics::display::Framebuffer<'a>,
+) -> Result<DesktopRuntime<'a>, DesktopStartError> {
+    if runtime.status.services != ServiceState::Ready {
+        return Err(DesktopStartError::ServicesUnavailable);
+    }
+    let viewport = globus_graphics::desktop::DesktopViewport {
+        width: display.width(),
+        height: display.height(),
+    };
+    let mut session = globus_graphics::desktop::DesktopSession::new(viewport);
+    session.unlock();
+    let mut shell = globus_graphics::shell::DesktopShell::new();
+    shell.register_app("Terminal", "globus-terminal", true);
+    shell.register_app("Settings", "globus-settings", true);
+    Ok(DesktopRuntime {
+        display,
+        session,
+        shell,
+    })
+}
+
 pub fn boot_userspace() -> Result<BootedRuntime, RuntimeBootError> {
     if !validate_boot_plan() {
         return Err(RuntimeBootError::InvalidBootPlan);
