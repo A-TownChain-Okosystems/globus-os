@@ -1,10 +1,13 @@
 //! Deterministic device enumeration and driver binding registry.
 
+use std::collections::BTreeMap;
+
 use crate::{Device, DeviceClass, DeviceId};
 
 #[derive(Debug, Default)]
 pub struct DeviceRegistry {
     devices: Vec<Device>,
+    drivers: BTreeMap<DeviceId, String>,
 }
 
 impl DeviceRegistry {
@@ -20,15 +23,16 @@ impl DeviceRegistry {
         true
     }
     pub fn bind_driver(&mut self, id: DeviceId, driver: String) -> bool {
-        let Some(device) = self.devices.iter_mut().find(|d| d.id == id) else {
-            return false;
-        };
-        if driver.is_empty() {
+        if !self.devices.iter().any(|device| device.id == id) || driver.is_empty() {
             return false;
         }
-        device.driver = driver;
+        self.drivers.insert(id, driver);
         true
     }
+    pub fn driver_for(&self, id: DeviceId) -> Option<&str> {
+        self.drivers.get(&id).map(String::as_str)
+    }
+
     pub fn by_class(&self, class: DeviceClass) -> impl Iterator<Item = &Device> {
         self.devices.iter().filter(move |d| d.class == class)
     }
@@ -43,20 +47,30 @@ impl DeviceRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn device(id: u64, class: DeviceClass) -> Device {
+        Device {
+            id: DeviceId(id),
+            name: format!("device-{id}"),
+            class,
+        }
+    }
+
     #[test]
     fn registration_is_deterministic() {
         let mut r = DeviceRegistry::new();
-        assert!(r.register(Device {
-            id: DeviceId(2),
-            class: DeviceClass::Network,
-            driver: "".into()
-        }));
-        assert!(r.register(Device {
-            id: DeviceId(1),
-            class: DeviceClass::Storage,
-            driver: "".into()
-        }));
+        assert!(r.register(device(2, DeviceClass::Network)));
+        assert!(r.register(device(1, DeviceClass::Storage)));
         assert_eq!(r.devices()[0].id, DeviceId(1));
         assert!(r.bind_driver(DeviceId(2), "ethernet".into()));
+        assert_eq!(r.driver_for(DeviceId(2)), Some("ethernet"));
+    }
+
+    #[test]
+    fn driver_binding_requires_registered_device_and_nonempty_driver() {
+        let mut r = DeviceRegistry::new();
+        assert!(!r.bind_driver(DeviceId(9), "ethernet".into()));
+        assert!(r.register(device(9, DeviceClass::Network)));
+        assert!(!r.bind_driver(DeviceId(9), String::new()));
+        assert_eq!(r.driver_for(DeviceId(9)), None);
     }
 }

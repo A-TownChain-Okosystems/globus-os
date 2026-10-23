@@ -5,5 +5,13 @@ edition = "2024"
 license = "Apache-2.0"
 publish = false
 
+[[bin]]
+name = "globus-uefi-loader"
+path = "src/main.rs"
+test = false
+bench = false
+
 [dependencies]
 uefi = { version = "0.40.0", features = ["alloc", "panic_handler"] }
+
+[workspace]

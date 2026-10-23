@@ -14,3 +14,13 @@ pub enum Protocol {
     Tcp,
     Udp,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NetworkPolicy {
+    Disabled,
+    Restricted,
+    Normal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SocketId(pub u64);

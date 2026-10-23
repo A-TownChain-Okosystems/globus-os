@@ -556,7 +556,7 @@ impl UserScheduler {
         let zombies: Vec<(Pid, ExitCode)> = self
             .entries
             .iter()
-            .filter(|e| e.is_runnable() == false && e.state.is_zombie())
+            .filter(|e| !e.is_runnable() && e.state.is_zombie())
             .map(|e| {
                 (
                     e.pid,

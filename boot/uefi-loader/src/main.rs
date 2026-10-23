@@ -3,16 +3,20 @@
 
 extern crate alloc;
 
+#[global_allocator]
+static ALLOCATOR: uefi::allocator::Allocator = uefi::allocator::Allocator;
+
 use alloc::vec::Vec;
 use core::{mem, ptr, slice};
 use uefi::{
     boot::{self, AllocateType, MemoryType},
     cstr16, entry,
     fs::FileSystem,
+    mem::memory_map::MemoryMap,
     helpers, println,
     table::cfg::ConfigTableEntry,
     system,
-    Handle, Status,
+    Status,
 };
 
 const KERNEL_PATH: &uefi::CStr16 = cstr16!("\\EFI\\GLOBUS\\SHIVACORE.ELF");
@@ -81,7 +85,7 @@ fn run() -> Result<(), Status> {
 
     let image = boot::image_handle();
     let mut fs = FileSystem::new(boot::get_image_file_system(image).map_err(|e| e.status())?);
-    let kernel = fs.read(KERNEL_PATH).map_err(|e| e.status())?;
+    let kernel = fs.read(KERNEL_PATH).map_err(|_| Status::LOAD_ERROR)?;
     drop(fs);
 
     let (entry_point, loaded_start, loaded_end) = load_elf64(&kernel)?;

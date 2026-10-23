@@ -146,9 +146,11 @@ impl Iommu for SoftwareIommu {
     fn map(&mut self, domain: DmaDomainId, region: DmaRegion) -> Result<(), IommuError> {
         validate_region(region)?;
         let target = self.domain_mut(domain)?;
-        if target.mappings.iter().any(|m| {
-            m.iova < region.iova + region.length && region.iova < m.iova + m.length
-        }) {
+        if target
+            .mappings
+            .iter()
+            .any(|m| m.iova < region.iova + region.length && region.iova < m.iova + m.length)
+        {
             return Err(IommuError::MappingDenied);
         }
         target.mappings.push(region);
