@@ -247,7 +247,7 @@ impl ProcessManager {
         target: Pid,
         rights: Rights,
     ) -> Result<CapId, crate::capability::CapabilityError> {
-        self.caps.delegate(source, cap_id, target, rights)
+        self.caps.lock().delegate(source, cap_id, target, rights)
     }
 }
 
@@ -289,7 +289,7 @@ mod tests {
         let p2 = pm.spawn(ProcessType::Service, 100);
 
         // p1 delegiert READ an p2
-        let p1_mem_cap = pm.caps.list_for(p1)[0].id;
+        let p1_mem_cap = pm.caps.lock().list_for(p1)[0].id;
         pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
             .unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
