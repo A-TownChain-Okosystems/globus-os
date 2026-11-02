@@ -2,7 +2,7 @@ name: Rust CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'security/sc005-capability-authority-phase1-v2-2026-11-02']
   pull_request:
 
 permissions:
