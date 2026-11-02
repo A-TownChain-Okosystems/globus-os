@@ -24,7 +24,7 @@ use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ats1000::{MemRegion, MemoryManager, Pid};
 use crate::capability::{
-    new_authority, CapabilityAuthority, CapabilityTable, ResourceType, Rights,
+    new_authority, CapabilityAuthority, ResourceType, Rights,
 };
 
 // === Konstanten — synchronisiert mit allocator.rs === //
@@ -127,7 +127,7 @@ impl KernelMemoryManager {
     ///   size > heap_threshold  -> Userspace-Bump (virtuelle Adress-Simulation)
     pub fn allocate(
         &mut self,
-        caps: &mut CapabilityTable,
+        caps: &CapabilityAuthority,
         pid: Pid,
         size: u64,
     ) -> Result<AllocatedRegion, MemError> {
@@ -226,15 +226,7 @@ impl KernelMemoryManager {
         self.regions.remove(&region_id);
 
         // Capabilities widerrufen
-        let cap_ids: Vec<_> = caps
-            .list_for(pid)
-            .iter()
-            .filter(|c| c.resource_type == ResourceType::Memory && c.resource_id == region_id)
-            .map(|c| c.id)
-            .collect();
-        for cap_id in cap_ids {
-            caps.revoke(cap_id);
-        }
+        caps.revoke_for_resource(pid, ResourceType::Memory, region_id);
 
         Ok(())
     }
@@ -243,7 +235,7 @@ impl KernelMemoryManager {
     /// Prueft READ-Capability.
     pub fn read_check(
         &self,
-        caps: &CapabilityTable,
+        caps: &CapabilityAuthority,
         pid: Pid,
         region_id: u64,
     ) -> Result<AllocatedRegion, MemError> {
@@ -390,23 +382,23 @@ impl MemorySubsystem {
 
     /// Allokiert Speicher fuer einen Prozess
     pub fn allocate(&mut self, pid: Pid, size: u64) -> Result<AllocatedRegion, MemError> {
-        self.manager.allocate(&mut self.caps.lock(), pid, size)
+        self.manager.allocate(&self.caps, pid, size)
     }
 
     /// Gibt Speicher frei
     pub fn deallocate(&mut self, pid: Pid, region_id: u64) -> Result<(), MemError> {
         self.manager
-            .deallocate(&mut self.caps.lock(), pid, region_id)
+            .deallocate(&self.caps, pid, region_id)
     }
 
     /// Prueft Lesezugriff
     pub fn read_check(&self, pid: Pid, region_id: u64) -> Result<AllocatedRegion, MemError> {
-        self.manager.read_check(&self.caps.lock(), pid, region_id)
+        self.manager.read_check(&self.caps, pid, region_id)
     }
 
     /// Prueft Schreibzugriff
     pub fn write_check(&self, pid: Pid, region_id: u64) -> Result<AllocatedRegion, MemError> {
-        self.manager.write_check(&self.caps.lock(), pid, region_id)
+        self.manager.write_check(&self.caps, pid, region_id)
     }
 
     /// Statistik
@@ -556,8 +548,8 @@ mod tests {
     #[test]
     fn test_allocate_kernel_heap() {
         let mut mm = KernelMemoryManager::new();
-        let mut caps = CapabilityTable::new();
-        let r = mm.allocate(&mut caps, pid(1), 256).unwrap(); // <= 4096 -> Kernel-Heap
+        let caps = CapabilityAuthority::new();
+        let r = mm.allocate(&caps, pid(1), 256).unwrap(); // <= 4096 -> Kernel-Heap
         assert_eq!(r.size, 256);
         assert_eq!(r.source, AllocSource::KernelHeap);
         assert!(r.addr != 0); // Adresse ist nicht 0
