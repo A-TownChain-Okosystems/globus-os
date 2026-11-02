@@ -236,7 +236,9 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.caps.lock().check(pid, resource_type, resource_id, required)
+        self.caps
+            .lock()
+            .check(pid, resource_type, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
