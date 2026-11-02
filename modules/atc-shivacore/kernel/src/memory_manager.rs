@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ats1000::{MemRegion, MemoryManager, Pid};
-use crate::capability::{new_authority, MemoryCapabilityPort, Rights};
+use crate::capability::{MemoryCapabilityPort, Rights};
 
 // === Konstanten — synchronisiert mit allocator.rs === //
 // allocator.rs: HEAP_START = 0x4444_4444_0000, HEAP_SIZE = 100 * 1024
@@ -336,41 +336,12 @@ pub struct MemorySubsystem {
     caps: MemoryCapabilityPort,
 }
 
-impl Default for MemorySubsystem {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl MemorySubsystem {
-    /// Erzeugt ein neues Speicher-Subsystem.
-    /// In Kernel-Mode: wird nach allocator::init_heap() aufgerufen.
-    pub fn new() -> Self {
-        Self::new_with_capability_port(new_authority().memory_port())
-    }
-
-    pub fn new_with_capability_port(caps: MemoryCapabilityPort) -> Self {
+    pub(crate) fn new_with_capability_port(caps: MemoryCapabilityPort) -> Self {
         Self {
             manager: KernelMemoryManager::new(),
             caps,
         }
-    }
-
-    /// Kernel-Init-Sequenz: initialisiert Heap + Memory-Subsystem.
-    /// In Kernel-Mode wuerde dies allocator::init_heap() aufrufen,
-    /// gefolgt von KernelMemoryManager::new().
-    ///
-    /// # Safety (Kernel-Mode)
-    /// Setzt voraus, dass Paging aktiv ist und der physische Speicher
-    /// gemapped wurde (memory::init + allocator::init_heap).
-    pub fn init_kernel() -> Self {
-        // In echter Kernel-Mode:
-        //   1. memory::init(physical_memory_offset)  -> OffsetPageTable
-        //   2. allocator::init_heap(mapper, frame_alloc)  -> Heap bereit
-        //   3. MemorySubsystem::new()  -> Prozess-Regionen + Caps
-        //
-        // In Test-Mode: Heap ist bereits durch Rust std aktiv.
-        Self::new()
     }
 
     /// Allokiert Speicher fuer einen Prozess
@@ -564,7 +535,7 @@ mod tests {
         let r = mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::READ));
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::WRITE));
-        assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::EXEC));
+        assert!(!caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::EXEC));
     }
 
     #[test]

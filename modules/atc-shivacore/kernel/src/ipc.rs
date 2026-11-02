@@ -66,16 +66,8 @@ impl IpcSubsystem {
         let resource_id = id.0;
 
         // Owner bekommt WRITE (senden) und READ (empfangen) + DELEGATE
-        let send_cap = self.capabilities.create_channel_capability(
-            owner,
-            resource_id,
-            Rights::WRITE | Rights::DELEGATE,
-        );
-        let recv_cap = self.capabilities.create_channel_capability(
-            owner,
-            resource_id,
-            Rights::READ | Rights::DELEGATE,
-        );
+        let send_cap = self.capabilities.create_channel_send_capability(owner, resource_id);
+        let recv_cap = self.capabilities.create_channel_receive_capability(owner, resource_id);
 
         let channel = Channel {
             id,

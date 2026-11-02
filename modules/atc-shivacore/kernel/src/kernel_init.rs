@@ -29,7 +29,7 @@ use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::{new_authority, CapabilityAuthority};
+use crate::capability::{new_authority, CapabilityAuthority, CapabilityAuthorityOwner};
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
@@ -85,6 +85,8 @@ pub struct KernelState {
     pub memory: MemorySubsystem,
     /// One kernel-owned capability authority shared by all consumers.
     capability_authority: CapabilityAuthority,
+    /// Privileged mutation facade retained only by the kernel owner.
+    capability_owner: CapabilityAuthorityOwner,
     // L2: Capabilities (inside ProcessManager)
     // L3: Process Manager
     pub processes: ProcessManager,
@@ -121,6 +123,7 @@ impl KernelState {
         // ── L1: MemorySubsystem (Heap-Bridge + Prozess-Regionen) ──
         log.push((BootPhase::Memory, InitStatus::Initializing));
         let capabilities = new_authority();
+        let capability_owner = capabilities.owner();
         let memory = MemorySubsystem::new_with_capability_port(capabilities.memory_port());
         let stats = memory.stats();
         if stats.heap_base != HEAP_START {
@@ -167,6 +170,7 @@ impl KernelState {
         Ok(KernelState {
             memory,
             capability_authority: capabilities,
+            capability_owner,
             processes,
             scheduler,
             ipc,
@@ -368,7 +372,7 @@ mod tests {
             crate::capability::Rights::WRITE,
         ));
         let endpoint_cap = state
-            .capabilities
+            .capability_owner
             .create_typed(pid, 99, crate::rights::endpoint::SEND);
         let response = state.syscalls.dispatch(
             pid,

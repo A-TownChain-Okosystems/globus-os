@@ -676,21 +676,21 @@ pub enum VfsError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::CapabilityAuthority;
+    use crate::capability::{new_authority, CapabilityAuthority};
     use crate::ats1000::Pid;
     use crate::capability::ResourceType;
 
     fn setup_vfs() -> Vfs {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         // Grant full rights to process 1
         {
-            let table = &caps;
-            let cap = table
+            let owner = caps.owner();
+            let cap = owner
                 .create(
                     Pid(1),
                     ResourceType::FileSystem,
                     1,
-                    Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+                    Rights::READ | Rights::WRITE,
                 )
                 .0;
             // cap handle = 1 (first cap)
@@ -701,8 +701,8 @@ mod tests {
     }
 
     fn grant_full_caps(caps: &CapabilityAuthority, pid: u64) -> u64 {
-        let table = caps;
-        let cap_id = table.create(
+        let owner = caps.owner();
+        let cap_id = owner.create(
             Pid(pid as u32),
             ResourceType::FileSystem,
             1,
@@ -1071,8 +1071,8 @@ mod tests {
         let caps = CapabilityAuthority::new();
         let mut vfs = Vfs::new(caps.vfs_port());
         let typed_handle = {
-            let table = caps;
-            table
+            let owner = caps.owner();
+            owner
                 .create_typed(Pid(2), 2, crate::rights::endpoint::SEND)
                 .0
         };
@@ -1088,8 +1088,8 @@ mod tests {
 
         // Prozess 2 bekommt nur READ (kein WRITE)
         let cap_read = {
-            let table = caps;
-            table
+            let owner = caps.owner();
+            owner
                 .create(Pid(2), ResourceType::FileSystem, 2, Rights::READ)
                 .0
         };

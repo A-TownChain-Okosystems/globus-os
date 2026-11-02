@@ -123,7 +123,9 @@ impl SyscallDispatcher {
                 if request.capability.is_none() {
                     return SyscallResponse::err(AbiError::InvalidHandle);
                 }
-                SyscallResponse::ok(0)
+                // BLOCKED / NOT IMPLEMENTED: ABI ownership and close/revocation
+                // semantics are not defined. Never report a close that did not occur.
+                SyscallResponse::err(AbiError::InvalidSyscall)
             }
             Syscall::MonotonicTime => {
                 self.monotonic_ticks = self.monotonic_ticks.wrapping_add(1);
@@ -207,7 +209,8 @@ mod tests {
     #[test]
     fn ipc_requires_matching_capability_and_right() {
         let table = CapabilityAuthority::new();
-        let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
+        let owner = table.owner();
+        let cap = owner.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
         let mut d = SyscallDispatcher::new(table.syscall_port());
         let r = d.dispatch(
             pid(1),
@@ -258,6 +261,18 @@ mod tests {
     }
 
     #[test]
+    fn handle_close_is_blocked_and_never_reports_success() {
+        let authority = CapabilityAuthority::new();
+        let mut dispatcher = SyscallDispatcher::new(authority.syscall_port());
+        let response = dispatcher.dispatch(pid(1), SyscallRequest {
+            capability: Some(CapabilityHandle(999)),
+            ..request(Syscall::HandleClose)
+        });
+        assert_eq!(response.error, Some(AbiError::InvalidSyscall));
+        assert_eq!(response.value, 0);
+    }
+
+    #[test]
     fn monotonic_time_is_kernel_owned() {
         let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
         let a = d.dispatch(pid(1), request(Syscall::MonotonicTime));
@@ -268,7 +283,8 @@ mod tests {
     #[test]
     fn capability_query_requires_inspect_right() {
         let table = CapabilityAuthority::new();
-        let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
+        let owner = table.owner();
+        let cap = owner.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
         let mut d = SyscallDispatcher::new(table.syscall_port());
         let r = d.dispatch(
             pid(1),

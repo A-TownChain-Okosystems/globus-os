@@ -111,7 +111,7 @@ pub enum CapabilityError {
 
 /// Capability-Tabelle — Kernel-intern, geschuetzt durch Spinlock
 #[derive(Clone)]
-pub(crate) struct CapabilityTable {
+struct CapabilityTable {
     caps: BTreeMap<CapId, Capability>,
     by_pid: BTreeMap<Pid, Vec<CapId>>,
     next_id: u64,
@@ -126,124 +126,63 @@ pub(crate) struct CapabilityAuthority {
 }
 
 impl CapabilityAuthority {
-    pub fn new() -> Self {
-        Self {
-            inner: Arc::new(spin::Mutex::new(CapabilityTable::new())),
-        }
+    pub(crate) fn new() -> Self {
+        Self { inner: Arc::new(spin::Mutex::new(CapabilityTable::new())) }
     }
 
-    pub fn create(
-        &self,
-        pid: Pid,
-        resource_type: ResourceType,
-        resource_id: u64,
-        rights: Rights,
-    ) -> CapId {
-        self.inner
-            .lock()
-            .create(pid, resource_type, resource_id, rights)
+    /// Only the kernel owner retains this mutation facade. Subsystems receive scoped ports.
+    pub(crate) fn owner(&self) -> CapabilityAuthorityOwner {
+        CapabilityAuthorityOwner { inner: self.inner.clone() }
     }
 
-    pub fn create_typed(&self, pid: Pid, resource_id: u64, rights: ObjectRights) -> CapId {
-        self.inner.lock().create_typed(pid, resource_id, rights)
+    pub(crate) fn check(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, required: Rights) -> bool {
+        self.inner.lock().check(pid, resource_type, resource_id, required)
     }
-
-    pub fn mint_typed(
-        &self,
-        source_pid: Pid,
-        source_cap: CapId,
-        cnode_cap: CapId,
-        target_pid: Pid,
-        rights: ObjectRights,
-    ) -> Result<CapId, CapabilityError> {
-        self.inner
-            .lock()
-            .mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
-    }
-
-    pub fn check(
-        &self,
-        pid: Pid,
-        resource_type: ResourceType,
-        resource_id: u64,
-        required: Rights,
-    ) -> bool {
-        self.inner
-            .lock()
-            .check(pid, resource_type, resource_id, required)
-    }
-
-    pub fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
+    pub(crate) fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
         self.inner.lock().check_any(pid, cap_id, required)
     }
-
-    pub fn check_typed(
-        &self,
-        pid: Pid,
-        cap_id: CapId,
-        resource_id: u64,
-        required: ObjectRights,
-    ) -> bool {
-        self.inner
-            .lock()
-            .check_typed(pid, cap_id, resource_id, required)
+    pub(crate) fn check_typed(&self, pid: Pid, cap_id: CapId, resource_id: u64, required: ObjectRights) -> bool {
+        self.inner.lock().check_typed(pid, cap_id, resource_id, required)
     }
-
-    pub fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
+    pub(crate) fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
         self.inner.lock().check_legacy_handle(pid, cap_id, required)
     }
-
-    pub fn delegate(
-        &self,
-        source_pid: Pid,
-        source_cap: CapId,
-        target_pid: Pid,
-        rights: Rights,
-    ) -> Result<CapId, CapabilityError> {
-        self.inner
-            .lock()
-            .delegate(source_pid, source_cap, target_pid, rights)
+    pub(crate) fn find_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) -> Option<CapId> {
+        self.inner.lock().find_for_resource(pid, resource_type, resource_id)
     }
+    pub(crate) fn find_for_resource_with_rights(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, required: Rights) -> Option<CapId> {
+        self.inner.lock().find_for_resource_with_rights(pid, resource_type, resource_id, required)
+    }
+    pub(crate) fn count(&self) -> usize {
+        self.inner.lock().count()
+    }
+}
 
-    pub fn revoke(&self, cap_id: CapId) {
+/// Privileged mutation surface retained by KernelState / the test-harness owner only.
+pub(crate) struct CapabilityAuthorityOwner {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+impl CapabilityAuthorityOwner {
+    pub(crate) fn create(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, rights: Rights) -> CapId {
+        self.inner.lock().create(pid, resource_type, resource_id, rights)
+    }
+    pub(crate) fn create_typed(&self, pid: Pid, resource_id: u64, rights: ObjectRights) -> CapId {
+        self.inner.lock().create_typed(pid, resource_id, rights)
+    }
+    pub(crate) fn mint_typed(&self, source_pid: Pid, source_cap: CapId, cnode_cap: CapId, target_pid: Pid, rights: ObjectRights) -> Result<CapId, CapabilityError> {
+        self.inner.lock().mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
+    }
+    pub(crate) fn delegate(&self, source_pid: Pid, source_cap: CapId, target_pid: Pid, rights: Rights) -> Result<CapId, CapabilityError> {
+        self.inner.lock().delegate(source_pid, source_cap, target_pid, rights)
+    }
+    pub(crate) fn revoke(&self, cap_id: CapId) {
         self.inner.lock().revoke(cap_id);
     }
-
-    pub fn revoke_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) {
-        self.inner
-            .lock()
-            .revoke_for_resource(pid, resource_type, resource_id);
+    pub(crate) fn revoke_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) {
+        self.inner.lock().revoke_for_resource(pid, resource_type, resource_id);
     }
-
-    pub fn revoke_for_pid(&self, pid: Pid) {
+    pub(crate) fn revoke_for_pid(&self, pid: Pid) {
         self.inner.lock().revoke_for_pid(pid);
-    }
-
-    pub fn find_for_resource(
-        &self,
-        pid: Pid,
-        resource_type: ResourceType,
-        resource_id: u64,
-    ) -> Option<CapId> {
-        self.inner
-            .lock()
-            .find_for_resource(pid, resource_type, resource_id)
-    }
-
-    pub fn find_for_resource_with_rights(
-        &self,
-        pid: Pid,
-        resource_type: ResourceType,
-        resource_id: u64,
-        required: Rights,
-    ) -> Option<CapId> {
-        self.inner
-            .lock()
-            .find_for_resource_with_rights(pid, resource_type, resource_id, required)
-    }
-
-    pub fn count(&self) -> usize {
-        self.inner.lock().count()
     }
 }
 
@@ -280,7 +219,7 @@ impl MemoryCapabilityPort {
             pid,
             ResourceType::Memory,
             region_id,
-            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+            Rights::READ | Rights::WRITE,
         )
     }
 
@@ -299,8 +238,8 @@ pub(crate) struct ProcessCapabilityPort {
 }
 
 impl ProcessCapabilityPort {
-    pub(crate) fn create_address_space(&self, pid: Pid, resource_id: u64, rights: Rights) -> CapId {
-        self.inner.lock().create(pid, ResourceType::Memory, resource_id, rights)
+    pub(crate) fn create_address_space(&self, pid: Pid, resource_id: u64) -> CapId {
+        self.inner.lock().create(pid, ResourceType::Memory, resource_id, Rights::READ | Rights::WRITE)
     }
 
     pub(crate) fn revoke_process(&self, pid: Pid) {
@@ -311,24 +250,7 @@ impl ProcessCapabilityPort {
         self.inner.lock().check(pid, ResourceType::Memory, resource_id, required)
     }
 
-    pub(crate) fn find_address_space_capability(&self, pid: Pid, resource_id: u64) -> Option<CapId> {
-        self.inner.lock().find_for_resource(pid, ResourceType::Memory, resource_id)
-    }
 
-    pub(crate) fn delegate_address_space(
-        &self,
-        source_pid: Pid,
-        source_cap: CapId,
-        target_pid: Pid,
-        rights: Rights,
-    ) -> Result<CapId, CapabilityError> {
-        let mut table = self.inner.lock();
-        let source = table.caps.get(&source_cap).ok_or(CapabilityError::NotFound)?;
-        if source.resource_type != ResourceType::Memory {
-            return Err(CapabilityError::WrongObjectType);
-        }
-        table.delegate(source_pid, source_cap, target_pid, rights)
-    }
 }
 
 #[derive(Clone)]
@@ -337,8 +259,11 @@ pub(crate) struct IpcCapabilityPort {
 }
 
 impl IpcCapabilityPort {
-    pub(crate) fn create_channel_capability(&self, pid: Pid, channel_id: u64, rights: Rights) -> CapId {
-        self.inner.lock().create(pid, ResourceType::IpcChannel, channel_id, rights)
+    pub(crate) fn create_channel_send_capability(&self, pid: Pid, channel_id: u64) -> CapId {
+        self.inner.lock().create(pid, ResourceType::IpcChannel, channel_id, Rights::WRITE | Rights::DELEGATE)
+    }
+    pub(crate) fn create_channel_receive_capability(&self, pid: Pid, channel_id: u64) -> CapId {
+        self.inner.lock().create(pid, ResourceType::IpcChannel, channel_id, Rights::READ | Rights::DELEGATE)
     }
 
     pub(crate) fn check_channel(&self, pid: Pid, channel_id: u64, required: Rights) -> bool {
@@ -396,12 +321,6 @@ impl SyscallCapabilityPort {
 
     pub(crate) fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
         self.inner.lock().check_any(pid, cap_id, required)
-    }
-}
-
-impl Default for CapabilityAuthority {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -730,6 +649,36 @@ mod tests {
     use super::*;
     fn pid(n: u32) -> Pid {
         Pid(n)
+    }
+
+    #[test]
+    fn memory_port_issues_only_read_write_rights() {
+        let authority = new_authority();
+        let port = authority.memory_port();
+        port.create_region(pid(1), 0x1000);
+        assert!(authority.check(pid(1), ResourceType::Memory, 0x1000, Rights::READ));
+        assert!(authority.check(pid(1), ResourceType::Memory, 0x1000, Rights::WRITE));
+        assert!(!authority.check(pid(1), ResourceType::Memory, 0x1000, Rights::EXEC));
+        assert!(!authority.check(pid(1), ResourceType::Memory, 0x1000, Rights::DELEGATE));
+    }
+    #[test]
+    fn owner_delegation_rejects_wrong_owner_and_missing_delegate_right() {
+        let authority = new_authority();
+        let owner = authority.owner();
+        let cap = owner.create(pid(1), ResourceType::Memory, 0x2000, Rights::READ | Rights::WRITE);
+        assert_eq!(owner.delegate(pid(2), cap, pid(3), Rights::READ), Err(CapabilityError::NotOwner));
+        assert_eq!(owner.delegate(pid(1), cap, pid(3), Rights::READ), Err(CapabilityError::NoDelegateRight));
+    }
+    #[test]
+    fn owner_revocation_removes_descendants() {
+        let authority = new_authority();
+        let owner = authority.owner();
+        let root = owner.create(pid(1), ResourceType::Memory, 0x3000, Rights::READ | Rights::DELEGATE);
+        let _child = owner.delegate(pid(1), root, pid(2), Rights::READ).unwrap();
+        owner.revoke(root);
+        assert!(!authority.check(pid(1), ResourceType::Memory, 0x3000, Rights::READ));
+        assert!(!authority.check(pid(2), ResourceType::Memory, 0x3000, Rights::READ));
+        assert_eq!(authority.count(), 0);
     }
 
     #[test]

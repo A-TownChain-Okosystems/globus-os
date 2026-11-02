@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 
 use crate::atcfs::{atc_content_id, AtcFileSystem, FsError};
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::{CapabilityAuthority, ResourceType, Rights};
+use crate::capability::{CapabilityAuthority, CapabilityAuthorityOwner, MemoryCapabilityPort, ResourceType, Rights};
 use crate::ipc::{ChannelId, IpcError, IpcSubsystem, Message};
 use crate::kernel_init::KernelState;
 use crate::memory_manager::{AllocSource, KernelMemoryManager, MemError};
@@ -23,7 +23,9 @@ use crate::process::{ProcessManager, ProcessState};
 
 /// Test-Harness: erzeugt ein frisches Set aller Subsysteme
 pub struct TestHarness {
-    pub caps: CapabilityAuthority,
+    caps: CapabilityAuthority,
+    owner: CapabilityAuthorityOwner,
+    mem_caps: MemoryCapabilityPort,
     pub mem: KernelMemoryManager,
     pub fs: AtcFileSystem,
     pub proc_mgr: ProcessManager,
@@ -39,10 +41,14 @@ impl Default for TestHarness {
 impl TestHarness {
     pub fn new() -> Self {
         let caps = CapabilityAuthority::new();
+        let owner = caps.owner();
+        let mem_caps = caps.memory_port();
         let process_caps = caps.process_port();
         let ipc_caps = caps.ipc_port();
         Self {
             caps,
+            owner,
+            mem_caps,
             mem: KernelMemoryManager::new(),
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new_with_capability_port(process_caps),
@@ -54,6 +60,17 @@ impl TestHarness {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn harness_memory_process_and_ipc_share_one_authority_store() {
+        let mut h = TestHarness::new();
+        let pid = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
+        let region = h.mem.allocate(&h.mem_caps, pid, 4096).unwrap();
+        assert!(h.caps.check(pid, ResourceType::Memory, region.region_id, Rights::READ));
+        assert!(h.proc_mgr.check_capability(pid, ResourceType::Memory, region.region_id, Rights::WRITE));
+        let channel = h.ipc.create_channel(pid, 128);
+        assert!(h.caps.check(pid, ResourceType::IpcChannel, channel.0, Rights::WRITE));
+    }
 
     // === FLOW 1: Boot → Spawn → Allocate → Write → Read → Free === //
 
@@ -67,7 +84,7 @@ mod tests {
         assert_eq!(h.proc_mgr.active_count(), 1);
 
         // 2. Allocate memory (takes ats1000::Pid = u32)
-        let region = h.mem.allocate(&h.caps.memory_port(), p1, 4096).unwrap();
+        let region = h.mem.allocate(&h.mem_caps, p1, 4096).unwrap();
         assert_eq!(region.owner_pid, p1);
 
         // 3. Process should have capabilities for its memory
@@ -201,13 +218,10 @@ mod tests {
         );
 
         // Parent delegates READ capability to child (use shared caps table)
-        let cap_id = h
-            .caps
-            .find_for_resource(parent, ResourceType::Memory, parent_mem.region_id)
-            .unwrap();
-        h.caps
-            .delegate(parent, cap_id, child, Rights::READ)
-            .unwrap();
+        // The process default does not include DELEGATE. The kernel owner
+        // explicitly issues a delegable source before attenuating it.
+        let cap_id = h.owner.create(parent, ResourceType::Memory, parent_mem.region_id, Rights::READ | Rights::DELEGATE);
+        h.owner.delegate(parent, cap_id, child, Rights::READ).unwrap();
 
         // Now child can read parent's memory
         assert!(h

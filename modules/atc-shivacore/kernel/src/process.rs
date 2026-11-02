@@ -18,7 +18,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::capability::{new_authority, CapId, Pid, ProcessCapabilityPort, ResourceType, Rights};
+use crate::capability::{CapId, Pid, ProcessCapabilityPort, ResourceType, Rights};
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -60,18 +60,8 @@ pub struct ProcessManager {
     caps: ProcessCapabilityPort,
 }
 
-impl Default for ProcessManager {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl ProcessManager {
-    pub fn new() -> Self {
-        Self::new_with_capability_port(new_authority().process_port())
-    }
-
-    pub fn new_with_capability_port(caps: ProcessCapabilityPort) -> Self {
+    pub(crate) fn new_with_capability_port(caps: ProcessCapabilityPort) -> Self {
         Self {
             processes: BTreeMap::new(),
             next_pid: AtomicU32::new(1),
@@ -95,11 +85,7 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.create_address_space(
-            pid,
-            addr_space,
-            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
-        );
+        self.caps.create_address_space(pid, addr_space);
 
         pid
     }
