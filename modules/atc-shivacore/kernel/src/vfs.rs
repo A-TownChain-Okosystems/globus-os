@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
-use crate::capability::{CapabilityTable, Rights};
+use crate::capability::{CapId, CapabilityAuthority, Rights};
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
