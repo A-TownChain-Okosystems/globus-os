@@ -18,6 +18,8 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::ops::{BitAnd, BitOr};
 
+use crate::rights::{cnode, ObjectRights};
+
 /// Ressourcen-Typen im Kernel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResourceType {
@@ -83,7 +85,11 @@ pub struct Capability {
     pub id: CapId,
     pub resource_type: ResourceType,
     pub resource_id: u64,
+    /// Legacy rights are present only for transitional, untyped consumers.
+    /// Typed capabilities must be accessed through `object_rights` APIs.
     pub rights: Rights,
+    /// SC-005 typed rights. `None` identifies a legacy transitional entry.
+    pub object_rights: Option<ObjectRights>,
     pub owner: Pid,
     /// Eltern-Capability, falls delegiert. None = vom Kernel direkt erzeugt.
     pub parent: Option<CapId>,
@@ -96,6 +102,10 @@ pub enum CapabilityError {
     NotOwner,
     NoDelegateRight,
     RightsExceeded,
+    InvalidTypedRights,
+    MissingCNodeMintRight,
+    WrongObjectType,
+    TypedOperationRequired,
 }
 
 /// Capability-Tabelle — Kernel-intern, geschuetzt durch Spinlock
@@ -136,6 +146,7 @@ impl CapabilityTable {
             resource_type,
             resource_id,
             rights,
+            object_rights: None,
             owner: pid,
             parent: None,
         };
@@ -158,6 +169,9 @@ impl CapabilityTable {
             .get(&source_cap)
             .ok_or(CapabilityError::NotFound)?
             .clone();
+        if parent_cap.object_rights.is_some() {
+            return Err(CapabilityError::TypedOperationRequired);
+        }
         if parent_cap.owner != source_pid {
             return Err(CapabilityError::NotOwner);
         }
@@ -174,12 +188,115 @@ impl CapabilityTable {
             resource_type: parent_cap.resource_type,
             resource_id: parent_cap.resource_id,
             rights: attenuated_rights,
+            object_rights: None,
             owner: target_pid,
             parent: Some(source_cap),
         };
         self.caps.insert(id, child);
         self.by_pid.entry(target_pid).or_default().push(id);
         Ok(id)
+    }
+
+    /// Creates a capability with the owner-approved SC-005 typed rights.
+    /// This is a kernel-authority operation; legacy lookup paths reject it.
+    pub fn create_typed(
+        &mut self,
+        pid: Pid,
+        resource_id: u64,
+        object_rights: ObjectRights,
+    ) -> CapId {
+        let id = CapId(self.next_id);
+        self.next_id += 1;
+        let cap = Capability {
+            id,
+            // Compatibility placeholder; typed operations never inspect this field.
+            resource_type: ResourceType::Memory,
+            resource_id,
+            rights: Rights::NONE,
+            object_rights: Some(object_rights),
+            owner: pid,
+            parent: None,
+        };
+        self.caps.insert(id, cap);
+        self.by_pid.entry(pid).or_default().push(id);
+        id
+    }
+
+    /// Mints a typed child after validating CNode.MINT and same-type attenuation.
+    pub fn mint_typed(
+        &mut self,
+        source_pid: Pid,
+        source_cap: CapId,
+        cnode_cap: CapId,
+        target_pid: Pid,
+        child_rights: ObjectRights,
+    ) -> Result<CapId, CapabilityError> {
+        let cnode = self.caps.get(&cnode_cap).ok_or(CapabilityError::NotFound)?;
+        if cnode.owner != source_pid {
+            return Err(CapabilityError::NotOwner);
+        }
+        let cnode_rights = cnode
+            .object_rights
+            .ok_or(CapabilityError::InvalidTypedRights)?;
+        if cnode_rights.contains(cnode::MINT) != Ok(true) {
+            return Err(CapabilityError::MissingCNodeMintRight);
+        }
+
+        let parent = self
+            .caps
+            .get(&source_cap)
+            .ok_or(CapabilityError::NotFound)?;
+        if parent.owner != source_pid {
+            return Err(CapabilityError::NotOwner);
+        }
+        let parent_rights = parent
+            .object_rights
+            .ok_or(CapabilityError::InvalidTypedRights)?;
+        parent_rights
+            .attenuate(child_rights)
+            .map_err(|error| match error {
+                crate::rights::RightsError::CrossObjectType => CapabilityError::WrongObjectType,
+                crate::rights::RightsError::RightsExpansion => CapabilityError::RightsExceeded,
+                _ => CapabilityError::InvalidTypedRights,
+            })?;
+
+        let resource_id = parent.resource_id;
+        let id = CapId(self.next_id);
+        self.next_id += 1;
+        let child = Capability {
+            id,
+            // Compatibility placeholder; typed operations never inspect this field.
+            resource_type: ResourceType::Memory,
+            resource_id,
+            rights: Rights::NONE,
+            object_rights: Some(child_rights),
+            owner: target_pid,
+            parent: Some(source_cap),
+        };
+        self.caps.insert(id, child);
+        self.by_pid.entry(target_pid).or_default().push(id);
+        Ok(id)
+    }
+
+    /// Checks owner, resource identity, object type and SC-005 rights together.
+    pub fn check_typed(
+        &self,
+        pid: Pid,
+        cap_id: CapId,
+        resource_id: u64,
+        required: ObjectRights,
+    ) -> bool {
+        self.caps
+            .get(&cap_id)
+            .map(|cap| {
+                cap.owner == pid
+                    && cap.resource_id == resource_id
+                    && cap
+                        .object_rights
+                        .and_then(|rights| rights.contains(required).ok())
+                        == Some(true)
+            })
+            .unwrap_or(false)
     }
 
     /// Prueft, ob ein Prozess eine bestimmte Capability mit den geforderten Rechten besitzt.
@@ -195,7 +312,8 @@ impl CapabilityTable {
             .map(|caps| {
                 caps.iter().any(|&cap_id| {
                     if let Some(cap) = self.caps.get(&cap_id) {
-                        cap.resource_type == resource_type
+                        cap.object_rights.is_none()
+                            && cap.resource_type == resource_type
                             && cap.resource_id == resource_id
                             && cap.rights.has(required)
                     } else {
@@ -210,7 +328,7 @@ impl CapabilityTable {
     pub fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
         self.caps
             .get(&CapId(cap_id))
-            .map(|cap| cap.owner == pid && cap.rights.has(required))
+            .map(|cap| cap.object_rights.is_none() && cap.owner == pid && cap.rights.has(required))
             .unwrap_or(false)
     }
 
@@ -256,6 +374,93 @@ mod tests {
     use super::*;
     fn pid(n: u32) -> Pid {
         Pid(n)
+    }
+
+    #[test]
+    fn typed_capability_checks_are_type_bound_and_fail_closed() {
+        let mut table = CapabilityTable::new();
+        let frame = table.create_typed(pid(1), 0x2000, crate::rights::frame::READ);
+        assert!(table.check_typed(pid(1), frame, 0x2000, crate::rights::frame::READ));
+        assert!(!table.check_typed(pid(1), frame, 0x2000, crate::rights::frame::WRITE));
+        assert!(!table.check_typed(pid(2), frame, 0x2000, crate::rights::frame::READ));
+        assert!(!table.check_typed(pid(1), frame, 0x3000, crate::rights::frame::READ));
+        assert!(!table.check(pid(1), ResourceType::Memory, 0x2000, Rights::NONE));
+        assert!(!table.check_any(pid(1), frame.0, Rights::NONE));
+    }
+
+    #[test]
+    fn typed_mint_requires_cnode_mint_and_attenuates() {
+        let mut table = CapabilityTable::new();
+        let parent_rights =
+            crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b0011).unwrap();
+        let expanded =
+            crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b0111).unwrap();
+        let frame = table.create_typed(pid(1), 0x4000, parent_rights);
+        let cnode = table.create_typed(pid(1), 7, crate::rights::cnode::MINT);
+        let child = table
+            .mint_typed(pid(1), frame, cnode, pid(2), crate::rights::frame::READ)
+            .unwrap();
+        assert!(table.check_typed(pid(2), child, 0x4000, crate::rights::frame::READ));
+        assert!(!table.check_typed(pid(2), child, 0x4000, crate::rights::frame::WRITE));
+        assert_eq!(
+            table.mint_typed(pid(1), frame, cnode, pid(3), expanded),
+            Err(CapabilityError::RightsExceeded)
+        );
+    }
+
+    #[test]
+    fn typed_mint_rejects_missing_cnode_authority_and_cross_type_rights() {
+        let mut table = CapabilityTable::new();
+        let frame = table.create_typed(pid(1), 0x5000, crate::rights::frame::READ);
+        let wrong_cnode = table.create_typed(pid(1), 8, crate::rights::cnode::DUPLICATE);
+        assert_eq!(
+            table.mint_typed(
+                pid(1),
+                frame,
+                wrong_cnode,
+                pid(2),
+                crate::rights::frame::READ
+            ),
+            Err(CapabilityError::MissingCNodeMintRight)
+        );
+        let cnode = table.create_typed(pid(1), 9, crate::rights::cnode::MINT);
+        assert_eq!(
+            table.mint_typed(pid(1), frame, cnode, pid(2), crate::rights::endpoint::SEND),
+            Err(CapabilityError::WrongObjectType)
+        );
+    }
+
+    #[test]
+    fn typed_revocation_removes_all_derived_capabilities() {
+        let mut table = CapabilityTable::new();
+        let root_rights = crate::rights::ObjectRights::new(
+            crate::rights::ObjectType::Frame,
+            0b1001,
+        )
+        .unwrap();
+        let root = table.create_typed(pid(1), 0x7000, root_rights);
+        let cnode = table.create_typed(pid(1), 10, crate::rights::cnode::MINT);
+        let child = table
+            .mint_typed(pid(1), root, cnode, pid(2), crate::rights::frame::READ)
+            .unwrap();
+
+        assert!(table.check_typed(pid(1), root, 0x7000, crate::rights::frame::READ));
+        assert!(table.check_typed(pid(2), child, 0x7000, crate::rights::frame::READ));
+        table.revoke(root);
+        assert!(!table.check_typed(pid(1), root, 0x7000, crate::rights::frame::READ));
+        assert!(!table.check_typed(pid(2), child, 0x7000, crate::rights::frame::READ));
+        assert_eq!(table.count(), 1);
+    }
+
+    #[test]
+    fn legacy_operations_cannot_consume_typed_capabilities() {
+        let mut table = CapabilityTable::new();
+        let typed = table.create_typed(pid(1), 0x6000, crate::rights::frame::READ);
+        assert_eq!(
+            table.delegate(pid(1), typed, pid(2), Rights::READ),
+            Err(CapabilityError::TypedOperationRequired)
+        );
+        assert!(!table.check(pid(1), ResourceType::Memory, 0x6000, Rights::NONE));
     }
 
     #[test]
