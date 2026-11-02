@@ -258,10 +258,10 @@ impl CapabilityTable {
         parent_rights
             .attenuate(child_rights)
             .map_err(|error| match error {
-            crate::rights::RightsError::CrossObjectType => CapabilityError::WrongObjectType,
-            crate::rights::RightsError::RightsExpansion => CapabilityError::RightsExceeded,
-            _ => CapabilityError::InvalidTypedRights,
-        })?;
+                crate::rights::RightsError::CrossObjectType => CapabilityError::WrongObjectType,
+                crate::rights::RightsError::RightsExpansion => CapabilityError::RightsExceeded,
+                _ => CapabilityError::InvalidTypedRights,
+            })?;
 
         let resource_id = parent.resource_id;
         let id = CapId(self.next_id);
