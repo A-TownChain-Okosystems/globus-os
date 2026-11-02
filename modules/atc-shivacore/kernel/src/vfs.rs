@@ -13,7 +13,7 @@ use alloc::string::{String, String as Str};
 use alloc::vec::Vec;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
-use crate::capability::{CapId, CapabilityAuthority, Rights};
+use crate::capability::{CapId, Rights, VfsCapabilityPort};
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
@@ -191,11 +191,11 @@ pub struct Vfs {
     root_inode: u64,
     handles: BTreeMap<u64, FileHandle>, // fd -> handle
     next_fd: u64,
-    caps: CapabilityAuthority,
+    caps: VfsCapabilityPort,
 }
 
 impl Vfs {
-    pub fn new(caps: CapabilityAuthority) -> Self {
+    pub fn new(caps: VfsCapabilityPort) -> Self {
         let mut vfs = Vfs {
             inodes: BTreeMap::new(),
             next_inode: 1,
@@ -676,6 +676,7 @@ pub enum VfsError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::CapabilityAuthority;
     use crate::ats1000::Pid;
     use crate::capability::ResourceType;
 
@@ -731,7 +732,7 @@ mod tests {
     #[test]
     fn test_mkdir_and_list() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/home", 1, cap).unwrap();
@@ -753,7 +754,7 @@ mod tests {
     #[test]
     fn test_mkdir_nested_path() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/a", 1, cap).unwrap();
@@ -769,7 +770,7 @@ mod tests {
     #[test]
     fn test_mkdir_already_exists() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/test", 1, cap).unwrap();
@@ -780,7 +781,7 @@ mod tests {
     #[test]
     fn test_mkdir_parent_not_dir() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/file.txt", 1, cap).unwrap();
@@ -791,7 +792,7 @@ mod tests {
     #[test]
     fn test_mkdir_parent_not_found() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let result = vfs.mkdir("/nonexistent/subdir", 1, cap);
@@ -801,7 +802,7 @@ mod tests {
     #[test]
     fn test_rmdir_empty() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/temp", 1, cap).unwrap();
@@ -812,7 +813,7 @@ mod tests {
     #[test]
     fn test_rmdir_not_empty() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/parent", 1, cap).unwrap();
@@ -824,7 +825,7 @@ mod tests {
     #[test]
     fn test_rmdir_root_fails() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let result = vfs.rmdir("/", 1, cap);
@@ -836,7 +837,7 @@ mod tests {
     #[test]
     fn test_create_and_stat() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/test.txt", 1, cap).unwrap();
@@ -849,7 +850,7 @@ mod tests {
     #[test]
     fn test_create_file_already_exists() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/file.txt", 1, cap).unwrap();
@@ -860,7 +861,7 @@ mod tests {
     #[test]
     fn test_open_write_read() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/data.bin", 1, cap).unwrap();
@@ -880,7 +881,7 @@ mod tests {
     #[test]
     fn test_open_create_mode() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs
@@ -902,7 +903,7 @@ mod tests {
     #[test]
     fn test_append_mode() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/log.txt", OpenMode::Create, 1, cap).unwrap();
@@ -922,7 +923,7 @@ mod tests {
     #[test]
     fn test_seek_and_partial_read() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs
@@ -942,7 +943,7 @@ mod tests {
     #[test]
     fn test_read_past_end() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/short.txt", OpenMode::Create, 1, cap).unwrap();
@@ -959,7 +960,7 @@ mod tests {
     #[test]
     fn test_close_and_reopen() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/reopen.txt", OpenMode::Create, 1, cap).unwrap();
@@ -974,7 +975,7 @@ mod tests {
     #[test]
     fn test_open_directory_fails() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/mydir", 1, cap).unwrap();
@@ -985,7 +986,7 @@ mod tests {
     #[test]
     fn test_remove_file() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/delete_me.txt", 1, cap).unwrap();
@@ -996,7 +997,7 @@ mod tests {
     #[test]
     fn test_remove_file_closes_handles() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/auto.txt", OpenMode::Create, 1, cap).unwrap();
@@ -1014,7 +1015,7 @@ mod tests {
     #[test]
     fn test_create_and_read_symlink() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/target.txt", 1, cap).unwrap();
@@ -1031,7 +1032,7 @@ mod tests {
     #[test]
     fn test_symlink_already_exists() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_symlink("/link", "/target", 1, cap).unwrap();
@@ -1044,7 +1045,7 @@ mod tests {
     #[test]
     fn test_path_normalization() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/a", 1, cap).unwrap();
@@ -1068,7 +1069,7 @@ mod tests {
     #[test]
     fn typed_capability_cannot_bypass_legacy_vfs_rights() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let typed_handle = {
             let table = caps;
             table
@@ -1083,7 +1084,7 @@ mod tests {
     #[test]
     fn test_mkdir_without_write_cap() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
 
         // Prozess 2 bekommt nur READ (kein WRITE)
         let cap_read = {
@@ -1100,7 +1101,7 @@ mod tests {
     #[test]
     fn test_read_without_read_cap() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
 
         // Prozess 2 bekommt nur WRITE (kein READ)
         let cap_write = {
@@ -1118,7 +1119,7 @@ mod tests {
     #[test]
     fn test_open_read_mode_with_only_write_cap() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
 
         let cap_write = {
             let table = caps;
@@ -1138,7 +1139,7 @@ mod tests {
     #[test]
     fn test_tree_display() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/home", 1, cap).unwrap();
@@ -1156,7 +1157,7 @@ mod tests {
     #[test]
     fn test_stat_after_write() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/sized.txt", OpenMode::Create, 1, cap).unwrap();
@@ -1170,7 +1171,7 @@ mod tests {
     #[test]
     fn test_multiple_files_in_directory() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/docs", 1, cap).unwrap();
@@ -1185,7 +1186,7 @@ mod tests {
     #[test]
     fn test_write_expands_file() {
         let caps = CapabilityAuthority::new();
-        let mut vfs = Vfs::new(caps.clone());
+        let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/expand.txt", OpenMode::Create, 1, cap).unwrap();
