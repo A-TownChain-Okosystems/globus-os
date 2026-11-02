@@ -32,7 +32,6 @@ pub struct TestHarness {
     caps: CapabilityAuthority,
     owner: CapabilityAuthorityOwner,
     mem_caps: MemoryCapabilityPort,
-    kg_caps: KnowledgeGraphCapabilityPort,
     pub mem: KernelMemoryManager,
     pub fs: AtcFileSystem,
     pub proc_mgr: ProcessManager,
@@ -54,7 +53,6 @@ impl TestHarness {
         let caps = new_authority();
         let owner = caps.owner();
         let mem_caps = owner.memory_port();
-        let kg_caps = owner.knowledge_graph_port();
         let process_caps = owner.process_port();
         let ipc_caps = owner.ipc_port();
         let vfs_caps = owner.vfs_port();
@@ -63,7 +61,6 @@ impl TestHarness {
             caps,
             owner,
             mem_caps,
-            kg_caps,
             mem: KernelMemoryManager::new(),
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new_with_capability_port(process_caps),
@@ -96,7 +93,8 @@ mod tests {
         assert!(h
             .caps
             .check(pid, ResourceType::IpcChannel, channel.0, Rights::WRITE));
-        let _kg_cap = h.kg_caps.create_entity_capability(pid, 0x5000);
+        let kg_caps = h.owner.knowledge_graph_port(pid);
+        let _kg_cap = kg_caps.create_entity_capability(pid, 0x5000).unwrap();
         assert!(h.caps.check(
             pid,
             ResourceType::KnowledgeGraph,

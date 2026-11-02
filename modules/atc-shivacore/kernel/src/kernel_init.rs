@@ -111,8 +111,9 @@ impl KernelState {
     /// Issues the narrowly scoped capability port required by service-space.
     pub fn knowledge_graph_capability_port(
         &self,
+        principal: crate::capability::Pid,
     ) -> crate::capability::KnowledgeGraphCapabilityPort {
-        self.capability_owner.knowledge_graph_port()
+        self.capability_owner.knowledge_graph_port(principal)
     }
 
     /// Kernel-Init-Sequenz — initialisiert alle Subsysteme in Reihenfolge.
@@ -380,7 +381,7 @@ mod tests {
             channel.0,
             crate::capability::Rights::WRITE,
         ));
-        let kg_port = state.knowledge_graph_capability_port();
+        let kg_port = state.knowledge_graph_capability_port(pid);
         let _kg_cap = kg_port.create_entity_capability(pid, 0x9000);
         assert!(state.capability_authority.check(
             pid,

@@ -285,9 +285,10 @@ impl CapabilityAuthorityOwner {
         }
     }
 
-    pub(crate) fn knowledge_graph_port(&self) -> KnowledgeGraphCapabilityPort {
+    pub(crate) fn knowledge_graph_port(&self, principal: Pid) -> KnowledgeGraphCapabilityPort {
         KnowledgeGraphCapabilityPort {
             inner: self.inner.clone(),
+            principal,
         }
     }
 }
@@ -295,9 +296,17 @@ impl CapabilityAuthorityOwner {
 /// Public contract consumed by the service-space Knowledge Graph.
 /// The concrete port is issued only by the kernel authority owner.
 pub trait KnowledgeGraphCapabilityAccess {
-    fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId;
+    fn create_entity_capability(
+        &self,
+        creator: Pid,
+        resource_id: u64,
+    ) -> Result<CapId, CapabilityError>;
     fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool;
-    fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64);
+    fn revoke_entity_capabilities(
+        &self,
+        owner: Pid,
+        resource_id: u64,
+    ) -> Result<(), CapabilityError>;
     fn delegate_entity_read(
         &self,
         owner: Pid,
@@ -309,34 +318,52 @@ pub trait KnowledgeGraphCapabilityAccess {
 #[derive(Clone)]
 pub struct KnowledgeGraphCapabilityPort {
     inner: Arc<spin::Mutex<CapabilityTable>>,
+    principal: Pid,
 }
 
 impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
-    fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId {
-        self.inner.lock().create(
-            creator,
+    fn create_entity_capability(
+        &self,
+        creator: Pid,
+        resource_id: u64,
+    ) -> Result<CapId, CapabilityError> {
+        if creator != self.principal {
+            return Err(CapabilityError::NotOwner);
+        }
+        Ok(self.inner.lock().create(
+            self.principal,
             ResourceType::KnowledgeGraph,
             resource_id,
             Rights::READ | Rights::WRITE,
-        )
+        ))
     }
 
     fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool {
-        self.inner
-            .lock()
-            .check(caller, ResourceType::KnowledgeGraph, resource_id, required)
+        caller == self.principal
+            && self.inner
+                .lock()
+                .check(caller, ResourceType::KnowledgeGraph, resource_id, required)
     }
 
-    fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
-        let mut table = self.inner.lock();
-        if table.check(
-            owner,
-            ResourceType::KnowledgeGraph,
-            resource_id,
-            Rights::WRITE,
-        ) {
-            table.revoke_for_resource(owner, ResourceType::KnowledgeGraph, resource_id);
+    fn revoke_entity_capabilities(
+        &self,
+        owner: Pid,
+        resource_id: u64,
+    ) -> Result<(), CapabilityError> {
+        if owner != self.principal {
+            return Err(CapabilityError::NotOwner);
         }
+        let mut table = self.inner.lock();
+        let root = table
+            .find_for_resource_with_rights(
+                owner,
+                ResourceType::KnowledgeGraph,
+                resource_id,
+                Rights::WRITE,
+            )
+            .ok_or(CapabilityError::NotOwner)?;
+        table.revoke(root);
+        Ok(())
     }
 
     fn delegate_entity_read(
@@ -345,16 +372,19 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
         resource_id: u64,
         target: Pid,
     ) -> Result<CapId, CapabilityError> {
+        if owner != self.principal {
+            return Err(CapabilityError::NotOwner);
+        }
         let mut table = self.inner.lock();
         let source = table
             .find_for_resource_with_rights(
                 owner,
                 ResourceType::KnowledgeGraph,
                 resource_id,
-                Rights::WRITE,
+                Rights::WRITE | Rights::DELEGATE,
             )
-            .ok_or(CapabilityError::NotOwner)?;
-        table.delegate_by_kernel_owner(owner, source, target, Rights::READ)
+            .ok_or(CapabilityError::NoDelegateRight)?;
+        table.delegate(owner, source, target, Rights::READ)
     }
 }
 

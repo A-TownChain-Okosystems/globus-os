@@ -122,7 +122,8 @@ impl KnowledgeGraph {
         let resource_id = id.0;
 
         // The owner-issued port grants only the rights needed by the graph.
-        caps.create_entity_capability(creator, resource_id);
+        caps.create_entity_capability(creator, resource_id)
+            .map_err(|_| KgError::CapabilityRevoked)?;
 
         let entity = Entity {
             id,
@@ -362,7 +363,8 @@ impl KnowledgeGraph {
         self.rebuild_indices();
 
         // Revoke the entity capability and all delegated descendants.
-        caps.revoke_entity_capabilities(caller, entity.0);
+        caps.revoke_entity_capabilities(caller, entity.0)
+            .map_err(|_| KgError::CapabilityRevoked)?;
 
         self.entities.remove(&entity);
         Ok(())
@@ -429,11 +431,15 @@ mod tests {
     }
 
     impl KnowledgeGraphCapabilityAccess for TestCapabilityPort {
-        fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId {
+        fn create_entity_capability(
+            &self,
+            creator: Pid,
+            resource_id: u64,
+        ) -> Result<CapId, CapabilityError> {
             self.rights
                 .borrow_mut()
                 .insert((creator.0, resource_id), Rights::READ | Rights::WRITE);
-            CapId(self.next_id.fetch_add(1, Ordering::SeqCst))
+            Ok(CapId(self.next_id.fetch_add(1, Ordering::SeqCst)))
         }
 
         fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool {
@@ -444,12 +450,17 @@ mod tests {
                 .unwrap_or(false)
         }
 
-        fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
+        fn revoke_entity_capabilities(
+            &self,
+            owner: Pid,
+            resource_id: u64,
+        ) -> Result<(), CapabilityError> {
             if self.check_entity_capability(owner, resource_id, Rights::WRITE) {
                 self.rights
                     .borrow_mut()
                     .retain(|(_, id), _| *id != resource_id);
             }
+            Ok(())
         }
 
         fn delegate_entity_read(
@@ -460,6 +471,9 @@ mod tests {
         ) -> Result<CapId, CapabilityError> {
             if !self.check_entity_capability(owner, resource_id, Rights::WRITE) {
                 return Err(CapabilityError::NotOwner);
+            }
+            if !self.check_entity_capability(owner, resource_id, Rights::DELEGATE) {
+                return Err(CapabilityError::NoDelegateRight);
             }
             self.rights
                 .borrow_mut()
