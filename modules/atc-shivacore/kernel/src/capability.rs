@@ -775,7 +775,7 @@ mod tests {
     #[test]
     fn memory_port_issues_only_read_write_rights() {
         let authority = new_authority();
-        let port = authority.memory_port();
+        let port = authority.owner().memory_port();
         port.create_region(pid(1), 0x1000);
         assert!(authority.check(pid(1), ResourceType::Memory, 0x1000, Rights::READ));
         assert!(authority.check(pid(1), ResourceType::Memory, 0x1000, Rights::WRITE));
