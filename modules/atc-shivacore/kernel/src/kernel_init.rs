@@ -121,7 +121,7 @@ impl KernelState {
         // ── L1: MemorySubsystem (Heap-Bridge + Prozess-Regionen) ──
         log.push((BootPhase::Memory, InitStatus::Initializing));
         let capabilities = new_authority();
-        let memory = MemorySubsystem::new_with_authority(capabilities.memory_port());
+        let memory = MemorySubsystem::new_with_capability_port(capabilities.memory_port());
         let stats = memory.stats();
         if stats.heap_base != HEAP_START {
             log.push((BootPhase::Memory, InitStatus::Failed));
@@ -131,7 +131,7 @@ impl KernelState {
 
         // ── L2+L3: ProcessManager (uses shared CapabilityAuthority) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
-        let processes = ProcessManager::new_with_authority(capabilities.process_port());
+        let processes = ProcessManager::new_with_capability_port(capabilities.process_port());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
         log.push((BootPhase::Processes, InitStatus::Ready));
 
