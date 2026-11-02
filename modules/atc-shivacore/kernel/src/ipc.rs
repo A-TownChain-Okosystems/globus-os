@@ -301,13 +301,8 @@ mod tests {
         let ch = ipc.create_channel(pid(1), 16);
 
         // pid(1) delegiert WRITE an pid(2), pid(2) kann senden
-        ipc.grant_access(
-            pid(1),
-            ch,
-            pid(2),
-            Rights::WRITE | Rights::DELEGATE,
-        )
-        .unwrap();
+        ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
+            .unwrap();
         ipc.send(pid(2), ch, b"from p2".to_vec()).unwrap();
 
         // pid(1) delegiert READ an pid(3), pid(3) kann empfangen
@@ -360,7 +355,7 @@ mod tests {
 
         let ch = ipc.create_channel(pid(1), 16);
         // pid(2) versucht, pid(1)s Channel zu schliessen
-        assert!(!ipc.close_channel( pid(2), ch));
+        assert!(!ipc.close_channel(pid(2), ch));
     }
 
     #[test]
@@ -439,13 +434,8 @@ mod tests {
         let mut ipc = IpcSubsystem::new(caps.clone());
 
         let ch = ipc.create_channel(pid(1), 16);
-        ipc.grant_access(
-            pid(1),
-            ch,
-            pid(2),
-            Rights::WRITE | Rights::DELEGATE,
-        )
-        .unwrap();
+        ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
+            .unwrap();
 
         // pid(2) kann zunaechst senden
         assert!(ipc.send(pid(2), ch, b"first".to_vec()).is_ok());
@@ -465,8 +455,7 @@ mod tests {
         let mut ipc = IpcSubsystem::new(caps.clone());
 
         let ch = ipc.create_channel(pid(1), 16);
-        ipc.grant_access(pid(1), ch, pid(3), Rights::READ)
-            .unwrap();
+        ipc.grant_access(pid(1), ch, pid(3), Rights::READ).unwrap();
 
         // Message ablegen
         ipc.send(pid(1), ch, b"msg".to_vec()).unwrap();
@@ -539,13 +528,8 @@ mod tests {
         let mut ipc = IpcSubsystem::new(caps.clone());
 
         let ch = ipc.create_channel(pid(1), 16);
-        ipc.grant_access(
-            pid(1),
-            ch,
-            pid(2),
-            Rights::WRITE | Rights::DELEGATE,
-        )
-        .unwrap();
+        ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
+            .unwrap();
         ipc.grant_access(pid(1), ch, pid(3), Rights::READ)
             .unwrap();
 
@@ -555,7 +539,7 @@ mod tests {
         assert!(caps.check(pid(3), ResourceType::IpcChannel, ch.0, Rights::READ));
 
         // Channel schliessen
-        ipc.close_channel( pid(1), ch);
+        ipc.close_channel(pid(1), ch);
 
         // Nach schliessen: niemand hat noch Caps fuer diesen Channel
         assert!(!caps.check(pid(1), ResourceType::IpcChannel, ch.0, Rights::WRITE));
