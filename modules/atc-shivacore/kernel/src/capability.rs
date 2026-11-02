@@ -283,6 +283,77 @@ impl CapabilityAuthorityOwner {
             inner: self.inner.clone(),
         }
     }
+
+    pub(crate) fn knowledge_graph_port(&self) -> KnowledgeGraphCapabilityPort {
+        KnowledgeGraphCapabilityPort {
+            inner: self.inner.clone(),
+        }
+    }
+}
+
+/// Public contract consumed by the service-space Knowledge Graph.
+/// The concrete port is issued only by the kernel authority owner.
+pub trait KnowledgeGraphCapabilityAccess {
+    fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId;
+    fn check_entity_capability(
+        &self,
+        caller: Pid,
+        resource_id: u64,
+        required: Rights,
+    ) -> bool;
+    fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64);
+    fn delegate_entity_read(
+        &self,
+        owner: Pid,
+        resource_id: u64,
+        target: Pid,
+    ) -> Result<CapId, CapabilityError>;
+}
+
+#[derive(Clone)]
+pub struct KnowledgeGraphCapabilityPort {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
+    fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId {
+        self.inner.lock().create(
+            creator,
+            ResourceType::Memory,
+            resource_id,
+            Rights::READ | Rights::WRITE,
+        )
+    }
+
+    fn check_entity_capability(
+        &self,
+        caller: Pid,
+        resource_id: u64,
+        required: Rights,
+    ) -> bool {
+        self.inner
+            .lock()
+            .check(caller, ResourceType::Memory, resource_id, required)
+    }
+
+    fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
+        self.inner
+            .lock()
+            .revoke_for_resource(owner, ResourceType::Memory, resource_id);
+    }
+
+    fn delegate_entity_read(
+        &self,
+        owner: Pid,
+        resource_id: u64,
+        target: Pid,
+    ) -> Result<CapId, CapabilityError> {
+        let mut table = self.inner.lock();
+        let source = table
+            .find_for_resource_with_rights(owner, ResourceType::Memory, resource_id, Rights::READ)
+            .ok_or(CapabilityError::NotOwner)?;
+        table.delegate_by_kernel_owner(owner, source, target, Rights::READ)
+    }
 }
 
 #[derive(Clone)]
@@ -490,6 +561,45 @@ impl CapabilityTable {
 
     /// Delegiert eine Capability an einen anderen Prozess.
     /// Rechte koennen nur EINGESCHRAENKT werden (Attenuation).
+    /// Kernel-owner delegation for a graph entity. Unlike process delegation,
+    /// this operation is not exposed to the entity owner and does not grant DELEGATE.
+    fn delegate_by_kernel_owner(
+        &mut self,
+        source_pid: Pid,
+        source_cap: CapId,
+        target_pid: Pid,
+        attenuated_rights: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        let parent_cap = self
+            .caps
+            .get(&source_cap)
+            .ok_or(CapabilityError::NotFound)?
+            .clone();
+        if parent_cap.object_rights.is_some() {
+            return Err(CapabilityError::TypedOperationRequired);
+        }
+        if parent_cap.owner != source_pid {
+            return Err(CapabilityError::NotOwner);
+        }
+        if (attenuated_rights.0 & !parent_cap.rights.0) != 0 {
+            return Err(CapabilityError::RightsExceeded);
+        }
+        let id = CapId(self.next_id);
+        self.next_id += 1;
+        let child = Capability {
+            id,
+            resource_type: parent_cap.resource_type,
+            resource_id: parent_cap.resource_id,
+            rights: attenuated_rights,
+            object_rights: None,
+            owner: target_pid,
+            parent: Some(source_cap),
+        };
+        self.caps.insert(id, child);
+        self.by_pid.entry(target_pid).or_default().push(id);
+        Ok(id)
+    }
+
     pub fn delegate(
         &mut self,
         source_pid: Pid,
@@ -816,6 +926,24 @@ mod tests {
         assert!(!authority.check(pid(1), ResourceType::Memory, 0x3000, Rights::READ));
         assert!(!authority.check(pid(2), ResourceType::Memory, 0x3000, Rights::READ));
         assert_eq!(authority.count(), 0);
+    }
+
+    #[test]
+    fn knowledge_graph_port_uses_least_authority_and_owner_delegation() {
+        let authority = new_authority();
+        let port = authority.owner().knowledge_graph_port();
+        let root = port.create_entity_capability(pid(1), 0x4000);
+        assert!(port.check_entity_capability(pid(1), 0x4000, Rights::READ));
+        assert!(port.check_entity_capability(pid(1), 0x4000, Rights::WRITE));
+        assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::EXEC));
+        assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::DELEGATE));
+        let child = port.delegate_entity_read(pid(1), 0x4000, pid(2)).unwrap();
+        assert!(port.check_entity_capability(pid(2), 0x4000, Rights::READ));
+        assert!(!port.check_entity_capability(pid(2), 0x4000, Rights::WRITE));
+        port.revoke_entity_capabilities(pid(1), 0x4000);
+        assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::READ));
+        assert!(!port.check_entity_capability(pid(2), 0x4000, Rights::READ));
+        let _ = (root, child);
     }
 
     #[test]
