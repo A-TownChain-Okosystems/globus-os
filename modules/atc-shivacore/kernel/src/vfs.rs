@@ -244,7 +244,9 @@ impl Vfs {
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
         let table = self.caps.lock();
         if let Some(cap) = table.get(crate::capability::CapId(cap_handle)) {
-            cap.owner == crate::ats1000::Pid(pid as u32) && cap.rights.has(required)
+            cap.object_rights.is_none()
+                && cap.owner == crate::ats1000::Pid(pid as u32)
+                && cap.rights.has(required)
         } else {
             false
         }
@@ -1070,6 +1072,19 @@ mod tests {
     }
 
     // ── Capability-Gating-Tests ─────────────────────────────────────────────
+
+    #[test]
+    fn typed_capability_cannot_bypass_legacy_vfs_rights() {
+        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let mut vfs = Vfs::new(caps.clone());
+        let typed_handle = {
+            let mut table = caps.lock();
+            table.create_typed(Pid(2), 2, crate::rights::endpoint::SEND).0
+        };
+
+        let result = vfs.mkdir("/typed-denied", 2, typed_handle);
+        assert_eq!(result, Err(VfsError::PermissionDenied));
+    }
 
     #[test]
     fn test_mkdir_without_write_cap() {
