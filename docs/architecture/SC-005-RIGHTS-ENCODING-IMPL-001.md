@@ -151,4 +151,4 @@ No frozen standard is changed by this document. No claim of CSpace implementatio
 
 **PROPOSED — REVIEW REQUIRED.**
 
-The authoring work is authorized for PR #113. The numeric mapping is recorded here as a concrete candidate for review. It MUST NOT be treated as owner-approved ABI or consumed by production kernel constants until the explicit review gate in §8.2 is satisfied.
+The authoring work is authorized for PR #113. The numeric mapping is recorded here as a concrete candidate for review. It MUST NOT be treated as owner-approved ABI or consumed by production kernel constants until the explicit review gate in §8, item 2, is satisfied.
