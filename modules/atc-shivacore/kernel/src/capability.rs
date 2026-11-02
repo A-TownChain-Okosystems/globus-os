@@ -208,6 +208,15 @@ impl CapabilityAuthority {
         self.inner.lock().revoke_for_pid(pid);
     }
 
+    pub fn find_for_resource(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+    ) -> Option<CapId> {
+        self.inner.lock().find_for_resource(pid, resource_type, resource_id)
+    }
+
     pub fn count(&self) -> usize {
         self.inner.lock().count()
     }
@@ -500,6 +509,20 @@ impl CapabilityTable {
             .get(&pid)
             .map(|caps| caps.iter().filter_map(|id| self.caps.get(id)).collect())
             .unwrap_or_default()
+    }
+
+    pub fn find_for_resource(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+    ) -> Option<CapId> {
+        self.by_pid.get(&pid)?.iter().find_map(|id| {
+            self.caps.get(id).and_then(|cap| {
+                (cap.resource_type == resource_type && cap.resource_id == resource_id)
+                    .then_some(cap.id)
+            })
+        })
     }
 
     pub fn count(&self) -> usize {
