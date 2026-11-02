@@ -235,7 +235,7 @@ mod tests {
     #[test]
     fn ipc_receive_requires_endpoint_recv_right() {
         let table = CapabilityAuthority::new();
-        let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::RECV);
+        let cap = table.owner().create_typed(pid(1), 42, crate::rights::endpoint::RECV);
         let mut d = SyscallDispatcher::new(table.syscall_port());
         let allowed = d.dispatch(
             pid(1),

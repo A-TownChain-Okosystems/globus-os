@@ -429,7 +429,7 @@ mod tests {
         assert!(ipc.send(pid(2), ch, b"first".to_vec()).is_ok());
 
         // Widerrufe pid(2)s WRITE-Cap
-        caps.revoke_for_resource(pid(2), ResourceType::IpcChannel, ch.0);
+        caps.owner().revoke_for_resource(pid(2), ResourceType::IpcChannel, ch.0);
 
         // pid(2) kann nicht mehr senden
         let result = ipc.send(pid(2), ch, b"blocked".to_vec());
@@ -453,7 +453,7 @@ mod tests {
 
         // Weitere Message + READ-Cap widerrufen
         ipc.send(pid(1), ch, b"msg2".to_vec()).unwrap();
-        caps.revoke_for_resource(pid(3), ResourceType::IpcChannel, ch.0);
+        caps.owner().revoke_for_resource(pid(3), ResourceType::IpcChannel, ch.0);
 
         // pid(3) kann nicht mehr empfangen
         let result = ipc.recv(pid(3), ch);
@@ -503,7 +503,7 @@ mod tests {
         assert!(ipc.send(pid(3), ch, b"from charlie".to_vec()).is_ok());
 
         // Charlie kann aber nicht weiter delegieren (kein DELEGATE-Recht)
-        let result = caps.delegate(pid(3), charlie_cap, pid(4), Rights::WRITE);
+        let result = caps.owner().delegate(pid(3), charlie_cap, pid(4), Rights::WRITE);
         assert_eq!(result, Err(CapabilityError::NoDelegateRight));
     }
 
@@ -569,7 +569,7 @@ mod tests {
         assert!(ipc.send(pid(2), ch, b"ok".to_vec()).is_ok());
 
         // Widerrufe die spezifische Cap
-        caps.revoke(cap);
+        caps.owner().revoke(cap);
         assert_eq!(
             ipc.send(pid(2), ch, b"blocked".to_vec()),
             Err(IpcError::NoWriteCapability)
