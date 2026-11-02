@@ -139,7 +139,7 @@ impl KernelState {
 
         // ── L5: IPC Subsystem ──
         log.push((BootPhase::Ipc, InitStatus::Initializing));
-        let ipc = IpcSubsystem::new();
+        let ipc = IpcSubsystem::new(capabilities.clone());
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
         // ── L6: ATCFS + VFS ──
