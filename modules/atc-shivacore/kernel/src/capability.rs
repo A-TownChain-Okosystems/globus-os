@@ -122,7 +122,7 @@ pub struct CapabilityTable {
 /// Kernel subsystems receive clones of this handle; all operations serialize
 /// through the same capability table. The table itself remains the sole store.
 #[derive(Clone)]
-pub struct CapabilityAuthority {
+pub(crate) struct CapabilityAuthority {
     inner: Arc<spin::Mutex<CapabilityTable>>,
 }
 
@@ -248,13 +248,165 @@ impl CapabilityAuthority {
     }
 }
 
+impl CapabilityAuthority {
+    pub(crate) fn memory_port(&self) -> MemoryCapabilityPort {
+        MemoryCapabilityPort { inner: self.inner.clone() }
+    }
+
+    pub(crate) fn process_port(&self) -> ProcessCapabilityPort {
+        ProcessCapabilityPort { inner: self.inner.clone() }
+    }
+
+    pub(crate) fn ipc_port(&self) -> IpcCapabilityPort {
+        IpcCapabilityPort { inner: self.inner.clone() }
+    }
+
+    pub(crate) fn vfs_port(&self) -> VfsCapabilityPort {
+        VfsCapabilityPort { inner: self.inner.clone() }
+    }
+
+    pub(crate) fn syscall_port(&self) -> SyscallCapabilityPort {
+        SyscallCapabilityPort { inner: self.inner.clone() }
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct MemoryCapabilityPort {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl MemoryCapabilityPort {
+    pub(crate) fn create_region(&self, pid: Pid, region_id: u64) -> CapId {
+        self.inner.lock().create(
+            pid,
+            ResourceType::Memory,
+            region_id,
+            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+        )
+    }
+
+    pub(crate) fn check_region(&self, pid: Pid, region_id: u64, required: Rights) -> bool {
+        self.inner.lock().check(pid, ResourceType::Memory, region_id, required)
+    }
+
+    pub(crate) fn revoke_region(&self, pid: Pid, region_id: u64) {
+        self.inner.lock().revoke_for_resource(pid, ResourceType::Memory, region_id);
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct ProcessCapabilityPort {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl ProcessCapabilityPort {
+    pub(crate) fn create_address_space(&self, pid: Pid, resource_id: u64, rights: Rights) -> CapId {
+        self.inner.lock().create(pid, ResourceType::Memory, resource_id, rights)
+    }
+
+    pub(crate) fn revoke_process(&self, pid: Pid) {
+        self.inner.lock().revoke_for_pid(pid);
+    }
+
+    pub(crate) fn check_address_space(&self, pid: Pid, resource_id: u64, required: Rights) -> bool {
+        self.inner.lock().check(pid, ResourceType::Memory, resource_id, required)
+    }
+
+    pub(crate) fn find_address_space_capability(&self, pid: Pid, resource_id: u64) -> Option<CapId> {
+        self.inner.lock().find_for_resource(pid, ResourceType::Memory, resource_id)
+    }
+
+    pub(crate) fn delegate_address_space(
+        &self,
+        source_pid: Pid,
+        source_cap: CapId,
+        target_pid: Pid,
+        rights: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        let mut table = self.inner.lock();
+        let source = table.caps.get(&source_cap).ok_or(CapabilityError::NotFound)?;
+        if source.resource_type != ResourceType::Memory {
+            return Err(CapabilityError::WrongObjectType);
+        }
+        table.delegate(source_pid, source_cap, target_pid, rights)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct IpcCapabilityPort {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl IpcCapabilityPort {
+    pub(crate) fn create_channel_capability(&self, pid: Pid, channel_id: u64, rights: Rights) -> CapId {
+        self.inner.lock().create(pid, ResourceType::IpcChannel, channel_id, rights)
+    }
+
+    pub(crate) fn check_channel(&self, pid: Pid, channel_id: u64, required: Rights) -> bool {
+        self.inner.lock().check(pid, ResourceType::IpcChannel, channel_id, required)
+    }
+
+    pub(crate) fn revoke_channel(&self, pid: Pid, channel_id: u64) {
+        self.inner.lock().revoke_for_resource(pid, ResourceType::IpcChannel, channel_id);
+    }
+
+    pub(crate) fn find_channel_with_rights(&self, pid: Pid, channel_id: u64, required: Rights) -> Option<CapId> {
+        self.inner.lock().find_for_resource_with_rights(pid, ResourceType::IpcChannel, channel_id, required)
+    }
+
+    pub(crate) fn delegate_channel(
+        &self,
+        source_pid: Pid,
+        source_cap: CapId,
+        target_pid: Pid,
+        rights: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        let mut table = self.inner.lock();
+        let source = table.caps.get(&source_cap).ok_or(CapabilityError::NotFound)?;
+        if source.resource_type != ResourceType::IpcChannel {
+            return Err(CapabilityError::WrongObjectType);
+        }
+        table.delegate(source_pid, source_cap, target_pid, rights)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct VfsCapabilityPort {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl VfsCapabilityPort {
+    pub(crate) fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
+        self.inner.lock().check_legacy_handle(pid, cap_id, required)
+    }
+}
+
+#[derive(Clone)]
+pub(crate) struct SyscallCapabilityPort {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl SyscallCapabilityPort {
+    pub(crate) fn check_typed(&self, pid: Pid, cap_id: CapId, resource_id: u64, required: ObjectRights) -> bool {
+        self.inner.lock().check_typed(pid, cap_id, resource_id, required)
+    }
+
+    pub(crate) fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
+        self.inner.lock().check_legacy_handle(pid, cap_id, required)
+    }
+
+    pub(crate) fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
+        self.inner.lock().check_any(pid, cap_id, required)
+    }
+}
+
 impl Default for CapabilityAuthority {
     fn default() -> Self {
         Self::new()
     }
 }
 
-pub fn new_authority() -> CapabilityAuthority {
+pub(crate) fn new_authority() -> CapabilityAuthority {
     CapabilityAuthority::new()
 }
 
