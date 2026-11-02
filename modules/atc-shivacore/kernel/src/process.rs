@@ -232,8 +232,7 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.caps
-            .check(pid, resource_type, resource_id, required)
+        self.caps.check(pid, resource_type, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
@@ -286,7 +285,10 @@ mod tests {
         let p2 = pm.spawn(ProcessType::Service, 100);
 
         // p1 delegiert READ an p2
-        let p1_mem_cap = pm.caps.find_for_resource(p1, ResourceType::Memory, p1.0 as u64).unwrap();
+        let p1_mem_cap = pm
+            .caps
+            .find_for_resource(p1, ResourceType::Memory, p1.0 as u64)
+            .unwrap();
         pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
             .unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
