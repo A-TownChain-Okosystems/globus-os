@@ -61,6 +61,31 @@ The implementation must not reuse one generic rights namespace across object cla
 
 Frame GRANT is not equivalent to generic DELEGATE. AddressSpace MAP is not generic WRITE. Mapping rights must additionally satisfy SC-007's subset and W^X constraints.
 
+### 2.3 SC-003 / SC-004 dependency constraints
+
+The frozen dependency contracts were checked at the same SC-005 source commit:
+
+- SC-003 `docs/specs/SC-003-IPC_ENDPOINTS.md`, blob `bc0d3b49aebb59729d1d6ea7ff2d87140299bfd6`.
+- SC-004 `docs/specs/SC-004-SYSCALL_ABI.md`, blob `69aba1513aa22e9188222801bbd4c5c82df341aa`.
+
+They constrain the implementation as follows:
+
+1. Endpoint authority is exactly SEND, RECV, DELEGATE, NOTIFY; Notification is SIGNAL/WAIT. Endpoint badges are kernel-issued provenance, not caller-selected authority.
+2. IPC send/recv must be blocking and queue insertion must be atomic with BLOCKED state. Revocation while blocked wakes the operation with an error (SC-003 I-E06); endpoint close wakes all waiters and invalidates badge-less reply paths (I-E07).
+3. Syscall entry is one `invoke` operation (plus voluntary `yield`). The target is selected by the caller's CNode slot index; capability arguments are slot indices in the caller's CNode. The kernel resolves both itself.
+4. Newly created/derived/reply capabilities are written to a target slot in the caller's CNode and returned as slot indices. Transient capabilities are discarded at sysret.
+5. Non-blocking invokes are atomic. Revocation racing an already slot-resolved non-blocking invoke takes effect at sysret; blocked operations use the SC-003 wake/error path instead.
+6. ABI major mismatch takes precedence over object opcode dispatch and returns ABI_MISMATCH. Rights validation must occur before the object operation.
+
+**Unresolved encoding detail:** SC-005 defines the rights mask width (16-bit) and each object's named rights, but does not assign numeric bit positions. The migration MUST NOT silently infer or invent bit numbers from table order. A deterministic 16-bit encoding map must be recorded as an implementation decision and reviewed before the first binary/G7 binding. Until that map is approved, typed-right encoding is a design gate, not an implementation-ready constant set.
+
+### 2.4 Capability operation authority
+
+- Mint requires the relevant CNode MINT authority and a concrete source capability; Endpoint mint alone may assign a new child badge.
+- Derive requires the relevant CNode DUPLICATE authority; it copies rights and badge unchanged.
+- MOVE requires the relevant CNode MOVE authority and must preserve the single-slot ownership semantics; no copy-like fallback is permitted.
+- The CNode authority is distinct from the rights on the target object. A generic DELEGATE bit is not a substitute for CNode MINT or DUPLICATE.
+
 ## 3. Authority and ownership boundaries
 
 1. There is exactly one kernel-owned capability authority implementation and one authoritative Initial root for the Initial Task.
@@ -100,7 +125,7 @@ Frame GRANT is not equivalent to generic DELEGATE. AddressSpace MAP is not gener
 
 ## 5. Existing implementation findings and required migration
 
-Baseline GlobusOS source inspected at `main` (source commit baseline previously recorded as `f370b681e5c9ff49577f25c24f15b5fc880d5cba`):
+Baseline GlobusOS source inspected at `main` commit `f370b681e5c9ff49577f25c24f15b5fc880d5cba`. The call-site census below includes production paths and test/harness-only references; test constructors are not authority instances in a running kernel:
 
 | File | Current finding | Required destination |
 |---|---|---|
@@ -110,6 +135,12 @@ Baseline GlobusOS source inspected at `main` (source commit baseline previously 
 | `memory_manager.rs` | MemorySubsystem owns a CapabilityTable; allocation auto-mints generic Memory caps | Consume explicit typed authority operations; no local capability store |
 | `vfs.rs` | VFS accepts `Arc<Mutex<CapabilityTable>>` and checks generic rights | Use object-bound VFS capability references through authority resolution |
 | `syscall.rs` | Dispatch accepts caller-provided `&CapabilityTable`; HandleClose only checks handle presence | Resolve CapPath through the kernel-bound caller CSpace; close/revoke semantics must be real operations |
+| `ipc.rs` | Creates, grants, checks and enumerates generic IpcChannel caps; accepts caller-provided tables | Replace with Endpoint/Notification object invokes, CNode-authorized delegation, SC-003 block/wake/reply semantics |
+| `atcfs.rs` | Kernel filesystem methods accept generic CapabilityTable references | Bind file/object access to typed, object-bound capability invokes; do not preserve PID/resource-ID checks as authority |
+| `cross_subsystem.rs` | Owns another CapabilityTable in a cross-subsystem harness | Classify as test/integration harness or migrate to injected restricted authority; it must not be a production authority |
+| `service_space/src/knowledge_graph.rs` | Service code imports kernel CapabilityTable and mutates/checks it directly | Replace direct kernel table access with a constrained service-facing capability interface; no service-owned kernel authority |
+| `service_space/src/remote_caps.rs` | Reuses kernel `Rights` for remote ticket metadata | Decouple remote/service ticket rights from local kernel capability rights; network tickets are not kernel capabilities (SC-005 §11) |
+| `system/shivacore-api/src/lib.rs` | Separate public `CapabilityRights(u8)` type | Determine whether this is a user-facing API mirror or independent authority; no direct cast/bitwise equivalence to kernel rights without an explicit ABI contract |
 
 The recent removal of implicit EXEC grants in PR #112 is a least-authority hardening step only. It does not implement CSpace or establish SC-005 conformance.
 
@@ -118,7 +149,9 @@ The recent removal of implicit EXEC grants in PR #112 is a least-authority harde
 ### Phase A — authority replacement design
 - Confirm no other capability manager or active capability table exists in the canonical kernel path.
 - Define the bounded CNode storage strategy, path encoding, synchronization/locking, and kernel object reference registry.
-- Define exact typed-right bit assignments from frozen SC-005/SC-003/SC-006 contracts; do not invent values or collapse rights across object types.
+- Define and review a deterministic 16-bit typed-right encoding map. Frozen SC-005 names the rights but does not assign numeric bit positions; do not infer them from table order or collapse rights across object types.
+- Trace CNode MINT, DUPLICATE and MOVE authorization separately from target-object rights.
+- Bind syscall slot-in/slot-out and transient-cap lifetime to SC-004 §3–4; bind blocked IPC revocation to SC-003 I-E06/I-E07.
 - Define Initial Task root construction only at the resolved SC-001 boot/Initial Task boundary.
 - Gate: no code until the design has explicit type/bit-level traceability to frozen standards.
 
@@ -147,6 +180,9 @@ The recent removal of implicit EXEC grants in PR #112 is a least-authority harde
 - CSpace path resolution is limited to the caller's own authorized CSpace.
 - Unknown rights bits are rejected as INVALID_CAP (never truncated).
 - Every object type rejects rights from another object's rights namespace.
+- CNode MINT, DUPLICATE and MOVE are independently authorized; generic Endpoint DELEGATE cannot stand in for CNode rights.
+- invoke resolves target and capability arguments from caller CNode slots; output capabilities are written to the specified caller CNode slots and transient caps do not survive sysret.
+- Revocation of a blocked Endpoint operation wakes it with the SC-003 error path; Endpoint close invalidates badge-less reply paths.
 - mint rejects rights expansion, depth overflow and full CNode without changing source or existing descendants.
 - derive preserves badge exactly; Endpoint mint changes only the child's badge.
 - revoke removes the complete derivation subtree; no descendant resolves after return.
@@ -164,4 +200,4 @@ The recent removal of implicit EXEC grants in PR #112 is a least-authority harde
 - No claim that PR #111/#112 establish SC-005 or SC-007 conformance.
 - No merge/release authorization in this document.
 
-**Disposition:** Architecture direction D1–D2 is approved by ADR-0002. This migration contract is a technical implementation plan only. The CSpace implementation remains NOT IMPLEMENTED until the core authority replacement and all required caller migrations are committed and verified.
+**Disposition:** Architecture direction D1–D2 is approved by ADR-0002. The SC-003/SC-004 cross-contract checks and expanded call-site census are now included. The numeric 16-bit rights encoding remains an explicit implementation decision gate because the frozen standard does not assign bit positions. This migration contract is a technical implementation plan only. The CSpace implementation remains NOT IMPLEMENTED until the core authority replacement and all required caller migrations are committed and verified.
