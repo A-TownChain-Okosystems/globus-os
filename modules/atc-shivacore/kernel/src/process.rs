@@ -18,7 +18,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::capability::{new_authority, CapId, CapabilityAuthority, Pid, ResourceType, Rights};
+use crate::capability::{new_authority, CapId, Pid, ProcessCapabilityPort, ResourceType, Rights};
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,7 +57,7 @@ pub struct ProcessManager {
     processes: BTreeMap<Pid, ProcessControlBlock>,
     next_pid: AtomicU32,
     /// Referenz zur Capability-Tabelle (Kernel-intern)
-    caps: CapabilityAuthority,
+    caps: ProcessCapabilityPort,
 }
 
 impl Default for ProcessManager {
@@ -68,10 +68,10 @@ impl Default for ProcessManager {
 
 impl ProcessManager {
     pub fn new() -> Self {
-        Self::new_with_authority(new_authority())
+        Self::new_with_authority(new_authority().process_port())
     }
 
-    pub fn new_with_authority(caps: CapabilityAuthority) -> Self {
+    pub fn new_with_authority(caps: ProcessCapabilityPort) -> Self {
         Self {
             processes: BTreeMap::new(),
             next_pid: AtomicU32::new(1),
@@ -95,9 +95,8 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.create(
+        self.caps.create_address_space(
             pid,
-            ResourceType::Memory,
             addr_space,
             Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
         );
@@ -137,7 +136,7 @@ impl ProcessManager {
         }
 
         // Alle Capabilities dieses Prozesses widerrufen
-        self.caps.revoke_for_pid(pid);
+        self.caps.revoke_process(pid);
 
         // Zustand auf Terminiert setzen
         pcb.state = ProcessState::Terminated(exit_code);
@@ -232,7 +231,8 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.caps.check(pid, resource_type, resource_id, required)
+        resource_type == ResourceType::Memory
+            && self.caps.check_address_space(pid, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
@@ -243,7 +243,7 @@ impl ProcessManager {
         target: Pid,
         rights: Rights,
     ) -> Result<CapId, crate::capability::CapabilityError> {
-        self.caps.delegate(source, cap_id, target, rights)
+        self.caps.delegate_address_space(source, cap_id, target, rights)
     }
 }
 
@@ -287,7 +287,7 @@ mod tests {
         // p1 delegiert READ an p2
         let p1_mem_cap = pm
             .caps
-            .find_for_resource(p1, ResourceType::Memory, p1.0 as u64)
+            .find_address_space_capability(p1, p1.0 as u64)
             .unwrap();
         pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
             .unwrap();
