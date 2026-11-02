@@ -15,6 +15,7 @@
 extern crate alloc;
 
 use alloc::collections::BTreeMap;
+use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::ops::{BitAnd, BitOr};
 
@@ -114,6 +115,16 @@ pub struct CapabilityTable {
     caps: BTreeMap<CapId, Capability>,
     by_pid: BTreeMap<Pid, Vec<CapId>>,
     next_id: u64,
+}
+
+/// Shared kernel-owned capability authority handle.
+///
+/// Kernel subsystems receive clones of this handle; all operations serialize
+/// through the same capability table. The table itself remains the sole store.
+pub type CapabilityAuthority = Arc<spin::Mutex<CapabilityTable>>;
+
+pub fn new_authority() -> CapabilityAuthority {
+    Arc::new(spin::Mutex::new(CapabilityTable::new()))
 }
 
 impl Default for CapabilityTable {
