@@ -28,7 +28,7 @@ SC-005 v0.1.0 is frozen. This proposal preserves, and does not redefine:
 - Exact rights sets per object type (REQ-SC005-04).
 - Any unknown or foreign bit is invalid and returns `INVALID_CAP` (REQ-SC005-04, INV-06, C-E07).
 - Derivation may only attenuate rights; it may never add rights (REQ-SC005-05/06, INV-03).
-- CNode `DUPLICATE` and `MINT` remain distinct from rights on the target object.
+- CNode `DUPLICATE`, `MINT`, and `MOVE` remain distinct CNode-operation rights and are never target-object rights.
 - Endpoint badge semantics remain independent of rights encoding.
 - SC-004 slot resolution, invoke snapshot, and sysret semantics remain unchanged.
 
