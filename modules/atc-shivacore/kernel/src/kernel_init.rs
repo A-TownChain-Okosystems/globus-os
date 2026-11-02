@@ -29,7 +29,7 @@ use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::{new_authority, CapabilityAuthority, CapabilityTable};
+use crate::capability::{new_authority, CapabilityAuthority};
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
@@ -205,7 +205,7 @@ impl KernelState {
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 2. FS write
-        let caps = crate::capability::CapabilityTable::new();
+        let caps = self.capabilities.clone();
         self.fs
             .write_file(
                 &caps,
