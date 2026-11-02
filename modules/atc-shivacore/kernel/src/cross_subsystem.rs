@@ -17,7 +17,7 @@ use crate::atcfs::{atc_content_id, AtcFileSystem, FsError};
 use crate::ats1000::{FileSystem, MemoryManager};
 use crate::capability::{
     new_authority, CapabilityAuthority, CapabilityAuthorityOwner, KnowledgeGraphCapabilityAccess,
-    KnowledgeGraphCapabilityPort, MemoryCapabilityPort, ResourceType, Rights,
+    MemoryCapabilityPort, ResourceType, Rights,
 };
 use crate::ipc::{ChannelId, IpcError, IpcSubsystem, Message};
 use crate::kernel_init::KernelState;

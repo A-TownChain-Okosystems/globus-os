@@ -81,6 +81,8 @@ pub enum KgError {
     NoWriteCapability,
     NoReadCapability,
     CapabilityRevoked,
+    CapabilityDenied,
+    NoDelegateCapability,
     InvalidObjectValue,
 }
 
@@ -123,7 +125,7 @@ impl KnowledgeGraph {
 
         // The owner-issued port grants only the rights needed by the graph.
         caps.create_entity_capability(creator, resource_id)
-            .map_err(|_| KgError::CapabilityRevoked)?;
+            .map_err(|_| KgError::CapabilityDenied)?;
 
         let entity = Entity {
             id,
@@ -364,7 +366,7 @@ impl KnowledgeGraph {
 
         // Revoke the entity capability and all delegated descendants.
         caps.revoke_entity_capabilities(caller, entity.0)
-            .map_err(|_| KgError::CapabilityRevoked)?;
+            .map_err(|_| KgError::CapabilityDenied)?;
 
         self.entities.remove(&entity);
         Ok(())
@@ -397,7 +399,11 @@ impl KnowledgeGraph {
             return Err(KgError::EntityNotFound);
         }
         caps.delegate_entity_read(owner, entity.0, target)
-            .map_err(|_| KgError::CapabilityRevoked)
+            .map_err(|error| match error {
+                CapabilityError::NoDelegateRight => KgError::NoDelegateCapability,
+                CapabilityError::NotOwner => KgError::NoWriteCapability,
+                _ => KgError::CapabilityRevoked,
+            })
     }
 
     /// Indices neu aufbauen (nach Loeschungen)
@@ -469,7 +475,7 @@ mod tests {
             resource_id: u64,
             target: Pid,
         ) -> Result<CapId, CapabilityError> {
-            if !self.check_entity_capability(owner, resource_id, Rights::WRITE) {
+            if !self.check_entity_capability(owner, resource_id, Rights::WRITE | Rights::DELEGATE) {
                 return Err(CapabilityError::NotOwner);
             }
             if !self.check_entity_capability(owner, resource_id, Rights::DELEGATE) {
@@ -632,7 +638,15 @@ mod tests {
             0
         );
 
-        // pid(1) delegiert READ an pid(2)
+        // Delegation is denied by default; the owner must explicitly grant DELEGATE.
+        assert_eq!(
+            kg.grant_read(&mut caps, pid(1), alice, pid(2)),
+            Err(KgError::NoDelegateCapability)
+        );
+        caps.rights.borrow_mut().insert(
+            (pid(1).0, alice.0),
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
+        );
         kg.grant_read(&mut caps, pid(1), alice, pid(2)).unwrap();
 
         // Jetzt sieht pid(2) das Tripel
