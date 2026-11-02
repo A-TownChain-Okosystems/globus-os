@@ -38,12 +38,13 @@ impl Default for TestHarness {
 
 impl TestHarness {
     pub fn new() -> Self {
+        let caps = CapabilityAuthority::new();
         Self {
-            caps: CapabilityAuthority::new(),
+            caps: caps.clone(),
             mem: KernelMemoryManager::new(),
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new(),
-            ipc: IpcSubsystem::new(),
+            ipc: IpcSubsystem::new(caps),
         }
     }
 }
@@ -107,7 +108,7 @@ mod tests {
         let mem_r = h.mem.allocate(&h.caps, receiver, 2048).unwrap();
 
         // Create IPC channel (uses capability::Pid)
-        let ch = h.ipc.create_channel(&h.caps, receiver, 1024);
+        let ch = h.ipc.create_channel( receiver, 1024);
 
         // Grant send access to sender
         h.ipc
@@ -120,7 +121,7 @@ mod tests {
             .unwrap();
 
         // Receiver reads the message
-        let received = h.ipc.recv(&h.caps, receiver, ch).unwrap();
+        let received = h.ipc.recv( receiver, ch).unwrap();
         assert_eq!(received.data, b"hello from sender");
         assert_eq!(received.sender, sender);
 
@@ -232,7 +233,7 @@ mod tests {
         let p3 = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
         // p1 creates a channel
-        let ch = h.ipc.create_channel(&h.caps, p1, 4096);
+        let ch = h.ipc.create_channel( p1, 4096);
 
         // p1 grants send to p2 and p3
         h.ipc
@@ -243,12 +244,12 @@ mod tests {
             .unwrap();
 
         // p2 and p3 send messages
-        h.ipc.send(&h.caps, p2, ch, b"from p2".to_vec()).unwrap();
-        h.ipc.send(&h.caps, p3, ch, b"from p3".to_vec()).unwrap();
+        h.ipc.send( p2, ch, b"from p2".to_vec()).unwrap();
+        h.ipc.send( p3, ch, b"from p3".to_vec()).unwrap();
 
         // p1 reads both
-        let m1 = h.ipc.recv(&h.caps, p1, ch).unwrap();
-        let m2 = h.ipc.recv(&h.caps, p1, ch).unwrap();
+        let m1 = h.ipc.recv( p1, ch).unwrap();
+        let m2 = h.ipc.recv( p1, ch).unwrap();
 
         assert_eq!(m1.data, b"from p2");
         assert_eq!(m2.data, b"from p3");
@@ -380,9 +381,9 @@ mod tests {
         let owner = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
         let _user = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
-        let ch1 = h.ipc.create_channel(&h.caps, owner, 1024);
-        let ch2 = h.ipc.create_channel(&h.caps, owner, 1024);
-        let ch3 = h.ipc.create_channel(&h.caps, owner, 2048);
+        let ch1 = h.ipc.create_channel( owner, 1024);
+        let ch2 = h.ipc.create_channel( owner, 1024);
+        let ch3 = h.ipc.create_channel( owner, 2048);
 
         assert_eq!(h.ipc.channel_count(), 3);
 
@@ -391,7 +392,7 @@ mod tests {
             .unwrap();
 
         // close_all_for closes capabilities and channels owned by this PID
-        let cleaned = h.ipc.close_all_for(&h.caps, owner);
+        let cleaned = h.ipc.close_all_for( owner);
         assert_eq!(cleaned, 3);
     }
 
