@@ -6,7 +6,7 @@
 //! fail closed before any kernel operation is reached.
 
 use crate::ats1000::Pid;
-use crate::capability::{CapId, CapabilityAuthority, CapabilityTable, ResourceType, Rights};
+use crate::capability::{CapId, CapabilityAuthority, ResourceType, Rights};
 use crate::rights::ObjectRights;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
@@ -197,7 +197,7 @@ mod tests {
                 abi_version: 0x0002_0000,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &CapabilityAuthority::new(),
         );
         assert_eq!(r.error, Some(AbiError::AbiVersionMismatch));
     }
@@ -211,14 +211,14 @@ mod tests {
                 payload_len: MAX_SYSCALL_PAYLOAD + 1,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &CapabilityAuthority::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidPayload));
     }
 
     #[test]
     fn ipc_requires_matching_capability_and_right() {
-        let mut table = CapabilityTable::new();
+        let table = CapabilityAuthority::new();
         let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -245,7 +245,7 @@ mod tests {
 
     #[test]
     fn ipc_receive_requires_endpoint_recv_right() {
-        let mut table = CapabilityTable::new();
+        let table = CapabilityAuthority::new();
         let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::RECV);
         let mut d = SyscallDispatcher::new();
         let allowed = d.dispatch(
@@ -279,19 +279,19 @@ mod tests {
         let a = d.dispatch(
             pid(1),
             request(Syscall::MonotonicTime),
-            &CapabilityTable::new(),
+            &CapabilityAuthority::new(),
         );
         let b = d.dispatch(
             pid(1),
             request(Syscall::MonotonicTime),
-            &CapabilityTable::new(),
+            &CapabilityAuthority::new(),
         );
         assert_eq!(a.value + 1, b.value);
     }
 
     #[test]
     fn capability_query_requires_inspect_right() {
-        let mut table = CapabilityTable::new();
+        let table = CapabilityAuthority::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
