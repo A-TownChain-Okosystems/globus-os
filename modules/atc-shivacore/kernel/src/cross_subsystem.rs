@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 
 use crate::atcfs::{atc_content_id, AtcFileSystem, FsError};
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::{CapabilityTable, ResourceType, Rights};
+use crate::capability::{CapabilityAuthority, ResourceType, Rights};
 use crate::ipc::{ChannelId, IpcError, IpcSubsystem, Message};
 use crate::kernel_init::KernelState;
 use crate::memory_manager::{AllocSource, KernelMemoryManager, MemError};
@@ -23,7 +23,7 @@ use crate::process::{ProcessManager, ProcessState};
 
 /// Test-Harness: erzeugt ein frisches Set aller Subsysteme
 pub struct TestHarness {
-    pub caps: CapabilityTable,
+    pub caps: CapabilityAuthority,
     pub mem: KernelMemoryManager,
     pub fs: AtcFileSystem,
     pub proc_mgr: ProcessManager,
@@ -39,7 +39,7 @@ impl Default for TestHarness {
 impl TestHarness {
     pub fn new() -> Self {
         Self {
-            caps: CapabilityTable::new(),
+            caps: CapabilityAuthority::new(),
             mem: KernelMemoryManager::new(),
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new(),
@@ -64,7 +64,7 @@ mod tests {
         assert_eq!(h.proc_mgr.active_count(), 1);
 
         // 2. Allocate memory (takes ats1000::Pid = u32)
-        let region = h.mem.allocate(&mut h.caps, p1, 4096).unwrap();
+        let region = h.mem.allocate(&h.caps, p1, 4096).unwrap();
         assert_eq!(region.owner_pid, p1);
 
         // 3. Process should have capabilities for its memory
@@ -85,7 +85,7 @@ mod tests {
         assert_eq!(h.fs.get_content(&cid).unwrap(), b"process data");
 
         // 6. Free memory (takes ats1000::Pid = u32)
-        h.mem.deallocate(&mut h.caps, p1, region.region_id).unwrap();
+        h.mem.deallocate(&h.caps, p1, region.region_id).unwrap();
         assert_eq!(h.mem.region_count(), 0);
 
         // 7. Kill process
@@ -103,15 +103,15 @@ mod tests {
         let receiver = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
         // Allocate memory for each (uses ats1000::Pid = u32)
-        let mem_s = h.mem.allocate(&mut h.caps, sender, 2048).unwrap();
-        let mem_r = h.mem.allocate(&mut h.caps, receiver, 2048).unwrap();
+        let mem_s = h.mem.allocate(&h.caps, sender, 2048).unwrap();
+        let mem_r = h.mem.allocate(&h.caps, receiver, 2048).unwrap();
 
         // Create IPC channel (uses capability::Pid)
-        let ch = h.ipc.create_channel(&mut h.caps, receiver, 1024);
+        let ch = h.ipc.create_channel(&h.caps, receiver, 1024);
 
         // Grant send access to sender
         h.ipc
-            .grant_access(&mut h.caps, receiver, ch, sender, Rights::WRITE)
+            .grant_access(&h.caps, receiver, ch, sender, Rights::WRITE)
             .unwrap();
 
         // Sender sends a message (data: Vec<u8>, not Message struct)
@@ -129,10 +129,10 @@ mod tests {
 
         // Cleanup
         h.mem
-            .deallocate(&mut h.caps, sender, mem_s.region_id)
+            .deallocate(&h.caps, sender, mem_s.region_id)
             .unwrap();
         h.mem
-            .deallocate(&mut h.caps, receiver, mem_r.region_id)
+            .deallocate(&h.caps, receiver, mem_r.region_id)
             .unwrap();
         h.proc_mgr.kill(sender, 0);
         h.proc_mgr.kill(receiver, 0);
@@ -148,7 +148,7 @@ mod tests {
         let bob = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
 
         // Alice allocates memory (u32 Pid)
-        let alice_mem = h.mem.allocate(&mut h.caps, alice, 4096).unwrap();
+        let alice_mem = h.mem.allocate(&h.caps, alice, 4096).unwrap();
 
         // Bob tries to read Alice's memory — should fail (u32 Pid)
         assert_eq!(
@@ -158,7 +158,7 @@ mod tests {
 
         // Bob tries to free Alice's memory — should fail
         assert_eq!(
-            h.mem.deallocate(&mut h.caps, bob, alice_mem.region_id),
+            h.mem.deallocate(&h.caps, bob, alice_mem.region_id),
             Err(MemError::NoCapability)
         );
 
@@ -186,7 +186,7 @@ mod tests {
         let mut h = TestHarness::new();
 
         let parent = h.proc_mgr.spawn(crate::process::ProcessType::Service, 200);
-        let parent_mem = h.mem.allocate(&mut h.caps, parent, 8192).unwrap();
+        let parent_mem = h.mem.allocate(&h.caps, parent, 8192).unwrap();
 
         let child = h
             .proc_mgr
@@ -237,14 +237,14 @@ mod tests {
         let p3 = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
         // p1 creates a channel
-        let ch = h.ipc.create_channel(&mut h.caps, p1, 4096);
+        let ch = h.ipc.create_channel(&h.caps, p1, 4096);
 
         // p1 grants send to p2 and p3
         h.ipc
-            .grant_access(&mut h.caps, p1, ch, p2, Rights::WRITE)
+            .grant_access(&h.caps, p1, ch, p2, Rights::WRITE)
             .unwrap();
         h.ipc
-            .grant_access(&mut h.caps, p1, ch, p3, Rights::WRITE)
+            .grant_access(&h.caps, p1, ch, p3, Rights::WRITE)
             .unwrap();
 
         // p2 and p3 send messages
@@ -295,10 +295,10 @@ mod tests {
         let p2 = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
         let p3 = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
 
-        h.mem.allocate(&mut h.caps, p1, 256).unwrap();
-        h.mem.allocate(&mut h.caps, p1, 8192).unwrap();
-        h.mem.allocate(&mut h.caps, p2, 1024).unwrap();
-        h.mem.allocate(&mut h.caps, p3, 4096).unwrap();
+        h.mem.allocate(&h.caps, p1, 256).unwrap();
+        h.mem.allocate(&h.caps, p1, 8192).unwrap();
+        h.mem.allocate(&h.caps, p2, 1024).unwrap();
+        h.mem.allocate(&h.caps, p3, 4096).unwrap();
 
         let stats = h.mem.stats();
         assert_eq!(stats.total_allocated, 256 + 8192 + 1024 + 4096);
@@ -310,7 +310,7 @@ mod tests {
 
         let p1_regions = h.mem.regions_for(p1);
         h.mem
-            .deallocate(&mut h.caps, p1, p1_regions[0].region_id)
+            .deallocate(&h.caps, p1, p1_regions[0].region_id)
             .unwrap();
 
         let stats2 = h.mem.stats();
@@ -385,18 +385,18 @@ mod tests {
         let owner = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
         let _user = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
-        let ch1 = h.ipc.create_channel(&mut h.caps, owner, 1024);
-        let ch2 = h.ipc.create_channel(&mut h.caps, owner, 1024);
-        let ch3 = h.ipc.create_channel(&mut h.caps, owner, 2048);
+        let ch1 = h.ipc.create_channel(&h.caps, owner, 1024);
+        let ch2 = h.ipc.create_channel(&h.caps, owner, 1024);
+        let ch3 = h.ipc.create_channel(&h.caps, owner, 2048);
 
         assert_eq!(h.ipc.channel_count(), 3);
 
         h.ipc
-            .grant_access(&mut h.caps, owner, ch1, _user, Rights::WRITE)
+            .grant_access(&h.caps, owner, ch1, _user, Rights::WRITE)
             .unwrap();
 
         // close_all_for closes capabilities and channels owned by this PID
-        let cleaned = h.ipc.close_all_for(&mut h.caps, owner);
+        let cleaned = h.ipc.close_all_for(&h.caps, owner);
         assert_eq!(cleaned, 3);
     }
 
@@ -409,20 +409,20 @@ mod tests {
         let p1 = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
         let p2 = h.proc_mgr.spawn(crate::process::ProcessType::Contract, 200);
 
-        let small1 = h.mem.allocate(&mut h.caps, p1, 512).unwrap();
-        let large1 = h.mem.allocate(&mut h.caps, p1, 65536).unwrap();
-        let small2 = h.mem.allocate(&mut h.caps, p2, 1024).unwrap();
-        let large2 = h.mem.allocate(&mut h.caps, p2, 131072).unwrap();
+        let small1 = h.mem.allocate(&h.caps, p1, 512).unwrap();
+        let large1 = h.mem.allocate(&h.caps, p1, 65536).unwrap();
+        let small2 = h.mem.allocate(&h.caps, p2, 1024).unwrap();
+        let large2 = h.mem.allocate(&h.caps, p2, 131072).unwrap();
 
         assert_eq!(small1.source, AllocSource::KernelHeap);
         assert_eq!(large1.source, AllocSource::UserspaceBump);
         assert_eq!(small2.source, AllocSource::KernelHeap);
         assert_eq!(large2.source, AllocSource::UserspaceBump);
 
-        h.mem.deallocate(&mut h.caps, p1, large1.region_id).unwrap();
-        h.mem.deallocate(&mut h.caps, p2, small2.region_id).unwrap();
-        h.mem.deallocate(&mut h.caps, p1, small1.region_id).unwrap();
-        h.mem.deallocate(&mut h.caps, p2, large2.region_id).unwrap();
+        h.mem.deallocate(&h.caps, p1, large1.region_id).unwrap();
+        h.mem.deallocate(&h.caps, p2, small2.region_id).unwrap();
+        h.mem.deallocate(&h.caps, p1, small1.region_id).unwrap();
+        h.mem.deallocate(&h.caps, p2, large2.region_id).unwrap();
 
         assert_eq!(h.mem.region_count(), 0);
         assert_eq!(h.mem.stats().total_allocated, 0);
@@ -448,7 +448,7 @@ mod tests {
     #[test]
     fn flow_ats1000_fs_trait() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(
             &caps,
@@ -513,7 +513,7 @@ mod tests {
                 .spawn(crate::process::ProcessType::Agent, ((i % 200) + 1) as u8);
             pids.push(p);
 
-            let r = h.mem.allocate(&mut h.caps, p, 128).unwrap();
+            let r = h.mem.allocate(&h.caps, p, 128).unwrap();
             regions.push(r);
 
             let path = format!("/tmp/p_{}.dat", i);
@@ -528,7 +528,7 @@ mod tests {
 
         for r in &regions {
             h.mem
-                .deallocate(&mut h.caps, r.owner_pid, r.region_id)
+                .deallocate(&h.caps, r.owner_pid, r.region_id)
                 .unwrap();
         }
         assert_eq!(h.mem.region_count(), 0);
