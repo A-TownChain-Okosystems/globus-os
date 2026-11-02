@@ -23,6 +23,8 @@ use crate::ipc::{ChannelId, IpcError, IpcSubsystem, Message};
 use crate::kernel_init::KernelState;
 use crate::memory_manager::{AllocSource, KernelMemoryManager, MemError};
 use crate::process::{ProcessManager, ProcessState};
+use crate::syscall::{SyscallDispatcher, SyscallRequest};
+use crate::vfs::Vfs;
 
 /// Test-Harness: erzeugt ein frisches Set aller Subsysteme
 #[cfg(test)]
@@ -35,6 +37,8 @@ pub struct TestHarness {
     pub fs: AtcFileSystem,
     pub proc_mgr: ProcessManager,
     pub ipc: IpcSubsystem,
+    pub vfs: Vfs,
+    pub syscalls: SyscallDispatcher,
 }
 
 #[cfg(test)]
@@ -62,6 +66,8 @@ impl TestHarness {
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new_with_capability_port(process_caps),
             ipc: IpcSubsystem::new(ipc_caps),
+            vfs: Vfs::new(owner.vfs_port()),
+            syscalls: SyscallDispatcher::new(owner.syscall_port()),
         }
     }
 }
@@ -95,6 +101,36 @@ mod tests {
             0x5000,
             Rights::READ | Rights::WRITE
         ));
+
+        let fs_cap = h.owner.create(
+            pid,
+            ResourceType::FileSystem,
+            0x6000,
+            Rights::READ | Rights::WRITE,
+        );
+        h.vfs
+            .mkdir("/shared-authority", pid.0 as u64, fs_cap.0)
+            .unwrap();
+
+        let inspect_cap = h.owner.create(
+            pid,
+            ResourceType::IpcChannel,
+            0x7000,
+            Rights::INSPECT,
+        );
+        let syscall = h.syscalls.dispatch(
+            pid,
+            SyscallRequest {
+                abi_version: libshivacore::ABI_VERSION,
+                syscall_id: libshivacore::Syscall::CapabilityQuery.id(),
+                capability: Some(libshivacore::CapabilityHandle(inspect_cap.0)),
+                arg0: 0,
+                arg1: 0,
+                payload_len: 0,
+            },
+        );
+        assert_eq!(syscall.error, None);
+        assert_eq!(syscall.value, 1);
     }
 
     // === FLOW 1: Boot → Spawn → Allocate → Write → Read → Free === //
