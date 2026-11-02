@@ -77,7 +77,7 @@ They constrain the implementation as follows:
 5. Non-blocking invokes are atomic. Revocation racing an already slot-resolved non-blocking invoke takes effect at sysret; blocked operations use the SC-003 wake/error path instead.
 6. ABI major mismatch takes precedence over object opcode dispatch and returns ABI_MISMATCH. Rights validation must occur before the object operation.
 
-**Unresolved encoding detail:** SC-005 defines the rights mask width (16-bit) and each object's named rights, but does not assign numeric bit positions. The migration MUST NOT silently infer or invent bit numbers from table order. A deterministic 16-bit encoding map must be recorded as an implementation decision and reviewed before the first binary/G7 binding. Until that map is approved, typed-right encoding is a design gate, not an implementation-ready constant set.
+**Encoding decision:** SC-005 defines the rights mask width (16-bit) and each object's named rights, but does not assign numeric bit positions. The candidate mapping is now documented in [SC-005-RIGHTS-ENCODING-IMPL-001 v1](./SC-005-RIGHTS-ENCODING-IMPL-001.md). It uses object-type-local bit positions and the typed identity `(ObjectType, RightsMask<u16>)`; it does not infer positions from the frozen table order. The mapping remains PROPOSED / REVIEW REQUIRED and MUST NOT be used for production constants, binary serialization, or G7 binding until explicit owner approval.
 
 ### 2.4 Capability operation authority
 
@@ -149,7 +149,7 @@ The recent removal of implicit EXEC grants in PR #112 is a least-authority harde
 ### Phase A — authority replacement design
 - Confirm no other capability manager or active capability table exists in the canonical kernel path.
 - Define the bounded CNode storage strategy, path encoding, synchronization/locking, and kernel object reference registry.
-- Define and review a deterministic 16-bit typed-right encoding map. Frozen SC-005 names the rights but does not assign numeric bit positions; do not infer them from table order or collapse rights across object types.
+- Review and explicitly approve the candidate mapping in [SC-005-RIGHTS-ENCODING-IMPL-001](./SC-005-RIGHTS-ENCODING-IMPL-001.md). The mapping is object-type-local; never infer positions from table order or collapse rights across object types.
 - Trace CNode MINT, DUPLICATE and MOVE authorization separately from target-object rights.
 - Bind syscall slot-in/slot-out and transient-cap lifetime to SC-004 §3–4; bind blocked IPC revocation to SC-003 I-E06/I-E07.
 - Define Initial Task root construction only at the resolved SC-001 boot/Initial Task boundary.
@@ -200,4 +200,4 @@ The recent removal of implicit EXEC grants in PR #112 is a least-authority harde
 - No claim that PR #111/#112 establish SC-005 or SC-007 conformance.
 - No merge/release authorization in this document.
 
-**Disposition:** Architecture direction D1–D2 is approved by ADR-0002. The SC-003/SC-004 cross-contract checks and expanded call-site census are now included. The numeric 16-bit rights encoding remains an explicit implementation decision gate because the frozen standard does not assign bit positions. This migration contract is a technical implementation plan only. The CSpace implementation remains NOT IMPLEMENTED until the core authority replacement and all required caller migrations are committed and verified.
+**Disposition:** Architecture direction D1–D2 is approved by ADR-0002. The SC-003/SC-004 cross-contract checks and expanded call-site census are included. Candidate numeric encoding is documented in `SC-005-RIGHTS-ENCODING-IMPL-001` as PROPOSED / REVIEW REQUIRED; it is not an approved ABI and is not implementation-ready. This migration contract is a technical implementation plan only. The CSpace implementation remains NOT IMPLEMENTED until the encoding decision is explicitly approved, the core authority replacement and all required caller migrations are committed, and the exact evidence gates pass.
