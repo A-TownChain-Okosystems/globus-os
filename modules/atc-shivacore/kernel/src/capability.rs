@@ -111,7 +111,7 @@ pub enum CapabilityError {
 
 /// Capability-Tabelle — Kernel-intern, geschuetzt durch Spinlock
 #[derive(Clone)]
-pub struct CapabilityTable {
+pub(crate) struct CapabilityTable {
     caps: BTreeMap<CapId, Capability>,
     by_pid: BTreeMap<Pid, Vec<CapId>>,
     next_id: u64,
@@ -121,7 +121,6 @@ pub struct CapabilityTable {
 ///
 /// Kernel subsystems receive clones of this handle; all operations serialize
 /// through the same capability table. The table itself remains the sole store.
-#[derive(Clone)]
 pub(crate) struct CapabilityAuthority {
     inner: Arc<spin::Mutex<CapabilityTable>>,
 }
