@@ -6,7 +6,7 @@
 //! fail closed before any kernel operation is reached.
 
 use crate::ats1000::Pid;
-use crate::capability::{CapId, CapabilityAuthority, ResourceType, Rights};
+use crate::capability::{CapId, CapabilityAuthority, ResourceType, Rights, SyscallCapabilityPort};
 use crate::rights::ObjectRights;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
@@ -53,11 +53,11 @@ impl From<AbiError> for DispatchError {
 
 pub struct SyscallDispatcher {
     monotonic_ticks: u64,
-    capabilities: CapabilityAuthority,
+    capabilities: SyscallCapabilityPort,
 }
 
 impl SyscallDispatcher {
-    pub fn new(capabilities: CapabilityAuthority) -> Self {
+    pub fn new(capabilities: SyscallCapabilityPort) -> Self {
         Self {
             monotonic_ticks: 0,
             capabilities,
@@ -148,6 +148,7 @@ impl SyscallDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::CapabilityAuthority;
 
     fn pid(n: u32) -> Pid {
         Pid(n)
@@ -166,7 +167,7 @@ mod tests {
 
     #[test]
     fn rejects_unknown_syscall() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -207,7 +208,7 @@ mod tests {
     fn ipc_requires_matching_capability_and_right() {
         let table = CapabilityAuthority::new();
         let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
-        let mut d = SyscallDispatcher::new(table.clone());
+        let mut d = SyscallDispatcher::new(table.syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -232,7 +233,7 @@ mod tests {
     fn ipc_receive_requires_endpoint_recv_right() {
         let table = CapabilityAuthority::new();
         let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::RECV);
-        let mut d = SyscallDispatcher::new(table.clone());
+        let mut d = SyscallDispatcher::new(table.syscall_port());
         let allowed = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -268,7 +269,7 @@ mod tests {
     fn capability_query_requires_inspect_right() {
         let table = CapabilityAuthority::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
-        let mut d = SyscallDispatcher::new(table.clone());
+        let mut d = SyscallDispatcher::new(table.syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
