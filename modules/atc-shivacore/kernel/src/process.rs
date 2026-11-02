@@ -68,10 +68,10 @@ impl Default for ProcessManager {
 
 impl ProcessManager {
     pub fn new() -> Self {
-        Self::new_with_authority(new_authority().process_port())
+        Self::new_with_capability_port(new_authority().process_port())
     }
 
-    pub fn new_with_authority(caps: ProcessCapabilityPort) -> Self {
+    pub fn new_with_capability_port(caps: ProcessCapabilityPort) -> Self {
         Self {
             processes: BTreeMap::new(),
             next_pid: AtomicU32::new(1),
