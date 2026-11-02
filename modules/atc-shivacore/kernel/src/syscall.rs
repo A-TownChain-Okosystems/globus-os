@@ -6,7 +6,7 @@
 //! fail closed before any kernel operation is reached.
 
 use crate::ats1000::Pid;
-use crate::capability::{CapId, CapabilityAuthority, ResourceType, Rights, SyscallCapabilityPort};
+use crate::capability::{CapId, Rights, SyscallCapabilityPort};
 use crate::rights::ObjectRights;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
@@ -148,7 +148,7 @@ impl SyscallDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::CapabilityAuthority;
+    use crate::capability::{CapabilityAuthority, ResourceType};
 
     fn pid(n: u32) -> Pid {
         Pid(n)
@@ -180,7 +180,7 @@ mod tests {
 
     #[test]
     fn rejects_major_abi_mismatch() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -193,7 +193,7 @@ mod tests {
 
     #[test]
     fn rejects_oversized_payload() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -259,7 +259,7 @@ mod tests {
 
     #[test]
     fn monotonic_time_is_kernel_owned() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
         let a = d.dispatch(pid(1), request(Syscall::MonotonicTime));
         let b = d.dispatch(pid(1), request(Syscall::MonotonicTime));
         assert_eq!(a.value + 1, b.value);
