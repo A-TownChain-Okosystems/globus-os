@@ -11,7 +11,7 @@
 //!   L2:  CapabilityAuthority         — kernel-owned authority
 //!   L3:  ProcessManager::new()       — Prozess-Verwaltung
 //!   L4:  Scheduler::new()            — DA-HEFT Scheduler
-//!   L5:  IpcSubsystem::new(capabilities.clone())        — IPC-Kanäle
+//!   L5:  IpcSubsystem::new(capabilities.ipc_port())        — IPC-Kanäle
 //!   L6:  AtcFileSystem::new()       — Content-Addressed FS
 //!   L6b: Vfs::new(caps)             — Virtual File System
 //!   L7:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
@@ -84,7 +84,7 @@ pub struct KernelState {
     // L1: Memory
     pub memory: MemorySubsystem,
     /// One kernel-owned capability authority shared by all consumers.
-    pub capabilities: CapabilityAuthority,
+    capability_authority: CapabilityAuthority,
     // L2: Capabilities (inside ProcessManager)
     // L3: Process Manager
     pub processes: ProcessManager,
@@ -121,7 +121,7 @@ impl KernelState {
         // ── L1: MemorySubsystem (Heap-Bridge + Prozess-Regionen) ──
         log.push((BootPhase::Memory, InitStatus::Initializing));
         let capabilities = new_authority();
-        let memory = MemorySubsystem::new_with_authority(capabilities.clone());
+        let memory = MemorySubsystem::new_with_authority(capabilities.memory_port());
         let stats = memory.stats();
         if stats.heap_base != HEAP_START {
             log.push((BootPhase::Memory, InitStatus::Failed));
@@ -131,7 +131,7 @@ impl KernelState {
 
         // ── L2+L3: ProcessManager (uses shared CapabilityAuthority) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
-        let processes = ProcessManager::new_with_authority(capabilities.clone());
+        let processes = ProcessManager::new_with_authority(capabilities.process_port());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
         log.push((BootPhase::Processes, InitStatus::Ready));
 
@@ -143,7 +143,7 @@ impl KernelState {
         // ── L5: IPC Subsystem ──
         log.push((BootPhase::Ipc, InitStatus::Initializing));
         let ipc = IpcSubsystem::new(capabilities.clone());
-        let syscalls = SyscallDispatcher::new(capabilities.clone());
+        let syscalls = SyscallDispatcher::new(capabilities.syscall_port());
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
         // ── L6: ATCFS + VFS ──
@@ -153,7 +153,7 @@ impl KernelState {
             log.push((BootPhase::FileSystem, InitStatus::Failed));
             return Err(BootError::FsInitFailed);
         }
-        let vfs = Vfs::new(capabilities.clone());
+        let vfs = Vfs::new(capabilities.vfs_port());
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
         // ── L7: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
@@ -166,7 +166,7 @@ impl KernelState {
 
         Ok(KernelState {
             memory,
-            capabilities,
+            capability_authority: capabilities,
             processes,
             scheduler,
             ipc,
@@ -210,10 +210,8 @@ impl KernelState {
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 2. FS write
-        let caps = self.capabilities.clone();
         self.fs
             .write_file(
-                &caps,
                 "/tmp/smoke_test.txt",
                 b"ShivaCore boot OK",
                 crate::ats1000::Pid(1),
@@ -223,10 +221,9 @@ impl KernelState {
         // 3. FS read
         let (_cid, node) = self
             .fs
-            .read_file(&caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
+            .read_file("/tmp/smoke_test.txt", crate::ats1000::Pid(1))
             .map_err(|_| BootError::SmokeTestFailed)?;
         assert_eq!(node.size, 17);
-        drop(caps);
 
         // 4. Memory free
         self.memory
@@ -357,7 +354,7 @@ mod tests {
             region.region_id,
             crate::capability::Rights::READ,
         ));
-        assert!(state.capabilities.check(
+        assert!(state.capability_authority.check(
             pid,
             crate::capability::ResourceType::Memory,
             region.region_id,
