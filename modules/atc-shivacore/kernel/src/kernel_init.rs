@@ -8,10 +8,10 @@
 //! Boot-Reihenfolge:
 //!   L0:  allocator::init_heap()      — Heap bereit (Box/Vec/String)
 //!   L1:  MemorySubsystem::new()      — Prozess-Regionen + Caps
-//!   L2:  CapabilityTable::new()      — System-Capability-Table
+//!   L2:  CapabilityAuthority         — kernel-owned authority
 //!   L3:  ProcessManager::new()       — Prozess-Verwaltung
 //!   L4:  Scheduler::new()            — DA-HEFT Scheduler
-//!   L5:  IpcSubsystem::new()        — IPC-Kanäle
+//!   L5:  IpcSubsystem::new(capabilities.clone())        — IPC-Kanäle
 //!   L6:  AtcFileSystem::new()       — Content-Addressed FS
 //!   L6b: Vfs::new(caps)             — Virtual File System
 //!   L7:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
@@ -52,7 +52,7 @@ pub enum InitStatus {
 pub enum BootPhase {
     Heap,         // L0: allocator::init_heap
     Memory,       // L1: MemorySubsystem
-    Capabilities, // L2: CapabilityTable
+    Capabilities, // L2: CapabilityAuthority
     Processes,    // L3: ProcessManager
     Scheduler,    // L4: DA-HEFT Scheduler
     Ipc,          // L5: IPC Channels
@@ -66,7 +66,7 @@ impl BootPhase {
         match self {
             BootPhase::Heap => "L0 Heap (linked_list_allocator)",
             BootPhase::Memory => "L1 MemorySubsystem (Heap-Bridge)",
-            BootPhase::Capabilities => "L2 CapabilityTable",
+            BootPhase::Capabilities => "L2 CapabilityAuthority",
             BootPhase::Processes => "L3 ProcessManager",
             BootPhase::Scheduler => "L4 DA-HEFT Scheduler",
             BootPhase::Ipc => "L5 IPC Channels",
@@ -126,7 +126,7 @@ impl KernelState {
         }
         log.push((BootPhase::Memory, InitStatus::Ready));
 
-        // ── L2+L3: ProcessManager (enthält CapabilityTable) ──
+        // ── L2+L3: ProcessManager (uses shared CapabilityAuthority) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
         let processes = ProcessManager::new_with_authority(capabilities.clone());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
@@ -356,6 +356,13 @@ mod tests {
             pid,
             crate::capability::ResourceType::Memory,
             region.region_id,
+            crate::capability::Rights::WRITE,
+        ));
+        let channel = state.ipc.create_channel(pid, 128);
+        assert!(state.capabilities.check(
+            pid,
+            crate::capability::ResourceType::IpcChannel,
+            channel.0,
             crate::capability::Rights::WRITE,
         ));
     }
