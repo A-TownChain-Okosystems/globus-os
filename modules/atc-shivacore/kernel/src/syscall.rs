@@ -6,7 +6,7 @@
 //! fail closed before any kernel operation is reached.
 
 use crate::ats1000::Pid;
-use crate::capability::{CapId, CapabilityTable, Rights};
+use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use crate::rights::ObjectRights;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
