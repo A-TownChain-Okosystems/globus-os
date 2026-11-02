@@ -351,7 +351,7 @@ impl KnowledgeGraph {
         if !self.entities.contains_key(&entity) {
             return Err(KgError::EntityNotFound);
         }
-        if !caps.check(caller, ResourceType::Memory, entity.0, Rights::WRITE) {
+        if !caps.check_entity_capability(caller, entity.0, Rights::WRITE) {
             return Err(KgError::NoWriteCapability);
         }
 

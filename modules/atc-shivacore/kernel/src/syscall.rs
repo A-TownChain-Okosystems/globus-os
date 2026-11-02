@@ -211,7 +211,7 @@ mod tests {
         let table = new_authority();
         let owner = table.owner();
         let cap = owner.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
-        let mut d = SyscallDispatcher::new(table.syscall_port());
+        let mut d = SyscallDispatcher::new(table.owner().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -238,7 +238,7 @@ mod tests {
         let cap = table
             .owner()
             .create_typed(pid(1), 42, crate::rights::endpoint::RECV);
-        let mut d = SyscallDispatcher::new(table.syscall_port());
+        let mut d = SyscallDispatcher::new(table.owner().syscall_port());
         let allowed = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -290,7 +290,7 @@ mod tests {
         let table = new_authority();
         let owner = table.owner();
         let cap = owner.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
-        let mut d = SyscallDispatcher::new(table.syscall_port());
+        let mut d = SyscallDispatcher::new(table.owner().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {

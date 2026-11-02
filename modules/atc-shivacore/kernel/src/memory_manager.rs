@@ -613,9 +613,7 @@ mod tests {
         let caps = new_authority();
 
         let r1 = mm
-
             .allocate(&caps.owner().memory_port(), pid(1), 4096)
-
             .unwrap();
         let r2 = mm
             .allocate(&caps.owner().memory_port(), pid(1), 4096)
@@ -668,7 +666,6 @@ mod tests {
         let caps = new_authority();
 
         mm.allocate(&caps.owner().memory_port(), pid(1), 4096)
-
             .unwrap();
         mm.allocate(&caps.owner().memory_port(), pid(1), 8192)
             .unwrap();
@@ -688,9 +685,7 @@ mod tests {
         let caps = new_authority();
 
         let r = mm
-
             .allocate(&caps.owner().memory_port(), pid(1), 8192)
-
             .unwrap();
         let s1 = mm.stats();
         assert_eq!(s1.peak_allocated, 8192);
@@ -708,7 +703,6 @@ mod tests {
         let caps = new_authority();
 
         mm.allocate(&caps.owner().memory_port(), pid(1), 4096)
-
             .unwrap();
         mm.allocate(&caps.owner().memory_port(), pid(1), 8192)
             .unwrap();
@@ -777,16 +771,12 @@ mod tests {
         let caps = new_authority();
 
         let r1 = mm
-
             .allocate(&caps.owner().memory_port(), pid(1), 2048)
-
             .unwrap();
         assert_eq!(r1.source, AllocSource::KernelHeap); // <= 2048
 
         let r2 = mm
-
             .allocate(&caps.owner().memory_port(), pid(1), 2049)
-
             .unwrap();
         assert_eq!(r2.source, AllocSource::UserspaceBump); // > 2048
     }
@@ -816,9 +806,7 @@ mod tests {
         let caps = new_authority();
 
         let heap_r = mm
-
             .allocate(&caps.owner().memory_port(), pid(1), 1024)
-
             .unwrap(); // Heap
         let user_r = mm
             .allocate(&caps.owner().memory_port(), pid(1), 65536)
