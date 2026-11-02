@@ -521,7 +521,9 @@ mod tests {
     fn test_allocate_kernel_heap() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 256).unwrap(); // <= 4096 -> Kernel-Heap
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 256)
+            .unwrap(); // <= 4096 -> Kernel-Heap
         assert_eq!(r.size, 256);
         assert_eq!(r.source, AllocSource::KernelHeap);
         assert!(r.addr != 0); // Adresse ist nicht 0
@@ -531,7 +533,9 @@ mod tests {
     fn test_allocate_userspace_bump() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 8192).unwrap(); // > 4096 -> Userspace
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 8192)
+            .unwrap(); // > 4096 -> Userspace
         assert_eq!(r.source, AllocSource::UserspaceBump);
         assert!(r.addr >= USERSPACE_BASE);
     }
@@ -540,7 +544,9 @@ mod tests {
     fn test_allocate_creates_capability() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 4096)
+            .unwrap();
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::READ));
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::WRITE));
         assert!(!caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::EXEC));
@@ -550,7 +556,9 @@ mod tests {
     fn test_deallocate_kernel_heap() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 512).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 512)
+            .unwrap();
         assert_eq!(r.source, AllocSource::KernelHeap);
 
         mm.deallocate(&caps.owner().memory_port(), pid(1), r.region_id)
@@ -566,7 +574,9 @@ mod tests {
     fn test_deallocate_userspace() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 8192).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 8192)
+            .unwrap();
         assert_eq!(r.source, AllocSource::UserspaceBump);
 
         mm.deallocate(&caps.owner().memory_port(), pid(1), r.region_id)
@@ -578,7 +588,9 @@ mod tests {
     fn test_deallocate_without_cap_rejected() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 4096)
+            .unwrap();
         assert_eq!(
             mm.deallocate(&caps.owner().memory_port(), pid(2), r.region_id),
             Err(MemError::NoCapability)
@@ -600,9 +612,17 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
 
-        let r1 = mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
-        let r2 = mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
-        let r3 = mm.allocate(&caps.owner().memory_port(), pid(2), 4096).unwrap();
+        let r1 = mm
+
+            .allocate(&caps.owner().memory_port(), pid(1), 4096)
+
+            .unwrap();
+        let r2 = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 4096)
+            .unwrap();
+        let r3 = mm
+            .allocate(&caps.owner().memory_port(), pid(2), 4096)
+            .unwrap();
 
         assert_ne!(r1.addr, r2.addr);
         assert_ne!(r2.addr, r3.addr);
@@ -612,7 +632,9 @@ mod tests {
     fn test_read_check_without_cap_rejected() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 4096)
+            .unwrap();
 
         assert!(mm
             .read_check(&caps.owner().memory_port(), pid(1), r.region_id)
@@ -627,7 +649,9 @@ mod tests {
     fn test_write_check_without_cap_rejected() {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 2048).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 2048)
+            .unwrap();
 
         assert!(mm
             .write_check(&caps.owner().memory_port(), pid(1), r.region_id)
@@ -643,9 +667,13 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
 
-        mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
-        mm.allocate(&caps.owner().memory_port(), pid(1), 8192).unwrap();
-        mm.allocate(&caps.owner().memory_port(), pid(2), 4096).unwrap();
+        mm.allocate(&caps.owner().memory_port(), pid(1), 4096)
+
+            .unwrap();
+        mm.allocate(&caps.owner().memory_port(), pid(1), 8192)
+            .unwrap();
+        mm.allocate(&caps.owner().memory_port(), pid(2), 4096)
+            .unwrap();
 
         let s = mm.stats();
         assert_eq!(s.total_allocated, 16384);
@@ -659,7 +687,11 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
 
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 8192).unwrap();
+        let r = mm
+
+            .allocate(&caps.owner().memory_port(), pid(1), 8192)
+
+            .unwrap();
         let s1 = mm.stats();
         assert_eq!(s1.peak_allocated, 8192);
 
@@ -675,9 +707,13 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
 
-        mm.allocate(&caps.owner().memory_port(), pid(1), 4096).unwrap();
-        mm.allocate(&caps.owner().memory_port(), pid(1), 8192).unwrap();
-        mm.allocate(&caps.owner().memory_port(), pid(2), 4096).unwrap();
+        mm.allocate(&caps.owner().memory_port(), pid(1), 4096)
+
+            .unwrap();
+        mm.allocate(&caps.owner().memory_port(), pid(1), 8192)
+            .unwrap();
+        mm.allocate(&caps.owner().memory_port(), pid(2), 4096)
+            .unwrap();
 
         assert_eq!(mm.regions_for(pid(1)).len(), 2);
         assert_eq!(mm.regions_for(pid(2)).len(), 1);
@@ -726,7 +762,9 @@ mod tests {
         let caps = new_authority();
 
         // Kleine Allokation -> Kernel-Heap (echte alloc::alloc)
-        let r = mm.allocate(&caps.owner().memory_port(), pid(1), 128).unwrap();
+        let r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 128)
+            .unwrap();
         assert_eq!(r.source, AllocSource::KernelHeap);
 
         // Adresse sollte im echten Heap-Bereich liegen (nicht Userspace)
@@ -738,10 +776,18 @@ mod tests {
         let mut mm = KernelMemoryManager::new().with_heap_threshold(2048);
         let caps = new_authority();
 
-        let r1 = mm.allocate(&caps.owner().memory_port(), pid(1), 2048).unwrap();
+        let r1 = mm
+
+            .allocate(&caps.owner().memory_port(), pid(1), 2048)
+
+            .unwrap();
         assert_eq!(r1.source, AllocSource::KernelHeap); // <= 2048
 
-        let r2 = mm.allocate(&caps.owner().memory_port(), pid(1), 2049).unwrap();
+        let r2 = mm
+
+            .allocate(&caps.owner().memory_port(), pid(1), 2049)
+
+            .unwrap();
         assert_eq!(r2.source, AllocSource::UserspaceBump); // > 2048
     }
 
@@ -752,7 +798,9 @@ mod tests {
 
         // Allokiere + deallokiere mehrfach — sollte nicht OOM gehen
         for _ in 0..100 {
-            let r = mm.allocate(&caps.owner().memory_port(), pid(1), 256).unwrap();
+            let r = mm
+                .allocate(&caps.owner().memory_port(), pid(1), 256)
+                .unwrap();
             mm.deallocate(&caps.owner().memory_port(), pid(1), r.region_id)
                 .unwrap();
         }
@@ -767,9 +815,17 @@ mod tests {
         let mut mm = KernelMemoryManager::new();
         let caps = new_authority();
 
-        let heap_r = mm.allocate(&caps.owner().memory_port(), pid(1), 1024).unwrap(); // Heap
-        let user_r = mm.allocate(&caps.owner().memory_port(), pid(1), 65536).unwrap(); // Userspace
-        let heap_r2 = mm.allocate(&caps.owner().memory_port(), pid(2), 2048).unwrap(); // Heap
+        let heap_r = mm
+
+            .allocate(&caps.owner().memory_port(), pid(1), 1024)
+
+            .unwrap(); // Heap
+        let user_r = mm
+            .allocate(&caps.owner().memory_port(), pid(1), 65536)
+            .unwrap(); // Userspace
+        let heap_r2 = mm
+            .allocate(&caps.owner().memory_port(), pid(2), 2048)
+            .unwrap(); // Heap
 
         assert_eq!(heap_r.source, AllocSource::KernelHeap);
         assert_eq!(user_r.source, AllocSource::UserspaceBump);

@@ -295,12 +295,7 @@ impl CapabilityAuthorityOwner {
 /// The concrete port is issued only by the kernel authority owner.
 pub trait KnowledgeGraphCapabilityAccess {
     fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId;
-    fn check_entity_capability(
-        &self,
-        caller: Pid,
-        resource_id: u64,
-        required: Rights,
-    ) -> bool;
+    fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool;
     fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64);
     fn delegate_entity_read(
         &self,
@@ -325,21 +320,17 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
         )
     }
 
-    fn check_entity_capability(
-        &self,
-        caller: Pid,
-        resource_id: u64,
-        required: Rights,
-    ) -> bool {
+    fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool {
         self.inner
             .lock()
             .check(caller, ResourceType::Memory, resource_id, required)
     }
 
     fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
-        self.inner
-            .lock()
-            .revoke_for_resource(owner, ResourceType::Memory, resource_id);
+        let mut table = self.inner.lock();
+        if table.check(owner, ResourceType::Memory, resource_id, Rights::WRITE) {
+            table.revoke_for_resource(owner, ResourceType::Memory, resource_id);
+        }
     }
 
     fn delegate_entity_read(
@@ -350,7 +341,7 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
     ) -> Result<CapId, CapabilityError> {
         let mut table = self.inner.lock();
         let source = table
-            .find_for_resource_with_rights(owner, ResourceType::Memory, resource_id, Rights::READ)
+            .find_for_resource_with_rights(owner, ResourceType::Memory, resource_id, Rights::WRITE)
             .ok_or(CapabilityError::NotOwner)?;
         table.delegate_by_kernel_owner(owner, source, target, Rights::READ)
     }
@@ -944,6 +935,19 @@ mod tests {
         assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::READ));
         assert!(!port.check_entity_capability(pid(2), 0x4000, Rights::READ));
         let _ = (root, child);
+    }
+
+    #[test]
+    fn knowledge_graph_port_rejects_unauthorized_delegate_and_revoke() {
+        let authority = new_authority();
+        let port = authority.owner().knowledge_graph_port();
+        port.create_entity_capability(pid(1), 0x5000);
+        assert_eq!(
+            port.delegate_entity_read(pid(2), 0x5000, pid(3)),
+            Err(CapabilityError::NotOwner)
+        );
+        port.revoke_entity_capabilities(pid(2), 0x5000);
+        assert!(port.check_entity_capability(pid(1), 0x5000, Rights::READ));
     }
 
     #[test]

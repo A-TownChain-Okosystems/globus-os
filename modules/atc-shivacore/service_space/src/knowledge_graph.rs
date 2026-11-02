@@ -22,9 +22,7 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use shivacore::capability::{
-    CapId, CapabilityError, KnowledgeGraphCapabilityAccess, Pid, Rights,
-};
+use shivacore::capability::{CapId, CapabilityError, KnowledgeGraphCapabilityAccess, Pid, Rights};
 
 /// Eindeutige Entity-ID im Knowledge Graph
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -227,7 +225,12 @@ impl KnowledgeGraph {
     }
 
     /// Holt alle ausgehenden Tripel einer Entity (Subject-Lookup).
-    pub fn outgoing(&self, caps: &dyn KnowledgeGraphCapabilityAccess, caller: Pid, entity: EntityId) -> Vec<Triple> {
+    pub fn outgoing(
+        &self,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
+        caller: Pid,
+        entity: EntityId,
+    ) -> Vec<Triple> {
         self.query(
             caps,
             caller,
@@ -241,7 +244,12 @@ impl KnowledgeGraph {
 
     /// Holt alle eingehenden Tripel einer Entity (Object-Lookup).
     /// "Wer referenziert mich?"
-    pub fn incoming(&self, caps: &dyn KnowledgeGraphCapabilityAccess, caller: Pid, entity: EntityId) -> Vec<Triple> {
+    pub fn incoming(
+        &self,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
+        caller: Pid,
+        entity: EntityId,
+    ) -> Vec<Triple> {
         let mut results = Vec::new();
 
         if let Some(indices) = self.osp_index.get(&entity) {
@@ -436,10 +444,12 @@ mod tests {
                 .unwrap_or(false)
         }
 
-        fn revoke_entity_capabilities(&self, _owner: Pid, resource_id: u64) {
-            self.rights
-                .borrow_mut()
-                .retain(|(_, id), _| *id != resource_id);
+        fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
+            if self.check_entity_capability(owner, resource_id, Rights::WRITE) {
+                self.rights
+                    .borrow_mut()
+                    .retain(|(_, id), _| *id != resource_id);
+            }
         }
 
         fn delegate_entity_read(
@@ -448,7 +458,7 @@ mod tests {
             resource_id: u64,
             target: Pid,
         ) -> Result<CapId, CapabilityError> {
-            if !self.check_entity_capability(owner, resource_id, Rights::READ) {
+            if !self.check_entity_capability(owner, resource_id, Rights::WRITE) {
                 return Err(CapabilityError::NotOwner);
             }
             self.rights

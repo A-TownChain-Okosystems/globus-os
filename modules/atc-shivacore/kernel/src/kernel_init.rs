@@ -107,7 +107,9 @@ pub struct KernelState {
 
 impl KernelState {
     /// Issues the narrowly scoped capability port required by service-space.
-    pub fn knowledge_graph_capability_port(&self) -> crate::capability::KnowledgeGraphCapabilityPort {
+    pub fn knowledge_graph_capability_port(
+        &self,
+    ) -> crate::capability::KnowledgeGraphCapabilityPort {
         self.capability_owner.knowledge_graph_port()
     }
 
