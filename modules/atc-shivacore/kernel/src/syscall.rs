@@ -6,7 +6,7 @@
 //! fail closed before any kernel operation is reached.
 
 use crate::ats1000::Pid;
-use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use crate::capability::{CapId, CapabilityAuthority, CapabilityTable, ResourceType, Rights};
 use crate::rights::ObjectRights;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
@@ -71,7 +71,7 @@ impl SyscallDispatcher {
         &mut self,
         pid: Pid,
         request: SyscallRequest,
-        capabilities: &CapabilityTable,
+        capabilities: &CapabilityAuthority,
     ) -> SyscallResponse {
         if !validate_abi_version(request.abi_version) {
             return SyscallResponse::err(AbiError::AbiVersionMismatch);
@@ -146,7 +146,7 @@ impl SyscallDispatcher {
         &self,
         pid: Pid,
         handle: Option<CapabilityHandle>,
-        capabilities: &CapabilityTable,
+        capabilities: &CapabilityAuthority,
         resource_id: u64,
         required: ObjectRights,
     ) -> bool {
