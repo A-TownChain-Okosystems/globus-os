@@ -15,7 +15,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ats1000::FileSystem;
-use crate::capability::{CapabilityTable, Pid, ResourceType, Rights};
+use crate::capability::{CapabilityAuthority, Pid, ResourceType, Rights};
 
 /// Content-ID: SHA3-256 Hash mit "atc1" Praefix
 pub type Cid = String;
@@ -206,7 +206,7 @@ impl AtcFileSystem {
     /// Schreibt Daten in eine Datei
     pub fn write_file(
         &mut self,
-        caps: &CapabilityTable,
+        caps: &CapabilityAuthority,
         path: &str,
         data: &[u8],
         actor: Pid,
@@ -260,7 +260,7 @@ impl AtcFileSystem {
     /// Liest eine Datei (gibt CID + Node zurueck)
     pub fn read_file(
         &self,
-        caps: &CapabilityTable,
+        caps: &CapabilityAuthority,
         path: &str,
         actor: Pid,
     ) -> Result<(Cid, AtcNode), FsError> {
