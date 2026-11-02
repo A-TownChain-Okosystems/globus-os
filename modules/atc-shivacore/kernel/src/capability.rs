@@ -329,7 +329,12 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
 
     fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
         let mut table = self.inner.lock();
-        if table.check(owner, ResourceType::KnowledgeGraph, resource_id, Rights::WRITE) {
+        if table.check(
+            owner,
+            ResourceType::KnowledgeGraph,
+            resource_id,
+            Rights::WRITE,
+        ) {
             table.revoke_for_resource(owner, ResourceType::KnowledgeGraph, resource_id);
         }
     }
@@ -342,7 +347,12 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
     ) -> Result<CapId, CapabilityError> {
         let mut table = self.inner.lock();
         let source = table
-            .find_for_resource_with_rights(owner, ResourceType::KnowledgeGraph, resource_id, Rights::WRITE)
+            .find_for_resource_with_rights(
+                owner,
+                ResourceType::KnowledgeGraph,
+                resource_id,
+                Rights::WRITE,
+            )
             .ok_or(CapabilityError::NotOwner)?;
         table.delegate_by_kernel_owner(owner, source, target, Rights::READ)
     }
