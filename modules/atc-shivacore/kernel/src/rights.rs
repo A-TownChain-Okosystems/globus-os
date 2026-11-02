@@ -261,9 +261,6 @@ mod tests {
         let child = ObjectRights::new(ObjectType::Frame, 1).unwrap();
         assert_eq!(parent.attenuate(child), Ok(child));
         let expanded = ObjectRights::new(ObjectType::Frame, 15).unwrap();
-        assert_eq!(
-            child.attenuate(expanded),
-            Err(RightsError::RightsExpansion)
-        );
+        assert_eq!(child.attenuate(expanded), Err(RightsError::RightsExpansion));
     }
 }
