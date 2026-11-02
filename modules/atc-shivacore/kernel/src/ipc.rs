@@ -512,9 +512,7 @@ mod tests {
             .unwrap();
 
         // Charlie kann senden
-        assert!(ipc
-            .send(pid(3), ch, b"from charlie".to_vec())
-            .is_ok());
+        assert!(ipc.send(pid(3), ch, b"from charlie".to_vec()).is_ok());
 
         // Charlie kann aber nicht weiter delegieren (kein DELEGATE-Recht)
         let result = caps.delegate(pid(3), charlie_cap, pid(4), Rights::WRITE);
@@ -579,9 +577,7 @@ mod tests {
         let ch = ipc.create_channel(pid(1), 16);
 
         // Grant WRITE an pid(2)
-        let cap = ipc
-            .grant_access(pid(1), ch, pid(2), Rights::WRITE)
-            .unwrap();
+        let cap = ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE).unwrap();
         assert!(ipc.send(pid(2), ch, b"ok".to_vec()).is_ok());
 
         // Widerrufe die spezifische Cap
