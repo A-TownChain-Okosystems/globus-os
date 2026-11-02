@@ -676,9 +676,9 @@ pub enum VfsError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::{new_authority, CapabilityAuthority};
     use crate::ats1000::Pid;
     use crate::capability::ResourceType;
+    use crate::capability::{new_authority, CapabilityAuthority};
 
     fn setup_vfs() -> Vfs {
         let caps = new_authority();

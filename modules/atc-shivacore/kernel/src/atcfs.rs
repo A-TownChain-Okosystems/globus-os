@@ -204,12 +204,7 @@ impl AtcFileSystem {
     }
 
     /// Schreibt Daten in eine Datei
-    pub fn write_file(
-        &mut self,
-        path: &str,
-        data: &[u8],
-        actor: Pid,
-    ) -> Result<AtcNode, FsError> {
+    pub fn write_file(&mut self, path: &str, data: &[u8], actor: Pid) -> Result<AtcNode, FsError> {
         let parent = Self::parent_path(path);
         if !self.nodes.contains_key(&parent) {
             self.mkdir(&parent, actor);
@@ -257,11 +252,7 @@ impl AtcFileSystem {
     }
 
     /// Liest eine Datei (gibt CID + Node zurueck)
-    pub fn read_file(
-        &self,
-        path: &str,
-        actor: Pid,
-    ) -> Result<(Cid, AtcNode), FsError> {
+    pub fn read_file(&self, path: &str, actor: Pid) -> Result<(Cid, AtcNode), FsError> {
         let node = self.nodes.get(path).ok_or(FsError::NotFound)?;
         if node.is_dir {
             return Err(FsError::IsADirectory);
@@ -481,19 +472,13 @@ mod tests {
     #[test]
     fn test_read_nonexistent() {
         let fs = AtcFileSystem::new();
-        assert_eq!(
-            fs.read_file("/nonexistent", pid(1)),
-            Err(FsError::NotFound)
-        );
+        assert_eq!(fs.read_file("/nonexistent", pid(1)), Err(FsError::NotFound));
     }
 
     #[test]
     fn test_read_directory_rejected() {
         let fs = AtcFileSystem::new();
-        assert_eq!(
-            fs.read_file("/home", pid(1)),
-            Err(FsError::IsADirectory)
-        );
+        assert_eq!(fs.read_file("/home", pid(1)), Err(FsError::IsADirectory));
     }
 
     #[test]
@@ -537,10 +522,8 @@ mod tests {
     fn test_ls_directory() {
         let mut fs = AtcFileSystem::new();
 
-        fs.write_file("/atc/file1.txt", b"a", pid(1))
-            .unwrap();
-        fs.write_file("/atc/file2.txt", b"b", pid(1))
-            .unwrap();
+        fs.write_file("/atc/file1.txt", b"a", pid(1)).unwrap();
+        fs.write_file("/atc/file2.txt", b"b", pid(1)).unwrap();
 
         let entries = fs.ls("/atc");
         assert_eq!(entries.len(), 2);
@@ -550,8 +533,7 @@ mod tests {
     fn test_delete_file() {
         let mut fs = AtcFileSystem::new();
 
-        fs.write_file("/tmp/test.txt", b"data", pid(1))
-            .unwrap();
+        fs.write_file("/tmp/test.txt", b"data", pid(1)).unwrap();
         assert!(fs.exists("/tmp/test.txt"));
 
         fs.delete_file("/tmp/test.txt", pid(1)).unwrap();
@@ -649,8 +631,7 @@ mod tests {
     #[test]
     fn test_ats1000_read_after_close() {
         let mut fs = AtcFileSystem::new();
-        fs.write_file("/tmp/test.txt", b"data", pid(1))
-            .unwrap();
+        fs.write_file("/tmp/test.txt", b"data", pid(1)).unwrap();
 
         let fh = fs.open("/tmp/test.txt", 0).unwrap();
         fs.close(fh);
@@ -663,11 +644,9 @@ mod tests {
     fn test_overwrite_file_preserves_owner() {
         let mut fs = AtcFileSystem::new();
 
-        fs.write_file("/atc/file.txt", b"v1", pid(1))
-            .unwrap();
+        fs.write_file("/atc/file.txt", b"v1", pid(1)).unwrap();
         // pid(0) ueberschreibt
-        fs.write_file("/atc/file.txt", b"v2", pid(0))
-            .unwrap();
+        fs.write_file("/atc/file.txt", b"v2", pid(0)).unwrap();
 
         let (_, node) = fs.read_file("/atc/file.txt", pid(1)).unwrap();
         assert_eq!(node.owner, pid(1)); // Original owner
@@ -678,12 +657,8 @@ mod tests {
     fn test_nested_directories() {
         let mut fs = AtcFileSystem::new();
 
-        fs.write_file(
-            "/home/alice/docs/research/notes.txt",
-            b"notes",
-            pid(1),
-        )
-        .unwrap();
+        fs.write_file("/home/alice/docs/research/notes.txt", b"notes", pid(1))
+            .unwrap();
         assert!(fs.exists("/home/alice/docs/research/notes.txt"));
         assert!(fs.exists("/home/alice/docs/research"));
         assert!(fs.exists("/home/alice/docs"));
