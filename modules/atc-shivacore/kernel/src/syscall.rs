@@ -7,6 +7,7 @@
 
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use crate::rights::ObjectRights;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
 };
@@ -92,13 +93,12 @@ impl SyscallDispatcher {
         match syscall {
             Syscall::Yield => SyscallResponse::ok(0),
             Syscall::IpcSend => {
-                if !self.check_capability(
+                if !self.check_typed_capability(
                     pid,
                     request.capability,
                     capabilities,
-                    ResourceType::IpcChannel,
                     request.arg0,
-                    Rights::WRITE,
+                    crate::rights::endpoint::SEND,
                 ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
@@ -108,13 +108,12 @@ impl SyscallDispatcher {
                 if request.arg1 as usize > MAX_SYSCALL_PAYLOAD {
                     return SyscallResponse::err(AbiError::InvalidPayload);
                 }
-                if !self.check_capability(
+                if !self.check_typed_capability(
                     pid,
                     request.capability,
                     capabilities,
-                    ResourceType::IpcChannel,
                     request.arg0,
-                    Rights::READ,
+                    crate::rights::endpoint::RECV,
                 ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
@@ -143,25 +142,16 @@ impl SyscallDispatcher {
         }
     }
 
-    fn check_capability(
+    fn check_typed_capability(
         &self,
         pid: Pid,
         handle: Option<CapabilityHandle>,
         capabilities: &CapabilityTable,
-        resource_type: ResourceType,
         resource_id: u64,
-        rights: Rights,
+        required: ObjectRights,
     ) -> bool {
         let Some(handle) = handle else { return false };
-        capabilities
-            .get(CapId(handle.0))
-            .map(|cap| {
-                cap.owner == pid
-                    && cap.resource_type == resource_type
-                    && cap.resource_id == resource_id
-                    && cap.rights.has(rights)
-            })
-            .unwrap_or(false)
+        capabilities.check_typed(pid, CapId(handle.0), resource_id, required)
     }
 }
 
@@ -229,7 +219,7 @@ mod tests {
     #[test]
     fn ipc_requires_matching_capability_and_right() {
         let mut table = CapabilityTable::new();
-        let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
+        let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
             pid(1),
@@ -247,6 +237,36 @@ mod tests {
                 capability: Some(CapabilityHandle(cap.0)),
                 arg0: 42,
                 ..request(Syscall::IpcSend)
+            },
+            &table,
+        );
+        assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn ipc_receive_requires_endpoint_recv_right() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::RECV);
+        let mut d = SyscallDispatcher::new();
+        let allowed = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 42,
+                arg1: 8,
+                ..request(Syscall::IpcReceive)
+            },
+            &table,
+        );
+        assert_eq!(allowed.error, None);
+
+        let denied = d.dispatch(
+            pid(2),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 42,
+                arg1: 8,
+                ..request(Syscall::IpcReceive)
             },
             &table,
         );
