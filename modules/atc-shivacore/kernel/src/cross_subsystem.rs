@@ -45,7 +45,7 @@ impl TestHarness {
             caps,
             mem: KernelMemoryManager::new(),
             fs: AtcFileSystem::new(),
-            proc_mgr: ProcessManager::new_with_authority(process_caps),
+            proc_mgr: ProcessManager::new_with_capability_port(process_caps),
             ipc: IpcSubsystem::new(ipc_caps),
         }
     }
