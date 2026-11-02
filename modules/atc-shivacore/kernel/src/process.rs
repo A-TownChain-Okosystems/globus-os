@@ -220,7 +220,6 @@ impl ProcessManager {
         resource_type == ResourceType::Memory
             && self.caps.check_address_space(pid, resource_id, required)
     }
-
 }
 
 #[cfg(test)]

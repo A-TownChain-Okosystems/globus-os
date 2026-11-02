@@ -120,9 +120,7 @@ mod tests {
         assert_eq!(h.fs.get_content(&cid).unwrap(), b"process data");
 
         // 6. Free memory (takes ats1000::Pid = u32)
-        h.mem
-            .deallocate(&h.mem_caps, p1, region.region_id)
-            .unwrap();
+        h.mem.deallocate(&h.mem_caps, p1, region.region_id).unwrap();
         assert_eq!(h.mem.region_count(), 0);
 
         // 7. Kill process
@@ -141,10 +139,7 @@ mod tests {
 
         // Allocate memory for each (uses ats1000::Pid = u32)
         let mem_s = h.mem.allocate(&h.mem_caps, sender, 2048).unwrap();
-        let mem_r = h
-            .mem
-            .allocate(&h.mem_caps, receiver, 2048)
-            .unwrap();
+        let mem_r = h.mem.allocate(&h.mem_caps, receiver, 2048).unwrap();
 
         // Create IPC channel (uses capability::Pid)
         let ch = h.ipc.create_channel(receiver, 1024);
@@ -192,15 +187,13 @@ mod tests {
 
         // Bob tries to read Alice's memory — should fail (u32 Pid)
         assert_eq!(
-            h.mem
-                .read_check(&h.mem_caps, bob, alice_mem.region_id),
+            h.mem.read_check(&h.mem_caps, bob, alice_mem.region_id),
             Err(MemError::NoCapability)
         );
 
         // Bob tries to free Alice's memory — should fail
         assert_eq!(
-            h.mem
-                .deallocate(&h.mem_caps, bob, alice_mem.region_id),
+            h.mem.deallocate(&h.mem_caps, bob, alice_mem.region_id),
             Err(MemError::NoCapability)
         );
 
@@ -237,8 +230,7 @@ mod tests {
 
         // Child initially cannot access parent's memory
         assert_eq!(
-            h.mem
-                .read_check(&h.mem_caps, child, parent_mem.region_id),
+            h.mem.read_check(&h.mem_caps, child, parent_mem.region_id),
             Err(MemError::NoCapability)
         );
 
@@ -263,8 +255,7 @@ mod tests {
 
         // But child still cannot write (only READ was delegated)
         assert_eq!(
-            h.mem
-                .write_check(&h.mem_caps, child, parent_mem.region_id),
+            h.mem.write_check(&h.mem_caps, child, parent_mem.region_id),
             Err(MemError::NoCapability)
         );
     }
@@ -457,18 +448,10 @@ mod tests {
         assert_eq!(small2.source, AllocSource::KernelHeap);
         assert_eq!(large2.source, AllocSource::UserspaceBump);
 
-        h.mem
-            .deallocate(&h.mem_caps, p1, large1.region_id)
-            .unwrap();
-        h.mem
-            .deallocate(&h.mem_caps, p2, small2.region_id)
-            .unwrap();
-        h.mem
-            .deallocate(&h.mem_caps, p1, small1.region_id)
-            .unwrap();
-        h.mem
-            .deallocate(&h.mem_caps, p2, large2.region_id)
-            .unwrap();
+        h.mem.deallocate(&h.mem_caps, p1, large1.region_id).unwrap();
+        h.mem.deallocate(&h.mem_caps, p2, small2.region_id).unwrap();
+        h.mem.deallocate(&h.mem_caps, p1, small1.region_id).unwrap();
+        h.mem.deallocate(&h.mem_caps, p2, large2.region_id).unwrap();
 
         assert_eq!(h.mem.region_count(), 0);
         assert_eq!(h.mem.stats().total_allocated, 0);

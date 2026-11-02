@@ -747,7 +747,7 @@ mod tests {
         for _ in 0..100 {
             let r = mm.allocate(&caps.memory_port(), pid(1), 256).unwrap();
             mm.deallocate(&caps.memory_port(), pid(1), r.region_id)
-            .unwrap();
+                .unwrap();
         }
 
         let s = mm.stats();

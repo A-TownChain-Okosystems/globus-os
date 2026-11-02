@@ -337,8 +337,6 @@ impl ProcessCapabilityPort {
             .lock()
             .check(pid, ResourceType::Memory, resource_id, required)
     }
-
-
 }
 
 #[derive(Clone)]
