@@ -337,6 +337,13 @@ pub struct MemorySubsystem {
 }
 
 impl MemorySubsystem {
+    /// Isolated test fixture only. Production construction is kernel-owned.
+    #[cfg(test)]
+    pub fn new() -> Self {
+        let authority = crate::capability::new_authority();
+        Self::new_with_capability_port(authority.owner().memory_port())
+    }
+
     pub(crate) fn new_with_capability_port(caps: MemoryCapabilityPort) -> Self {
         Self {
             manager: KernelMemoryManager::new(),

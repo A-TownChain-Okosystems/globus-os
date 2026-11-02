@@ -477,10 +477,7 @@ mod tests {
     #[test]
     fn flow_ats1000_fs_trait() {
         let mut fs = AtcFileSystem::new();
-        let caps = new_authority();
-
         fs.write_file(
-            &caps,
             "/tmp/trait_test.bin",
             b"trait test data",
             crate::ats1000::Pid(1),

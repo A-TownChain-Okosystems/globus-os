@@ -1105,8 +1105,8 @@ mod tests {
 
         // Prozess 2 bekommt nur WRITE (kein READ)
         let cap_write = {
-            let table = caps;
-            table
+            let owner = caps.owner();
+            owner
                 .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
                 .0
         };
@@ -1122,8 +1122,8 @@ mod tests {
         let mut vfs = Vfs::new(caps.owner().vfs_port());
 
         let cap_write = {
-            let table = caps;
-            table
+            let owner = caps.owner();
+            owner
                 .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
                 .0
         };

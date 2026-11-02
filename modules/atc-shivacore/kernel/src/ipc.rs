@@ -495,6 +495,7 @@ mod tests {
 
         // Bob delegiert nur WRITE an Charlie (Attenuation)
         let charlie_cap = caps
+            .owner()
             .delegate(pid(2), bob_cap, pid(3), Rights::WRITE)
             .unwrap();
 
