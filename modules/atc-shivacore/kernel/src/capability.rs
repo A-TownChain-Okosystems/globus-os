@@ -126,32 +126,67 @@ pub(crate) struct CapabilityAuthority {
 }
 
 impl CapabilityAuthority {
-    pub(crate) fn new() -> Self {
-        Self { inner: Arc::new(spin::Mutex::new(CapabilityTable::new())) }
+    fn new() -> Self {
+        Self {
+            inner: Arc::new(spin::Mutex::new(CapabilityTable::new())),
+        }
     }
 
     /// Only the kernel owner retains this mutation facade. Subsystems receive scoped ports.
     pub(crate) fn owner(&self) -> CapabilityAuthorityOwner {
-        CapabilityAuthorityOwner { inner: self.inner.clone() }
+        CapabilityAuthorityOwner {
+            inner: self.inner.clone(),
+        }
     }
 
-    pub(crate) fn check(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, required: Rights) -> bool {
-        self.inner.lock().check(pid, resource_type, resource_id, required)
+    pub(crate) fn check(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        required: Rights,
+    ) -> bool {
+        self.inner
+            .lock()
+            .check(pid, resource_type, resource_id, required)
     }
     pub(crate) fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
         self.inner.lock().check_any(pid, cap_id, required)
     }
-    pub(crate) fn check_typed(&self, pid: Pid, cap_id: CapId, resource_id: u64, required: ObjectRights) -> bool {
-        self.inner.lock().check_typed(pid, cap_id, resource_id, required)
+    pub(crate) fn check_typed(
+        &self,
+        pid: Pid,
+        cap_id: CapId,
+        resource_id: u64,
+        required: ObjectRights,
+    ) -> bool {
+        self.inner
+            .lock()
+            .check_typed(pid, cap_id, resource_id, required)
     }
     pub(crate) fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
         self.inner.lock().check_legacy_handle(pid, cap_id, required)
     }
-    pub(crate) fn find_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) -> Option<CapId> {
-        self.inner.lock().find_for_resource(pid, resource_type, resource_id)
+    pub(crate) fn find_for_resource(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+    ) -> Option<CapId> {
+        self.inner
+            .lock()
+            .find_for_resource(pid, resource_type, resource_id)
     }
-    pub(crate) fn find_for_resource_with_rights(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, required: Rights) -> Option<CapId> {
-        self.inner.lock().find_for_resource_with_rights(pid, resource_type, resource_id, required)
+    pub(crate) fn find_for_resource_with_rights(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        required: Rights,
+    ) -> Option<CapId> {
+        self.inner
+            .lock()
+            .find_for_resource_with_rights(pid, resource_type, resource_id, required)
     }
     pub(crate) fn count(&self) -> usize {
         self.inner.lock().count()
@@ -163,23 +198,55 @@ pub(crate) struct CapabilityAuthorityOwner {
     inner: Arc<spin::Mutex<CapabilityTable>>,
 }
 impl CapabilityAuthorityOwner {
-    pub(crate) fn create(&self, pid: Pid, resource_type: ResourceType, resource_id: u64, rights: Rights) -> CapId {
-        self.inner.lock().create(pid, resource_type, resource_id, rights)
+    pub(crate) fn create(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        rights: Rights,
+    ) -> CapId {
+        self.inner
+            .lock()
+            .create(pid, resource_type, resource_id, rights)
     }
     pub(crate) fn create_typed(&self, pid: Pid, resource_id: u64, rights: ObjectRights) -> CapId {
         self.inner.lock().create_typed(pid, resource_id, rights)
     }
-    pub(crate) fn mint_typed(&self, source_pid: Pid, source_cap: CapId, cnode_cap: CapId, target_pid: Pid, rights: ObjectRights) -> Result<CapId, CapabilityError> {
-        self.inner.lock().mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
+    pub(crate) fn mint_typed(
+        &self,
+        source_pid: Pid,
+        source_cap: CapId,
+        cnode_cap: CapId,
+        target_pid: Pid,
+        rights: ObjectRights,
+    ) -> Result<CapId, CapabilityError> {
+        self.inner
+            .lock()
+            .mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
     }
-    pub(crate) fn delegate(&self, source_pid: Pid, source_cap: CapId, target_pid: Pid, rights: Rights) -> Result<CapId, CapabilityError> {
-        self.inner.lock().delegate(source_pid, source_cap, target_pid, rights)
+    pub(crate) fn delegate(
+        &self,
+        source_pid: Pid,
+        source_cap: CapId,
+        target_pid: Pid,
+        rights: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        self.inner
+            .lock()
+            .delegate(source_pid, source_cap, target_pid, rights)
     }
     pub(crate) fn revoke(&self, cap_id: CapId) {
         self.inner.lock().revoke(cap_id);
     }
-    pub(crate) fn revoke_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) {
-        self.inner.lock().revoke_for_resource(pid, resource_type, resource_id);
+    pub(crate) fn revoke_for_resource(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+    ) {
+        self.inner
+            .lock()
+            .revoke_for_resource(pid, resource_type, resource_id);
     }
     pub(crate) fn revoke_for_pid(&self, pid: Pid) {
         self.inner.lock().revoke_for_pid(pid);
@@ -188,23 +255,33 @@ impl CapabilityAuthorityOwner {
 
 impl CapabilityAuthority {
     pub(crate) fn memory_port(&self) -> MemoryCapabilityPort {
-        MemoryCapabilityPort { inner: self.inner.clone() }
+        MemoryCapabilityPort {
+            inner: self.inner.clone(),
+        }
     }
 
     pub(crate) fn process_port(&self) -> ProcessCapabilityPort {
-        ProcessCapabilityPort { inner: self.inner.clone() }
+        ProcessCapabilityPort {
+            inner: self.inner.clone(),
+        }
     }
 
     pub(crate) fn ipc_port(&self) -> IpcCapabilityPort {
-        IpcCapabilityPort { inner: self.inner.clone() }
+        IpcCapabilityPort {
+            inner: self.inner.clone(),
+        }
     }
 
     pub(crate) fn vfs_port(&self) -> VfsCapabilityPort {
-        VfsCapabilityPort { inner: self.inner.clone() }
+        VfsCapabilityPort {
+            inner: self.inner.clone(),
+        }
     }
 
     pub(crate) fn syscall_port(&self) -> SyscallCapabilityPort {
-        SyscallCapabilityPort { inner: self.inner.clone() }
+        SyscallCapabilityPort {
+            inner: self.inner.clone(),
+        }
     }
 }
 
@@ -224,11 +301,15 @@ impl MemoryCapabilityPort {
     }
 
     pub(crate) fn check_region(&self, pid: Pid, region_id: u64, required: Rights) -> bool {
-        self.inner.lock().check(pid, ResourceType::Memory, region_id, required)
+        self.inner
+            .lock()
+            .check(pid, ResourceType::Memory, region_id, required)
     }
 
     pub(crate) fn revoke_region(&self, pid: Pid, region_id: u64) {
-        self.inner.lock().revoke_for_resource(pid, ResourceType::Memory, region_id);
+        self.inner
+            .lock()
+            .revoke_for_resource(pid, ResourceType::Memory, region_id);
     }
 }
 
@@ -239,7 +320,12 @@ pub(crate) struct ProcessCapabilityPort {
 
 impl ProcessCapabilityPort {
     pub(crate) fn create_address_space(&self, pid: Pid, resource_id: u64) -> CapId {
-        self.inner.lock().create(pid, ResourceType::Memory, resource_id, Rights::READ | Rights::WRITE)
+        self.inner.lock().create(
+            pid,
+            ResourceType::Memory,
+            resource_id,
+            Rights::READ | Rights::WRITE,
+        )
     }
 
     pub(crate) fn revoke_process(&self, pid: Pid) {
@@ -247,7 +333,9 @@ impl ProcessCapabilityPort {
     }
 
     pub(crate) fn check_address_space(&self, pid: Pid, resource_id: u64, required: Rights) -> bool {
-        self.inner.lock().check(pid, ResourceType::Memory, resource_id, required)
+        self.inner
+            .lock()
+            .check(pid, ResourceType::Memory, resource_id, required)
     }
 
 
@@ -260,22 +348,46 @@ pub(crate) struct IpcCapabilityPort {
 
 impl IpcCapabilityPort {
     pub(crate) fn create_channel_send_capability(&self, pid: Pid, channel_id: u64) -> CapId {
-        self.inner.lock().create(pid, ResourceType::IpcChannel, channel_id, Rights::WRITE | Rights::DELEGATE)
+        self.inner.lock().create(
+            pid,
+            ResourceType::IpcChannel,
+            channel_id,
+            Rights::WRITE | Rights::DELEGATE,
+        )
     }
     pub(crate) fn create_channel_receive_capability(&self, pid: Pid, channel_id: u64) -> CapId {
-        self.inner.lock().create(pid, ResourceType::IpcChannel, channel_id, Rights::READ | Rights::DELEGATE)
+        self.inner.lock().create(
+            pid,
+            ResourceType::IpcChannel,
+            channel_id,
+            Rights::READ | Rights::DELEGATE,
+        )
     }
 
     pub(crate) fn check_channel(&self, pid: Pid, channel_id: u64, required: Rights) -> bool {
-        self.inner.lock().check(pid, ResourceType::IpcChannel, channel_id, required)
+        self.inner
+            .lock()
+            .check(pid, ResourceType::IpcChannel, channel_id, required)
     }
 
     pub(crate) fn revoke_channel(&self, pid: Pid, channel_id: u64) {
-        self.inner.lock().revoke_for_resource(pid, ResourceType::IpcChannel, channel_id);
+        self.inner
+            .lock()
+            .revoke_for_resource(pid, ResourceType::IpcChannel, channel_id);
     }
 
-    pub(crate) fn find_channel_with_rights(&self, pid: Pid, channel_id: u64, required: Rights) -> Option<CapId> {
-        self.inner.lock().find_for_resource_with_rights(pid, ResourceType::IpcChannel, channel_id, required)
+    pub(crate) fn find_channel_with_rights(
+        &self,
+        pid: Pid,
+        channel_id: u64,
+        required: Rights,
+    ) -> Option<CapId> {
+        self.inner.lock().find_for_resource_with_rights(
+            pid,
+            ResourceType::IpcChannel,
+            channel_id,
+            required,
+        )
     }
 
     pub(crate) fn delegate_channel(
@@ -286,7 +398,10 @@ impl IpcCapabilityPort {
         rights: Rights,
     ) -> Result<CapId, CapabilityError> {
         let mut table = self.inner.lock();
-        let source = table.caps.get(&source_cap).ok_or(CapabilityError::NotFound)?;
+        let source = table
+            .caps
+            .get(&source_cap)
+            .ok_or(CapabilityError::NotFound)?;
         if source.resource_type != ResourceType::IpcChannel {
             return Err(CapabilityError::WrongObjectType);
         }
@@ -311,8 +426,16 @@ pub(crate) struct SyscallCapabilityPort {
 }
 
 impl SyscallCapabilityPort {
-    pub(crate) fn check_typed(&self, pid: Pid, cap_id: CapId, resource_id: u64, required: ObjectRights) -> bool {
-        self.inner.lock().check_typed(pid, cap_id, resource_id, required)
+    pub(crate) fn check_typed(
+        &self,
+        pid: Pid,
+        cap_id: CapId,
+        resource_id: u64,
+        required: ObjectRights,
+    ) -> bool {
+        self.inner
+            .lock()
+            .check_typed(pid, cap_id, resource_id, required)
     }
 
     pub(crate) fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
@@ -665,15 +788,31 @@ mod tests {
     fn owner_delegation_rejects_wrong_owner_and_missing_delegate_right() {
         let authority = new_authority();
         let owner = authority.owner();
-        let cap = owner.create(pid(1), ResourceType::Memory, 0x2000, Rights::READ | Rights::WRITE);
-        assert_eq!(owner.delegate(pid(2), cap, pid(3), Rights::READ), Err(CapabilityError::NotOwner));
-        assert_eq!(owner.delegate(pid(1), cap, pid(3), Rights::READ), Err(CapabilityError::NoDelegateRight));
+        let cap = owner.create(
+            pid(1),
+            ResourceType::Memory,
+            0x2000,
+            Rights::READ | Rights::WRITE,
+        );
+        assert_eq!(
+            owner.delegate(pid(2), cap, pid(3), Rights::READ),
+            Err(CapabilityError::NotOwner)
+        );
+        assert_eq!(
+            owner.delegate(pid(1), cap, pid(3), Rights::READ),
+            Err(CapabilityError::NoDelegateRight)
+        );
     }
     #[test]
     fn owner_revocation_removes_descendants() {
         let authority = new_authority();
         let owner = authority.owner();
-        let root = owner.create(pid(1), ResourceType::Memory, 0x3000, Rights::READ | Rights::DELEGATE);
+        let root = owner.create(
+            pid(1),
+            ResourceType::Memory,
+            0x3000,
+            Rights::READ | Rights::DELEGATE,
+        );
         let _child = owner.delegate(pid(1), root, pid(2), Rights::READ).unwrap();
         owner.revoke(root);
         assert!(!authority.check(pid(1), ResourceType::Memory, 0x3000, Rights::READ));

@@ -150,7 +150,7 @@ impl SyscallDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::capability::{CapabilityAuthority, ResourceType};
+    use crate::capability::{new_authority, ResourceType};
 
     fn pid(n: u32) -> Pid {
         Pid(n)
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn rejects_unknown_syscall() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn rejects_major_abi_mismatch() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn rejects_oversized_payload() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -208,7 +208,7 @@ mod tests {
 
     #[test]
     fn ipc_requires_matching_capability_and_right() {
-        let table = CapabilityAuthority::new();
+        let table = new_authority();
         let owner = table.owner();
         let cap = owner.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
         let mut d = SyscallDispatcher::new(table.syscall_port());
@@ -234,8 +234,10 @@ mod tests {
 
     #[test]
     fn ipc_receive_requires_endpoint_recv_right() {
-        let table = CapabilityAuthority::new();
-        let cap = table.owner().create_typed(pid(1), 42, crate::rights::endpoint::RECV);
+        let table = new_authority();
+        let cap = table
+            .owner()
+            .create_typed(pid(1), 42, crate::rights::endpoint::RECV);
         let mut d = SyscallDispatcher::new(table.syscall_port());
         let allowed = d.dispatch(
             pid(1),
@@ -262,19 +264,22 @@ mod tests {
 
     #[test]
     fn handle_close_is_blocked_and_never_reports_success() {
-        let authority = CapabilityAuthority::new();
+        let authority = new_authority();
         let mut dispatcher = SyscallDispatcher::new(authority.syscall_port());
-        let response = dispatcher.dispatch(pid(1), SyscallRequest {
-            capability: Some(CapabilityHandle(999)),
-            ..request(Syscall::HandleClose)
-        });
+        let response = dispatcher.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(999)),
+                ..request(Syscall::HandleClose)
+            },
+        );
         assert_eq!(response.error, Some(AbiError::InvalidSyscall));
         assert_eq!(response.value, 0);
     }
 
     #[test]
     fn monotonic_time_is_kernel_owned() {
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
         let a = d.dispatch(pid(1), request(Syscall::MonotonicTime));
         let b = d.dispatch(pid(1), request(Syscall::MonotonicTime));
         assert_eq!(a.value + 1, b.value);
@@ -282,7 +287,7 @@ mod tests {
 
     #[test]
     fn capability_query_requires_inspect_right() {
-        let table = CapabilityAuthority::new();
+        let table = new_authority();
         let owner = table.owner();
         let cap = owner.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
         let mut d = SyscallDispatcher::new(table.syscall_port());

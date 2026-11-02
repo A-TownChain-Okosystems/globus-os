@@ -501,6 +501,7 @@ pub fn boot_log() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::new_authority;
     use crate::capability::{CapabilityAuthority, ResourceType};
 
     fn pid(n: u32) -> Pid {
@@ -512,7 +513,7 @@ mod tests {
     #[test]
     fn test_allocate_kernel_heap() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 256).unwrap(); // <= 4096 -> Kernel-Heap
         assert_eq!(r.size, 256);
         assert_eq!(r.source, AllocSource::KernelHeap);
@@ -522,7 +523,7 @@ mod tests {
     #[test]
     fn test_allocate_userspace_bump() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 8192).unwrap(); // > 4096 -> Userspace
         assert_eq!(r.source, AllocSource::UserspaceBump);
         assert!(r.addr >= USERSPACE_BASE);
@@ -531,7 +532,7 @@ mod tests {
     #[test]
     fn test_allocate_creates_capability() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::READ));
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::WRITE));
@@ -541,11 +542,12 @@ mod tests {
     #[test]
     fn test_deallocate_kernel_heap() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 512).unwrap();
         assert_eq!(r.source, AllocSource::KernelHeap);
 
-        mm.deallocate(&caps.memory_port(), pid(1), r.region_id).unwrap();
+        mm.deallocate(&caps.memory_port(), pid(1), r.region_id)
+            .unwrap();
 
         // Cap widerrufen
         assert!(!caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::WRITE));
@@ -556,18 +558,19 @@ mod tests {
     #[test]
     fn test_deallocate_userspace() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 8192).unwrap();
         assert_eq!(r.source, AllocSource::UserspaceBump);
 
-        mm.deallocate(&caps.memory_port(), pid(1), r.region_id).unwrap();
+        mm.deallocate(&caps.memory_port(), pid(1), r.region_id)
+            .unwrap();
         assert_eq!(mm.region_count(), 0);
     }
 
     #[test]
     fn test_deallocate_without_cap_rejected() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
         assert_eq!(
             mm.deallocate(&caps.memory_port(), pid(2), r.region_id),
@@ -578,7 +581,7 @@ mod tests {
     #[test]
     fn test_deallocate_invalid_region() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         assert_eq!(
             mm.deallocate(&caps.memory_port(), pid(1), 999),
             Err(MemError::InvalidRegion)
@@ -588,7 +591,7 @@ mod tests {
     #[test]
     fn test_multiple_allocations_unique() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         let r1 = mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
         let r2 = mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
@@ -601,10 +604,12 @@ mod tests {
     #[test]
     fn test_read_check_without_cap_rejected() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
 
-        assert!(mm.read_check(&caps.memory_port(), pid(1), r.region_id).is_ok());
+        assert!(mm
+            .read_check(&caps.memory_port(), pid(1), r.region_id)
+            .is_ok());
         assert_eq!(
             mm.read_check(&caps.memory_port(), pid(2), r.region_id),
             Err(MemError::NoCapability)
@@ -614,10 +619,12 @@ mod tests {
     #[test]
     fn test_write_check_without_cap_rejected() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let r = mm.allocate(&caps.memory_port(), pid(1), 2048).unwrap();
 
-        assert!(mm.write_check(&caps.memory_port(), pid(1), r.region_id).is_ok());
+        assert!(mm
+            .write_check(&caps.memory_port(), pid(1), r.region_id)
+            .is_ok());
         assert_eq!(
             mm.write_check(&caps.memory_port(), pid(2), r.region_id),
             Err(MemError::NoCapability)
@@ -627,7 +634,7 @@ mod tests {
     #[test]
     fn test_stats_tracking() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
         mm.allocate(&caps.memory_port(), pid(1), 8192).unwrap();
@@ -643,13 +650,14 @@ mod tests {
     #[test]
     fn test_stats_peak_after_free() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         let r = mm.allocate(&caps.memory_port(), pid(1), 8192).unwrap();
         let s1 = mm.stats();
         assert_eq!(s1.peak_allocated, 8192);
 
-        mm.deallocate(&caps.memory_port(), pid(1), r.region_id).unwrap();
+        mm.deallocate(&caps.memory_port(), pid(1), r.region_id)
+            .unwrap();
         let s2 = mm.stats();
         assert_eq!(s2.total_allocated, 0);
         assert_eq!(s2.peak_allocated, 8192);
@@ -658,7 +666,7 @@ mod tests {
     #[test]
     fn test_regions_for_pid() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         mm.allocate(&caps.memory_port(), pid(1), 4096).unwrap();
         mm.allocate(&caps.memory_port(), pid(1), 8192).unwrap();
@@ -671,7 +679,7 @@ mod tests {
     #[test]
     fn test_zero_size_rejected() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         assert_eq!(
             mm.allocate(&caps.memory_port(), pid(1), 0),
             Err(MemError::InvalidAlignment)
@@ -708,7 +716,7 @@ mod tests {
     #[test]
     fn test_heap_allocation_is_real() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         // Kleine Allokation -> Kernel-Heap (echte alloc::alloc)
         let r = mm.allocate(&caps.memory_port(), pid(1), 128).unwrap();
@@ -721,7 +729,7 @@ mod tests {
     #[test]
     fn test_heap_threshold_routing() {
         let mut mm = KernelMemoryManager::new().with_heap_threshold(2048);
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         let r1 = mm.allocate(&caps.memory_port(), pid(1), 2048).unwrap();
         assert_eq!(r1.source, AllocSource::KernelHeap); // <= 2048
@@ -733,12 +741,13 @@ mod tests {
     #[test]
     fn test_heap_dealloc_frees_memory() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         // Allokiere + deallokiere mehrfach — sollte nicht OOM gehen
         for _ in 0..100 {
             let r = mm.allocate(&caps.memory_port(), pid(1), 256).unwrap();
-            mm.deallocate(&caps.memory_port(), pid(1), r.region_id).unwrap();
+            mm.deallocate(&caps.memory_port(), pid(1), r.region_id)
+            .unwrap();
         }
 
         let s = mm.stats();
@@ -749,7 +758,7 @@ mod tests {
     #[test]
     fn test_mixed_heap_and_userspace() {
         let mut mm = KernelMemoryManager::new();
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
 
         let heap_r = mm.allocate(&caps.memory_port(), pid(1), 1024).unwrap(); // Heap
         let user_r = mm.allocate(&caps.memory_port(), pid(1), 65536).unwrap(); // Userspace
@@ -760,9 +769,12 @@ mod tests {
         assert_eq!(heap_r2.source, AllocSource::KernelHeap);
 
         // Alle freigeben
-        mm.deallocate(&caps.memory_port(), pid(1), heap_r.region_id).unwrap();
-        mm.deallocate(&caps.memory_port(), pid(1), user_r.region_id).unwrap();
-        mm.deallocate(&caps.memory_port(), pid(2), heap_r2.region_id).unwrap();
+        mm.deallocate(&caps.memory_port(), pid(1), heap_r.region_id)
+            .unwrap();
+        mm.deallocate(&caps.memory_port(), pid(1), user_r.region_id)
+            .unwrap();
+        mm.deallocate(&caps.memory_port(), pid(2), heap_r2.region_id)
+            .unwrap();
 
         assert_eq!(mm.region_count(), 0);
     }
