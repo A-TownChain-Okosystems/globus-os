@@ -57,6 +57,8 @@ impl TestHarness {
         let kg_caps = owner.knowledge_graph_port();
         let process_caps = owner.process_port();
         let ipc_caps = owner.ipc_port();
+        let vfs_caps = owner.vfs_port();
+        let syscall_caps = owner.syscall_port();
         Self {
             caps,
             owner,
@@ -66,8 +68,8 @@ impl TestHarness {
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new_with_capability_port(process_caps),
             ipc: IpcSubsystem::new(ipc_caps),
-            vfs: Vfs::new(owner.vfs_port()),
-            syscalls: SyscallDispatcher::new(owner.syscall_port()),
+            vfs: Vfs::new(vfs_caps),
+            syscalls: SyscallDispatcher::new(syscall_caps),
         }
     }
 }
