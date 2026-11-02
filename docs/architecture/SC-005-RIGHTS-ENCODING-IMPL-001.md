@@ -2,7 +2,7 @@
 
 **Identifier:** SC-005-RIGHTS-ENCODING-IMPL-001  
 **Version:** 1.0.0  
-**Status:** Proposed implementation decision — review required before implementation constants or binary/G7 binding  
+**Status:** OWNER-APPROVED implementation decision v1.0.0 — kernel implementation authorized; binary/G7 binding remains separately gated  
 **Scope:** GlobusOS kernel implementation of frozen SC-005 v0.1.0  
 **Related contract:** [SC-005 CSpace Migration Contract](./SC-005-CSPACE-MIGRATION-CONTRACT.md)  
 **Frozen normative source:** `atc-shivacore@3b56253b39bdc6cbf719ed9a2a21461d73b8fc34:docs/specs/SC-005-CAPABILITY_SYSTEM.md`  
@@ -139,7 +139,7 @@ Tests MUST assert exact error classes and failure atomicity, not merely that an 
 This proposal is not implementation evidence. Before kernel code adopts the mapping:
 
 1. Review this mapping against the exact frozen SC-005 blob cited above.
-2. Record owner approval of the mapping and the typed representation.
+2. Owner approval of the v1 mapping and typed representation was recorded on 2026-11-02. This approval authorizes implementation against this decision; it does not authorize G7, external serialization, or ABI binding.
 3. Implement strict typed validation in the existing canonical capability authority; do not add a parallel rights authority.
 4. Add the positive and negative tests in §7.
 5. Verify the exact PR head and retain Actions Run → Job → Step/log evidence.
@@ -149,6 +149,8 @@ No frozen standard is changed by this document. No claim of CSpace implementatio
 
 ## 9. Decision status
 
-**PROPOSED — REVIEW REQUIRED.**
+**OWNER-APPROVED — IMPLEMENTATION AUTHORIZED (2026-11-02).**
 
-The authoring work is authorized for PR #113. The numeric mapping is recorded here as a concrete candidate for review. It MUST NOT be treated as owner-approved ABI or consumed by production kernel constants until the explicit review gate in §8, item 2, is satisfied.
+The architecture owner explicitly approved the numeric v1 mapping and typed representation in the project conversation on 2026-11-02. This approval satisfies the owner-approval gate in §8, item 2, and authorizes implementation of strict typed rights validation in the existing canonical kernel capability authority, subject to the remaining implementation and evidence gates.
+
+This approval is limited to the implementation-level mapping in this document. It does NOT amend frozen SC-005, SC-003, SC-004, or SC-007; it does NOT authorize G7 binding, external serialization, persistent storage encoding, syscall ABI changes, or ABI freeze. Those require separate explicit approval.
