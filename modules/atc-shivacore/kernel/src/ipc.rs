@@ -530,8 +530,7 @@ mod tests {
         let ch = ipc.create_channel(pid(1), 16);
         ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
             .unwrap();
-        ipc.grant_access(pid(1), ch, pid(3), Rights::READ)
-            .unwrap();
+        ipc.grant_access(pid(1), ch, pid(3), Rights::READ).unwrap();
 
         // Bevor schliessen: alle koennen zugreifen
         assert!(caps.check(pid(1), ResourceType::IpcChannel, ch.0, Rights::WRITE));
