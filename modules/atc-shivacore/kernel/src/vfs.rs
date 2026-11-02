@@ -1079,7 +1079,9 @@ mod tests {
         let mut vfs = Vfs::new(caps.clone());
         let typed_handle = {
             let mut table = caps.lock();
-            table.create_typed(Pid(2), 2, crate::rights::endpoint::SEND).0
+            table
+                .create_typed(Pid(2), 2, crate::rights::endpoint::SEND)
+                .0
         };
 
         let result = vfs.mkdir("/typed-denied", 2, typed_handle);
