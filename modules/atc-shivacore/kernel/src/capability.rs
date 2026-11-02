@@ -253,7 +253,7 @@ impl CapabilityAuthorityOwner {
     }
 }
 
-impl CapabilityAuthority {
+impl CapabilityAuthorityOwner {
     pub(crate) fn memory_port(&self) -> MemoryCapabilityPort {
         MemoryCapabilityPort {
             inner: self.inner.clone(),

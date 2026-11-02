@@ -48,9 +48,9 @@ impl TestHarness {
     pub fn new() -> Self {
         let caps = new_authority();
         let owner = caps.owner();
-        let mem_caps = caps.memory_port();
-        let process_caps = caps.process_port();
-        let ipc_caps = caps.ipc_port();
+        let mem_caps = owner.memory_port();
+        let process_caps = owner.process_port();
+        let ipc_caps = owner.ipc_port();
         Self {
             caps,
             owner,

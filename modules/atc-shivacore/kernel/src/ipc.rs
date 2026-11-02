@@ -242,7 +242,7 @@ mod tests {
     #[test]
     fn test_create_channel_and_send_recv() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         assert!(ch.0 > 0);
@@ -257,7 +257,7 @@ mod tests {
     #[test]
     fn test_send_without_write_cap_rejected() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         // pid(2) hat keine Cap fuer diesen Channel
@@ -268,7 +268,7 @@ mod tests {
     #[test]
     fn test_recv_without_read_cap_rejected() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         ipc.send(pid(1), ch, b"data".to_vec()).unwrap();
@@ -281,7 +281,7 @@ mod tests {
     #[test]
     fn test_grant_access_and_cross_process_comm() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
 
@@ -300,7 +300,7 @@ mod tests {
     #[test]
     fn test_channel_full() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 2);
         ipc.send(pid(1), ch, b"a".to_vec()).unwrap();
@@ -313,7 +313,7 @@ mod tests {
     #[test]
     fn test_recv_empty_channel() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         let result = ipc.recv(pid(1), ch);
@@ -323,7 +323,7 @@ mod tests {
     #[test]
     fn test_close_channel() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         assert!(ipc.close_channel(pid(1), ch));
@@ -336,7 +336,7 @@ mod tests {
     #[test]
     fn test_close_rejects_non_owner() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         // pid(2) versucht, pid(1)s Channel zu schliessen
@@ -346,7 +346,7 @@ mod tests {
     #[test]
     fn test_close_all_for_process() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch1 = ipc.create_channel(pid(1), 16);
         let ch2 = ipc.create_channel(pid(1), 16);
@@ -371,7 +371,7 @@ mod tests {
     #[test]
     fn test_grant_access_wrong_owner_rejected() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         // pid(2) versucht, Zugang zu gewaehren, ist aber nicht Owner
@@ -382,7 +382,7 @@ mod tests {
     #[test]
     fn test_fifo_order() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         ipc.send(pid(1), ch, b"first".to_vec()).unwrap();
@@ -400,7 +400,7 @@ mod tests {
     #[test]
     fn test_pending_messages_count() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         assert_eq!(ipc.pending_messages(ch), Some(0));
@@ -416,7 +416,7 @@ mod tests {
     fn test_revoked_cap_blocks_send() {
         // Wenn eine Capability widerrufen wird, kann der Prozess nicht mehr senden
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
@@ -438,7 +438,7 @@ mod tests {
     fn test_revoked_cap_blocks_recv() {
         // Wenn READ-Cap widerrufen wird, kann der Prozess nicht mehr empfangen
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         ipc.grant_access(pid(1), ch, pid(3), Rights::READ).unwrap();
@@ -463,7 +463,7 @@ mod tests {
     fn test_attenuated_cap_cannot_exceed_original() {
         // Owner delegiert nur READ — Target kann nicht WRITE erlangen
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
 
@@ -484,7 +484,7 @@ mod tests {
         // Alice -> Bob (WRITE+DELEGATE) -> Charlie (WRITE only)
         // Charlie kann senden, Bob kann senden, aber Charlie kann nicht weiter delegieren
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16); // Alice
 
@@ -512,7 +512,7 @@ mod tests {
     fn test_close_channel_revokes_all_delegated_caps() {
         // Channel schliessen widerruft alle Caps — auch delegierte an andere Prozesse
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
         ipc.grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
@@ -537,7 +537,7 @@ mod tests {
     fn test_isolated_channels_capability_gating() {
         // Prozesse koennen nur auf Channels zugreifen fuer die sie Caps haben
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch1 = ipc.create_channel(pid(1), 16);
         let ch2 = ipc.create_channel(pid(2), 16);
@@ -561,7 +561,7 @@ mod tests {
     fn test_grant_then_revoke_blocks_access() {
         // Grant access, dann widerruf, Zugriff sollte blockiert sein
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch = ipc.create_channel(pid(1), 16);
 
@@ -581,7 +581,7 @@ mod tests {
     fn test_cross_channel_capability_isolation() {
         // Caps fuer Channel A geben keinen Zugriff auf Channel B
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let ch_a = ipc.create_channel(pid(1), 16);
         let ch_b = ipc.create_channel(pid(1), 16);
@@ -606,7 +606,7 @@ mod tests {
     #[test]
     fn test_send_to_nonexistent_channel() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let result = ipc.send(pid(1), ChannelId(999), b"x".to_vec());
         assert_eq!(result, Err(IpcError::ChannelNotFound));
@@ -615,7 +615,7 @@ mod tests {
     #[test]
     fn test_recv_from_nonexistent_channel() {
         let caps = new_authority();
-        let mut ipc = IpcSubsystem::new(caps.ipc_port());
+        let mut ipc = IpcSubsystem::new(caps.owner().ipc_port());
 
         let result = ipc.recv(pid(1), ChannelId(999));
         assert_eq!(result, Err(IpcError::ChannelNotFound));

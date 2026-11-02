@@ -229,7 +229,7 @@ mod tests {
 
     fn new_process_manager() -> ProcessManager {
         let authority = new_authority();
-        ProcessManager::new_with_capability_port(authority.process_port())
+        ProcessManager::new_with_capability_port(authority.owner().process_port())
     }
 
     #[test]
@@ -265,7 +265,7 @@ mod tests {
     fn test_kill_revokes_all_capabilities() {
         let authority = new_authority();
         let owner = authority.owner();
-        let mut pm = ProcessManager::new_with_capability_port(authority.process_port());
+        let mut pm = ProcessManager::new_with_capability_port(authority.owner().process_port());
         let p1 = pm.spawn(ProcessType::Agent, 128);
         let p2 = pm.spawn(ProcessType::Service, 100);
 

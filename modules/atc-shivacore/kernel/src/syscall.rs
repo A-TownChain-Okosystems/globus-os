@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn rejects_unknown_syscall() {
-        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().owner().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn rejects_major_abi_mismatch() {
-        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().owner().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -195,7 +195,7 @@ mod tests {
 
     #[test]
     fn rejects_oversized_payload() {
-        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().owner().syscall_port());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -265,7 +265,7 @@ mod tests {
     #[test]
     fn handle_close_is_blocked_and_never_reports_success() {
         let authority = new_authority();
-        let mut dispatcher = SyscallDispatcher::new(authority.syscall_port());
+        let mut dispatcher = SyscallDispatcher::new(authority.owner().syscall_port());
         let response = dispatcher.dispatch(
             pid(1),
             SyscallRequest {
@@ -279,7 +279,7 @@ mod tests {
 
     #[test]
     fn monotonic_time_is_kernel_owned() {
-        let mut d = SyscallDispatcher::new(new_authority().syscall_port());
+        let mut d = SyscallDispatcher::new(new_authority().owner().syscall_port());
         let a = d.dispatch(pid(1), request(Syscall::MonotonicTime));
         let b = d.dispatch(pid(1), request(Syscall::MonotonicTime));
         assert_eq!(a.value + 1, b.value);

@@ -11,7 +11,7 @@
 //!   L2:  CapabilityAuthority         — kernel-owned authority
 //!   L3:  ProcessManager::new()       — Prozess-Verwaltung
 //!   L4:  Scheduler::new()            — DA-HEFT Scheduler
-//!   L5:  IpcSubsystem::new(capabilities.ipc_port())        — IPC-Kanäle
+//!   L5:  IpcSubsystem::new(capability_owner.ipc_port())        — IPC-Kanäle
 //!   L6:  AtcFileSystem::new()       — Content-Addressed FS
 //!   L6b: Vfs::new(caps)             — Virtual File System
 //!   L7:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
@@ -124,7 +124,7 @@ impl KernelState {
         log.push((BootPhase::Memory, InitStatus::Initializing));
         let capabilities = new_authority();
         let capability_owner = capabilities.owner();
-        let memory = MemorySubsystem::new_with_capability_port(capabilities.memory_port());
+        let memory = MemorySubsystem::new_with_capability_port(capability_owner.memory_port());
         let stats = memory.stats();
         if stats.heap_base != HEAP_START {
             log.push((BootPhase::Memory, InitStatus::Failed));
@@ -134,7 +134,7 @@ impl KernelState {
 
         // ── L2+L3: ProcessManager (uses shared CapabilityAuthority) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
-        let processes = ProcessManager::new_with_capability_port(capabilities.process_port());
+        let processes = ProcessManager::new_with_capability_port(capability_owner.process_port());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
         log.push((BootPhase::Processes, InitStatus::Ready));
 
@@ -145,8 +145,8 @@ impl KernelState {
 
         // ── L5: IPC Subsystem ──
         log.push((BootPhase::Ipc, InitStatus::Initializing));
-        let ipc = IpcSubsystem::new(capabilities.ipc_port());
-        let syscalls = SyscallDispatcher::new(capabilities.syscall_port());
+        let ipc = IpcSubsystem::new(capability_owner.ipc_port());
+        let syscalls = SyscallDispatcher::new(capability_owner.syscall_port());
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
         // ── L6: ATCFS + VFS ──
@@ -156,7 +156,7 @@ impl KernelState {
             log.push((BootPhase::FileSystem, InitStatus::Failed));
             return Err(BootError::FsInitFailed);
         }
-        let vfs = Vfs::new(capabilities.vfs_port());
+        let vfs = Vfs::new(capability_owner.vfs_port());
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
         // ── L7: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
