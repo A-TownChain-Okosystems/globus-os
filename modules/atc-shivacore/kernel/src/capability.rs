@@ -963,32 +963,57 @@ mod tests {
     #[test]
     fn knowledge_graph_port_uses_least_authority_and_owner_delegation() {
         let authority = new_authority();
-        let port = authority.owner().knowledge_graph_port();
-        let root = port.create_entity_capability(pid(1), 0x4000);
+        let owner = authority.owner();
+        let port = owner.knowledge_graph_port(pid(1));
+        let root = port.create_entity_capability(pid(1), 0x4000).unwrap();
         assert!(port.check_entity_capability(pid(1), 0x4000, Rights::READ));
         assert!(port.check_entity_capability(pid(1), 0x4000, Rights::WRITE));
         assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::EXEC));
         assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::DELEGATE));
-        let child = port.delegate_entity_read(pid(1), 0x4000, pid(2)).unwrap();
-        assert!(port.check_entity_capability(pid(2), 0x4000, Rights::READ));
-        assert!(!port.check_entity_capability(pid(2), 0x4000, Rights::WRITE));
-        port.revoke_entity_capabilities(pid(1), 0x4000);
-        assert!(!port.check_entity_capability(pid(1), 0x4000, Rights::READ));
-        assert!(!port.check_entity_capability(pid(2), 0x4000, Rights::READ));
+        assert_eq!(
+            port.delegate_entity_read(pid(1), 0x4000, pid(2)),
+            Err(CapabilityError::NoDelegateRight)
+        );
+
+        // Delegation becomes possible only after the owner explicitly grants DELEGATE.
+        owner.create(
+            pid(1),
+            ResourceType::KnowledgeGraph,
+            0x4001,
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
+        );
+        let child = port.delegate_entity_read(pid(1), 0x4001, pid(2)).unwrap();
+        assert!(authority.check(pid(2), ResourceType::KnowledgeGraph, 0x4001, Rights::READ));
+        assert!(!authority.check(pid(2), ResourceType::KnowledgeGraph, 0x4001, Rights::WRITE));
+        port.revoke_entity_capabilities(pid(1), 0x4001).unwrap();
+        assert!(!authority.check(pid(1), ResourceType::KnowledgeGraph, 0x4001, Rights::READ));
+        assert!(!authority.check(pid(2), ResourceType::KnowledgeGraph, 0x4001, Rights::READ));
+        port.revoke_entity_capabilities(pid(1), 0x4000).unwrap();
+        assert!(!authority.check(pid(1), ResourceType::KnowledgeGraph, 0x4000, Rights::READ));
         let _ = (root, child);
     }
 
     #[test]
-    fn knowledge_graph_port_rejects_unauthorized_delegate_and_revoke() {
+    fn knowledge_graph_port_rejects_unauthorized_create_delegate_and_revoke() {
         let authority = new_authority();
-        let port = authority.owner().knowledge_graph_port();
-        port.create_entity_capability(pid(1), 0x5000);
+        let owner = authority.owner();
+        let port_one = owner.knowledge_graph_port(pid(1));
+        let port_two = owner.knowledge_graph_port(pid(2));
+        port_one.create_entity_capability(pid(1), 0x5000).unwrap();
+
         assert_eq!(
-            port.delegate_entity_read(pid(2), 0x5000, pid(3)),
+            port_two.create_entity_capability(pid(1), 0x5001),
             Err(CapabilityError::NotOwner)
         );
-        port.revoke_entity_capabilities(pid(2), 0x5000);
-        assert!(port.check_entity_capability(pid(1), 0x5000, Rights::READ));
+        assert_eq!(
+            port_two.delegate_entity_read(pid(2), 0x5000, pid(3)),
+            Err(CapabilityError::NotOwner)
+        );
+        assert_eq!(
+            port_two.revoke_entity_capabilities(pid(2), 0x5000),
+            Err(CapabilityError::NotOwner)
+        );
+        assert!(authority.check(pid(1), ResourceType::KnowledgeGraph, 0x5000, Rights::READ));
     }
 
     #[test]
