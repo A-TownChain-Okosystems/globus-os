@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   cargo-tests:
@@ -61,39 +62,182 @@ jobs:
           exit "$FAIL"
 
   evidence:
-    if: ${{ success() }}
+    if: ${{ always() && needs.cargo-tests.result == 'success' && needs.npm-tests.result == 'success' }}
     needs: [cargo-tests, npm-tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Evidence-Bindung (SCR-0086)
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Regression-test fail-closed validator
+        working-directory: tools/ci
+        run: python3 -m unittest test_fail_closed_evidence -v
+      - name: Verify GitHub Actions API provenance (SCR-0086)
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
+          set -euo pipefail
           python3 - <<'PY'
-          import datetime
+          import json
           import os
           import re
+          import sys
+          import urllib.error
+          import urllib.request
 
-          sha = os.environ["GITHUB_SHA"]
-          rid = os.environ["GITHUB_RUN_ID"]
-          wf = os.environ.get("GITHUB_WORKFLOW", "ATC Test Suite")
-          ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+          repo = os.environ.get("GITHUB_REPOSITORY", "")
+          run_id = os.environ.get("GITHUB_RUN_ID", "")
+          token = os.environ.get("GH_TOKEN", "")
+          if not re.fullmatch(r"[^/]+/[^/]+", repo) or not run_id.isdigit() or int(run_id) <= 0 or not token:
+              sys.exit("FAIL-CLOSED: missing repository, run ID, or GitHub token")
+
+          def get_json(path):
+              url = "https://api.github.com/repos/" + repo + path
+              request = urllib.request.Request(url, headers={
+                  "Accept": "application/vnd.github+json",
+                  "X-GitHub-Api-Version": "2022-11-28",
+                  "Authorization": "Bearer " + token,
+                  "User-Agent": "ATC-fail-closed-evidence-validator",
+              })
+              try:
+                  with urllib.request.urlopen(request, timeout=20) as response:
+                      if response.status != 200:
+                          raise RuntimeError("unexpected HTTP status " + str(response.status))
+                      return json.load(response), response.headers.get("Link", "")
+              except (urllib.error.URLError, TimeoutError, OSError, ValueError) as exc:
+                  raise RuntimeError("GitHub API request failed: " + str(exc)) from exc
+
+          run, _ = get_json("/actions/runs/" + run_id)
+          if run.get("id") != int(run_id):
+              sys.exit("FAIL-CLOSED: GitHub API run ID mismatch")
+          repository = run.get("repository") or {}
+          if repository.get("full_name") != repo:
+              sys.exit("FAIL-CLOSED: GitHub API repository mismatch")
+          if not isinstance(run.get("workflow_id"), int) or run["workflow_id"] <= 0:
+              sys.exit("FAIL-CLOSED: workflow ID missing from GitHub API run metadata")
+          if not isinstance(run.get("run_attempt"), int) or run["run_attempt"] <= 0:
+              sys.exit("FAIL-CLOSED: run attempt missing from GitHub API run metadata")
+
+          jobs_response, jobs_link = get_json("/actions/runs/" + run_id + "/jobs?per_page=100")
+          jobs = jobs_response.get("jobs")
+          if not isinstance(jobs, list) or not jobs:
+              sys.exit("FAIL-CLOSED: GitHub API jobs response missing jobs array")
+          # Fail closed if a second page exists; don't silently certify a partial job list.
+          if 'rel="next"' in jobs_link:
+              sys.exit("FAIL-CLOSED: jobs response pagination requires full-page retrieval")
+          by_name = {job.get("name"): job for job in jobs if isinstance(job, dict)}
+          for required in ("cargo-tests", "npm-tests"):
+              job = by_name.get(required)
+              if not job:
+                  sys.exit("FAIL-CLOSED: required job missing from GitHub API: " + required)
+              if job.get("status") != "completed" or job.get("conclusion") != "success":
+                  sys.exit("FAIL-CLOSED: GitHub API does not confirm successful " + required)
+              steps = job.get("steps")
+              if not isinstance(steps, list) or not steps:
+                  sys.exit("FAIL-CLOSED: step evidence missing for " + required)
+              if any(not isinstance(step, dict) for step in steps):
+                  sys.exit("FAIL-CLOSED: malformed step evidence for " + required)
+              allowed_skips = ("Post Run actions/checkout@v4", "Post Run Swatinem/rust-cache@v2", "Post Run actions/setup-node@v4")
+              if any(
+                  step.get("status") != "completed"
+                  or (step.get("conclusion") != "success"
+                      and not (step.get("conclusion") == "skipped" and step.get("name") in allowed_skips))
+                  for step in steps
+              ):
+                  sys.exit("FAIL-CLOSED: non-success step found in " + required)
+          print(json.dumps({
+              "verified": True,
+              "repository": repo,
+              "run_id": int(run_id),
+              "workflow_id": run["workflow_id"],
+              "run_attempt": run["run_attempt"],
+              "prerequisite_jobs": {
+                  name: {
+                      "id": by_name[name].get("id"),
+                      "status": by_name[name].get("status"),
+                      "conclusion": by_name[name].get("conclusion"),
+                      "steps": [{"name": s.get("name"), "status": s.get("status"), "conclusion": s.get("conclusion")}
+                                for s in by_name[name]["steps"]],
+                  } for name in ("cargo-tests", "npm-tests")
+              }
+          }, sort_keys=True))
+          PY
+      - name: Validate evidence contract before writing PASS (SCR-0086)
+        env:
+          CARGO_RESULT: ${{ needs.cargo-tests.result }}
+          NPM_RESULT: ${{ needs.npm-tests.result }}
+        run: |
+          set -euo pipefail
+          test "$CARGO_RESULT" = "success"
+          test "$NPM_RESULT" = "success"
+          python3 - <<'PY'
+          import datetime
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+
+          repo = os.environ.get("GITHUB_REPOSITORY", "")
+          sha = os.environ.get("GITHUB_SHA", "")
+          run_id = os.environ.get("GITHUB_RUN_ID", "")
+          workflow = os.environ.get("GITHUB_WORKFLOW", "")
+          cargo = os.environ.get("CARGO_RESULT", "")
+          npm = os.environ.get("NPM_RESULT", "")
+
+          # Reject absent or malformed identity fields before creating any PASS claim.
+          if not re.fullmatch(r"[^/]+/[^/]+", repo):
+              sys.exit("FAIL-CLOSED: GITHUB_REPOSITORY missing or malformed")
+          if not re.fullmatch(r"[0-9a-f]{40}", sha):
+              sys.exit("FAIL-CLOSED: GITHUB_SHA must be a full 40-character lowercase SHA")
+          if not run_id.isdigit() or int(run_id) <= 0:
+              sys.exit("FAIL-CLOSED: GITHUB_RUN_ID missing or invalid")
+          if not workflow:
+              sys.exit("FAIL-CLOSED: GITHUB_WORKFLOW missing")
+          if cargo != "success" or npm != "success":
+              sys.exit("FAIL-CLOSED: prerequisite job result is not success")
+
+          contract = {
+              "repository": repo,
+              "sha": sha,
+              "run_id": run_id,
+              "job_results": {"cargo-tests": cargo, "npm-tests": npm},
+          }
+          checked = subprocess.run(
+              [sys.executable, "tools/ci/fail_closed_evidence.py", "--repo", repo, "--sha", sha],
+              input=json.dumps(contract), text=True, capture_output=True, check=False,
+          )
+          print(checked.stdout, end="")
+          if checked.stderr:
+              print(checked.stderr, file=sys.stderr, end="")
+          if checked.returncode != 0:
+              sys.exit("FAIL-CLOSED: validator rejected evidence contract")
+
+          timestamp = datetime.datetime.now(datetime.timezone.utc).isoformat()
           path = ".atc/evidence/evidence.yaml"
-          text = open(path, encoding="utf-8").read()
-          text = re.sub(r"bound_commit: [^\n]*", "bound_commit: " + sha, text)
+          with open(path, encoding="utf-8") as stream:
+              text = stream.read()
+          text = re.sub(r"(?m)^bound_commit: [^\n]*", "bound_commit: " + sha, text)
           block = (
               "test_run:\n"
-              "  workflow: " + wf + "\n"
-              "  run_id: " + rid + "\n"
+              "  workflow: " + workflow + "\n"
+              "  run_id: " + run_id + "\n"
               "  commit: " + sha + "\n"
-              "  timestamp: " + ts + "\n"
+              "  timestamp: " + timestamp + "\n"
               "  result: PASS\n"
+              "  scope: cargo-tests,npm-tests\n"
+              "  cargo_job_result: " + cargo + "\n"
+              "  npm_job_result: " + npm + "\n"
               "  runner: github-actions\n"
           )
           if re.search(r"(?m)^test_run:\n(?:  [^\n]*\n)+", text):
-              text = re.sub(r"(?m)^test_run:\n(?:  [^\n]*\n)+", block, text)
+              text = re.sub(r"(?m)^test_run:\n(?:  [^\n]*\n)+", lambda _: block, text)
           else:
               text = text.rstrip() + "\n" + block
-          open(path, "w", encoding="utf-8").write(text)
+          with open(path, "w", encoding="utf-8") as stream:
+              stream.write(text)
           PY
       - name: Publish SHA-bound evidence artifact
         uses: actions/upload-artifact@v4
