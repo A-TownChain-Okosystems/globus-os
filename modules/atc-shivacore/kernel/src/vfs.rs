@@ -10,9 +10,7 @@ use alloc::string::ToString;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, String as Str};
-use alloc::sync::Arc;
 use alloc::vec::Vec;
-use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
 use crate::capability::{CapId, CapabilityAuthority, Rights};
@@ -685,10 +683,10 @@ mod tests {
     use crate::capability::ResourceType;
 
     fn setup_vfs() -> Vfs {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new();
         // Grant full rights to process 1
         {
-            let mut table = caps.lock();
+            let table = caps;
             let cap = table
                 .create(
                     Pid(1),
@@ -704,7 +702,7 @@ mod tests {
         Vfs::new(caps)
     }
 
-    fn grant_full_caps(caps: &Arc<Mutex<CapabilityTable>>, pid: u64) -> u64 {
+    fn grant_full_caps(caps: &CapabilityAuthority, pid: u64) -> u64 {
         let mut table = caps.lock();
         let cap_id = table.create(
             Pid(pid as u32),
