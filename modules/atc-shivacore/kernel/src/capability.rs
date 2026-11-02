@@ -195,6 +195,7 @@ impl CapabilityAuthority {
 }
 
 /// Privileged mutation surface retained by KernelState / the test-harness owner only.
+#[derive(Clone)]
 pub(crate) struct CapabilityAuthorityOwner {
     inner: Arc<spin::Mutex<CapabilityTable>>,
 }
@@ -252,6 +253,85 @@ impl CapabilityAuthorityOwner {
     pub(crate) fn revoke_for_pid(&self, pid: Pid) {
         self.inner.lock().revoke_for_pid(pid);
     }
+
+    fn create_knowledge_graph_entity(
+        &self,
+        principal: Pid,
+        creator: Pid,
+        resource_id: u64,
+    ) -> Result<CapId, CapabilityError> {
+        if creator != principal {
+            return Err(CapabilityError::NotOwner);
+        }
+        Ok(self.create(
+            principal,
+            ResourceType::KnowledgeGraph,
+            resource_id,
+            Rights::READ | Rights::WRITE,
+        ))
+    }
+
+    fn check_knowledge_graph_entity(
+        &self,
+        principal: Pid,
+        caller: Pid,
+        resource_id: u64,
+        required: Rights,
+    ) -> bool {
+        caller == principal
+            && self.inner.lock().check(
+                principal,
+                ResourceType::KnowledgeGraph,
+                resource_id,
+                required,
+            )
+    }
+
+    fn revoke_knowledge_graph_entity(
+        &self,
+        principal: Pid,
+        owner: Pid,
+        resource_id: u64,
+    ) -> Result<(), CapabilityError> {
+        if owner != principal {
+            return Err(CapabilityError::NotOwner);
+        }
+        let root = self
+            .inner
+            .lock()
+            .find_for_resource_with_rights(
+                principal,
+                ResourceType::KnowledgeGraph,
+                resource_id,
+                Rights::WRITE,
+            )
+            .ok_or(CapabilityError::NotOwner)?;
+        self.revoke(root);
+        Ok(())
+    }
+
+    fn delegate_knowledge_graph_read(
+        &self,
+        principal: Pid,
+        owner: Pid,
+        resource_id: u64,
+        target: Pid,
+    ) -> Result<CapId, CapabilityError> {
+        if owner != principal {
+            return Err(CapabilityError::NotOwner);
+        }
+        let source = self
+            .inner
+            .lock()
+            .find_for_resource_with_rights(
+                principal,
+                ResourceType::KnowledgeGraph,
+                resource_id,
+                Rights::WRITE | Rights::DELEGATE,
+            )
+            .ok_or(CapabilityError::NoDelegateRight)?;
+        self.delegate(principal, source, target, Rights::READ)
+    }
 }
 
 impl CapabilityAuthorityOwner {
@@ -287,7 +367,7 @@ impl CapabilityAuthorityOwner {
 
     pub(crate) fn knowledge_graph_port(&self, principal: Pid) -> KnowledgeGraphCapabilityPort {
         KnowledgeGraphCapabilityPort {
-            inner: self.inner.clone(),
+            owner: self.clone(),
             principal,
         }
     }
@@ -317,7 +397,7 @@ pub trait KnowledgeGraphCapabilityAccess {
 
 #[derive(Clone)]
 pub struct KnowledgeGraphCapabilityPort {
-    inner: Arc<spin::Mutex<CapabilityTable>>,
+    owner: CapabilityAuthorityOwner,
     principal: Pid,
 }
 
@@ -327,22 +407,13 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
         creator: Pid,
         resource_id: u64,
     ) -> Result<CapId, CapabilityError> {
-        if creator != self.principal {
-            return Err(CapabilityError::NotOwner);
-        }
-        Ok(self.inner.lock().create(
-            self.principal,
-            ResourceType::KnowledgeGraph,
-            resource_id,
-            Rights::READ | Rights::WRITE,
-        ))
+        self.owner
+            .create_knowledge_graph_entity(self.principal, creator, resource_id)
     }
 
     fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool {
-        caller == self.principal
-            && self.inner
-                .lock()
-                .check(caller, ResourceType::KnowledgeGraph, resource_id, required)
+        self.owner
+            .check_knowledge_graph_entity(self.principal, caller, resource_id, required)
     }
 
     fn revoke_entity_capabilities(
@@ -350,20 +421,8 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
         owner: Pid,
         resource_id: u64,
     ) -> Result<(), CapabilityError> {
-        if owner != self.principal {
-            return Err(CapabilityError::NotOwner);
-        }
-        let mut table = self.inner.lock();
-        let root = table
-            .find_for_resource_with_rights(
-                owner,
-                ResourceType::KnowledgeGraph,
-                resource_id,
-                Rights::WRITE,
-            )
-            .ok_or(CapabilityError::NotOwner)?;
-        table.revoke(root);
-        Ok(())
+        self.owner
+            .revoke_knowledge_graph_entity(self.principal, owner, resource_id)
     }
 
     fn delegate_entity_read(
@@ -372,22 +431,10 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
         resource_id: u64,
         target: Pid,
     ) -> Result<CapId, CapabilityError> {
-        if owner != self.principal {
-            return Err(CapabilityError::NotOwner);
-        }
-        let mut table = self.inner.lock();
-        let source = table
-            .find_for_resource_with_rights(
-                owner,
-                ResourceType::KnowledgeGraph,
-                resource_id,
-                Rights::WRITE | Rights::DELEGATE,
-            )
-            .ok_or(CapabilityError::NoDelegateRight)?;
-        table.delegate(owner, source, target, Rights::READ)
+        self.owner
+            .delegate_knowledge_graph_read(self.principal, owner, resource_id, target)
     }
 }
-
 #[derive(Clone)]
 pub(crate) struct MemoryCapabilityPort {
     inner: Arc<spin::Mutex<CapabilityTable>>,
