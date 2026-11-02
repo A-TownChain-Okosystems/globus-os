@@ -697,7 +697,7 @@ mod tests {
         }
         // We need the cap handle. Let's use a simpler approach:
         // Create caps manually with known handle
-        Vfs::new(caps)
+        Vfs::new(caps.vfs_port())
     }
 
     fn grant_full_caps(caps: &CapabilityAuthority, pid: u64) -> u64 {
@@ -1060,7 +1060,7 @@ mod tests {
     #[test]
     fn test_resolve_nonexistent() {
         let caps = CapabilityAuthority::new();
-        let vfs = Vfs::new(caps);
+        let vfs = Vfs::new(caps.vfs_port());
         assert!(vfs.resolve("/does/not/exist").is_none());
     }
 
