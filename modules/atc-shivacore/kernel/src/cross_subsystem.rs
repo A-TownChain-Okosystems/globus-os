@@ -202,12 +202,7 @@ mod tests {
         // Parent delegates READ capability to child (use shared caps table)
         let cap_id = h
             .caps
-            .list_for(parent)
-            .iter()
-            .find(|c| {
-                c.resource_type == ResourceType::Memory && c.resource_id == parent_mem.region_id
-            })
-            .map(|c| c.id)
+            .find_for_resource(parent, ResourceType::Memory, parent_mem.region_id)
             .unwrap();
         h.caps
             .delegate(parent, cap_id, child, Rights::READ)
