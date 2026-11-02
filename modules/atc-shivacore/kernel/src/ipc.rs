@@ -244,6 +244,7 @@ pub enum IpcError {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::{CapabilityAuthority, ResourceType};
 
     fn pid(n: u32) -> Pid {
         Pid(n)
