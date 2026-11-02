@@ -346,10 +346,10 @@ impl MemorySubsystem {
     /// Erzeugt ein neues Speicher-Subsystem.
     /// In Kernel-Mode: wird nach allocator::init_heap() aufgerufen.
     pub fn new() -> Self {
-        Self::new_with_authority(new_authority().memory_port())
+        Self::new_with_capability_port(new_authority().memory_port())
     }
 
-    pub fn new_with_authority(caps: MemoryCapabilityPort) -> Self {
+    pub fn new_with_capability_port(caps: MemoryCapabilityPort) -> Self {
         Self {
             manager: KernelMemoryManager::new(),
             caps,
