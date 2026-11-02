@@ -465,7 +465,7 @@ mod tests {
     #[test]
     fn test_write_and_read_file() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         let node = fs
             .write_file(&caps, "/home/alice/test.txt", b"hello world", pid(1))
@@ -484,7 +484,7 @@ mod tests {
     #[test]
     fn test_read_nonexistent() {
         let fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
         assert_eq!(
             fs.read_file(&caps, "/nonexistent", pid(1)),
             Err(FsError::NotFound)
@@ -494,7 +494,7 @@ mod tests {
     #[test]
     fn test_read_directory_rejected() {
         let fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
         assert_eq!(
             fs.read_file(&caps, "/home", pid(1)),
             Err(FsError::IsADirectory)
@@ -504,7 +504,7 @@ mod tests {
     #[test]
     fn test_write_directory_rejected() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
         assert_eq!(
             fs.write_file(&caps, "/home", b"data", pid(1)),
             Err(FsError::IsADirectory)
@@ -514,7 +514,7 @@ mod tests {
     #[test]
     fn test_permission_denied() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         // pid(1) schreibt nach /home/alice/secret.txt
         fs.write_file(&caps, "/home/alice/secret.txt", b"secret", pid(1))
@@ -530,7 +530,7 @@ mod tests {
     #[test]
     fn test_public_paths_readable() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         // pid(1) schreibt nach /atc/public.txt
         fs.write_file(&caps, "/atc/public.txt", b"public data", pid(1))
@@ -544,7 +544,7 @@ mod tests {
     #[test]
     fn test_ls_directory() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(&caps, "/atc/file1.txt", b"a", pid(1))
             .unwrap();
@@ -558,7 +558,7 @@ mod tests {
     #[test]
     fn test_delete_file() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(&caps, "/tmp/test.txt", b"data", pid(1))
             .unwrap();
@@ -571,7 +571,7 @@ mod tests {
     #[test]
     fn test_delete_without_permission() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(&caps, "/home/alice/file.txt", b"data", pid(1))
             .unwrap();
@@ -601,7 +601,7 @@ mod tests {
     #[test]
     fn test_manifest_export() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(&caps, "/atc/a.txt", b"aaa", pid(1)).unwrap();
         fs.write_file(&caps, "/atc/b.txt", b"bbb", pid(1)).unwrap();
@@ -616,7 +616,7 @@ mod tests {
     fn test_manifest_deterministic() {
         let mut fs1 = AtcFileSystem::new();
         let mut fs2 = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs1.write_file(&caps, "/atc/a.txt", b"aaa", pid(1)).unwrap();
         fs1.write_file(&caps, "/atc/b.txt", b"bbb", pid(1)).unwrap();
@@ -632,7 +632,7 @@ mod tests {
     #[test]
     fn test_ats1000_filesystem_trait() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         // Datei schreiben
         fs.write_file(&caps, "/tmp/test.bin", b"binary data", pid(1))
@@ -663,7 +663,7 @@ mod tests {
     #[test]
     fn test_ats1000_read_after_close() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
         fs.write_file(&caps, "/tmp/test.txt", b"data", pid(1))
             .unwrap();
 
@@ -677,7 +677,7 @@ mod tests {
     #[test]
     fn test_overwrite_file_preserves_owner() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(&caps, "/atc/file.txt", b"v1", pid(1))
             .unwrap();
@@ -693,7 +693,7 @@ mod tests {
     #[test]
     fn test_nested_directories() {
         let mut fs = AtcFileSystem::new();
-        let caps = CapabilityTable::new();
+        let caps = CapabilityAuthority::new();
 
         fs.write_file(
             &caps,
