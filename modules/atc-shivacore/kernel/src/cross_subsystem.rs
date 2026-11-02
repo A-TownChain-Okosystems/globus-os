@@ -16,8 +16,8 @@ use alloc::vec::Vec;
 use crate::atcfs::{atc_content_id, AtcFileSystem, FsError};
 use crate::ats1000::{FileSystem, MemoryManager};
 use crate::capability::{
-    new_authority, CapabilityAuthority, CapabilityAuthorityOwner, MemoryCapabilityPort,
-    ResourceType, Rights,
+    new_authority, CapabilityAuthority, CapabilityAuthorityOwner, KnowledgeGraphCapabilityAccess,
+    KnowledgeGraphCapabilityPort, MemoryCapabilityPort, ResourceType, Rights,
 };
 use crate::ipc::{ChannelId, IpcError, IpcSubsystem, Message};
 use crate::kernel_init::KernelState;
@@ -30,6 +30,7 @@ pub struct TestHarness {
     caps: CapabilityAuthority,
     owner: CapabilityAuthorityOwner,
     mem_caps: MemoryCapabilityPort,
+    kg_caps: KnowledgeGraphCapabilityPort,
     pub mem: KernelMemoryManager,
     pub fs: AtcFileSystem,
     pub proc_mgr: ProcessManager,
@@ -49,12 +50,14 @@ impl TestHarness {
         let caps = new_authority();
         let owner = caps.owner();
         let mem_caps = owner.memory_port();
+        let kg_caps = owner.knowledge_graph_port();
         let process_caps = owner.process_port();
         let ipc_caps = owner.ipc_port();
         Self {
             caps,
             owner,
             mem_caps,
+            kg_caps,
             mem: KernelMemoryManager::new(),
             fs: AtcFileSystem::new(),
             proc_mgr: ProcessManager::new_with_capability_port(process_caps),
@@ -85,6 +88,13 @@ mod tests {
         assert!(h
             .caps
             .check(pid, ResourceType::IpcChannel, channel.0, Rights::WRITE));
+        let _kg_cap = h.kg_caps.create_entity_capability(pid, 0x5000);
+        assert!(h.caps.check(
+            pid,
+            ResourceType::KnowledgeGraph,
+            0x5000,
+            Rights::READ | Rights::WRITE
+        ));
     }
 
     // === FLOW 1: Boot → Spawn → Allocate → Write → Read → Free === //

@@ -29,6 +29,7 @@ pub enum ResourceType {
     Accelerator,
     FileSystem,
     Network,
+    KnowledgeGraph,
 }
 
 /// Zugriffsrechte als Bitfield
@@ -314,7 +315,7 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
     fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId {
         self.inner.lock().create(
             creator,
-            ResourceType::Memory,
+            ResourceType::KnowledgeGraph,
             resource_id,
             Rights::READ | Rights::WRITE,
         )
@@ -323,13 +324,13 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
     fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool {
         self.inner
             .lock()
-            .check(caller, ResourceType::Memory, resource_id, required)
+            .check(caller, ResourceType::KnowledgeGraph, resource_id, required)
     }
 
     fn revoke_entity_capabilities(&self, owner: Pid, resource_id: u64) {
         let mut table = self.inner.lock();
-        if table.check(owner, ResourceType::Memory, resource_id, Rights::WRITE) {
-            table.revoke_for_resource(owner, ResourceType::Memory, resource_id);
+        if table.check(owner, ResourceType::KnowledgeGraph, resource_id, Rights::WRITE) {
+            table.revoke_for_resource(owner, ResourceType::KnowledgeGraph, resource_id);
         }
     }
 
@@ -341,7 +342,7 @@ impl KnowledgeGraphCapabilityAccess for KnowledgeGraphCapabilityPort {
     ) -> Result<CapId, CapabilityError> {
         let mut table = self.inner.lock();
         let source = table
-            .find_for_resource_with_rights(owner, ResourceType::Memory, resource_id, Rights::WRITE)
+            .find_for_resource_with_rights(owner, ResourceType::KnowledgeGraph, resource_id, Rights::WRITE)
             .ok_or(CapabilityError::NotOwner)?;
         table.delegate_by_kernel_owner(owner, source, target, Rights::READ)
     }

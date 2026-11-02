@@ -29,7 +29,9 @@ use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::{new_authority, CapabilityAuthority, CapabilityAuthorityOwner};
+use crate::capability::{
+    new_authority, CapabilityAuthority, CapabilityAuthorityOwner, KnowledgeGraphCapabilityAccess,
+};
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
@@ -376,6 +378,14 @@ mod tests {
             pid,
             crate::capability::ResourceType::IpcChannel,
             channel.0,
+            crate::capability::Rights::WRITE,
+        ));
+        let kg_port = state.knowledge_graph_capability_port();
+        let _kg_cap = kg_port.create_entity_capability(pid, 0x9000);
+        assert!(state.capability_authority.check(
+            pid,
+            crate::capability::ResourceType::KnowledgeGraph,
+            0x9000,
             crate::capability::Rights::WRITE,
         ));
         let endpoint_cap =
