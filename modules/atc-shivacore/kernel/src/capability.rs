@@ -140,7 +140,9 @@ impl CapabilityAuthority {
         resource_id: u64,
         rights: Rights,
     ) -> CapId {
-        self.inner.lock().create(pid, resource_type, resource_id, rights)
+        self.inner
+            .lock()
+            .create(pid, resource_type, resource_id, rights)
     }
 
     pub fn create_typed(&self, pid: Pid, resource_id: u64, rights: ObjectRights) -> CapId {
@@ -155,7 +157,9 @@ impl CapabilityAuthority {
         target_pid: Pid,
         rights: ObjectRights,
     ) -> Result<CapId, CapabilityError> {
-        self.inner.lock().mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
+        self.inner
+            .lock()
+            .mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
     }
 
     pub fn check(
@@ -165,7 +169,9 @@ impl CapabilityAuthority {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.inner.lock().check(pid, resource_type, resource_id, required)
+        self.inner
+            .lock()
+            .check(pid, resource_type, resource_id, required)
     }
 
     pub fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
@@ -179,7 +185,9 @@ impl CapabilityAuthority {
         resource_id: u64,
         required: ObjectRights,
     ) -> bool {
-        self.inner.lock().check_typed(pid, cap_id, resource_id, required)
+        self.inner
+            .lock()
+            .check_typed(pid, cap_id, resource_id, required)
     }
 
     pub fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
@@ -193,7 +201,9 @@ impl CapabilityAuthority {
         target_pid: Pid,
         rights: Rights,
     ) -> Result<CapId, CapabilityError> {
-        self.inner.lock().delegate(source_pid, source_cap, target_pid, rights)
+        self.inner
+            .lock()
+            .delegate(source_pid, source_cap, target_pid, rights)
     }
 
     pub fn revoke(&self, cap_id: CapId) {
@@ -201,7 +211,9 @@ impl CapabilityAuthority {
     }
 
     pub fn revoke_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) {
-        self.inner.lock().revoke_for_resource(pid, resource_type, resource_id);
+        self.inner
+            .lock()
+            .revoke_for_resource(pid, resource_type, resource_id);
     }
 
     pub fn revoke_for_pid(&self, pid: Pid) {
@@ -214,7 +226,9 @@ impl CapabilityAuthority {
         resource_type: ResourceType,
         resource_id: u64,
     ) -> Option<CapId> {
-        self.inner.lock().find_for_resource(pid, resource_type, resource_id)
+        self.inner
+            .lock()
+            .find_for_resource(pid, resource_type, resource_id)
     }
 
     pub fn find_for_resource_with_rights(
