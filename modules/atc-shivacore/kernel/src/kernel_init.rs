@@ -205,7 +205,7 @@ impl KernelState {
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 2. FS write
-        let caps = self.capabilities.lock();
+        let caps = crate::capability::CapabilityTable::new();
         self.fs
             .write_file(
                 &caps,
@@ -352,7 +352,7 @@ mod tests {
             region.region_id,
             crate::capability::Rights::READ,
         ));
-        assert!(state.capabilities.lock().check(
+        assert!(state.capabilities.check(
             pid,
             crate::capability::ResourceType::Memory,
             region.region_id,
