@@ -99,7 +99,7 @@ impl ProcessManager {
             pid,
             ResourceType::Memory,
             addr_space,
-            Rights::READ | Rights::WRITE | Rights::DELEGATE,
+            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
         );
 
         pid
