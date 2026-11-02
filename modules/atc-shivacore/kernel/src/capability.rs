@@ -121,10 +121,106 @@ pub struct CapabilityTable {
 ///
 /// Kernel subsystems receive clones of this handle; all operations serialize
 /// through the same capability table. The table itself remains the sole store.
-pub type CapabilityAuthority = Arc<spin::Mutex<CapabilityTable>>;
+#[derive(Clone)]
+pub struct CapabilityAuthority {
+    inner: Arc<spin::Mutex<CapabilityTable>>,
+}
+
+impl CapabilityAuthority {
+    pub fn new() -> Self {
+        Self {
+            inner: Arc::new(spin::Mutex::new(CapabilityTable::new())),
+        }
+    }
+
+    pub fn create(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        rights: Rights,
+    ) -> CapId {
+        self.inner.lock().create(pid, resource_type, resource_id, rights)
+    }
+
+    pub fn create_typed(&self, pid: Pid, resource_id: u64, rights: ObjectRights) -> CapId {
+        self.inner.lock().create_typed(pid, resource_id, rights)
+    }
+
+    pub fn mint_typed(
+        &self,
+        source_pid: Pid,
+        source_cap: CapId,
+        cnode_cap: CapId,
+        target_pid: Pid,
+        rights: ObjectRights,
+    ) -> Result<CapId, CapabilityError> {
+        self.inner.lock().mint_typed(source_pid, source_cap, cnode_cap, target_pid, rights)
+    }
+
+    pub fn check(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        required: Rights,
+    ) -> bool {
+        self.inner.lock().check(pid, resource_type, resource_id, required)
+    }
+
+    pub fn check_any(&self, pid: Pid, cap_id: u64, required: Rights) -> bool {
+        self.inner.lock().check_any(pid, cap_id, required)
+    }
+
+    pub fn check_typed(
+        &self,
+        pid: Pid,
+        cap_id: CapId,
+        resource_id: u64,
+        required: ObjectRights,
+    ) -> bool {
+        self.inner.lock().check_typed(pid, cap_id, resource_id, required)
+    }
+
+    pub fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
+        self.inner.lock().check_legacy_handle(pid, cap_id, required)
+    }
+
+    pub fn delegate(
+        &self,
+        source_pid: Pid,
+        source_cap: CapId,
+        target_pid: Pid,
+        rights: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        self.inner.lock().delegate(source_pid, source_cap, target_pid, rights)
+    }
+
+    pub fn revoke(&self, cap_id: CapId) {
+        self.inner.lock().revoke(cap_id);
+    }
+
+    pub fn revoke_for_resource(&self, pid: Pid, resource_type: ResourceType, resource_id: u64) {
+        self.inner.lock().revoke_for_resource(pid, resource_type, resource_id);
+    }
+
+    pub fn revoke_for_pid(&self, pid: Pid) {
+        self.inner.lock().revoke_for_pid(pid);
+    }
+
+    pub fn count(&self) -> usize {
+        self.inner.lock().count()
+    }
+}
+
+impl Default for CapabilityAuthority {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
 pub fn new_authority() -> CapabilityAuthority {
-    Arc::new(spin::Mutex::new(CapabilityTable::new()))
+    CapabilityAuthority::new()
 }
 
 impl Default for CapabilityTable {
@@ -341,6 +437,37 @@ impl CapabilityTable {
             .get(&CapId(cap_id))
             .map(|cap| cap.object_rights.is_none() && cap.owner == pid && cap.rights.has(required))
             .unwrap_or(false)
+    }
+
+    /// Checks a legacy handle without exposing the stored capability record.
+    pub fn check_legacy_handle(&self, pid: Pid, cap_id: CapId, required: Rights) -> bool {
+        self.caps
+            .get(&cap_id)
+            .map(|cap| cap.object_rights.is_none() && cap.owner == pid && cap.rights.has(required))
+            .unwrap_or(false)
+    }
+
+    /// Revokes all legacy capabilities for one resource identity.
+    pub fn revoke_for_resource(&mut self, pid: Pid, resource_type: ResourceType, resource_id: u64) {
+        let ids: Vec<CapId> = self
+            .by_pid
+            .get(&pid)
+            .into_iter()
+            .flatten()
+            .filter_map(|id| self.caps.get(id))
+            .filter(|cap| cap.resource_type == resource_type && cap.resource_id == resource_id)
+            .map(|cap| cap.id)
+            .collect();
+        for id in ids {
+            self.revoke(id);
+        }
+    }
+
+    pub fn revoke_for_pid(&mut self, pid: Pid) {
+        let ids: Vec<CapId> = self.by_pid.get(&pid).cloned().unwrap_or_default();
+        for id in ids {
+            self.revoke(id);
+        }
     }
 
     pub fn get(&self, id: CapId) -> Option<&Capability> {
