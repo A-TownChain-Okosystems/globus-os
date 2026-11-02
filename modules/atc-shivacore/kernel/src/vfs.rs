@@ -731,7 +731,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_and_list() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -753,7 +753,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_nested_path() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -769,7 +769,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_already_exists() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -780,7 +780,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_parent_not_dir() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -791,7 +791,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_parent_not_found() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -801,7 +801,7 @@ mod tests {
 
     #[test]
     fn test_rmdir_empty() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -812,7 +812,7 @@ mod tests {
 
     #[test]
     fn test_rmdir_not_empty() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -824,7 +824,7 @@ mod tests {
 
     #[test]
     fn test_rmdir_root_fails() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -836,7 +836,7 @@ mod tests {
 
     #[test]
     fn test_create_and_stat() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -849,7 +849,7 @@ mod tests {
 
     #[test]
     fn test_create_file_already_exists() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -860,7 +860,7 @@ mod tests {
 
     #[test]
     fn test_open_write_read() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -880,7 +880,7 @@ mod tests {
 
     #[test]
     fn test_open_create_mode() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -902,7 +902,7 @@ mod tests {
 
     #[test]
     fn test_append_mode() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -922,7 +922,7 @@ mod tests {
 
     #[test]
     fn test_seek_and_partial_read() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -942,7 +942,7 @@ mod tests {
 
     #[test]
     fn test_read_past_end() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -959,7 +959,7 @@ mod tests {
 
     #[test]
     fn test_close_and_reopen() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -974,7 +974,7 @@ mod tests {
 
     #[test]
     fn test_open_directory_fails() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -985,7 +985,7 @@ mod tests {
 
     #[test]
     fn test_remove_file() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -996,7 +996,7 @@ mod tests {
 
     #[test]
     fn test_remove_file_closes_handles() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1014,7 +1014,7 @@ mod tests {
 
     #[test]
     fn test_create_and_read_symlink() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1031,7 +1031,7 @@ mod tests {
 
     #[test]
     fn test_symlink_already_exists() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1044,7 +1044,7 @@ mod tests {
 
     #[test]
     fn test_path_normalization() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1059,7 +1059,7 @@ mod tests {
 
     #[test]
     fn test_resolve_nonexistent() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let vfs = Vfs::new(caps.vfs_port());
         assert!(vfs.resolve("/does/not/exist").is_none());
     }
@@ -1068,7 +1068,7 @@ mod tests {
 
     #[test]
     fn typed_capability_cannot_bypass_legacy_vfs_rights() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let typed_handle = {
             let owner = caps.owner();
@@ -1083,7 +1083,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_without_write_cap() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
 
         // Prozess 2 bekommt nur READ (kein WRITE)
@@ -1100,7 +1100,7 @@ mod tests {
 
     #[test]
     fn test_read_without_read_cap() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
 
         // Prozess 2 bekommt nur WRITE (kein READ)
@@ -1118,7 +1118,7 @@ mod tests {
 
     #[test]
     fn test_open_read_mode_with_only_write_cap() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
 
         let cap_write = {
@@ -1138,7 +1138,7 @@ mod tests {
 
     #[test]
     fn test_tree_display() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1156,7 +1156,7 @@ mod tests {
 
     #[test]
     fn test_stat_after_write() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1170,7 +1170,7 @@ mod tests {
 
     #[test]
     fn test_multiple_files_in_directory() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1185,7 +1185,7 @@ mod tests {
 
     #[test]
     fn test_write_expands_file() {
-        let caps = CapabilityAuthority::new();
+        let caps = new_authority();
         let mut vfs = Vfs::new(caps.vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
