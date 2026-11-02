@@ -433,11 +433,8 @@ mod tests {
     #[test]
     fn typed_revocation_removes_all_derived_capabilities() {
         let mut table = CapabilityTable::new();
-        let root_rights = crate::rights::ObjectRights::new(
-            crate::rights::ObjectType::Frame,
-            0b1001,
-        )
-        .unwrap();
+        let root_rights =
+            crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b1001).unwrap();
         let root = table.create_typed(pid(1), 0x7000, root_rights);
         let cnode = table.create_typed(pid(1), 10, crate::rights::cnode::MINT);
         let child = table
