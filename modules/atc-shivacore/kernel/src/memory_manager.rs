@@ -123,7 +123,7 @@ impl KernelMemoryManager {
     /// Routing:
     ///   size <= heap_threshold -> Kernel-Heap (echte alloc::alloc)
     ///   size > heap_threshold  -> Userspace-Bump (virtuelle Adress-Simulation)
-    pub fn allocate(
+    pub(crate) fn allocate(
         &mut self,
         caps: &MemoryCapabilityPort,
         pid: Pid,
@@ -186,7 +186,7 @@ impl KernelMemoryManager {
     /// Gibt eine Speicherregion frei.
     /// Prueft WRITE-Capability und widerruft alle Capabilities.
     /// Bei Kernel-Heap-Regionen: echte dealloc.
-    pub fn deallocate(
+    pub(crate) fn deallocate(
         &mut self,
         caps: &MemoryCapabilityPort,
         pid: Pid,
@@ -226,7 +226,7 @@ impl KernelMemoryManager {
 
     /// Liest Speicher (simuliert — gibt die Regions-Info zurueck).
     /// Prueft READ-Capability.
-    pub fn read_check(
+    pub(crate) fn read_check(
         &self,
         caps: &MemoryCapabilityPort,
         pid: Pid,
@@ -244,7 +244,7 @@ impl KernelMemoryManager {
 
     /// Schreibt in eine Kernel-Heap-Region (echter Memory-Write).
     /// Prueft WRITE-Capability.
-    pub fn write_check(
+    pub(crate) fn write_check(
         &self,
         caps: &MemoryCapabilityPort,
         pid: Pid,
@@ -261,7 +261,7 @@ impl KernelMemoryManager {
     }
 
     /// Mappt eine physikalische Adresse (mmap — simuliert).
-    pub fn mmap(
+    pub(crate) fn mmap(
         &mut self,
         caps: &MemoryCapabilityPort,
         pid: Pid,

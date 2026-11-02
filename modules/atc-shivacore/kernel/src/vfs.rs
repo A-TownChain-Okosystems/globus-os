@@ -195,7 +195,7 @@ pub struct Vfs {
 }
 
 impl Vfs {
-    pub fn new(caps: VfsCapabilityPort) -> Self {
+    pub(crate) fn new(caps: VfsCapabilityPort) -> Self {
         let mut vfs = Vfs {
             inodes: BTreeMap::new(),
             next_inode: 1,

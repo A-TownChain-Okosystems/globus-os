@@ -57,7 +57,7 @@ pub struct SyscallDispatcher {
 }
 
 impl SyscallDispatcher {
-    pub fn new(capabilities: SyscallCapabilityPort) -> Self {
+    pub(crate) fn new(capabilities: SyscallCapabilityPort) -> Self {
         Self {
             monotonic_ticks: 0,
             capabilities,

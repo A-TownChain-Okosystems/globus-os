@@ -51,7 +51,7 @@ pub struct IpcSubsystem {
 }
 
 impl IpcSubsystem {
-    pub fn new(capabilities: IpcCapabilityPort) -> Self {
+    pub(crate) fn new(capabilities: IpcCapabilityPort) -> Self {
         Self {
             channels: BTreeMap::new(),
             next_channel_id: AtomicU64::new(1),
