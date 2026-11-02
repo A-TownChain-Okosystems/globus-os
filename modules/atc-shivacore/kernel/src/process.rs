@@ -95,7 +95,7 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.lock().create(
+        self.caps.create(
             pid,
             ResourceType::Memory,
             addr_space,
@@ -137,11 +137,7 @@ impl ProcessManager {
         }
 
         // Alle Capabilities dieses Prozesses widerrufen
-        let mut caps = self.caps.lock();
-        let cap_ids: Vec<CapId> = caps.list_for(pid).iter().map(|c| c.id).collect();
-        for cap_id in cap_ids {
-            caps.revoke(cap_id);
-        }
+        self.caps.revoke_for_pid(pid);
 
         // Zustand auf Terminiert setzen
         pcb.state = ProcessState::Terminated(exit_code);
@@ -237,7 +233,6 @@ impl ProcessManager {
         required: Rights,
     ) -> bool {
         self.caps
-            .lock()
             .check(pid, resource_type, resource_id, required)
     }
 
@@ -249,7 +244,7 @@ impl ProcessManager {
         target: Pid,
         rights: Rights,
     ) -> Result<CapId, crate::capability::CapabilityError> {
-        self.caps.lock().delegate(source, cap_id, target, rights)
+        self.caps.delegate(source, cap_id, target, rights)
     }
 }
 
@@ -291,7 +286,7 @@ mod tests {
         let p2 = pm.spawn(ProcessType::Service, 100);
 
         // p1 delegiert READ an p2
-        let p1_mem_cap = pm.caps.lock().list_for(p1)[0].id;
+        let p1_mem_cap = pm.caps.check_capability(p1, ResourceType::Memory, p1.0 as u64, Rights::READ);
         pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
             .unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
