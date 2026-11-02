@@ -112,12 +112,9 @@ mod tests {
             .mkdir("/shared-authority", pid.0 as u64, fs_cap.0)
             .unwrap();
 
-        let inspect_cap = h.owner.create(
-            pid,
-            ResourceType::IpcChannel,
-            0x7000,
-            Rights::INSPECT,
-        );
+        let inspect_cap = h
+            .owner
+            .create(pid, ResourceType::IpcChannel, 0x7000, Rights::INSPECT);
         let syscall = h.syscalls.dispatch(
             pid,
             SyscallRequest {
