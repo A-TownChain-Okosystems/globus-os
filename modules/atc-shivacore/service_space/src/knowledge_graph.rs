@@ -22,7 +22,9 @@ use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
-use shivacore::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
+use shivacore::capability::{
+    CapId, CapabilityError, KnowledgeGraphCapabilityAccess, Pid, Rights,
+};
 
 /// Eindeutige Entity-ID im Knowledge Graph
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -113,7 +115,7 @@ impl KnowledgeGraph {
     /// Erzeugt eine neue Entity und gibt dem Ersteller WRITE-Capability.
     pub fn create_entity(
         &mut self,
-        caps: &mut CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         creator: Pid,
         label: &str,
         entity_type: &str,
@@ -121,13 +123,8 @@ impl KnowledgeGraph {
         let id = EntityId(self.next_entity_id.fetch_add(1, Ordering::SeqCst));
         let resource_id = id.0;
 
-        // Creator bekommt READ + WRITE + DELEGATE
-        caps.create(
-            creator,
-            ResourceType::Memory,
-            resource_id,
-            Rights::READ | Rights::WRITE | Rights::DELEGATE,
-        );
+        // The owner-issued port grants only the rights needed by the graph.
+        caps.create_entity_capability(creator, resource_id);
 
         let entity = Entity {
             id,
@@ -143,7 +140,7 @@ impl KnowledgeGraph {
     /// Fuegt ein Triple hinzu. Prueft WRITE-Capability fuer das Subject.
     pub fn add_triple(
         &mut self,
-        caps: &CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         caller: Pid,
         subject: EntityId,
         predicate: Predicate,
@@ -155,7 +152,7 @@ impl KnowledgeGraph {
         }
 
         // Capability-Check: Caller braucht WRITE auf Subject-Entity
-        if !caps.check(caller, ResourceType::Memory, subject.0, Rights::WRITE) {
+        if !caps.check_entity_capability(caller, subject.0, Rights::WRITE) {
             return Err(KgError::NoWriteCapability);
         }
 
@@ -192,7 +189,7 @@ impl KnowledgeGraph {
     /// Prueft READ-Capability fuer jedes zurueckgegebene Subject.
     pub fn query(
         &self,
-        caps: &CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         caller: Pid,
         pattern: &QueryPattern,
     ) -> Vec<Triple> {
@@ -219,7 +216,7 @@ impl KnowledgeGraph {
             }
 
             // Capability-Check: Caller braucht READ auf Subject
-            if !caps.check(caller, ResourceType::Memory, triple.subject.0, Rights::READ) {
+            if !caps.check_entity_capability(caller, triple.subject.0, Rights::READ) {
                 continue;
             }
 
@@ -230,7 +227,7 @@ impl KnowledgeGraph {
     }
 
     /// Holt alle ausgehenden Tripel einer Entity (Subject-Lookup).
-    pub fn outgoing(&self, caps: &CapabilityTable, caller: Pid, entity: EntityId) -> Vec<Triple> {
+    pub fn outgoing(&self, caps: &dyn KnowledgeGraphCapabilityAccess, caller: Pid, entity: EntityId) -> Vec<Triple> {
         self.query(
             caps,
             caller,
@@ -244,14 +241,14 @@ impl KnowledgeGraph {
 
     /// Holt alle eingehenden Tripel einer Entity (Object-Lookup).
     /// "Wer referenziert mich?"
-    pub fn incoming(&self, caps: &CapabilityTable, caller: Pid, entity: EntityId) -> Vec<Triple> {
+    pub fn incoming(&self, caps: &dyn KnowledgeGraphCapabilityAccess, caller: Pid, entity: EntityId) -> Vec<Triple> {
         let mut results = Vec::new();
 
         if let Some(indices) = self.osp_index.get(&entity) {
             for &idx in indices {
                 let triple = &self.triples[idx];
                 // Capability-Check
-                if caps.check(caller, ResourceType::Memory, triple.subject.0, Rights::READ) {
+                if caps.check_entity_capability(caller, triple.subject.0, Rights::READ) {
                     results.push(triple.clone());
                 }
             }
@@ -264,7 +261,7 @@ impl KnowledgeGraph {
     /// Bsp: "depends_on" transitiv — A depends_on B depends_on C -> [A->B, B->C]
     pub fn transitive_closure(
         &self,
-        caps: &CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         caller: Pid,
         start: EntityId,
         predicate: &str,
@@ -307,13 +304,13 @@ impl KnowledgeGraph {
     /// Loescht ein Triple. Prueft WRITE-Capability.
     pub fn remove_triple(
         &mut self,
-        caps: &CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         caller: Pid,
         subject: EntityId,
         predicate: &str,
         object: &ObjectValue,
     ) -> Result<(), KgError> {
-        if !caps.check(caller, ResourceType::Memory, subject.0, Rights::WRITE) {
+        if !caps.check_entity_capability(caller, subject.0, Rights::WRITE) {
             return Err(KgError::NoWriteCapability);
         }
 
@@ -339,7 +336,7 @@ impl KnowledgeGraph {
     /// Loescht eine Entity und alle ihre Tripel. Prueft WRITE-Capability.
     pub fn delete_entity(
         &mut self,
-        caps: &mut CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         caller: Pid,
         entity: EntityId,
     ) -> Result<(), KgError> {
@@ -356,16 +353,8 @@ impl KnowledgeGraph {
         });
         self.rebuild_indices();
 
-        // Capabilities widerrufen
-        let cap_ids: Vec<CapId> = caps
-            .list_for(caller)
-            .iter()
-            .filter(|c| c.resource_type == ResourceType::Memory && c.resource_id == entity.0)
-            .map(|c| c.id)
-            .collect();
-        for cap_id in cap_ids {
-            caps.revoke(cap_id);
-        }
+        // Revoke the entity capability and all delegated descendants.
+        caps.revoke_entity_capabilities(caller, entity.0);
 
         self.entities.remove(&entity);
         Ok(())
@@ -389,7 +378,7 @@ impl KnowledgeGraph {
     /// Grant: delegiert READ an einen anderen Prozess
     pub fn grant_read(
         &self,
-        caps: &mut CapabilityTable,
+        caps: &dyn KnowledgeGraphCapabilityAccess,
         owner: Pid,
         entity: EntityId,
         target: Pid,
@@ -397,19 +386,7 @@ impl KnowledgeGraph {
         if !self.entities.contains_key(&entity) {
             return Err(KgError::EntityNotFound);
         }
-        let owner_caps: Vec<CapId> = caps
-            .list_for(owner)
-            .iter()
-            .filter(|c| {
-                c.resource_type == ResourceType::Memory
-                    && c.resource_id == entity.0
-                    && c.rights.has(Rights::READ)
-            })
-            .map(|c| c.id)
-            .collect();
-
-        let source_cap = owner_caps.first().ok_or(KgError::NoReadCapability)?;
-        caps.delegate(owner, *source_cap, target, Rights::READ)
+        caps.delegate_entity_read(owner, entity.0, target)
             .map_err(|_| KgError::CapabilityRevoked)
     }
 
@@ -435,13 +412,58 @@ impl KnowledgeGraph {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use core::cell::RefCell;
+
+    #[derive(Default)]
+    struct TestCapabilityPort {
+        rights: RefCell<BTreeMap<(u32, u64), Rights>>,
+        next_id: AtomicU64,
+    }
+
+    impl KnowledgeGraphCapabilityAccess for TestCapabilityPort {
+        fn create_entity_capability(&self, creator: Pid, resource_id: u64) -> CapId {
+            self.rights
+                .borrow_mut()
+                .insert((creator.0, resource_id), Rights::READ | Rights::WRITE);
+            CapId(self.next_id.fetch_add(1, Ordering::SeqCst))
+        }
+
+        fn check_entity_capability(&self, caller: Pid, resource_id: u64, required: Rights) -> bool {
+            self.rights
+                .borrow()
+                .get(&(caller.0, resource_id))
+                .map(|rights| rights.has(required))
+                .unwrap_or(false)
+        }
+
+        fn revoke_entity_capabilities(&self, _owner: Pid, resource_id: u64) {
+            self.rights
+                .borrow_mut()
+                .retain(|(_, id), _| *id != resource_id);
+        }
+
+        fn delegate_entity_read(
+            &self,
+            owner: Pid,
+            resource_id: u64,
+            target: Pid,
+        ) -> Result<CapId, CapabilityError> {
+            if !self.check_entity_capability(owner, resource_id, Rights::READ) {
+                return Err(CapabilityError::NotOwner);
+            }
+            self.rights
+                .borrow_mut()
+                .insert((target.0, resource_id), Rights::READ);
+            Ok(CapId(self.next_id.fetch_add(1, Ordering::SeqCst)))
+        }
+    }
 
     fn pid(n: u32) -> Pid {
         Pid(n)
     }
 
-    fn setup() -> (CapabilityTable, KnowledgeGraph) {
-        (CapabilityTable::new(), KnowledgeGraph::new())
+    fn setup() -> (TestCapabilityPort, KnowledgeGraph) {
+        (TestCapabilityPort::default(), KnowledgeGraph::new())
     }
 
     #[test]
