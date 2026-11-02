@@ -686,7 +686,7 @@ mod tests {
         let caps = CapabilityAuthority::new();
         // Grant full rights to process 1
         {
-            let table = caps;
+            let table = &caps;
             let cap = table
                 .create(
                     Pid(1),
