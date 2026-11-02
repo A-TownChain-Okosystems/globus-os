@@ -35,6 +35,7 @@ use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
 use crate::security::SecurityManager;
+use crate::syscall::SyscallDispatcher;
 use crate::timer::{MonotonicClock, SimulatedTimerSource, TimerManager};
 use crate::vfs::Vfs;
 
@@ -91,6 +92,8 @@ pub struct KernelState {
     pub scheduler: DaHeftScheduler,
     // L5: IPC
     pub ipc: IpcSubsystem,
+    /// Syscall dispatcher bound to the boot-owned capability authority.
+    pub syscalls: SyscallDispatcher,
     // L6: Filesystems
     pub fs: AtcFileSystem,
     pub vfs: Vfs,
@@ -140,6 +143,7 @@ impl KernelState {
         // ── L5: IPC Subsystem ──
         log.push((BootPhase::Ipc, InitStatus::Initializing));
         let ipc = IpcSubsystem::new(capabilities.clone());
+        let syscalls = SyscallDispatcher::new(capabilities.clone());
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
         // ── L6: ATCFS + VFS ──
@@ -166,6 +170,7 @@ impl KernelState {
             processes,
             scheduler,
             ipc,
+            syscalls,
             fs,
             vfs,
             security,
@@ -365,6 +370,21 @@ mod tests {
             channel.0,
             crate::capability::Rights::WRITE,
         ));
+        let endpoint_cap = state
+            .capabilities
+            .create_typed(pid, 99, crate::rights::endpoint::SEND);
+        let response = state.syscalls.dispatch(
+            pid,
+            crate::syscall::SyscallRequest {
+                abi_version: libshivacore::ABI_VERSION,
+                syscall_id: libshivacore::Syscall::IpcSend.id(),
+                capability: Some(libshivacore::CapabilityHandle(endpoint_cap.0)),
+                arg0: 99,
+                arg1: 0,
+                payload_len: 0,
+            },
+        );
+        assert_eq!(response.error, None);
     }
 
     #[test]
