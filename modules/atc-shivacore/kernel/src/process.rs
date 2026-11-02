@@ -18,7 +18,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
+use crate::capability::{new_authority, CapId, CapabilityAuthority, Pid, ResourceType, Rights};
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,7 +57,7 @@ pub struct ProcessManager {
     processes: BTreeMap<Pid, ProcessControlBlock>,
     next_pid: AtomicU32,
     /// Referenz zur Capability-Tabelle (Kernel-intern)
-    pub caps: CapabilityTable,
+    caps: CapabilityAuthority,
 }
 
 impl Default for ProcessManager {
@@ -68,10 +68,14 @@ impl Default for ProcessManager {
 
 impl ProcessManager {
     pub fn new() -> Self {
+        Self::new_with_authority(new_authority())
+    }
+
+    pub fn new_with_authority(caps: CapabilityAuthority) -> Self {
         Self {
             processes: BTreeMap::new(),
             next_pid: AtomicU32::new(1),
-            caps: CapabilityTable::new(),
+            caps,
         }
     }
 
@@ -91,11 +95,11 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.create(
+        self.caps.lock().create(
             pid,
             ResourceType::Memory,
             addr_space,
-            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
         );
 
         pid
@@ -133,9 +137,10 @@ impl ProcessManager {
         }
 
         // Alle Capabilities dieses Prozesses widerrufen
-        let cap_ids: Vec<CapId> = self.caps.list_for(pid).iter().map(|c| c.id).collect();
+        let mut caps = self.caps.lock();
+        let cap_ids: Vec<CapId> = caps.list_for(pid).iter().map(|c| c.id).collect();
         for cap_id in cap_ids {
-            self.caps.revoke(cap_id);
+            caps.revoke(cap_id);
         }
 
         // Zustand auf Terminiert setzen
@@ -231,7 +236,7 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.caps.check(pid, resource_type, resource_id, required)
+        self.caps.lock().check(pid, resource_type, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
