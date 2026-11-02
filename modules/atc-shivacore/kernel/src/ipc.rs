@@ -61,11 +61,7 @@ impl IpcSubsystem {
 
     /// Erzeugt einen neuen IPC-Channel fuer einen Prozess.
     /// Der Owner (Empfaenger) bekommt automatisch READ+WRITE+DELEGATE Capabilities.
-    pub fn create_channel(
-        &mut self,
-        owner: Pid,
-        capacity: usize,
-    ) -> ChannelId {
+    pub fn create_channel(&mut self, owner: Pid, capacity: usize) -> ChannelId {
         let id = ChannelId(self.next_channel_id.fetch_add(1, Ordering::SeqCst));
         let resource_id = id.0;
 
@@ -139,11 +135,7 @@ impl IpcSubsystem {
     /// Empfaengt eine Message von einem Channel (FIFO).
     /// Prueft: Channel existiert, nicht leer,
     /// Empfaenger hat READ-Capability fuer diesen Channel.
-    pub fn recv(
-        &mut self,
-        receiver: Pid,
-        channel_id: ChannelId,
-    ) -> Result<Message, IpcError> {
+    pub fn recv(&mut self, receiver: Pid, channel_id: ChannelId) -> Result<Message, IpcError> {
         let channel = self
             .channels
             .get_mut(&channel_id)
@@ -171,11 +163,7 @@ impl IpcSubsystem {
     }
 
     /// Schliesst einen Channel und widerruft alle Capabilities.
-    pub fn close_channel(
-        &mut self,
-        owner: Pid,
-        channel_id: ChannelId,
-    ) -> bool {
+    pub fn close_channel(&mut self, owner: Pid, channel_id: ChannelId) -> bool {
         let channel = match self.channels.get_mut(&channel_id) {
             Some(c) => c,
             None => return false,
@@ -225,7 +213,8 @@ impl IpcSubsystem {
         }
 
         // Finde die entsprechende Cap des Owners
-        let source_cap = self.capabilities
+        let source_cap = self
+            .capabilities
             .find_for_resource_with_rights(
                 owner,
                 ResourceType::IpcChannel,
@@ -234,7 +223,8 @@ impl IpcSubsystem {
             )
             .ok_or(CapabilityError::NoDelegateRight)?;
 
-        self.capabilities.delegate(owner, source_cap, target, rights)
+        self.capabilities
+            .delegate(owner, source_cap, target, rights)
     }
 
     pub fn channel_count(&self) -> usize {
@@ -321,8 +311,7 @@ mod tests {
         ipc.send(pid(2), ch, b"from p2".to_vec()).unwrap();
 
         // pid(1) delegiert READ an pid(3), pid(3) kann empfangen
-        ipc.grant_access(pid(1), ch, pid(3), Rights::READ)
-            .unwrap();
+        ipc.grant_access(pid(1), ch, pid(3), Rights::READ).unwrap();
         let msg = ipc.recv(pid(3), ch).unwrap();
         assert_eq!(msg.data, b"from p2");
         assert_eq!(msg.sender, pid(2));
@@ -357,7 +346,7 @@ mod tests {
         let mut ipc = IpcSubsystem::new(caps.clone());
 
         let ch = ipc.create_channel(pid(1), 16);
-        assert!(ipc.close_channel( pid(1), ch));
+        assert!(ipc.close_channel(pid(1), ch));
 
         // Channel ist geschlossen
         let result = ipc.send(pid(1), ch, b"x".to_vec());
@@ -383,7 +372,7 @@ mod tests {
         let ch2 = ipc.create_channel(pid(1), 16);
         let ch3 = ipc.create_channel(pid(2), 16);
 
-        let closed = ipc.close_all_for( pid(1));
+        let closed = ipc.close_all_for(pid(1));
         assert_eq!(closed, 2);
 
         // pid(1)s Channels sind zu
@@ -503,8 +492,7 @@ mod tests {
         let ch = ipc.create_channel(pid(1), 16);
 
         // pid(1) delegiert nur READ an pid(2)
-        ipc.grant_access(pid(1), ch, pid(2), Rights::READ)
-            .unwrap();
+        ipc.grant_access(pid(1), ch, pid(2), Rights::READ).unwrap();
 
         // pid(2) kann empfangen aber nicht senden
         ipc.send(pid(1), ch, b"data".to_vec()).unwrap();
@@ -526,12 +514,7 @@ mod tests {
 
         // Alice delegiert WRITE+DELEGATE an Bob
         let bob_cap = ipc
-            .grant_access(
-                    pid(1),
-                ch,
-                pid(2),
-                Rights::WRITE | Rights::DELEGATE,
-            )
+            .grant_access(pid(1), ch, pid(2), Rights::WRITE | Rights::DELEGATE)
             .unwrap();
 
         // Bob delegiert nur WRITE an Charlie (Attenuation)
@@ -649,10 +632,7 @@ mod tests {
         );
 
         // pid(2) kann auch nicht von ch_b empfangen
-        assert_eq!(
-            ipc.recv(pid(2), ch_b),
-            Err(IpcError::NoReadCapability)
-        );
+        assert_eq!(ipc.recv(pid(2), ch_b), Err(IpcError::NoReadCapability));
     }
 
     #[test]
