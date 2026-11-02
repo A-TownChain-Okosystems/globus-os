@@ -112,12 +112,12 @@ mod tests {
 
         // Grant send access to sender
         h.ipc
-            .grant_access(&h.caps, receiver, ch, sender, Rights::WRITE)
+            .grant_access( receiver, ch, sender, Rights::WRITE)
             .unwrap();
 
         // Sender sends a message (data: Vec<u8>, not Message struct)
         h.ipc
-            .send(&h.caps, sender, ch, b"hello from sender".to_vec())
+            .send( sender, ch, b"hello from sender".to_vec())
             .unwrap();
 
         // Receiver reads the message
@@ -237,10 +237,10 @@ mod tests {
 
         // p1 grants send to p2 and p3
         h.ipc
-            .grant_access(&h.caps, p1, ch, p2, Rights::WRITE)
+            .grant_access( p1, ch, p2, Rights::WRITE)
             .unwrap();
         h.ipc
-            .grant_access(&h.caps, p1, ch, p3, Rights::WRITE)
+            .grant_access( p1, ch, p3, Rights::WRITE)
             .unwrap();
 
         // p2 and p3 send messages
@@ -388,7 +388,7 @@ mod tests {
         assert_eq!(h.ipc.channel_count(), 3);
 
         h.ipc
-            .grant_access(&h.caps, owner, ch1, _user, Rights::WRITE)
+            .grant_access( owner, ch1, _user, Rights::WRITE)
             .unwrap();
 
         // close_all_for closes capabilities and channels owned by this PID
