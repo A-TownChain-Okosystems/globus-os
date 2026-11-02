@@ -231,10 +231,7 @@ impl CapabilityTable {
         target_pid: Pid,
         child_rights: ObjectRights,
     ) -> Result<CapId, CapabilityError> {
-        let cnode = self
-            .caps
-            .get(&cnode_cap)
-            .ok_or(CapabilityError::NotFound)?;
+        let cnode = self.caps.get(&cnode_cap).ok_or(CapabilityError::NotFound)?;
         if cnode.owner != source_pid {
             return Err(CapabilityError::NotOwner);
         }
@@ -294,7 +291,9 @@ impl CapabilityTable {
             .map(|cap| {
                 cap.owner == pid
                     && cap.resource_id == resource_id
-                    && cap.object_rights.and_then(|rights| rights.contains(required).ok())
+                    && cap
+                        .object_rights
+                        .and_then(|rights| rights.contains(required).ok())
                         == Some(true)
             })
             .unwrap_or(false)
@@ -392,16 +391,10 @@ mod tests {
     #[test]
     fn typed_mint_requires_cnode_mint_and_attenuates() {
         let mut table = CapabilityTable::new();
-        let parent_rights = crate::rights::ObjectRights::new(
-            crate::rights::ObjectType::Frame,
-            0b0011,
-        )
-        .unwrap();
-        let expanded = crate::rights::ObjectRights::new(
-            crate::rights::ObjectType::Frame,
-            0b0111,
-        )
-        .unwrap();
+        let parent_rights =
+            crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b0011).unwrap();
+        let expanded =
+            crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b0111).unwrap();
         let frame = table.create_typed(pid(1), 0x4000, parent_rights);
         let cnode = table.create_typed(pid(1), 7, crate::rights::cnode::MINT);
         let child = table
@@ -421,7 +414,13 @@ mod tests {
         let frame = table.create_typed(pid(1), 0x5000, crate::rights::frame::READ);
         let wrong_cnode = table.create_typed(pid(1), 8, crate::rights::cnode::DUPLICATE);
         assert_eq!(
-            table.mint_typed(pid(1), frame, wrong_cnode, pid(2), crate::rights::frame::READ),
+            table.mint_typed(
+                pid(1),
+                frame,
+                wrong_cnode,
+                pid(2),
+                crate::rights::frame::READ
+            ),
             Err(CapabilityError::MissingCNodeMintRight)
         );
         let cnode = table.create_typed(pid(1), 9, crate::rights::cnode::MINT);
