@@ -240,11 +240,8 @@ impl Vfs {
     // ── Capability-Check ───────────────────────────────────────────────────
 
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
-        self.caps.check_legacy_handle(
-            crate::ats1000::Pid(pid as u32),
-            CapId(cap_handle),
-            required,
-        )
+        self.caps
+            .check_legacy_handle(crate::ats1000::Pid(pid as u32), CapId(cap_handle), required)
     }
 
     // ── Verzeichnis-Operationen ────────────────────────────────────────────
