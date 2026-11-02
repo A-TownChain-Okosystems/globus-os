@@ -193,11 +193,11 @@ pub struct Vfs {
     root_inode: u64,
     handles: BTreeMap<u64, FileHandle>, // fd -> handle
     next_fd: u64,
-    caps: Arc<Mutex<CapabilityTable>>,
+    caps: CapabilityAuthority,
 }
 
 impl Vfs {
-    pub fn new(caps: Arc<Mutex<CapabilityTable>>) -> Self {
+    pub fn new(caps: CapabilityAuthority) -> Self {
         let mut vfs = Vfs {
             inodes: BTreeMap::new(),
             next_inode: 1,
@@ -242,14 +242,11 @@ impl Vfs {
     // ── Capability-Check ───────────────────────────────────────────────────
 
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
-        let table = self.caps.lock();
-        if let Some(cap) = table.get(crate::capability::CapId(cap_handle)) {
-            cap.object_rights.is_none()
-                && cap.owner == crate::ats1000::Pid(pid as u32)
-                && cap.rights.has(required)
-        } else {
-            false
-        }
+        self.caps.check_legacy_handle(
+            crate::ats1000::Pid(pid as u32),
+            CapId(cap_handle),
+            required,
+        )
     }
 
     // ── Verzeichnis-Operationen ────────────────────────────────────────────
