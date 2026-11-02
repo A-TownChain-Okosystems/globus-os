@@ -345,19 +345,19 @@ mod tests {
     fn kernel_subsystems_share_one_capability_authority() {
         let mut state = KernelState::boot().unwrap();
         let pid = crate::ats1000::Pid(77);
-        let cap = state.capabilities.lock().create(
-            pid,
-            crate::capability::ResourceType::Memory,
-            0x7788,
-            crate::capability::Rights::READ,
-        );
+        let region = state.memory.allocate(pid, 1024).unwrap();
         assert!(state.processes.check_capability(
             pid,
             crate::capability::ResourceType::Memory,
-            0x7788,
+            region.region_id,
             crate::capability::Rights::READ,
         ));
-        assert!(state.capabilities.lock().get(cap).is_some());
+        assert!(state.capabilities.lock().check(
+            pid,
+            crate::capability::ResourceType::Memory,
+            region.region_id,
+            crate::capability::Rights::WRITE,
+        ));
     }
 
     #[test]
