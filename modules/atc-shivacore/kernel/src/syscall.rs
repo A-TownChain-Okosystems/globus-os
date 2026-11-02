@@ -183,7 +183,7 @@ mod tests {
                 syscall_id: 0xffff,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &CapabilityAuthority::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidSyscall));
     }
