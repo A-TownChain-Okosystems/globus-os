@@ -95,7 +95,7 @@ impl ProcessManager {
             pid,
             ResourceType::Memory,
             addr_space,
-            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
         );
 
         pid
@@ -264,6 +264,8 @@ mod tests {
         // Hat automatisch Memory-Cap fuer eigenen Adressraum
         assert!(pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::READ));
         assert!(pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::WRITE));
+        // Executable authority must be granted explicitly by the typed mapping path.
+        assert!(!pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::EXEC));
     }
 
     #[test]
