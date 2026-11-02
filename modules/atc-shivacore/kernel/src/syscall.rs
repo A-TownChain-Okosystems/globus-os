@@ -207,7 +207,7 @@ mod tests {
     fn ipc_requires_matching_capability_and_right() {
         let table = CapabilityAuthority::new();
         let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(table.clone());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -232,7 +232,7 @@ mod tests {
     fn ipc_receive_requires_endpoint_recv_right() {
         let table = CapabilityAuthority::new();
         let cap = table.create_typed(pid(1), 42, crate::rights::endpoint::RECV);
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(table.clone());
         let allowed = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -268,7 +268,7 @@ mod tests {
     fn capability_query_requires_inspect_right() {
         let table = CapabilityAuthority::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
-        let mut d = SyscallDispatcher::new(CapabilityAuthority::new());
+        let mut d = SyscallDispatcher::new(table.clone());
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
