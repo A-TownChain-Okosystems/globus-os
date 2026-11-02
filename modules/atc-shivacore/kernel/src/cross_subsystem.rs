@@ -108,20 +108,20 @@ mod tests {
         let mem_r = h.mem.allocate(&h.caps, receiver, 2048).unwrap();
 
         // Create IPC channel (uses capability::Pid)
-        let ch = h.ipc.create_channel( receiver, 1024);
+        let ch = h.ipc.create_channel(receiver, 1024);
 
         // Grant send access to sender
         h.ipc
-            .grant_access( receiver, ch, sender, Rights::WRITE)
+            .grant_access(receiver, ch, sender, Rights::WRITE)
             .unwrap();
 
         // Sender sends a message (data: Vec<u8>, not Message struct)
         h.ipc
-            .send( sender, ch, b"hello from sender".to_vec())
+            .send(sender, ch, b"hello from sender".to_vec())
             .unwrap();
 
         // Receiver reads the message
-        let received = h.ipc.recv( receiver, ch).unwrap();
+        let received = h.ipc.recv(receiver, ch).unwrap();
         assert_eq!(received.data, b"hello from sender");
         assert_eq!(received.sender, sender);
 
@@ -129,9 +129,7 @@ mod tests {
         assert_eq!(h.ipc.pending_messages(ch).unwrap(), 0);
 
         // Cleanup
-        h.mem
-            .deallocate(&h.caps, sender, mem_s.region_id)
-            .unwrap();
+        h.mem.deallocate(&h.caps, sender, mem_s.region_id).unwrap();
         h.mem
             .deallocate(&h.caps, receiver, mem_r.region_id)
             .unwrap();
@@ -233,23 +231,19 @@ mod tests {
         let p3 = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
         // p1 creates a channel
-        let ch = h.ipc.create_channel( p1, 4096);
+        let ch = h.ipc.create_channel(p1, 4096);
 
         // p1 grants send to p2 and p3
-        h.ipc
-            .grant_access( p1, ch, p2, Rights::WRITE)
-            .unwrap();
-        h.ipc
-            .grant_access( p1, ch, p3, Rights::WRITE)
-            .unwrap();
+        h.ipc.grant_access(p1, ch, p2, Rights::WRITE).unwrap();
+        h.ipc.grant_access(p1, ch, p3, Rights::WRITE).unwrap();
 
         // p2 and p3 send messages
-        h.ipc.send( p2, ch, b"from p2".to_vec()).unwrap();
-        h.ipc.send( p3, ch, b"from p3".to_vec()).unwrap();
+        h.ipc.send(p2, ch, b"from p2".to_vec()).unwrap();
+        h.ipc.send(p3, ch, b"from p3".to_vec()).unwrap();
 
         // p1 reads both
-        let m1 = h.ipc.recv( p1, ch).unwrap();
-        let m2 = h.ipc.recv( p1, ch).unwrap();
+        let m1 = h.ipc.recv(p1, ch).unwrap();
+        let m2 = h.ipc.recv(p1, ch).unwrap();
 
         assert_eq!(m1.data, b"from p2");
         assert_eq!(m2.data, b"from p3");
@@ -381,18 +375,18 @@ mod tests {
         let owner = h.proc_mgr.spawn(crate::process::ProcessType::Service, 100);
         let _user = h.proc_mgr.spawn(crate::process::ProcessType::Agent, 100);
 
-        let ch1 = h.ipc.create_channel( owner, 1024);
-        let ch2 = h.ipc.create_channel( owner, 1024);
-        let ch3 = h.ipc.create_channel( owner, 2048);
+        let ch1 = h.ipc.create_channel(owner, 1024);
+        let ch2 = h.ipc.create_channel(owner, 1024);
+        let ch3 = h.ipc.create_channel(owner, 2048);
 
         assert_eq!(h.ipc.channel_count(), 3);
 
         h.ipc
-            .grant_access( owner, ch1, _user, Rights::WRITE)
+            .grant_access(owner, ch1, _user, Rights::WRITE)
             .unwrap();
 
         // close_all_for closes capabilities and channels owned by this PID
-        let cleaned = h.ipc.close_all_for( owner);
+        let cleaned = h.ipc.close_all_for(owner);
         assert_eq!(cleaned, 3);
     }
 
@@ -523,9 +517,7 @@ mod tests {
         assert_eq!(stats.total_allocated, 50 * 128);
 
         for r in &regions {
-            h.mem
-                .deallocate(&h.caps, r.owner_pid, r.region_id)
-                .unwrap();
+            h.mem.deallocate(&h.caps, r.owner_pid, r.region_id).unwrap();
         }
         assert_eq!(h.mem.region_count(), 0);
 
