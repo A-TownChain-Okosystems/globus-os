@@ -259,7 +259,6 @@ impl AtcFileSystem {
     /// Liest eine Datei (gibt CID + Node zurueck)
     pub fn read_file(
         &self,
-        caps: &CapabilityAuthority,
         path: &str,
         actor: Pid,
     ) -> Result<(Cid, AtcNode), FsError> {
