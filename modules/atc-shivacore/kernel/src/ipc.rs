@@ -513,7 +513,7 @@ mod tests {
 
         // Charlie kann senden
         assert!(ipc
-            .send(&caps, pid(3), ch, b"from charlie".to_vec())
+            .send(pid(3), ch, b"from charlie".to_vec())
             .is_ok());
 
         // Charlie kann aber nicht weiter delegieren (kein DELEGATE-Recht)
@@ -580,7 +580,7 @@ mod tests {
 
         // Grant WRITE an pid(2)
         let cap = ipc
-            .grant_access(&caps, pid(1), ch, pid(2), Rights::WRITE)
+            .grant_access(pid(1), ch, pid(2), Rights::WRITE)
             .unwrap();
         assert!(ipc.send(pid(2), ch, b"ok".to_vec()).is_ok());
 
