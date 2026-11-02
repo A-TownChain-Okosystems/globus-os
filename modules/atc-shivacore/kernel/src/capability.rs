@@ -431,6 +431,28 @@ mod tests {
     }
 
     #[test]
+    fn typed_revocation_removes_all_derived_capabilities() {
+        let mut table = CapabilityTable::new();
+        let root_rights = crate::rights::ObjectRights::new(
+            crate::rights::ObjectType::Frame,
+            0b1001,
+        )
+        .unwrap();
+        let root = table.create_typed(pid(1), 0x7000, root_rights);
+        let cnode = table.create_typed(pid(1), 10, crate::rights::cnode::MINT);
+        let child = table
+            .mint_typed(pid(1), root, cnode, pid(2), crate::rights::frame::READ)
+            .unwrap();
+
+        assert!(table.check_typed(pid(1), root, 0x7000, crate::rights::frame::READ));
+        assert!(table.check_typed(pid(2), child, 0x7000, crate::rights::frame::READ));
+        table.revoke(root);
+        assert!(!table.check_typed(pid(1), root, 0x7000, crate::rights::frame::READ));
+        assert!(!table.check_typed(pid(2), child, 0x7000, crate::rights::frame::READ));
+        assert_eq!(table.count(), 1);
+    }
+
+    #[test]
     fn legacy_operations_cannot_consume_typed_capabilities() {
         let mut table = CapabilityTable::new();
         let typed = table.create_typed(pid(1), 0x6000, crate::rights::frame::READ);
