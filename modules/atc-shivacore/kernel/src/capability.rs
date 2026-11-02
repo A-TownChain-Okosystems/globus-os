@@ -217,6 +217,18 @@ impl CapabilityAuthority {
         self.inner.lock().find_for_resource(pid, resource_type, resource_id)
     }
 
+    pub fn find_for_resource_with_rights(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        required: Rights,
+    ) -> Option<CapId> {
+        self.inner
+            .lock()
+            .find_for_resource_with_rights(pid, resource_type, resource_id, required)
+    }
+
     pub fn count(&self) -> usize {
         self.inner.lock().count()
     }
@@ -521,6 +533,24 @@ impl CapabilityTable {
             self.caps.get(id).and_then(|cap| {
                 (cap.resource_type == resource_type && cap.resource_id == resource_id)
                     .then_some(cap.id)
+            })
+        })
+    }
+
+    pub fn find_for_resource_with_rights(
+        &self,
+        pid: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        required: Rights,
+    ) -> Option<CapId> {
+        self.by_pid.get(&pid)?.iter().find_map(|id| {
+            self.caps.get(id).and_then(|cap| {
+                (cap.object_rights.is_none()
+                    && cap.resource_type == resource_type
+                    && cap.resource_id == resource_id
+                    && cap.rights.has(required))
+                .then_some(cap.id)
             })
         })
     }
