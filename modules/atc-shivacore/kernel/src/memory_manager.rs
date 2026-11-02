@@ -23,9 +23,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ats1000::{MemRegion, MemoryManager, Pid};
-use crate::capability::{
-    new_authority, CapabilityAuthority, ResourceType, Rights,
-};
+use crate::capability::{new_authority, CapabilityAuthority, ResourceType, Rights};
 
 // === Konstanten — synchronisiert mit allocator.rs === //
 // allocator.rs: HEAP_START = 0x4444_4444_0000, HEAP_SIZE = 100 * 1024
@@ -387,8 +385,7 @@ impl MemorySubsystem {
 
     /// Gibt Speicher frei
     pub fn deallocate(&mut self, pid: Pid, region_id: u64) -> Result<(), MemError> {
-        self.manager
-            .deallocate(&self.caps, pid, region_id)
+        self.manager.deallocate(&self.caps, pid, region_id)
     }
 
     /// Prueft Lesezugriff
