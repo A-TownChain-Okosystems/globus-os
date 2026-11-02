@@ -142,7 +142,7 @@ impl KernelState {
 
         // ── L5: IPC Subsystem ──
         log.push((BootPhase::Ipc, InitStatus::Initializing));
-        let ipc = IpcSubsystem::new(capabilities.clone());
+        let ipc = IpcSubsystem::new(capabilities.ipc_port());
         let syscalls = SyscallDispatcher::new(capabilities.syscall_port());
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
@@ -361,7 +361,7 @@ mod tests {
             crate::capability::Rights::WRITE,
         ));
         let channel = state.ipc.create_channel(pid, 128);
-        assert!(state.capabilities.check(
+        assert!(state.capability_authority.check(
             pid,
             crate::capability::ResourceType::IpcChannel,
             channel.0,
