@@ -195,7 +195,7 @@ impl KernelMemoryManager {
     /// Bei Kernel-Heap-Regionen: echte dealloc.
     pub fn deallocate(
         &mut self,
-        caps: &mut CapabilityAuthority,
+        caps: &CapabilityAuthority,
         pid: Pid,
         region_id: u64,
     ) -> Result<(), MemError> {
@@ -270,7 +270,7 @@ impl KernelMemoryManager {
     /// Mappt eine physikalische Adresse (mmap — simuliert).
     pub fn mmap(
         &mut self,
-        caps: &mut CapabilityAuthority,
+        caps: &CapabilityAuthority,
         pid: Pid,
         size: u64,
     ) -> Result<AllocatedRegion, MemError> {
