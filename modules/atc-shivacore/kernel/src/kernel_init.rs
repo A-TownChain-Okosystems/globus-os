@@ -30,7 +30,7 @@ use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::CapabilityTable;
+use crate::capability::{new_authority, CapabilityAuthority};
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
@@ -83,6 +83,8 @@ impl BootPhase {
 pub struct KernelState {
     // L1: Memory
     pub memory: MemorySubsystem,
+    /// One kernel-owned capability authority shared by all consumers.
+    pub capabilities: CapabilityAuthority,
     // L2: Capabilities (inside ProcessManager)
     // L3: Process Manager
     pub processes: ProcessManager,
@@ -116,7 +118,8 @@ impl KernelState {
 
         // ── L1: MemorySubsystem (Heap-Bridge + Prozess-Regionen) ──
         log.push((BootPhase::Memory, InitStatus::Initializing));
-        let memory = MemorySubsystem::new();
+        let capabilities = new_authority();
+        let memory = MemorySubsystem::new_with_authority(capabilities.clone());
         let stats = memory.stats();
         if stats.heap_base != HEAP_START {
             log.push((BootPhase::Memory, InitStatus::Failed));
@@ -126,7 +129,7 @@ impl KernelState {
 
         // ── L2+L3: ProcessManager (enthält CapabilityTable) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
-        let processes = ProcessManager::new();
+        let processes = ProcessManager::new_with_authority(capabilities.clone());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
         log.push((BootPhase::Processes, InitStatus::Ready));
 
@@ -147,8 +150,7 @@ impl KernelState {
             log.push((BootPhase::FileSystem, InitStatus::Failed));
             return Err(BootError::FsInitFailed);
         }
-        let caps = Arc::new(spin::Mutex::new(CapabilityTable::new()));
-        let vfs = Vfs::new(caps);
+        let vfs = Vfs::new(capabilities.clone());
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
         // ── L7: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
@@ -161,6 +163,7 @@ impl KernelState {
 
         Ok(KernelState {
             memory,
+            capabilities,
             processes,
             scheduler,
             ipc,
@@ -203,10 +206,10 @@ impl KernelState {
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 2. FS write
-        let caps = &self.memory.caps;
+        let caps = self.capabilities.lock();
         self.fs
             .write_file(
-                caps,
+                &caps,
                 "/tmp/smoke_test.txt",
                 b"ShivaCore boot OK",
                 crate::ats1000::Pid(1),
@@ -216,7 +219,7 @@ impl KernelState {
         // 3. FS read
         let (_cid, node) = self
             .fs
-            .read_file(caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
+            .read_file(&caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
             .map_err(|_| BootError::SmokeTestFailed)?;
         assert_eq!(node.size, 17);
 
