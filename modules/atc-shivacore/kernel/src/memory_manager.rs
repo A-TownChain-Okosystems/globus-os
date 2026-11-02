@@ -23,7 +23,7 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ats1000::{MemRegion, MemoryManager, Pid};
-use crate::capability::{CapabilityTable, ResourceType, Rights};
+use crate::capability::{new_authority, CapabilityAuthority, CapabilityTable, ResourceType, Rights};
 
 // === Konstanten — synchronisiert mit allocator.rs === //
 // allocator.rs: HEAP_START = 0x4444_4444_0000, HEAP_SIZE = 100 * 1024
@@ -346,7 +346,7 @@ pub struct MemStats {
 /// Dies ist die Haupt-Schnittstelle, die der Kernel im Init benutzt.
 pub struct MemorySubsystem {
     pub manager: KernelMemoryManager,
-    pub caps: CapabilityTable,
+    caps: CapabilityAuthority,
 }
 
 impl Default for MemorySubsystem {
@@ -359,9 +359,13 @@ impl MemorySubsystem {
     /// Erzeugt ein neues Speicher-Subsystem.
     /// In Kernel-Mode: wird nach allocator::init_heap() aufgerufen.
     pub fn new() -> Self {
+        Self::new_with_authority(new_authority())
+    }
+
+    pub fn new_with_authority(caps: CapabilityAuthority) -> Self {
         Self {
             manager: KernelMemoryManager::new(),
-            caps: CapabilityTable::new(),
+            caps,
         }
     }
 
@@ -384,22 +388,22 @@ impl MemorySubsystem {
 
     /// Allokiert Speicher fuer einen Prozess
     pub fn allocate(&mut self, pid: Pid, size: u64) -> Result<AllocatedRegion, MemError> {
-        self.manager.allocate(&mut self.caps, pid, size)
+        self.manager.allocate(&mut self.caps.lock(), pid, size)
     }
 
     /// Gibt Speicher frei
     pub fn deallocate(&mut self, pid: Pid, region_id: u64) -> Result<(), MemError> {
-        self.manager.deallocate(&mut self.caps, pid, region_id)
+        self.manager.deallocate(&mut self.caps.lock(), pid, region_id)
     }
 
     /// Prueft Lesezugriff
     pub fn read_check(&self, pid: Pid, region_id: u64) -> Result<AllocatedRegion, MemError> {
-        self.manager.read_check(&self.caps, pid, region_id)
+        self.manager.read_check(&self.caps.lock(), pid, region_id)
     }
 
     /// Prueft Schreibzugriff
     pub fn write_check(&self, pid: Pid, region_id: u64) -> Result<AllocatedRegion, MemError> {
-        self.manager.write_check(&self.caps, pid, region_id)
+        self.manager.write_check(&self.caps.lock(), pid, region_id)
     }
 
     /// Statistik
