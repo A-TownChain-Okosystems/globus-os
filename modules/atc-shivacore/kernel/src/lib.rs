@@ -15,6 +15,7 @@ pub mod allocator;
 pub mod atcfs;
 pub mod ats1000;
 pub mod capability;
+pub mod rights;
 pub mod cross_subsystem;
 pub mod diagnostics;
 pub mod elf_loader;
