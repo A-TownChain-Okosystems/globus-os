@@ -25,7 +25,6 @@ extern crate alloc;
 use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
@@ -222,6 +221,7 @@ impl KernelState {
             .read_file(&caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
             .map_err(|_| BootError::SmokeTestFailed)?;
         assert_eq!(node.size, 17);
+        drop(caps);
 
         // 4. Memory free
         self.memory
@@ -339,6 +339,25 @@ mod tests {
     fn test_scheduler_initialized() {
         let state = KernelState::boot().unwrap();
         // Scheduler exists with no tasks
+    }
+
+    #[test]
+    fn kernel_subsystems_share_one_capability_authority() {
+        let mut state = KernelState::boot().unwrap();
+        let pid = crate::ats1000::Pid(77);
+        let cap = state.capabilities.lock().create(
+            pid,
+            crate::capability::ResourceType::Memory,
+            0x7788,
+            crate::capability::Rights::READ,
+        );
+        assert!(state.processes.check_capability(
+            pid,
+            crate::capability::ResourceType::Memory,
+            0x7788,
+            crate::capability::Rights::READ,
+        ));
+        assert!(state.capabilities.lock().get(cap).is_some());
     }
 
     #[test]
