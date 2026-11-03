@@ -210,7 +210,7 @@ mod tests {
     fn ipc_requires_matching_capability_and_right() {
         let table = new_authority();
         let owner = table.owner();
-        let cap = owner.create_typed(pid(1), 42, crate::rights::endpoint::SEND);
+        let cap = owner.create_typed(pid(1), 42, crate::rights::endpoint::SEND).unwrap();
         let mut d = SyscallDispatcher::new(table.owner().syscall_port());
         let r = d.dispatch(
             pid(1),
@@ -237,7 +237,7 @@ mod tests {
         let table = new_authority();
         let cap = table
             .owner()
-            .create_typed(pid(1), 42, crate::rights::endpoint::RECV);
+            .create_typed(pid(1), 42, crate::rights::endpoint::RECV).unwrap();
         let mut d = SyscallDispatcher::new(table.owner().syscall_port());
         let allowed = d.dispatch(
             pid(1),
@@ -289,7 +289,7 @@ mod tests {
     fn capability_query_requires_inspect_right() {
         let table = new_authority();
         let owner = table.owner();
-        let cap = owner.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
+        let cap = owner.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ).unwrap();
         let mut d = SyscallDispatcher::new(table.owner().syscall_port());
         let r = d.dispatch(
             pid(1),
