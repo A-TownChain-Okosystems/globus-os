@@ -500,7 +500,7 @@ mod tests {
     fn test_create_entity() {
         let (mut caps, mut kg) = setup();
         let eid = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         assert!(eid.0 > 0);
         assert_eq!(kg.entity_count(), 1);
@@ -513,10 +513,10 @@ mod tests {
     fn test_add_and_query_triple() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         let bob = kg
-            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .create_entity(&caps, pid(1), "Bob", "Person")
             .unwrap();
 
         kg.add_triple(
@@ -546,7 +546,7 @@ mod tests {
     fn test_add_triple_without_write_cap_rejected() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
 
         // pid(2) hat keine WRITE-Cap auf Alice
@@ -564,10 +564,10 @@ mod tests {
     fn test_query_without_read_cap_filtered() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         let bob = kg
-            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .create_entity(&caps, pid(1), "Bob", "Person")
             .unwrap();
 
         kg.add_triple(
@@ -608,10 +608,10 @@ mod tests {
     fn test_grant_read_enables_query() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         let bob = kg
-            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .create_entity(&caps, pid(1), "Bob", "Person")
             .unwrap();
 
         kg.add_triple(
@@ -640,14 +640,14 @@ mod tests {
 
         // Delegation is denied by default; the owner must explicitly grant DELEGATE.
         assert_eq!(
-            kg.grant_read(&mut caps, pid(1), alice, pid(2)),
+            kg.grant_read(&caps, pid(1), alice, pid(2)),
             Err(KgError::NoDelegateCapability)
         );
         caps.rights.borrow_mut().insert(
             (pid(1).0, alice.0),
             Rights::READ | Rights::WRITE | Rights::DELEGATE,
         );
-        kg.grant_read(&mut caps, pid(1), alice, pid(2)).unwrap();
+        kg.grant_read(&caps, pid(1), alice, pid(2)).unwrap();
 
         // Jetzt sieht pid(2) das Tripel
         let results = kg.query(
@@ -666,13 +666,13 @@ mod tests {
     fn test_outgoing_and_incoming() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         let bob = kg
-            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .create_entity(&caps, pid(1), "Bob", "Person")
             .unwrap();
         let charlie = kg
-            .create_entity(&mut caps, pid(1), "Charlie", "Person")
+            .create_entity(&caps, pid(1), "Charlie", "Person")
             .unwrap();
 
         // Alice -> knows -> Bob
@@ -707,10 +707,10 @@ mod tests {
     #[test]
     fn test_transitive_closure() {
         let (mut caps, mut kg) = setup();
-        let a = kg.create_entity(&mut caps, pid(1), "A", "Module").unwrap();
-        let b = kg.create_entity(&mut caps, pid(1), "B", "Module").unwrap();
-        let c = kg.create_entity(&mut caps, pid(1), "C", "Module").unwrap();
-        let d = kg.create_entity(&mut caps, pid(1), "D", "Module").unwrap();
+        let a = kg.create_entity(&caps, pid(1), "A", "Module").unwrap();
+        let b = kg.create_entity(&caps, pid(1), "B", "Module").unwrap();
+        let c = kg.create_entity(&caps, pid(1), "C", "Module").unwrap();
+        let d = kg.create_entity(&caps, pid(1), "D", "Module").unwrap();
 
         // A depends_on B, B depends_on C, C depends_on D
         kg.add_triple(
@@ -749,9 +749,9 @@ mod tests {
     #[test]
     fn test_transitive_closure_respects_max_depth() {
         let (mut caps, mut kg) = setup();
-        let a = kg.create_entity(&mut caps, pid(1), "A", "Module").unwrap();
-        let b = kg.create_entity(&mut caps, pid(1), "B", "Module").unwrap();
-        let c = kg.create_entity(&mut caps, pid(1), "C", "Module").unwrap();
+        let a = kg.create_entity(&caps, pid(1), "A", "Module").unwrap();
+        let b = kg.create_entity(&caps, pid(1), "B", "Module").unwrap();
+        let c = kg.create_entity(&caps, pid(1), "C", "Module").unwrap();
 
         kg.add_triple(
             &caps,
@@ -783,8 +783,8 @@ mod tests {
     #[test]
     fn test_transitive_closure_no_cycle() {
         let (mut caps, mut kg) = setup();
-        let a = kg.create_entity(&mut caps, pid(1), "A", "Module").unwrap();
-        let b = kg.create_entity(&mut caps, pid(1), "B", "Module").unwrap();
+        let a = kg.create_entity(&caps, pid(1), "A", "Module").unwrap();
+        let b = kg.create_entity(&caps, pid(1), "B", "Module").unwrap();
 
         kg.add_triple(
             &caps,
@@ -813,7 +813,7 @@ mod tests {
     fn test_literal_values() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
 
         // String-Literal
@@ -875,10 +875,10 @@ mod tests {
     fn test_remove_triple() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         let bob = kg
-            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .create_entity(&caps, pid(1), "Bob", "Person")
             .unwrap();
 
         kg.add_triple(
@@ -904,7 +904,7 @@ mod tests {
     fn test_remove_triple_without_cap_rejected() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
 
         kg.add_triple(
@@ -931,10 +931,10 @@ mod tests {
     fn test_delete_entity() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         let bob = kg
-            .create_entity(&mut caps, pid(1), "Bob", "Person")
+            .create_entity(&caps, pid(1), "Bob", "Person")
             .unwrap();
 
         kg.add_triple(
@@ -950,7 +950,7 @@ mod tests {
         assert_eq!(kg.triple_count(), 1);
 
         // Alice loeschen
-        kg.delete_entity(&mut caps, pid(1), alice).unwrap();
+        kg.delete_entity(&caps, pid(1), alice).unwrap();
         assert_eq!(kg.entity_count(), 1);
         assert_eq!(kg.triple_count(), 0); // Triple entfernt
     }
@@ -959,19 +959,19 @@ mod tests {
     fn test_delete_entity_without_cap_rejected() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
 
-        let result = kg.delete_entity(&mut caps, pid(2), alice);
+        let result = kg.delete_entity(&caps, pid(2), alice);
         assert_eq!(result, Err(KgError::NoWriteCapability));
     }
 
     #[test]
     fn test_wildcard_query() {
         let (mut caps, mut kg) = setup();
-        let a = kg.create_entity(&mut caps, pid(1), "A", "Node").unwrap();
-        let b = kg.create_entity(&mut caps, pid(1), "B", "Node").unwrap();
-        let c = kg.create_entity(&mut caps, pid(1), "C", "Node").unwrap();
+        let a = kg.create_entity(&caps, pid(1), "A", "Node").unwrap();
+        let b = kg.create_entity(&caps, pid(1), "B", "Node").unwrap();
+        let c = kg.create_entity(&caps, pid(1), "C", "Node").unwrap();
 
         kg.add_triple(
             &caps,
@@ -1041,11 +1041,11 @@ mod tests {
         let (mut caps, mut kg) = setup();
         // pid(1) erstellt Alice
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
         // pid(2) erstellt Bob
         let bob = kg
-            .create_entity(&mut caps, pid(2), "Bob", "Person")
+            .create_entity(&caps, pid(2), "Bob", "Person")
             .unwrap();
 
         // pid(1) kann auf Alice schreiben, nicht auf Bob
@@ -1095,7 +1095,7 @@ mod tests {
     fn test_triple_count_tracking() {
         let (mut caps, mut kg) = setup();
         let alice = kg
-            .create_entity(&mut caps, pid(1), "Alice", "Person")
+            .create_entity(&caps, pid(1), "Alice", "Person")
             .unwrap();
 
         kg.add_triple(
