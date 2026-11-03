@@ -108,6 +108,7 @@ pub enum CapabilityError {
     MissingCNodeMintRight,
     WrongObjectType,
     TypedOperationRequired,
+    IdExhausted,
 }
 
 /// Capability-Tabelle — Kernel-intern, geschuetzt durch Spinlock
@@ -207,12 +208,17 @@ impl CapabilityAuthorityOwner {
         resource_type: ResourceType,
         resource_id: u64,
         rights: Rights,
-    ) -> CapId {
+    ) -> Result<CapId, CapabilityError> {
         self.inner
             .lock()
             .create(pid, resource_type, resource_id, rights)
     }
-    pub(crate) fn create_typed(&self, pid: Pid, resource_id: u64, rights: ObjectRights) -> CapId {
+    pub(crate) fn create_typed(
+        &self,
+        pid: Pid,
+        resource_id: u64,
+        rights: ObjectRights,
+    ) -> Result<CapId, CapabilityError> {
         self.inner.lock().create_typed(pid, resource_id, rights)
     }
     pub(crate) fn mint_typed(
@@ -264,12 +270,12 @@ impl CapabilityAuthorityOwner {
         if creator != principal {
             return Err(CapabilityError::NotOwner);
         }
-        Ok(self.create(
+        self.create(
             principal,
             ResourceType::KnowledgeGraph,
             resource_id,
             Rights::READ | Rights::WRITE,
-        ))
+        )
     }
 
     fn check_knowledge_graph_entity(
@@ -638,8 +644,8 @@ impl CapabilityTable {
         resource_type: ResourceType,
         resource_id: u64,
         rights: Rights,
-    ) -> CapId {
-        let id = self.allocate_id();
+    ) -> Result<CapId, CapabilityError> {
+        let id = self.allocate_id()?;
         let cap = Capability {
             id,
             resource_type,
@@ -651,7 +657,7 @@ impl CapabilityTable {
         };
         self.caps.insert(id, cap);
         self.by_pid.entry(pid).or_default().push(id);
-        id
+        Ok(id)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess.
@@ -679,7 +685,7 @@ impl CapabilityTable {
         if (attenuated_rights.0 & !parent_cap.rights.0) != 0 {
             return Err(CapabilityError::RightsExceeded);
         }
-        let id = self.allocate_id();
+        let id = self.allocate_id()?;
         let child = Capability {
             id,
             resource_type: parent_cap.resource_type,
@@ -719,7 +725,7 @@ impl CapabilityTable {
         if (attenuated_rights.0 & !parent_cap.rights.0) != 0 {
             return Err(CapabilityError::RightsExceeded);
         }
-        let id = self.allocate_id();
+        let id = self.allocate_id()?;
         let child = Capability {
             id,
             resource_type: parent_cap.resource_type,
@@ -742,8 +748,8 @@ impl CapabilityTable {
         pid: Pid,
         resource_id: u64,
         object_rights: ObjectRights,
-    ) -> CapId {
-        let id = self.allocate_id();
+    ) -> Result<CapId, CapabilityError> {
+        let id = self.allocate_id()?;
         let cap = Capability {
             id,
             // Compatibility placeholder; typed operations never inspect this field.
@@ -756,7 +762,7 @@ impl CapabilityTable {
         };
         self.caps.insert(id, cap);
         self.by_pid.entry(pid).or_default().push(id);
-        id
+        Ok(id)
     }
 
     /// Mints a typed child after validating CNode.MINT and same-type attenuation.
@@ -798,7 +804,7 @@ impl CapabilityTable {
             })?;
 
         let resource_id = parent.resource_id;
-        let id = self.allocate_id();
+        let id = self.allocate_id()?;
         let child = Capability {
             id,
             // Compatibility placeholder; typed operations never inspect this field.
@@ -970,13 +976,10 @@ impl CapabilityTable {
         })
     }
 
-    fn allocate_id(&mut self) -> CapId {
+    fn allocate_id(&mut self) -> Result<CapId, CapabilityError> {
         let id = CapId(self.next_id);
-        self.next_id = self
-            .next_id
-            .checked_add(1)
-            .expect("capability ID space exhausted; refusing identifier reuse");
-        id
+        self.next_id = self.next_id.checked_add(1).ok_or(CapabilityError::IdExhausted)?;
+        Ok(id)
     }
 
     pub fn count(&self) -> usize {
@@ -1010,7 +1013,7 @@ mod tests {
             ResourceType::Memory,
             0x2000,
             Rights::READ | Rights::WRITE,
-        );
+        ).unwrap();
         assert_eq!(
             owner.delegate(pid(2), cap, pid(3), Rights::READ),
             Err(CapabilityError::NotOwner)
@@ -1029,7 +1032,7 @@ mod tests {
             ResourceType::Memory,
             0x3000,
             Rights::READ | Rights::DELEGATE,
-        );
+        ).unwrap();
         let _child = owner.delegate(pid(1), root, pid(2), Rights::READ).unwrap();
         owner.revoke(root);
         assert!(!authority.check(pid(1), ResourceType::Memory, 0x3000, Rights::READ));
@@ -1058,7 +1061,7 @@ mod tests {
             ResourceType::KnowledgeGraph,
             0x4001,
             Rights::READ | Rights::WRITE | Rights::DELEGATE,
-        );
+        ).unwrap();
         let child = port.delegate_entity_read(pid(1), 0x4001, pid(2)).unwrap();
         assert!(authority.check(pid(2), ResourceType::KnowledgeGraph, 0x4001, Rights::READ));
         assert!(!authority.check(pid(2), ResourceType::KnowledgeGraph, 0x4001, Rights::WRITE));
@@ -1096,7 +1099,7 @@ mod tests {
     #[test]
     fn typed_capability_checks_are_type_bound_and_fail_closed() {
         let mut table = CapabilityTable::new();
-        let frame = table.create_typed(pid(1), 0x2000, crate::rights::frame::READ);
+        let frame = table.create_typed(pid(1), 0x2000, crate::rights::frame::READ).unwrap();
         assert!(table.check_typed(pid(1), frame, 0x2000, crate::rights::frame::READ));
         assert!(!table.check_typed(pid(1), frame, 0x2000, crate::rights::frame::WRITE));
         assert!(!table.check_typed(pid(2), frame, 0x2000, crate::rights::frame::READ));
@@ -1112,8 +1115,8 @@ mod tests {
             crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b0011).unwrap();
         let expanded =
             crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b0111).unwrap();
-        let frame = table.create_typed(pid(1), 0x4000, parent_rights);
-        let cnode = table.create_typed(pid(1), 7, crate::rights::cnode::MINT);
+        let frame = table.create_typed(pid(1), 0x4000, parent_rights).unwrap();
+        let cnode = table.create_typed(pid(1), 7, crate::rights::cnode::MINT).unwrap();
         let child = table
             .mint_typed(pid(1), frame, cnode, pid(2), crate::rights::frame::READ)
             .unwrap();
@@ -1128,8 +1131,8 @@ mod tests {
     #[test]
     fn typed_mint_rejects_missing_cnode_authority_and_cross_type_rights() {
         let mut table = CapabilityTable::new();
-        let frame = table.create_typed(pid(1), 0x5000, crate::rights::frame::READ);
-        let wrong_cnode = table.create_typed(pid(1), 8, crate::rights::cnode::DUPLICATE);
+        let frame = table.create_typed(pid(1), 0x5000, crate::rights::frame::READ).unwrap();
+        let wrong_cnode = table.create_typed(pid(1), 8, crate::rights::cnode::DUPLICATE).unwrap();
         assert_eq!(
             table.mint_typed(
                 pid(1),
@@ -1140,7 +1143,7 @@ mod tests {
             ),
             Err(CapabilityError::MissingCNodeMintRight)
         );
-        let cnode = table.create_typed(pid(1), 9, crate::rights::cnode::MINT);
+        let cnode = table.create_typed(pid(1), 9, crate::rights::cnode::MINT).unwrap();
         assert_eq!(
             table.mint_typed(pid(1), frame, cnode, pid(2), crate::rights::endpoint::SEND),
             Err(CapabilityError::WrongObjectType)
@@ -1152,8 +1155,8 @@ mod tests {
         let mut table = CapabilityTable::new();
         let root_rights =
             crate::rights::ObjectRights::new(crate::rights::ObjectType::Frame, 0b1001).unwrap();
-        let root = table.create_typed(pid(1), 0x7000, root_rights);
-        let cnode = table.create_typed(pid(1), 10, crate::rights::cnode::MINT);
+        let root = table.create_typed(pid(1), 0x7000, root_rights).unwrap();
+        let cnode = table.create_typed(pid(1), 10, crate::rights::cnode::MINT).unwrap();
         let child = table
             .mint_typed(pid(1), root, cnode, pid(2), crate::rights::frame::READ)
             .unwrap();
@@ -1169,7 +1172,7 @@ mod tests {
     #[test]
     fn legacy_operations_cannot_consume_typed_capabilities() {
         let mut table = CapabilityTable::new();
-        let typed = table.create_typed(pid(1), 0x6000, crate::rights::frame::READ);
+        let typed = table.create_typed(pid(1), 0x6000, crate::rights::frame::READ).unwrap();
         assert_eq!(
             table.delegate(pid(1), typed, pid(2), Rights::READ),
             Err(CapabilityError::TypedOperationRequired)
@@ -1185,7 +1188,7 @@ mod tests {
             ResourceType::Memory,
             0x1000,
             Rights::READ | Rights::WRITE,
-        );
+        ).unwrap();
         assert!(cap.0 > 0);
         assert!(table.check(pid(1), ResourceType::Memory, 0x1000, Rights::READ));
         assert!(table.check(pid(1), ResourceType::Memory, 0x1000, Rights::WRITE));
@@ -1201,7 +1204,7 @@ mod tests {
             ResourceType::IpcChannel,
             42,
             Rights::READ | Rights::WRITE | Rights::DELEGATE,
-        );
+        ).unwrap();
         let child = table
             .delegate(pid(1), parent, pid(2), Rights::READ)
             .unwrap();
@@ -1217,7 +1220,7 @@ mod tests {
             ResourceType::Memory,
             0,
             Rights::READ | Rights::DELEGATE,
-        );
+        ).unwrap();
         let result = table.delegate(pid(1), parent, pid(2), Rights::READ | Rights::WRITE);
         assert_eq!(result, Err(CapabilityError::RightsExceeded));
     }
@@ -1230,7 +1233,7 @@ mod tests {
             ResourceType::Memory,
             0,
             Rights::READ | Rights::WRITE,
-        );
+        ).unwrap();
         let result = table.delegate(pid(1), parent, pid(2), Rights::READ);
         assert_eq!(result, Err(CapabilityError::NoDelegateRight));
     }
@@ -1238,7 +1241,7 @@ mod tests {
     #[test]
     fn test_delegate_wrong_owner() {
         let mut table = CapabilityTable::new();
-        let parent = table.create(pid(1), ResourceType::Memory, 0, Rights::ALL);
+        let parent = table.create(pid(1), ResourceType::Memory, 0, Rights::ALL).unwrap();
         let result = table.delegate(pid(2), parent, pid(3), Rights::READ);
         assert_eq!(result, Err(CapabilityError::NotOwner));
     }
@@ -1246,7 +1249,7 @@ mod tests {
     #[test]
     fn test_revoke_cascade() {
         let mut table = CapabilityTable::new();
-        let root = table.create(pid(1), ResourceType::Memory, 0, Rights::ALL);
+        let root = table.create(pid(1), ResourceType::Memory, 0, Rights::ALL).unwrap();
         let child = table
             .delegate(pid(1), root, pid(2), Rights::READ | Rights::DELEGATE)
             .unwrap();
@@ -1262,11 +1265,14 @@ mod tests {
     }
 
     #[test]
-    #[should_panic(expected = "capability ID space exhausted; refusing identifier reuse")]
-    fn capability_id_exhaustion_fails_closed_without_wraparound() {
+    fn capability_id_exhaustion_returns_error_without_wraparound() {
         let mut table = CapabilityTable::new();
         table.next_id = u64::MAX;
-        let _ = table.create(pid(1), ResourceType::Memory, 0xBEEF, Rights::READ);
+        assert_eq!(
+            table.create(pid(1), ResourceType::Memory, 0xBEEF, Rights::READ),
+            Err(CapabilityError::IdExhausted)
+        );
+        assert_eq!(table.count(), 0);
     }
 
     #[test]
@@ -1277,7 +1283,7 @@ mod tests {
             ResourceType::Memory,
             0xDEAD,
             Rights::READ | Rights::DELEGATE,
-        );
+        ).unwrap();
         let mut parent = root;
         for process_id in 2..=4096 {
             parent = table
@@ -1299,9 +1305,9 @@ mod tests {
     #[test]
     fn test_list_for_process() {
         let mut table = CapabilityTable::new();
-        table.create(pid(1), ResourceType::Memory, 0, Rights::READ);
-        table.create(pid(1), ResourceType::IpcChannel, 5, Rights::WRITE);
-        table.create(pid(2), ResourceType::Memory, 1, Rights::READ);
+        table.create(pid(1), ResourceType::Memory, 0, Rights::READ).unwrap();
+        table.create(pid(1), ResourceType::IpcChannel, 5, Rights::WRITE).unwrap();
+        table.create(pid(2), ResourceType::Memory, 1, Rights::READ).unwrap();
         let pid1_caps = table.list_for(pid(1));
         assert_eq!(pid1_caps.len(), 2);
         let pid2_caps = table.list_for(pid(2));
