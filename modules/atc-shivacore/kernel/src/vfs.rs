@@ -691,7 +691,7 @@ mod tests {
                     ResourceType::FileSystem,
                     1,
                     Rights::READ | Rights::WRITE,
-                )
+                ).unwrap()
                 .0;
             // cap handle = 1 (first cap)
         }
@@ -707,7 +707,7 @@ mod tests {
             ResourceType::FileSystem,
             1,
             Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
-        );
+        ).unwrap();
         cap_id.0
     }
 
@@ -1073,7 +1073,7 @@ mod tests {
         let typed_handle = {
             let owner = caps.owner();
             owner
-                .create_typed(Pid(2), 2, crate::rights::endpoint::SEND)
+                .create_typed(Pid(2), 2, crate::rights::endpoint::SEND).unwrap()
                 .0
         };
 
@@ -1090,7 +1090,7 @@ mod tests {
         let cap_read = {
             let owner = caps.owner();
             owner
-                .create(Pid(2), ResourceType::FileSystem, 2, Rights::READ)
+                .create(Pid(2), ResourceType::FileSystem, 2, Rights::READ).unwrap()
                 .0
         };
 
@@ -1107,7 +1107,7 @@ mod tests {
         let cap_write = {
             let owner = caps.owner();
             owner
-                .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
+                .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE).unwrap()
                 .0
         };
 
@@ -1124,7 +1124,7 @@ mod tests {
         let cap_write = {
             let owner = caps.owner();
             owner
-                .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
+                .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE).unwrap()
                 .0
         };
 
