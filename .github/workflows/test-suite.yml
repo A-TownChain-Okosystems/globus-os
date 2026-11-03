@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: dtolnay/rust-toolchain@nightly
         with:
           components: rustfmt, clippy, rust-src, llvm-tools-preview
@@ -40,9 +42,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22.19.0"
       - name: npm install + test/build (SCR-0078, F-093)
         run: |
           set +e
@@ -66,10 +70,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Evidence-Bindung (SCR-0086)
         run: |
+          set -euo pipefail
+          mkdir -p evidence
+          checked_out_sha="$(git rev-parse HEAD)"
+          git ls-tree -r --full-tree "$checked_out_sha" > evidence/source-tree.txt
           python3 - <<'PY'
           import datetime
+          import hashlib
           import json
           import os
           import re
@@ -87,13 +98,12 @@ jobs:
           rid = os.environ["GITHUB_RUN_ID"]
           wf = os.environ.get("GITHUB_WORKFLOW", "ATC Test Suite")
           ts = datetime.datetime.now(datetime.timezone.utc).isoformat()
+          source_tree_sha256 = hashlib.sha256(open("evidence/source-tree.txt", "rb").read()).hexdigest()
           path = ".atc/evidence/evidence.yaml"
           text = open(path, encoding="utf-8").read()
-          text = re.sub(
-              r"(?m)^bound_commit: [^\n]*",
-              "bound_commit: " + checked_out_sha,
-              text,
-          )
+          text = re.sub(r"(?m)^bound_commit: [^\n]*", "bound_commit: " + checked_out_sha, text)
+          text = re.sub(r"(?m)^(tests:\n  status:) [^\n]*", lambda m: m.group(1) + " pass_with_evidence", text)
+          text = re.sub(r"(?m)^  evidence: [^\n]*\n?", "", text)
           block = (
               "test_run:\n"
               "  workflow: " + wf + "\n"
@@ -106,6 +116,9 @@ jobs:
               "  timestamp: " + ts + "\n"
               "  result: PASS\n"
               "  runner: github-actions\n"
+              "  jobs: cargo-tests=success,npm-tests=success\n"
+              "  source_tree_file: source-tree.txt\n"
+              "  source_tree_sha256: " + source_tree_sha256 + "\n"
           )
           if re.search(r"(?m)^test_run:\n(?:  [^\n]*\n)+", text):
               text = re.sub(r"(?m)^test_run:\n(?:  [^\n]*\n)+", block, text)
@@ -113,10 +126,12 @@ jobs:
               text = text.rstrip() + "\n" + block
           open(path, "w", encoding="utf-8").write(text)
           PY
+          cp .atc/evidence/evidence.yaml evidence/evidence.yaml
+          sha256sum evidence/evidence.yaml > evidence/evidence.yaml.sha256
       - name: Publish SHA-bound evidence artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: scr-0086-evidence-${{ github.run_id }}
-          path: .atc/evidence/evidence.yaml
+          path: evidence/
           if-no-files-found: error
           retention-days: 90
