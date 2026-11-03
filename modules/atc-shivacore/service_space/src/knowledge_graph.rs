@@ -651,7 +651,9 @@ mod tests {
         let (mut caps, mut kg) = setup();
         let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
         let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
-        let charlie = kg.create_entity(&caps, pid(1), "Charlie", "Person").unwrap();
+        let charlie = kg
+            .create_entity(&caps, pid(1), "Charlie", "Person")
+            .unwrap();
 
         // Alice -> knows -> Bob
         kg.add_triple(
