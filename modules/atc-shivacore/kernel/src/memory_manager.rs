@@ -382,7 +382,6 @@ impl MemorySubsystem {
     }
 }
 
-
 #[cfg(test)]
 impl Default for MemorySubsystem {
     fn default() -> Self {
