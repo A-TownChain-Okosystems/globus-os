@@ -60,6 +60,9 @@ pub enum ElfParseError {
     Truncated,
     InvalidOffset,
     NoLoadableSegments,
+    InvalidSegment,
+    UnsupportedSegment,
+    InvalidEntryPoint,
 }
 
 impl core::fmt::Display for ElfParseError {
@@ -73,6 +76,9 @@ impl core::fmt::Display for ElfParseError {
             ElfParseError::Truncated => write!(f, "file truncated"),
             ElfParseError::InvalidOffset => write!(f, "invalid header offset"),
             ElfParseError::NoLoadableSegments => write!(f, "no loadable segments"),
+            ElfParseError::InvalidSegment => write!(f, "invalid ELF load segment"),
+            ElfParseError::UnsupportedSegment => write!(f, "unsupported ELF segment type or layout"),
+            ElfParseError::InvalidEntryPoint => write!(f, "entry point is outside the supported executable segment"),
         }
     }
 }
@@ -176,13 +182,26 @@ impl<'a> ElfParser<'a> {
             e_shstrndx,
         };
 
-        // Parse program headers
+        // Parse program headers with checked arithmetic. The simplified loader
+        // supports static ET_EXEC images only; it must not silently ignore an
+        // interpreter/dynamic segment or trust overflowing file/virtual ranges.
         let mut program_headers = Vec::new();
-        let phdr_size = 56; // sizeof(Elf64_Phdr) = 56 bytes
+        let phdr_size = 56usize; // sizeof(Elf64_Phdr) = 56 bytes
+        let phentsize = u16::from_le_bytes([data[54], data[55]]) as usize;
+        if phentsize != phdr_size {
+            return Err(ElfParseError::InvalidOffset);
+        }
+        let phoff = usize::try_from(e_phoff).map_err(|_| ElfParseError::InvalidOffset)?;
 
         for i in 0..e_phnum as usize {
-            let offset = e_phoff as usize + i * phdr_size;
-            if offset + phdr_size > data.len() {
+            let offset = i
+                .checked_mul(phdr_size)
+                .and_then(|relative| phoff.checked_add(relative))
+                .ok_or(ElfParseError::InvalidOffset)?;
+            let end = offset
+                .checked_add(phdr_size)
+                .ok_or(ElfParseError::InvalidOffset)?;
+            if end > data.len() {
                 return Err(ElfParseError::Truncated);
             }
             let phdr = Elf64ProgramHeader {
@@ -195,6 +214,27 @@ impl<'a> ElfParser<'a> {
                 p_memsz: u64::from_le_bytes(data[offset + 40..offset + 48].try_into().unwrap()),
                 p_align: u64::from_le_bytes(data[offset + 48..offset + 56].try_into().unwrap()),
             };
+            if phdr.p_type == PT_INTERP || phdr.p_type == PT_DYNAMIC {
+                return Err(ElfParseError::UnsupportedSegment);
+            }
+            if phdr.is_loadable() {
+                if phdr.p_filesz > phdr.p_memsz
+                    || phdr.p_vaddr.checked_add(phdr.p_memsz).is_none()
+                    || (phdr.p_align > 1 && !phdr.p_align.is_power_of_two())
+                {
+                    return Err(ElfParseError::InvalidSegment);
+                }
+                let file_start = usize::try_from(phdr.p_offset)
+                    .map_err(|_| ElfParseError::InvalidOffset)?;
+                let file_len = usize::try_from(phdr.p_filesz)
+                    .map_err(|_| ElfParseError::InvalidOffset)?;
+                let file_end = file_start
+                    .checked_add(file_len)
+                    .ok_or(ElfParseError::InvalidOffset)?;
+                if file_end > data.len() {
+                    return Err(ElfParseError::Truncated);
+                }
+            }
             program_headers.push(phdr);
         }
 
@@ -235,8 +275,9 @@ impl<'a> ElfParser<'a> {
 
     /// Get raw bytes for a segment
     pub fn segment_data(&self, phdr: &Elf64ProgramHeader) -> Result<&[u8], ElfParseError> {
-        let start = phdr.p_offset as usize;
-        let end = start + phdr.p_filesz as usize;
+        let start = usize::try_from(phdr.p_offset).map_err(|_| ElfParseError::InvalidOffset)?;
+        let len = usize::try_from(phdr.p_filesz).map_err(|_| ElfParseError::InvalidOffset)?;
+        let end = start.checked_add(len).ok_or(ElfParseError::InvalidOffset)?;
         if end > self.data.len() {
             return Err(ElfParseError::Truncated);
         }
@@ -249,6 +290,8 @@ impl<'a> ElfParser<'a> {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
+use crate::user_sched::UserScheduler;
+use crate::vfs::{Vfs, VfsError};
 
 pub struct ElfLoader;
 
@@ -259,6 +302,11 @@ impl ElfLoader {
 
         // Extract code segment
         let code_seg = parser.code_segment().ok_or(ElfLoadError::NoCodeSegment)?;
+        // UserBinary currently maps its code buffer starting at entry_point;
+        // reject ELF layouts where that would relocate bytes incorrectly.
+        if parser.entry_point() != code_seg.p_vaddr {
+            return Err(ElfLoadError::Parse(ElfParseError::InvalidEntryPoint));
+        }
         let code_bytes = parser.segment_data(code_seg)?;
 
         // Extract data segment (optional)
@@ -275,6 +323,76 @@ impl ElfLoader {
         };
 
         mgr.load_binary(binary).map_err(ElfLoadError::Userspace)
+    }
+
+    /// Read an executable through the capability-gated VFS, parse it, create
+    /// its user context, and register that context with the user scheduler.
+    ///
+    /// This connects the VFS -> ELF loader -> UserspaceManager -> scheduler
+    /// metadata path. The architecture boot path must still map isolated page
+    /// tables and perform the actual IRETQ transition before claiming execution.
+    pub fn load_elf_from_vfs(
+        mgr: &mut UserspaceManager,
+        scheduler: &mut UserScheduler,
+        vfs: &Vfs,
+        path: &str,
+        caller_pid: u64,
+        fs_capability: u64,
+        priority: u8,
+        max_bytes: usize,
+    ) -> Result<Pid, ElfLoadError> {
+        Self::load_elf_from_vfs_internal(
+            mgr, scheduler, vfs, path, caller_pid, fs_capability, priority, max_bytes, false,
+        )
+    }
+
+    /// Like `load_elf_from_vfs`, but keep the new process non-runnable until
+    /// init has completed capability handoff and explicitly activates the PID.
+    pub fn load_elf_from_vfs_staged(
+        mgr: &mut UserspaceManager,
+        scheduler: &mut UserScheduler,
+        vfs: &Vfs,
+        path: &str,
+        caller_pid: u64,
+        fs_capability: u64,
+        priority: u8,
+        max_bytes: usize,
+    ) -> Result<Pid, ElfLoadError> {
+        Self::load_elf_from_vfs_internal(
+            mgr, scheduler, vfs, path, caller_pid, fs_capability, priority, max_bytes, true,
+        )
+    }
+
+    fn load_elf_from_vfs_internal(
+        mgr: &mut UserspaceManager,
+        scheduler: &mut UserScheduler,
+        vfs: &Vfs,
+        path: &str,
+        caller_pid: u64,
+        fs_capability: u64,
+        priority: u8,
+        max_bytes: usize,
+        staged: bool,
+    ) -> Result<Pid, ElfLoadError> {
+        let elf_data = vfs
+            .read_executable(path, caller_pid, fs_capability, max_bytes)
+            .map_err(ElfLoadError::Vfs)?;
+        let pid = Self::load_elf(mgr, &elf_data)?;
+        let context = mgr
+            .get_context(pid)
+            .ok_or(ElfLoadError::Userspace(UserspaceError::ProcessNotFound))?;
+        if !context.is_user_mode()
+            || !context.valid_address(context.rip)
+            || !context.valid_address(context.rsp)
+        {
+            return Err(ElfLoadError::Userspace(UserspaceError::InvalidAddress));
+        }
+        if staged {
+            scheduler.add_staged_process(pid, context, priority);
+        } else {
+            scheduler.add_process(pid, context, priority);
+        }
+        Ok(pid)
     }
 
     /// Create a minimal valid ELF64 binary for testing
@@ -339,6 +457,7 @@ pub enum ElfLoadError {
     Parse(ElfParseError),
     NoCodeSegment,
     Userspace(UserspaceError),
+    Vfs(VfsError),
 }
 
 impl From<ElfParseError> for ElfLoadError {
@@ -358,6 +477,7 @@ impl core::fmt::Display for ElfLoadError {
             ElfLoadError::Parse(e) => write!(f, "ELF parse error: {}", e),
             ElfLoadError::NoCodeSegment => write!(f, "no executable code segment"),
             ElfLoadError::Userspace(e) => write!(f, "userspace error: {}", e),
+            ElfLoadError::Vfs(e) => write!(f, "VFS error: {:?}", e),
         }
     }
 }
@@ -1240,4 +1360,24 @@ mod tests {
         assert!(parser.code_segment().is_some());
         assert!(parser.data_segment().is_some());
     }
+    #[test]
+    fn parser_rejects_overflowing_program_header_offset() {
+        let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0x90]);
+        elf[32..40].copy_from_slice(&u64::MAX.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidOffset)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_dynamic_interpreter_segments() {
+        let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0x90]);
+        elf[64..68].copy_from_slice(&PT_INTERP.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::UnsupportedSegment)
+        ));
+    }
+
 }

@@ -76,22 +76,50 @@ impl Default for UserAddressSpace {
 }
 
 impl UserAddressSpace {
-    /// Check if an address falls within any user region
+    /// Check if an address falls within any configured user region.
     pub fn contains(&self, addr: u64) -> bool {
         self.in_code(addr) || self.in_data(addr) || self.in_stack(addr) || self.in_heap(addr)
     }
+
+    fn in_forward_region(addr: u64, base: u64, size: u64) -> bool {
+        size != 0
+            && base.checked_add(size).is_some_and(|end| addr >= base && addr < end)
+    }
+
     pub fn in_code(&self, addr: u64) -> bool {
-        addr >= self.code_base && addr < self.code_base + self.code_size
+        Self::in_forward_region(addr, self.code_base, self.code_size)
     }
     pub fn in_data(&self, addr: u64) -> bool {
-        addr >= self.data_base && addr < self.data_base + self.data_size
+        Self::in_forward_region(addr, self.data_base, self.data_size)
     }
     pub fn in_stack(&self, addr: u64) -> bool {
-        addr > self.stack_base - self.stack_size && addr <= self.stack_base
+        self.stack_base.checked_sub(self.stack_size)
+            .is_some_and(|bottom| self.stack_size != 0 && addr > bottom && addr <= self.stack_base)
     }
     pub fn in_heap(&self, addr: u64) -> bool {
-        addr >= self.heap_base && addr < self.heap_base + self.heap_size
+        Self::in_forward_region(addr, self.heap_base, self.heap_size)
     }
+
+    /// Validate a non-empty byte range without overflow or crossing a region
+    /// boundary. This is a metadata check only: hardware callers must also
+    /// validate the active process page tables and PTE permissions.
+    pub fn contains_range(&self, addr: u64, len: usize) -> bool {
+        if len == 0 {
+            return false;
+        }
+        let Some(end) = addr.checked_add(len as u64) else {
+            return false;
+        };
+        if end <= addr {
+            return false;
+        }
+        let last = end - 1;
+        (self.in_code(addr) && self.in_code(last))
+            || (self.in_data(addr) && self.in_data(last))
+            || (self.in_stack(addr) && last < self.stack_base && self.in_stack(last))
+            || (self.in_heap(addr) && self.in_heap(last))
+    }
+
     /// Stack pointer initial value (top of stack)
     pub fn initial_rsp(&self) -> u64 {
         self.stack_base
@@ -957,6 +985,36 @@ mod tests {
         assert_eq!(users.len(), 2);
         assert_eq!(users[0].pid, Pid(1000));
         assert_eq!(users[1].pid, Pid(1001));
+    }
+
+    #[test]
+    fn user_address_space_rejects_overflow_and_invalid_regions() {
+        let mut space = UserAddressSpace::default();
+        assert!(!space.in_code(u64::MAX));
+        assert!(!space.contains_range(u64::MAX - 1, 8));
+        assert!(!space.contains_range(0x0040_0000, 0));
+        assert!(!space.contains_range(0x004F_FFFF, 2));
+        assert!(!space.contains_range(0x7FFE_FFFF, 2));
+
+        space.code_base = u64::MAX - 8;
+        space.code_size = 32;
+        assert!(!space.in_code(u64::MAX));
+        assert!(!space.contains_range(u64::MAX - 3, 8));
+
+        space.stack_base = 4;
+        space.stack_size = 8;
+        assert!(!space.in_stack(1));
+    }
+
+    #[test]
+    fn user_address_space_accepts_only_single_region_ranges() {
+        let space = UserAddressSpace::default();
+        assert!(space.contains_range(0x0040_0000, 1));
+        assert!(space.contains_range(0x0040_0FFF, 1));
+        assert!(!space.contains_range(0x004F_FFFF, 2));
+        assert!(space.contains_range(0x0050_0000, 16));
+        assert!(space.contains_range(0x7FFE_F001, 0x0FFE));
+        assert!(!space.contains_range(0x7FFFEFFF, 2));
     }
 
     #[test]

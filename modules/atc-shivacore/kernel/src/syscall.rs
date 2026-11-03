@@ -7,6 +7,9 @@
 
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use crate::process_runtime::ProcessRuntime;
+use crate::user_copy::UserMemoryReader;
+use crate::vfs::Vfs;
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
 };
@@ -28,10 +31,10 @@ pub struct SyscallResponse {
 }
 
 impl SyscallResponse {
-    const fn ok(value: u64) -> Self {
+    pub(crate) const fn ok(value: u64) -> Self {
         Self { error: None, value }
     }
-    const fn err(error: AbiError) -> Self {
+    pub(crate) const fn err(error: AbiError) -> Self {
         Self {
             error: Some(error),
             value: 0,
@@ -86,6 +89,9 @@ impl SyscallDispatcher {
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
+            x if x == Syscall::ProcessStart.id() => Syscall::ProcessStart,
+            x if x == Syscall::ProcessTerminate.id() => Syscall::ProcessTerminate,
+            x if x == Syscall::ProcessStatus.id() => Syscall::ProcessStatus,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
@@ -140,6 +146,45 @@ impl SyscallDispatcher {
                 self.monotonic_ticks = self.monotonic_ticks.wrapping_add(1);
                 SyscallResponse::ok(self.monotonic_ticks)
             }
+            // The ABI reserves these IDs, but process creation/termination/status
+            // are not yet wired to the scheduler and ELF loader. Fail closed.
+            Syscall::ProcessStart | Syscall::ProcessTerminate | Syscall::ProcessStatus => {
+                SyscallResponse::err(AbiError::UnsupportedOperation)
+            }
+        }
+    }
+
+    /// Dispatch with the context required by process syscalls.
+    ///
+    /// Architecture syscall entry code must pass a reader bound to the calling
+    /// process's page tables and the VFS/process capability tables. The simpler
+    /// `dispatch` method remains fail-closed for process syscalls.
+    pub fn dispatch_with_process_runtime(
+        &mut self,
+        pid: Pid,
+        request: SyscallRequest,
+        capabilities: &CapabilityTable,
+        process_runtime: &mut ProcessRuntime,
+        user_memory: &impl UserMemoryReader,
+        vfs: &Vfs,
+        process_capabilities: &mut CapabilityTable,
+        max_executable_bytes: usize,
+    ) -> SyscallResponse {
+        match request.syscall_id {
+            id if id == Syscall::ProcessStart.id()
+                || id == Syscall::ProcessTerminate.id()
+                || id == Syscall::ProcessStatus.id() =>
+            {
+                process_runtime.dispatch_process_syscall(
+                    pid,
+                    request,
+                    user_memory,
+                    vfs,
+                    process_capabilities,
+                    max_executable_bytes,
+                )
+            }
+            _ => self.dispatch(pid, request, capabilities),
         }
     }
 
@@ -251,6 +296,20 @@ mod tests {
             &table,
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn process_syscalls_fail_closed_until_kernel_integration_exists() {
+        let mut dispatcher = SyscallDispatcher::new();
+        for syscall in [Syscall::ProcessStart, Syscall::ProcessTerminate, Syscall::ProcessStatus] {
+            let response = dispatcher.dispatch(
+                pid(1),
+                request(syscall),
+                &CapabilityTable::new(),
+            );
+            assert_eq!(response.error, Some(AbiError::UnsupportedOperation));
+            assert_eq!(response.value, 0);
+        }
     }
 
     #[test]

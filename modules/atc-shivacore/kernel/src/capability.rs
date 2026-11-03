@@ -26,6 +26,8 @@ pub enum ResourceType {
     Accelerator,
     FileSystem,
     Network,
+    /// Authority over a specific process lifecycle object.
+    Process,
 }
 
 /// Zugriffsrechte als Bitfield
@@ -180,6 +182,23 @@ impl CapabilityTable {
         self.caps.insert(id, child);
         self.by_pid.entry(target_pid).or_default().push(id);
         Ok(id)
+    }
+
+    /// Delegates a capability only after enforcing both the source capability
+    /// and a caller-supplied service policy ceiling. Requested rights must be a
+    /// subset of the source rights and of the policy ceiling.
+    pub fn delegate_authorized(
+        &mut self,
+        source_pid: Pid,
+        source_cap: CapId,
+        target_pid: Pid,
+        requested_rights: Rights,
+        policy_ceiling: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        if (requested_rights.0 & !policy_ceiling.0) != 0 {
+            return Err(CapabilityError::RightsExceeded);
+        }
+        self.delegate(source_pid, source_cap, target_pid, requested_rights)
     }
 
     /// Prueft, ob ein Prozess eine bestimmte Capability mit den geforderten Rechten besitzt.
@@ -390,4 +409,31 @@ mod tests {
         assert_eq!(Rights::from_bits_truncate(0x20), Rights::NONE);
         assert_eq!(Rights::from_bits_truncate(0xFF), Rights::ALL);
     }
+    #[test]
+    fn authorized_delegation_enforces_policy_ceiling_and_attenuates() {
+        let mut table = CapabilityTable::new();
+        let source = table.create(
+            pid(1),
+            ResourceType::FileSystem,
+            7,
+            Rights::READ | Rights::EXEC | Rights::DELEGATE | Rights::WRITE,
+        );
+        assert_eq!(
+            table.delegate_authorized(
+                pid(1), source, pid(2), Rights::WRITE,
+                Rights::READ | Rights::EXEC
+            ),
+            Err(CapabilityError::RightsExceeded)
+        );
+        let child = table.delegate_authorized(
+            pid(1), source, pid(2), Rights::READ | Rights::EXEC,
+            Rights::READ | Rights::EXEC
+        ).unwrap();
+        let delegated = table.get(child).unwrap();
+        assert_eq!(delegated.owner, pid(2));
+        assert_eq!(delegated.rights, Rights::READ | Rights::EXEC);
+        assert!(!delegated.rights.has(Rights::WRITE));
+        assert!(!delegated.rights.has(Rights::DELEGATE));
+    }
+
 }
