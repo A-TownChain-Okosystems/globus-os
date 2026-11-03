@@ -499,9 +499,7 @@ mod tests {
     #[test]
     fn test_create_entity() {
         let (mut caps, mut kg) = setup();
-        let eid = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let eid = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
         assert!(eid.0 > 0);
         assert_eq!(kg.entity_count(), 1);
         let e = kg.get_entity(eid).unwrap();
@@ -512,12 +510,8 @@ mod tests {
     #[test]
     fn test_add_and_query_triple() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
-        let bob = kg
-            .create_entity(&caps, pid(1), "Bob", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
+        let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
 
         kg.add_triple(
             &caps,
@@ -545,9 +539,7 @@ mod tests {
     #[test]
     fn test_add_triple_without_write_cap_rejected() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
 
         // pid(2) hat keine WRITE-Cap auf Alice
         let result = kg.add_triple(
@@ -563,12 +555,8 @@ mod tests {
     #[test]
     fn test_query_without_read_cap_filtered() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
-        let bob = kg
-            .create_entity(&caps, pid(1), "Bob", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
+        let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
 
         kg.add_triple(
             &caps,
@@ -607,12 +595,8 @@ mod tests {
     #[test]
     fn test_grant_read_enables_query() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
-        let bob = kg
-            .create_entity(&caps, pid(1), "Bob", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
+        let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
 
         kg.add_triple(
             &caps,
@@ -665,15 +649,9 @@ mod tests {
     #[test]
     fn test_outgoing_and_incoming() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
-        let bob = kg
-            .create_entity(&caps, pid(1), "Bob", "Person")
-            .unwrap();
-        let charlie = kg
-            .create_entity(&caps, pid(1), "Charlie", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
+        let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
+        let charlie = kg.create_entity(&caps, pid(1), "Charlie", "Person").unwrap();
 
         // Alice -> knows -> Bob
         kg.add_triple(
@@ -812,9 +790,7 @@ mod tests {
     #[test]
     fn test_literal_values() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
 
         // String-Literal
         kg.add_triple(
@@ -874,12 +850,8 @@ mod tests {
     #[test]
     fn test_remove_triple() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
-        let bob = kg
-            .create_entity(&caps, pid(1), "Bob", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
+        let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
 
         kg.add_triple(
             &caps,
@@ -903,9 +875,7 @@ mod tests {
     #[test]
     fn test_remove_triple_without_cap_rejected() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
 
         kg.add_triple(
             &caps,
@@ -930,12 +900,8 @@ mod tests {
     #[test]
     fn test_delete_entity() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
-        let bob = kg
-            .create_entity(&caps, pid(1), "Bob", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
+        let bob = kg.create_entity(&caps, pid(1), "Bob", "Person").unwrap();
 
         kg.add_triple(
             &caps,
@@ -958,9 +924,7 @@ mod tests {
     #[test]
     fn test_delete_entity_without_cap_rejected() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
 
         let result = kg.delete_entity(&caps, pid(2), alice);
         assert_eq!(result, Err(KgError::NoWriteCapability));
@@ -1040,13 +1004,9 @@ mod tests {
     fn test_cross_process_isolation() {
         let (mut caps, mut kg) = setup();
         // pid(1) erstellt Alice
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
         // pid(2) erstellt Bob
-        let bob = kg
-            .create_entity(&caps, pid(2), "Bob", "Person")
-            .unwrap();
+        let bob = kg.create_entity(&caps, pid(2), "Bob", "Person").unwrap();
 
         // pid(1) kann auf Alice schreiben, nicht auf Bob
         assert!(kg
@@ -1094,9 +1054,7 @@ mod tests {
     #[test]
     fn test_triple_count_tracking() {
         let (mut caps, mut kg) = setup();
-        let alice = kg
-            .create_entity(&caps, pid(1), "Alice", "Person")
-            .unwrap();
+        let alice = kg.create_entity(&caps, pid(1), "Alice", "Person").unwrap();
 
         kg.add_triple(
             &caps,
