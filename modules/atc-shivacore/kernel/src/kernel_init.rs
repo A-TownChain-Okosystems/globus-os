@@ -392,7 +392,7 @@ mod tests {
         let endpoint_cap =
             state
                 .capability_owner
-                .create_typed(pid, 99, crate::rights::endpoint::SEND).unwrap();
+                .create_typed(pid, 99, crate::rights::endpoint::SEND);
         let response = state.syscalls.dispatch(
             pid,
             crate::syscall::SyscallRequest {
