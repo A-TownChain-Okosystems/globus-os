@@ -276,7 +276,7 @@ mod tests {
             ResourceType::Memory,
             p1.0 as u64,
             Rights::READ | Rights::DELEGATE,
-        );
+        ).unwrap();
         owner.delegate(p1, p1_mem_cap, p2, Rights::READ).unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
 
