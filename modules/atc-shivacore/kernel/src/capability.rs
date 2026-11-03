@@ -639,8 +639,7 @@ impl CapabilityTable {
         resource_id: u64,
         rights: Rights,
     ) -> CapId {
-        let id = CapId(self.next_id);
-        self.next_id += 1;
+        let id = self.allocate_id();
         let cap = Capability {
             id,
             resource_type,
@@ -680,8 +679,7 @@ impl CapabilityTable {
         if (attenuated_rights.0 & !parent_cap.rights.0) != 0 {
             return Err(CapabilityError::RightsExceeded);
         }
-        let id = CapId(self.next_id);
-        self.next_id += 1;
+        let id = self.allocate_id();
         let child = Capability {
             id,
             resource_type: parent_cap.resource_type,
@@ -721,8 +719,7 @@ impl CapabilityTable {
         if (attenuated_rights.0 & !parent_cap.rights.0) != 0 {
             return Err(CapabilityError::RightsExceeded);
         }
-        let id = CapId(self.next_id);
-        self.next_id += 1;
+        let id = self.allocate_id();
         let child = Capability {
             id,
             resource_type: parent_cap.resource_type,
@@ -746,8 +743,7 @@ impl CapabilityTable {
         resource_id: u64,
         object_rights: ObjectRights,
     ) -> CapId {
-        let id = CapId(self.next_id);
-        self.next_id += 1;
+        let id = self.allocate_id();
         let cap = Capability {
             id,
             // Compatibility placeholder; typed operations never inspect this field.
@@ -802,8 +798,7 @@ impl CapabilityTable {
             })?;
 
         let resource_id = parent.resource_id;
-        let id = CapId(self.next_id);
-        self.next_id += 1;
+        let id = self.allocate_id();
         let child = Capability {
             id,
             // Compatibility placeholder; typed operations never inspect this field.
@@ -973,6 +968,15 @@ impl CapabilityTable {
                 .then_some(cap.id)
             })
         })
+    }
+
+    fn allocate_id(&mut self) -> CapId {
+        let id = CapId(self.next_id);
+        self.next_id = self
+            .next_id
+            .checked_add(1)
+            .expect("capability ID space exhausted; refusing identifier reuse");
+        id
     }
 
     pub fn count(&self) -> usize {
@@ -1255,6 +1259,14 @@ mod tests {
         assert!(!table.check(pid(2), ResourceType::Memory, 0, Rights::READ));
         assert!(!table.check(pid(3), ResourceType::Memory, 0, Rights::READ));
         assert_eq!(table.count(), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "capability ID space exhausted; refusing identifier reuse")]
+    fn capability_id_exhaustion_fails_closed_without_wraparound() {
+        let mut table = CapabilityTable::new();
+        table.next_id = u64::MAX;
+        let _ = table.create(pid(1), ResourceType::Memory, 0xBEEF, Rights::READ);
     }
 
     #[test]
