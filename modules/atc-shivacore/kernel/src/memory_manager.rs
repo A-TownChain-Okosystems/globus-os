@@ -382,6 +382,13 @@ impl MemorySubsystem {
     }
 }
 
+
+#[cfg(test)]
+impl Default for MemorySubsystem {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 // === ats1000 MemoryManager-Trait-Implementierung (Adapter) === //
 
 impl MemoryManager for KernelMemoryManager {
