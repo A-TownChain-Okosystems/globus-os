@@ -18,7 +18,7 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
+use crate::capability::{Pid, ProcessCapabilityPort, ResourceType, Rights};
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,21 +57,15 @@ pub struct ProcessManager {
     processes: BTreeMap<Pid, ProcessControlBlock>,
     next_pid: AtomicU32,
     /// Referenz zur Capability-Tabelle (Kernel-intern)
-    pub caps: CapabilityTable,
-}
-
-impl Default for ProcessManager {
-    fn default() -> Self {
-        Self::new()
-    }
+    caps: ProcessCapabilityPort,
 }
 
 impl ProcessManager {
-    pub fn new() -> Self {
+    pub(crate) fn new_with_capability_port(caps: ProcessCapabilityPort) -> Self {
         Self {
             processes: BTreeMap::new(),
             next_pid: AtomicU32::new(1),
-            caps: CapabilityTable::new(),
+            caps,
         }
     }
 
@@ -91,12 +85,7 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.create(
-            pid,
-            ResourceType::Memory,
-            addr_space,
-            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
-        );
+        self.caps.create_address_space(pid, addr_space);
 
         pid
     }
@@ -133,10 +122,7 @@ impl ProcessManager {
         }
 
         // Alle Capabilities dieses Prozesses widerrufen
-        let cap_ids: Vec<CapId> = self.caps.list_for(pid).iter().map(|c| c.id).collect();
-        for cap_id in cap_ids {
-            self.caps.revoke(cap_id);
-        }
+        self.caps.revoke_process(pid);
 
         // Zustand auf Terminiert setzen
         pcb.state = ProcessState::Terminated(exit_code);
@@ -231,28 +217,24 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.caps.check(pid, resource_type, resource_id, required)
-    }
-
-    /// Delegiert eine Capability an einen anderen Prozess
-    pub fn delegate_capability(
-        &mut self,
-        source: Pid,
-        cap_id: CapId,
-        target: Pid,
-        rights: Rights,
-    ) -> Result<CapId, crate::capability::CapabilityError> {
-        self.caps.delegate(source, cap_id, target, rights)
+        resource_type == ResourceType::Memory
+            && self.caps.check_address_space(pid, resource_id, required)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::capability::new_authority;
+
+    fn new_process_manager() -> ProcessManager {
+        let authority = new_authority();
+        ProcessManager::new_with_capability_port(authority.owner().process_port())
+    }
 
     #[test]
     fn test_spawn_creates_process_and_memory_cap() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let pid1 = pm.spawn(ProcessType::Agent, 128);
         assert!(pid1.0 > 0);
 
@@ -264,11 +246,13 @@ mod tests {
         // Hat automatisch Memory-Cap fuer eigenen Adressraum
         assert!(pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::READ));
         assert!(pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::WRITE));
+        assert!(!pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::EXEC));
+        assert!(!pm.check_capability(pid1, ResourceType::Memory, pid1.0 as u64, Rights::DELEGATE));
     }
 
     #[test]
     fn test_spawn_multiple_processes() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let p1 = pm.spawn(ProcessType::Agent, 100);
         let p2 = pm.spawn(ProcessType::Service, 200);
         let p3 = pm.spawn(ProcessType::Validator, 255);
@@ -279,14 +263,21 @@ mod tests {
 
     #[test]
     fn test_kill_revokes_all_capabilities() {
-        let mut pm = ProcessManager::new();
+        let authority = new_authority();
+        let owner = authority.owner();
+        let mut pm = ProcessManager::new_with_capability_port(authority.owner().process_port());
         let p1 = pm.spawn(ProcessType::Agent, 128);
         let p2 = pm.spawn(ProcessType::Service, 100);
 
-        // p1 delegiert READ an p2
-        let p1_mem_cap = pm.caps.list_for(p1)[0].id;
-        pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
-            .unwrap();
+        // Default process capabilities do not include DELEGATE. The kernel
+        // owner explicitly issues a delegable source capability for this test.
+        let p1_mem_cap = owner.create(
+            p1,
+            ResourceType::Memory,
+            p1.0 as u64,
+            Rights::READ | Rights::DELEGATE,
+        );
+        owner.delegate(p1, p1_mem_cap, p2, Rights::READ).unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
 
         // Kill p1 -> alle Caps weg (auch p2s delegierte)
@@ -303,13 +294,13 @@ mod tests {
 
     #[test]
     fn test_kill_nonexistent_process() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         assert!(!pm.kill(Pid(999), 1));
     }
 
     #[test]
     fn test_double_kill_rejected() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let p1 = pm.spawn(ProcessType::Agent, 100);
         assert!(pm.kill(p1, 0));
         assert!(!pm.kill(p1, 1)); // Bereits terminiert
@@ -317,7 +308,7 @@ mod tests {
 
     #[test]
     fn test_spawn_child_linking() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let parent = pm.spawn(ProcessType::System, 255);
         let child = pm.spawn_child(parent, ProcessType::Agent, 100).unwrap();
 
@@ -330,7 +321,7 @@ mod tests {
 
     #[test]
     fn test_kill_removes_from_parent_children() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let parent = pm.spawn(ProcessType::System, 255);
         let child = pm.spawn_child(parent, ProcessType::Agent, 100).unwrap();
 
@@ -341,7 +332,7 @@ mod tests {
 
     #[test]
     fn test_state_transitions() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let p1 = pm.spawn(ProcessType::Agent, 100);
 
         // Ready -> Running
@@ -364,7 +355,7 @@ mod tests {
 
     #[test]
     fn test_active_count() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let p1 = pm.spawn(ProcessType::Agent, 100);
         let p2 = pm.spawn(ProcessType::Service, 200);
         assert_eq!(pm.active_count(), 2);
@@ -378,7 +369,7 @@ mod tests {
 
     #[test]
     fn test_priority_preserved() {
-        let mut pm = ProcessManager::new();
+        let mut pm = new_process_manager();
         let p1 = pm.spawn(ProcessType::System, 255);
         let p2 = pm.spawn(ProcessType::Agent, 0);
         let p3 = pm.spawn(ProcessType::Validator, 128);

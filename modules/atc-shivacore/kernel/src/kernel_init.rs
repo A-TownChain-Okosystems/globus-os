@@ -8,10 +8,10 @@
 //! Boot-Reihenfolge:
 //!   L0:  allocator::init_heap()      — Heap bereit (Box/Vec/String)
 //!   L1:  MemorySubsystem::new()      — Prozess-Regionen + Caps
-//!   L2:  CapabilityTable::new()      — System-Capability-Table
+//!   L2:  CapabilityAuthority         — kernel-owned authority
 //!   L3:  ProcessManager::new()       — Prozess-Verwaltung
 //!   L4:  Scheduler::new()            — DA-HEFT Scheduler
-//!   L5:  IpcSubsystem::new()        — IPC-Kanäle
+//!   L5:  IpcSubsystem::new(capability_owner.ipc_port())        — IPC-Kanäle
 //!   L6:  AtcFileSystem::new()       — Content-Addressed FS
 //!   L6b: Vfs::new(caps)             — Virtual File System
 //!   L7:  SecurityManager::new()     — MultiSig + AuditLog + Reputation
@@ -25,17 +25,19 @@ extern crate alloc;
 use alloc::format;
 use alloc::string::String;
 use alloc::string::ToString;
-use alloc::sync::Arc;
 use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
-use crate::capability::CapabilityTable;
+use crate::capability::{
+    new_authority, CapabilityAuthority, CapabilityAuthorityOwner, KnowledgeGraphCapabilityAccess,
+};
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
 use crate::security::SecurityManager;
+use crate::syscall::SyscallDispatcher;
 use crate::timer::{MonotonicClock, SimulatedTimerSource, TimerManager};
 use crate::vfs::Vfs;
 
@@ -53,7 +55,7 @@ pub enum InitStatus {
 pub enum BootPhase {
     Heap,         // L0: allocator::init_heap
     Memory,       // L1: MemorySubsystem
-    Capabilities, // L2: CapabilityTable
+    Capabilities, // L2: CapabilityAuthority
     Processes,    // L3: ProcessManager
     Scheduler,    // L4: DA-HEFT Scheduler
     Ipc,          // L5: IPC Channels
@@ -67,7 +69,7 @@ impl BootPhase {
         match self {
             BootPhase::Heap => "L0 Heap (linked_list_allocator)",
             BootPhase::Memory => "L1 MemorySubsystem (Heap-Bridge)",
-            BootPhase::Capabilities => "L2 CapabilityTable",
+            BootPhase::Capabilities => "L2 CapabilityAuthority",
             BootPhase::Processes => "L3 ProcessManager",
             BootPhase::Scheduler => "L4 DA-HEFT Scheduler",
             BootPhase::Ipc => "L5 IPC Channels",
@@ -83,6 +85,10 @@ impl BootPhase {
 pub struct KernelState {
     // L1: Memory
     pub memory: MemorySubsystem,
+    /// One kernel-owned capability authority shared by all consumers.
+    capability_authority: CapabilityAuthority,
+    /// Privileged mutation facade retained only by the kernel owner.
+    capability_owner: CapabilityAuthorityOwner,
     // L2: Capabilities (inside ProcessManager)
     // L3: Process Manager
     pub processes: ProcessManager,
@@ -90,6 +96,8 @@ pub struct KernelState {
     pub scheduler: DaHeftScheduler,
     // L5: IPC
     pub ipc: IpcSubsystem,
+    /// Syscall dispatcher bound to the boot-owned capability authority.
+    pub syscalls: SyscallDispatcher,
     // L6: Filesystems
     pub fs: AtcFileSystem,
     pub vfs: Vfs,
@@ -100,6 +108,14 @@ pub struct KernelState {
 }
 
 impl KernelState {
+    /// Issues the narrowly scoped capability port required by service-space.
+    pub fn knowledge_graph_capability_port(
+        &self,
+        principal: crate::capability::Pid,
+    ) -> crate::capability::KnowledgeGraphCapabilityPort {
+        self.capability_owner.knowledge_graph_port(principal)
+    }
+
     /// Kernel-Init-Sequenz — initialisiert alle Subsysteme in Reihenfolge.
     ///
     /// In Kernel-Mode (no_std):
@@ -116,7 +132,9 @@ impl KernelState {
 
         // ── L1: MemorySubsystem (Heap-Bridge + Prozess-Regionen) ──
         log.push((BootPhase::Memory, InitStatus::Initializing));
-        let memory = MemorySubsystem::new();
+        let capabilities = new_authority();
+        let capability_owner = capabilities.owner();
+        let memory = MemorySubsystem::new_with_capability_port(capability_owner.memory_port());
         let stats = memory.stats();
         if stats.heap_base != HEAP_START {
             log.push((BootPhase::Memory, InitStatus::Failed));
@@ -124,9 +142,9 @@ impl KernelState {
         }
         log.push((BootPhase::Memory, InitStatus::Ready));
 
-        // ── L2+L3: ProcessManager (enthält CapabilityTable) ──
+        // ── L2+L3: ProcessManager (uses shared CapabilityAuthority) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
-        let processes = ProcessManager::new();
+        let processes = ProcessManager::new_with_capability_port(capability_owner.process_port());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
         log.push((BootPhase::Processes, InitStatus::Ready));
 
@@ -137,7 +155,8 @@ impl KernelState {
 
         // ── L5: IPC Subsystem ──
         log.push((BootPhase::Ipc, InitStatus::Initializing));
-        let ipc = IpcSubsystem::new();
+        let ipc = IpcSubsystem::new(capability_owner.ipc_port());
+        let syscalls = SyscallDispatcher::new(capability_owner.syscall_port());
         log.push((BootPhase::Ipc, InitStatus::Ready));
 
         // ── L6: ATCFS + VFS ──
@@ -147,8 +166,7 @@ impl KernelState {
             log.push((BootPhase::FileSystem, InitStatus::Failed));
             return Err(BootError::FsInitFailed);
         }
-        let caps = Arc::new(spin::Mutex::new(CapabilityTable::new()));
-        let vfs = Vfs::new(caps);
+        let vfs = Vfs::new(capability_owner.vfs_port());
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
         // ── L7: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
@@ -161,9 +179,12 @@ impl KernelState {
 
         Ok(KernelState {
             memory,
+            capability_authority: capabilities,
+            capability_owner,
             processes,
             scheduler,
             ipc,
+            syscalls,
             fs,
             vfs,
             security,
@@ -203,10 +224,8 @@ impl KernelState {
             .map_err(|_| BootError::SmokeTestFailed)?;
 
         // 2. FS write
-        let caps = &self.memory.caps;
         self.fs
             .write_file(
-                caps,
                 "/tmp/smoke_test.txt",
                 b"ShivaCore boot OK",
                 crate::ats1000::Pid(1),
@@ -216,7 +235,7 @@ impl KernelState {
         // 3. FS read
         let (_cid, node) = self
             .fs
-            .read_file(caps, "/tmp/smoke_test.txt", crate::ats1000::Pid(1))
+            .read_file("/tmp/smoke_test.txt", crate::ats1000::Pid(1))
             .map_err(|_| BootError::SmokeTestFailed)?;
         assert_eq!(node.size, 17);
 
@@ -336,6 +355,56 @@ mod tests {
     fn test_scheduler_initialized() {
         let state = KernelState::boot().unwrap();
         // Scheduler exists with no tasks
+    }
+
+    #[test]
+    fn kernel_subsystems_share_one_capability_authority() {
+        let mut state = KernelState::boot().unwrap();
+        let pid = crate::ats1000::Pid(77);
+        let region = state.memory.allocate(pid, 1024).unwrap();
+        assert!(state.processes.check_capability(
+            pid,
+            crate::capability::ResourceType::Memory,
+            region.region_id,
+            crate::capability::Rights::READ,
+        ));
+        assert!(state.capability_authority.check(
+            pid,
+            crate::capability::ResourceType::Memory,
+            region.region_id,
+            crate::capability::Rights::WRITE,
+        ));
+        let channel = state.ipc.create_channel(pid, 128);
+        assert!(state.capability_authority.check(
+            pid,
+            crate::capability::ResourceType::IpcChannel,
+            channel.0,
+            crate::capability::Rights::WRITE,
+        ));
+        let kg_port = state.knowledge_graph_capability_port(pid);
+        let _kg_cap = kg_port.create_entity_capability(pid, 0x9000);
+        assert!(state.capability_authority.check(
+            pid,
+            crate::capability::ResourceType::KnowledgeGraph,
+            0x9000,
+            crate::capability::Rights::WRITE,
+        ));
+        let endpoint_cap =
+            state
+                .capability_owner
+                .create_typed(pid, 99, crate::rights::endpoint::SEND);
+        let response = state.syscalls.dispatch(
+            pid,
+            crate::syscall::SyscallRequest {
+                abi_version: libshivacore::ABI_VERSION,
+                syscall_id: libshivacore::Syscall::IpcSend.id(),
+                capability: Some(libshivacore::CapabilityHandle(endpoint_cap.0)),
+                arg0: 99,
+                arg1: 0,
+                payload_len: 0,
+            },
+        );
+        assert_eq!(response.error, None);
     }
 
     #[test]

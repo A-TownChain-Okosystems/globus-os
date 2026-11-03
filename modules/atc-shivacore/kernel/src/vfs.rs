@@ -10,12 +10,10 @@ use alloc::string::ToString;
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, String as Str};
-use alloc::sync::Arc;
 use alloc::vec::Vec;
-use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
-use crate::capability::{CapabilityTable, Rights};
+use crate::capability::{CapId, Rights, VfsCapabilityPort};
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
@@ -193,11 +191,11 @@ pub struct Vfs {
     root_inode: u64,
     handles: BTreeMap<u64, FileHandle>, // fd -> handle
     next_fd: u64,
-    caps: Arc<Mutex<CapabilityTable>>,
+    caps: VfsCapabilityPort,
 }
 
 impl Vfs {
-    pub fn new(caps: Arc<Mutex<CapabilityTable>>) -> Self {
+    pub(crate) fn new(caps: VfsCapabilityPort) -> Self {
         let mut vfs = Vfs {
             inodes: BTreeMap::new(),
             next_inode: 1,
@@ -242,12 +240,8 @@ impl Vfs {
     // ── Capability-Check ───────────────────────────────────────────────────
 
     fn check_cap(&self, pid: u64, cap_handle: u64, required: Rights) -> bool {
-        let table = self.caps.lock();
-        if let Some(cap) = table.get(crate::capability::CapId(cap_handle)) {
-            cap.owner == crate::ats1000::Pid(pid as u32) && cap.rights.has(required)
-        } else {
-            false
-        }
+        self.caps
+            .check_legacy_handle(crate::ats1000::Pid(pid as u32), CapId(cap_handle), required)
     }
 
     // ── Verzeichnis-Operationen ────────────────────────────────────────────
@@ -684,30 +678,31 @@ mod tests {
     use super::*;
     use crate::ats1000::Pid;
     use crate::capability::ResourceType;
+    use crate::capability::{new_authority, CapabilityAuthority};
 
     fn setup_vfs() -> Vfs {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = new_authority();
         // Grant full rights to process 1
         {
-            let mut table = caps.lock();
-            let cap = table
+            let owner = caps.owner();
+            let cap = owner
                 .create(
                     Pid(1),
                     ResourceType::FileSystem,
                     1,
-                    Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+                    Rights::READ | Rights::WRITE,
                 )
                 .0;
             // cap handle = 1 (first cap)
         }
         // We need the cap handle. Let's use a simpler approach:
         // Create caps manually with known handle
-        Vfs::new(caps)
+        Vfs::new(caps.owner().vfs_port())
     }
 
-    fn grant_full_caps(caps: &Arc<Mutex<CapabilityTable>>, pid: u64) -> u64 {
-        let mut table = caps.lock();
-        let cap_id = table.create(
+    fn grant_full_caps(caps: &CapabilityAuthority, pid: u64) -> u64 {
+        let owner = caps.owner();
+        let cap_id = owner.create(
             Pid(pid as u32),
             ResourceType::FileSystem,
             1,
@@ -736,8 +731,8 @@ mod tests {
 
     #[test]
     fn test_mkdir_and_list() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/home", 1, cap).unwrap();
@@ -758,8 +753,8 @@ mod tests {
 
     #[test]
     fn test_mkdir_nested_path() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/a", 1, cap).unwrap();
@@ -774,8 +769,8 @@ mod tests {
 
     #[test]
     fn test_mkdir_already_exists() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/test", 1, cap).unwrap();
@@ -785,8 +780,8 @@ mod tests {
 
     #[test]
     fn test_mkdir_parent_not_dir() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/file.txt", 1, cap).unwrap();
@@ -796,8 +791,8 @@ mod tests {
 
     #[test]
     fn test_mkdir_parent_not_found() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let result = vfs.mkdir("/nonexistent/subdir", 1, cap);
@@ -806,8 +801,8 @@ mod tests {
 
     #[test]
     fn test_rmdir_empty() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/temp", 1, cap).unwrap();
@@ -817,8 +812,8 @@ mod tests {
 
     #[test]
     fn test_rmdir_not_empty() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/parent", 1, cap).unwrap();
@@ -829,8 +824,8 @@ mod tests {
 
     #[test]
     fn test_rmdir_root_fails() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let result = vfs.rmdir("/", 1, cap);
@@ -841,8 +836,8 @@ mod tests {
 
     #[test]
     fn test_create_and_stat() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/test.txt", 1, cap).unwrap();
@@ -854,8 +849,8 @@ mod tests {
 
     #[test]
     fn test_create_file_already_exists() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/file.txt", 1, cap).unwrap();
@@ -865,8 +860,8 @@ mod tests {
 
     #[test]
     fn test_open_write_read() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/data.bin", 1, cap).unwrap();
@@ -885,8 +880,8 @@ mod tests {
 
     #[test]
     fn test_open_create_mode() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs
@@ -907,8 +902,8 @@ mod tests {
 
     #[test]
     fn test_append_mode() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/log.txt", OpenMode::Create, 1, cap).unwrap();
@@ -927,8 +922,8 @@ mod tests {
 
     #[test]
     fn test_seek_and_partial_read() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs
@@ -947,8 +942,8 @@ mod tests {
 
     #[test]
     fn test_read_past_end() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/short.txt", OpenMode::Create, 1, cap).unwrap();
@@ -964,8 +959,8 @@ mod tests {
 
     #[test]
     fn test_close_and_reopen() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/reopen.txt", OpenMode::Create, 1, cap).unwrap();
@@ -979,8 +974,8 @@ mod tests {
 
     #[test]
     fn test_open_directory_fails() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/mydir", 1, cap).unwrap();
@@ -990,8 +985,8 @@ mod tests {
 
     #[test]
     fn test_remove_file() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/delete_me.txt", 1, cap).unwrap();
@@ -1001,8 +996,8 @@ mod tests {
 
     #[test]
     fn test_remove_file_closes_handles() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/auto.txt", OpenMode::Create, 1, cap).unwrap();
@@ -1019,8 +1014,8 @@ mod tests {
 
     #[test]
     fn test_create_and_read_symlink() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_file("/target.txt", 1, cap).unwrap();
@@ -1036,8 +1031,8 @@ mod tests {
 
     #[test]
     fn test_symlink_already_exists() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.create_symlink("/link", "/target", 1, cap).unwrap();
@@ -1049,8 +1044,8 @@ mod tests {
 
     #[test]
     fn test_path_normalization() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/a", 1, cap).unwrap();
@@ -1064,22 +1059,37 @@ mod tests {
 
     #[test]
     fn test_resolve_nonexistent() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let vfs = Vfs::new(caps);
+        let caps = new_authority();
+        let vfs = Vfs::new(caps.owner().vfs_port());
         assert!(vfs.resolve("/does/not/exist").is_none());
     }
 
     // ── Capability-Gating-Tests ─────────────────────────────────────────────
 
     #[test]
+    fn typed_capability_cannot_bypass_legacy_vfs_rights() {
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
+        let typed_handle = {
+            let owner = caps.owner();
+            owner
+                .create_typed(Pid(2), 2, crate::rights::endpoint::SEND)
+                .0
+        };
+
+        let result = vfs.mkdir("/typed-denied", 2, typed_handle);
+        assert_eq!(result, Err(VfsError::PermissionDenied));
+    }
+
+    #[test]
     fn test_mkdir_without_write_cap() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
 
         // Prozess 2 bekommt nur READ (kein WRITE)
         let cap_read = {
-            let mut table = caps.lock();
-            table
+            let owner = caps.owner();
+            owner
                 .create(Pid(2), ResourceType::FileSystem, 2, Rights::READ)
                 .0
         };
@@ -1090,13 +1100,13 @@ mod tests {
 
     #[test]
     fn test_read_without_read_cap() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
 
         // Prozess 2 bekommt nur WRITE (kein READ)
         let cap_write = {
-            let mut table = caps.lock();
-            table
+            let owner = caps.owner();
+            owner
                 .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
                 .0
         };
@@ -1108,12 +1118,12 @@ mod tests {
 
     #[test]
     fn test_open_read_mode_with_only_write_cap() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
 
         let cap_write = {
-            let mut table = caps.lock();
-            table
+            let owner = caps.owner();
+            owner
                 .create(Pid(2), ResourceType::FileSystem, 2, Rights::WRITE)
                 .0
         };
@@ -1128,8 +1138,8 @@ mod tests {
 
     #[test]
     fn test_tree_display() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/home", 1, cap).unwrap();
@@ -1146,8 +1156,8 @@ mod tests {
 
     #[test]
     fn test_stat_after_write() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/sized.txt", OpenMode::Create, 1, cap).unwrap();
@@ -1160,8 +1170,8 @@ mod tests {
 
     #[test]
     fn test_multiple_files_in_directory() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         vfs.mkdir("/docs", 1, cap).unwrap();
@@ -1175,8 +1185,8 @@ mod tests {
 
     #[test]
     fn test_write_expands_file() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
-        let mut vfs = Vfs::new(caps.clone());
+        let caps = new_authority();
+        let mut vfs = Vfs::new(caps.owner().vfs_port());
         let cap = grant_full_caps(&caps, 1);
 
         let fd = vfs.open("/expand.txt", OpenMode::Create, 1, cap).unwrap();
