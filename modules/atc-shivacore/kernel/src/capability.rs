@@ -320,16 +320,31 @@ impl CapabilityAuthorityOwner {
         if owner != principal {
             return Err(CapabilityError::NotOwner);
         }
-        let source = self
-            .inner
-            .lock()
-            .find_for_resource_with_rights(
+        let source = {
+            let table = self.inner.lock();
+            match table.find_for_resource_with_rights(
                 principal,
                 ResourceType::KnowledgeGraph,
                 resource_id,
                 Rights::WRITE | Rights::DELEGATE,
-            )
-            .ok_or(CapabilityError::NoDelegateRight)?;
+            ) {
+                Some(source) => source,
+                None if table
+                    .find_for_resource(principal, ResourceType::KnowledgeGraph, resource_id)
+                    .is_some() =>
+                {
+                    return Err(CapabilityError::NoDelegateRight);
+                }
+                None if table.caps.values().any(|cap| {
+                    cap.resource_type == ResourceType::KnowledgeGraph
+                        && cap.resource_id == resource_id
+                }) =>
+                {
+                    return Err(CapabilityError::NotOwner);
+                }
+                None => return Err(CapabilityError::NotFound),
+            }
+        };
         self.delegate(principal, source, target, Rights::READ)
     }
 }
