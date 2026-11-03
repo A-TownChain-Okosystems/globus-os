@@ -475,7 +475,7 @@ mod tests {
             resource_id: u64,
             target: Pid,
         ) -> Result<CapId, CapabilityError> {
-            if !self.check_entity_capability(owner, resource_id, Rights::WRITE | Rights::DELEGATE) {
+            if !self.check_entity_capability(owner, resource_id, Rights::WRITE) {
                 return Err(CapabilityError::NotOwner);
             }
             if !self.check_entity_capability(owner, resource_id, Rights::DELEGATE) {
