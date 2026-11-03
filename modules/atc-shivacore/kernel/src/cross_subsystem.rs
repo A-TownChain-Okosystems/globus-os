@@ -107,14 +107,14 @@ mod tests {
             ResourceType::FileSystem,
             0x6000,
             Rights::READ | Rights::WRITE,
-        ).unwrap();
+        );
         h.vfs
             .mkdir("/shared-authority", pid.0 as u64, fs_cap.0)
             .unwrap();
 
         let inspect_cap = h
             .owner
-            .create(pid, ResourceType::IpcChannel, 0x7000, Rights::INSPECT).unwrap();
+            .create(pid, ResourceType::IpcChannel, 0x7000, Rights::INSPECT);
         let syscall = h.syscalls.dispatch(
             pid,
             SyscallRequest {
@@ -285,7 +285,7 @@ mod tests {
             ResourceType::Memory,
             parent_mem.region_id,
             Rights::READ | Rights::DELEGATE,
-        ).unwrap();
+        );
         h.owner
             .delegate(parent, cap_id, child, Rights::READ)
             .unwrap();
