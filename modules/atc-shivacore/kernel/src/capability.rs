@@ -975,9 +975,7 @@ impl CapabilityTable {
         self.next_id = self
             .next_id
             .checked_add(1)
-            .expect(
-                "capability ID space exhausted; refusing identifier reuse",
-            );
+            .expect("capability ID space exhausted; refusing identifier reuse");
         id
     }
 
