@@ -14,7 +14,7 @@
 
 extern crate alloc;
 
-use alloc::collections::BTreeMap;
+use alloc::collections::{BTreeMap, BTreeSet};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 use core::ops::{BitAnd, BitOr};
@@ -115,6 +115,7 @@ pub enum CapabilityError {
 struct CapabilityTable {
     caps: BTreeMap<CapId, Capability>,
     by_pid: BTreeMap<Pid, Vec<CapId>>,
+    children: BTreeMap<CapId, Vec<CapId>>,
     next_id: u64,
 }
 
@@ -625,6 +626,7 @@ impl CapabilityTable {
         Self {
             caps: BTreeMap::new(),
             by_pid: BTreeMap::new(),
+            children: BTreeMap::new(),
             next_id: 1,
         }
     }
@@ -691,6 +693,7 @@ impl CapabilityTable {
         };
         self.caps.insert(id, child);
         self.by_pid.entry(target_pid).or_default().push(id);
+        self.children.entry(source_cap).or_default().push(id);
         Ok(id)
     }
 
@@ -731,6 +734,7 @@ impl CapabilityTable {
         };
         self.caps.insert(id, child);
         self.by_pid.entry(target_pid).or_default().push(id);
+        self.children.entry(source_cap).or_default().push(id);
         Ok(id)
     }
 
@@ -812,6 +816,7 @@ impl CapabilityTable {
         };
         self.caps.insert(id, child);
         self.by_pid.entry(target_pid).or_default().push(id);
+        self.children.entry(source_cap).or_default().push(id);
         Ok(id)
     }
 
@@ -904,24 +909,30 @@ impl CapabilityTable {
         self.caps.get(&id)
     }
 
-    /// Widerruft eine Capability und alle davon abgeleiteten (rekursiv).
+    /// Revokes a capability and all descendants without recursive stack growth.
     pub fn revoke(&mut self, cap_id: CapId) {
-        let mut to_remove = Vec::new();
-        self.collect_descendants(cap_id, &mut to_remove);
+        let mut pending = Vec::new();
+        let mut to_remove = BTreeSet::new();
+        pending.push(cap_id);
+
+        while let Some(current) = pending.pop() {
+            if !to_remove.insert(current) {
+                continue;
+            }
+            if let Some(children) = self.children.get(&current) {
+                pending.extend(children.iter().copied());
+            }
+        }
+
         for id in &to_remove {
             self.caps.remove(id);
+            self.children.remove(id);
+        }
+        for children in self.children.values_mut() {
+            children.retain(|child| !to_remove.contains(child));
         }
         for pid_caps in self.by_pid.values_mut() {
-            pid_caps.retain(|c| !to_remove.contains(c));
-        }
-    }
-
-    fn collect_descendants(&self, cap_id: CapId, out: &mut Vec<CapId>) {
-        out.push(cap_id);
-        for (id, cap) in &self.caps {
-            if cap.parent == Some(cap_id) {
-                self.collect_descendants(*id, out);
-            }
+            pid_caps.retain(|id| !to_remove.contains(id));
         }
     }
 
@@ -1244,6 +1255,33 @@ mod tests {
         assert!(!table.check(pid(2), ResourceType::Memory, 0, Rights::READ));
         assert!(!table.check(pid(3), ResourceType::Memory, 0, Rights::READ));
         assert_eq!(table.count(), 0);
+    }
+
+    #[test]
+    fn revoke_handles_deep_delegation_chain_iteratively() {
+        let mut table = CapabilityTable::new();
+        let root = table.create(
+            pid(1),
+            ResourceType::Memory,
+            0xDEAD,
+            Rights::READ | Rights::DELEGATE,
+        );
+        let mut parent = root;
+        for process_id in 2..=4096 {
+            parent = table
+                .delegate(
+                    pid(process_id - 1),
+                    parent,
+                    pid(process_id),
+                    Rights::READ | Rights::DELEGATE,
+                )
+                .unwrap();
+        }
+
+        assert_eq!(table.count(), 4096);
+        table.revoke(root);
+        assert_eq!(table.count(), 0);
+        assert!(table.children.is_empty());
     }
 
     #[test]
