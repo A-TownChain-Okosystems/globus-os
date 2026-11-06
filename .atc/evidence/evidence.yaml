@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 88149d1c1202f2b278ae422e0b5cfadd32f15ce2
+bound_commit: 6501c9a78221da62972c4dbf290bb8f36f3885a6
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 88149d1c1202f2b278ae422e0b5cfadd32f15ce2
-  timestamp: 2026-11-07T01:35:00+00:00
+  commit: 6501c9a78221da62972c4dbf290bb8f36f3885a6
+  timestamp: 2026-11-07T02:15:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -82,7 +82,12 @@ verification:
         PIC 98-99 Hz, IOAPIC 98 Hz, Verhaeltnis 1.0x. Der frueher gemessene
         Faktor 2 war die Rechteckwelle aus PIT-Modus 3 (zwei Flanken pro Periode,
         kantengetriggert doppelt gezaehlt); mit Modus 2 liefern beide Wege im
-        Rahmen der Messgenauigkeit den Sollwert. In frischem Clone fuer BIOS und UEFI
+        Rahmen der Messgenauigkeit den Sollwert.
+        Zeitquelle: MonotonicTime haengt nicht mehr am Syscall-Gate (try_lock
+        verschluckte Ticks, Zeit blieb unter Syscall-Last stehen). Jetzt
+        lock-freier AtomicU64; Messung an gemeinsamer Tick-Flanke zeigt 40
+        zugestellte Ticks und 40 MonotonicTime-Schritte, Drift 0, in BIOS und
+        UEFI. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
