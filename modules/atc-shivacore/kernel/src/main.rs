@@ -59,12 +59,44 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .physical_memory_offset
         .into_option()
         .expect("Bootloader hat physical_memory_offset nicht gesetzt (Config fehlt?)");
-    let validated_tables = validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
+    let (validated_tables, madt) = validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
         .unwrap_or_else(|error| panic!("ShivaCore: ACPI validation failed: {}", error));
     serial_println!(
         "ShivaCore: ACPI RSDP/root/table checksums validated; tables={}",
         validated_tables
     );
+    let lapic_base = match madt {
+        Some(summary) => {
+            let ioapic = match summary.ioapic {
+                Some(ioapic) => ioapic,
+                None => shivacore::madt::IoApic {
+                    id: 0xFF,
+                    address: 0,
+                    gsi_base: 0,
+                },
+            };
+            serial_println!(
+                "ShivaCore: MADT local_apic=0x{:X} ioapic=0x{:X} gsi_base={} cpus={}/{} overrides={} x2apic={} unknown={}",
+                summary.local_apic_address,
+                ioapic.address,
+                ioapic.gsi_base,
+                summary.processors_enabled,
+                summary.processors,
+                summary.overrides,
+                summary.x2apic_processors,
+                summary.unknown_entries
+            );
+            if summary.local_apic_address == 0 {
+                shivacore::apic::LAPIC_DEFAULT_BASE
+            } else {
+                summary.local_apic_address
+            }
+        }
+        None => {
+            serial_println!("ShivaCore: WARNUNG -- keine MADT im ACPI-Baum gefunden.");
+            shivacore::apic::LAPIC_DEFAULT_BASE
+        }
+    };
     let phys_mem_offset = x86_64::VirtAddr::new(phys_mem_offset_raw);
 
     if let Some(fb) = boot_info.framebuffer.as_mut() {
@@ -91,7 +123,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     // SC-006 REQ-03: Die LAPIC-Registerschicht an das MMIO-Fenster anbinden.
     // Ohne diesen Schritt blieb `apic.rs` folgenlos.
-    let lapic_address = map_lapic_mmio(&mut mapper, &mut frame_allocator);
+    let lapic_address = map_lapic_mmio(&mut mapper, &mut frame_allocator, lapic_base);
     let mut lapic = unsafe {
         shivacore::apic::LocalApic::new(shivacore::apic::MappedRegisters::new(
             lapic_address.as_u64() as *mut u32,
@@ -240,7 +272,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 fn validate_acpi_boot_tables(
     boot_info: &BootInfo,
     physical_memory_offset: u64,
-) -> Result<usize, &'static str> {
+) -> Result<(usize, Option<shivacore::madt::MadtSummary>), &'static str> {
     const RSDP_V1_LEN: usize = 20;
     const RSDP_V2_MIN_LEN: usize = 36;
     const MAX_RSDP_LEN: usize = 4096;
@@ -326,6 +358,7 @@ fn validate_acpi_boot_tables(
         return Err("root table contains no ACPI table entries");
     }
     let mut validated = 1usize; // RSDT/XSDT
+    let mut madt = None;
     for entry in root_table[SDT_HEADER_LEN..root_length].chunks_exact(entry_size) {
         let address = if entry_size == 8 {
             u64::from_le_bytes([
@@ -343,11 +376,16 @@ fn validate_acpi_boot_tables(
         if !acpi_checksum_valid(table) {
             return Err("referenced ACPI table checksum invalid");
         }
+        if table.len() >= 4 && table[0..4] == shivacore::madt::MADT_SIGNATURE {
+            let summary =
+                shivacore::madt::summarize(table).map_err(|_| "MADT entries are malformed")?;
+            madt = Some(summary);
+        }
         validated = validated
             .checked_add(1)
             .ok_or("ACPI table count overflow")?;
     }
-    Ok(validated)
+    Ok((validated, madt))
 }
 
 fn sdt_length(header: &[u8], maximum: usize) -> Result<usize, &'static str> {
@@ -410,6 +448,7 @@ fn panic(info: &PanicInfo) -> ! {
 fn map_lapic_mmio(
     mapper: &mut x86_64::structures::paging::mapper::OffsetPageTable,
     frame_allocator: &mut crate::memory::BootInfoFrameAllocator,
+    base: u64,
 ) -> x86_64::VirtAddr {
     use x86_64::structures::paging::{
         mapper::MapToError, page::Page, FrameAllocator, Mapper, PageTableFlags, PhysFrame, Size4KiB,
