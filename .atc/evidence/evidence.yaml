@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 092f0b9242ce3cb210a14c0cf92c2da571f4f0b9
+bound_commit: bcd045499aeb20b1e06bf26c06bf25ac1f303c45
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 092f0b9242ce3cb210a14c0cf92c2da571f4f0b9
-  timestamp: 2026-11-07T03:30:00+00:00
+  commit: bcd045499aeb20b1e06bf26c06bf25ac1f303c45
+  timestamp: 2026-11-07T03:55:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -95,8 +95,12 @@ verification:
         ABI-Syscall fuer das ACK (sechs Syscalls unveraendert).
         Nachgezogen: die Maskierung laeuft jetzt im echten Timer-Pfad —
         Sperre beim Eintritt, EOI und Freigabe im ACK. Bootlog beider Pfade:
-        "41 Ticks ueber IOAPIC, 41 Sperren, 41 Freigaben", 0 Panics, 608
-        Kernel-Tests. In frischem Clone fuer BIOS und UEFI
+        "41 Ticks ueber IOAPIC, 41 Sperren, 41 Freigaben", 0 Panics.
+        Dazu irq_routing.rs: Line/GSI/Vektor in einer Tabelle statt fester Zahl
+        im Bootpfad (24 Zeilen, routbar ab 0x20, automatisch ab 0x30, keine
+        geteilten Vektoren). Bootlog "IRQ-Routing: IRQ 0 -> GSI 2 -> Vektor
+        0x20, naechster freier Geraetevektor 0x30", BIOS und UEFI, 0 Panics,
+        616 Kernel-Tests. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
