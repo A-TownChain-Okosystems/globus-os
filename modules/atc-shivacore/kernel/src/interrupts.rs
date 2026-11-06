@@ -163,6 +163,9 @@ pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
 
 /// Merkt je Ring-3-Smoke-Prozess, ob sein Register-Muster schon einmal
 /// beobachtet wurde (Slot 0 = PID 1000, Slot 1 = PID 1001).
+/// Wie viele Syscalls der Gate insgesamt bedient hat.
+pub static SYSCALL_ENTRIES: AtomicU64 = AtomicU64::new(0);
+
 static PATTERN_ESTABLISHED: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(false)];
 
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
@@ -170,17 +173,19 @@ static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 /// Der einzige Userspace->Kernel-Pfad: Dispatcher + Capability-Tabelle.
 static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
 
-pub fn init_user_scheduler(first: &UserContext, second: &UserContext) {
+pub fn init_user_scheduler(first: &UserContext, second: &UserContext, third: &UserContext) {
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
+    scheduler.add_process(third.pid, third, 0);
     let _ = scheduler.schedule(None);
     *USER_SCHEDULER.lock() = Some(scheduler);
     *SYSCALL_GATE.lock() = Some(SyscallGate::new());
     serial_println!(
-        "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={}",
+        "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={} + PID={} (Syscall-Schleife)",
         first.pid.0,
-        second.pid.0
+        second.pid.0,
+        third.pid.0
     );
 }
 
@@ -673,6 +678,20 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
             return;
         }
     };
+
+    // Beweis, dass der Gate aus Ring 3 erreichbar ist. Nicht jede Zustellung
+    // loggen: die Serienausgabe ist der Flaschenhals (11,5 kB/s), ein
+    // Syscall-Dauerlauf wuerde den Bootlauf sonst ersticken.
+    let entries = SYSCALL_ENTRIES.fetch_add(1, Ordering::Relaxed) + 1;
+    if entries == 1 || entries % 100_000 == 0 {
+        serial_println!(
+            "ShivaCore: Syscall aus Ring 3: Nr={} PID={} Opcode={:#06X} Ergebnis={:?}",
+            entries,
+            pid.0,
+            request.syscall_id,
+            response.error
+        );
+    }
 
     frame.rax = response.value;
     frame.rbx = response.error.map(|e| e as u64).unwrap_or(0);
