@@ -12,6 +12,8 @@
 // ist noch nicht angebunden; ein QEMU-Bootlauf steht weiterhin aus.
 // ─────────────────────────────────────────────────────────────────────────
 
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+
 /// Standardbasis des Local APIC (Physical Address, ueblich per ACPI/MADT).
 pub const LAPIC_DEFAULT_BASE: u64 = 0xFEE0_0000;
 
@@ -21,6 +23,43 @@ pub const REG_ID: u32 = 0x020;
 pub const REG_TASK_PRIORITY: u32 = 0x080;
 /// End of Interrupt.
 pub const REG_EOI: u32 = 0x0B0;
+
+/// true = Interrupts werden ueber den IOAPIC zugestellt, die Bestaetigung
+/// laeuft dann ueber den Local APIC (EOI-Register 0x0B0) und nicht ueber die PIC.
+static DELIVERY_VIA_APIC: AtomicBool = AtomicBool::new(false);
+/// Basis des gemappten LAPIC-Fensters fuer die Bestaetigung im IRQ-Pfad.
+static EOI_BASE: AtomicU64 = AtomicU64::new(0);
+
+/// Stellt den Bestaetigungsweg auf den Local APIC um. Muss erfolgen, bevor der
+/// IOAPIC-Eintrag freigegeben wird, sonst bleibt der erste Interrupt haengen.
+pub fn switch_acknowledge_to_apic(mapped_base: u64) {
+    EOI_BASE.store(mapped_base, Ordering::Release);
+    DELIVERY_VIA_APIC.store(true, Ordering::Release);
+}
+
+/// Meldet, ob der Local-APIC-Weg aktiv ist.
+pub fn acknowledges_via_apic() -> bool {
+    DELIVERY_VIA_APIC.load(Ordering::Acquire)
+}
+
+/// Quittiert den laufenden Interrupt am Local APIC. Ohne umgestellten Weg und
+/// ohne gemappte Basis passiert nichts.
+pub fn acknowledge_interrupt() {
+    if !acknowledges_via_apic() {
+        return;
+    }
+    let base = EOI_BASE.load(Ordering::Acquire);
+    if base == 0 {
+        return;
+    }
+    // SAFETY: base stammt aus dem gemappten LAPIC-Fenster (map_mmio_page) und
+    // deckt das EOI-Register bei Offset 0x0B0 ab.
+    unsafe {
+        core::ptr::write_volatile((base + EOI_BASE_OFFSET) as *mut u32, 0);
+    }
+}
+
+const EOI_BASE_OFFSET: u64 = 0x0B0;
 /// Spurious Interrupt Vector Register.
 pub const REG_SPURIOUS: u32 = 0x0F0;
 /// Erstes In-Service-Register (8 Stueck, Schrittweite 0x10).
