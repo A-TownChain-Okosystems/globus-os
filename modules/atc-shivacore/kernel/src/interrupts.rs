@@ -7,7 +7,7 @@
 use crate::gdt;
 use crate::serial_println;
 use core::arch::global_asm;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use lazy_static::lazy_static;
 use libshivacore::CapabilityHandle;
 use pic8259::ChainedPics;
@@ -28,6 +28,10 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+
+/// Zaehlt jeden zugestellten Timer-Tick. Dient der Messung, ob ein
+/// Zustellweg Ticks verliert.
+pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
 
 /// Merkt je Ring-3-Smoke-Prozess, ob sein Register-Muster schon einmal
 /// beobachtet wurde (Slot 0 = PID 1000, Slot 1 = PID 1001).
@@ -322,6 +326,7 @@ shivacore_timer_trampoline:
 
 #[no_mangle]
 extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
+    TIMER_TICKS.fetch_add(1, Ordering::Relaxed);
     // Ein Hardware-Tick -> genau ein MonotonicTime-Schritt.
     // try_lock: faellt das Gate gerade in einem Syscall, wird der Tick
     // uebersprungen (monoton bleibt monoton) statt im IRQ zu blockieren.
