@@ -553,3 +553,54 @@ auf dem PIC-Weg.
 Bootläufen (rund 9 bis 19 pro Sekunde, obwohl 100 Hz programmiert waren) sind
 kein Tickverlust: der Handler schreibt bei jedem Tick zwei Serienzeilen, und die
 Serienausgabe ist der Flaschenhals, nicht die Zustellung.
+
+## Nachtrag 02:10 — Zeitquelle hing an einer Sperre
+
+Nach dem PIT-Fix lief der Tick mit 100 Hz. Beim Prüfen, ob `MonotonicTime`
+diesen Tick auch so verbraucht, kam ein eigener Fehler zum Vorschein.
+
+**Der Fehler.** Der Timer-IRQ schrieb die Zeit so fort:
+
+```rust
+if let Some(mut guard) = SYSCALL_GATE.try_lock() {
+    if let Some(gate) = guard.as_mut() { gate.on_tick(); }
+}
+```
+
+`try_lock` heißt: läuft gerade ein Syscall, wird der Tick übersprungen. Der
+Kommentar dazu lautete „monoton bleibt monoton" — das stimmt, aber die Zeit
+bleibt dann stehen. Jeder Syscall kostet bis zu einen Tick, unter Last also
+beliebig viel Zeit. Eine Uhr, die bei Betrieb langsamer wird, ist kaputt, nicht
+monoton.
+
+**Der Fix.** Die Zeitquelle ist jetzt ein eigener lock-freier Zähler in
+`syscall.rs`:
+
+```rust
+static MONOTONIC_TICKS: AtomicU64 = AtomicU64::new(0);
+pub fn advance_monotonic_tick() { MONOTONIC_TICKS.fetch_add(1, Ordering::Relaxed); }
+pub fn monotonic_ticks() -> u64 { MONOTONIC_TICKS.load(Ordering::Relaxed) }
+```
+
+Der IRQ ruft nur noch `advance_monotonic_tick()` auf, ohne Sperre und ohne
+Bedingung. `Syscall::MonotonicTime` liest denselben Zähler, `SyscallDispatcher`
+hat kein eigenes Feld mehr. Die beiden Tests, die vorher absolute Werte
+prüften, arbeiten jetzt mit Abständen — bei einer globalen Quelle laufen sie
+sonst gegeneinander.
+
+**Beleg.** Beide Zähler werden an derselben Tick-Flanke gelesen, damit der
+Vergleich nicht um einen Tick verschoben ist:
+
+```text
+ShivaCore: Zeitquelle: 40 Ticks zugestellt, 40 MonotonicTime-Schritte (Drift +0)
+ShivaCore: Tick-Rate (PIT soll 100 Hz): PIC=98 Hz, IOAPIC=99 Hz
+```
+
+Drei Läufe, jedes Mal 40/40 und Drift 0, Raten 98 bis 99 Hz.
+
+**Zwei Ehrlichkeiten zur Messung.** Erstens hatte die erste Fassung dieser
+Prüfung „Drift 0" gemeldet, weil `saturating_sub` den Wert −1 verschluckte; der
+Fehler lag in der Messung, nicht im Kernel, und ist mit der Flankenausrichtung
+behoben. Zweitens zeigte ein einzelner Bootlauf 138 Hz auf beiden Wegen: die
+TSC-Kalibrierung lag in diesem Lauf daneben. Die Rate wird deshalb immer über
+mehrere Läufe geprüft und nicht aus einem einzelnen Lauf behauptet.
