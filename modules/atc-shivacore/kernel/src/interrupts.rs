@@ -144,6 +144,16 @@ pub fn subscribe_kernel_line(line: u32) -> Result<u32, &'static str> {
 /// der Pfad wirklich ueber die Tabelle geht.
 pub static BRIDGED_DELIVERIES: AtomicU64 = AtomicU64::new(0);
 pub static DIRECT_FALLBACKS: AtomicU64 = AtomicU64::new(0);
+/// Eingabewarteschlange zwischen Handler und Konsument (dem Tick).
+///
+/// Der Handler legt nur ab, was er gelesen hat. Formatierung und Serienausgabe
+/// macht der Tick: Arbeit, die nicht in den Tastatur-Interrupt gehoert.
+pub static INPUT_QUEUE: Mutex<shivacore::input_queue::InputQueue> =
+    Mutex::new(shivacore::input_queue::InputQueue::new());
+
+/// Wie viele Ereignisse der Konsument insgesamt abgeholt hat.
+pub static INPUT_CONSUMED: AtomicU64 = AtomicU64::new(0);
+
 /// Zustellungen, die auf eine offene (nie quittierte) Zustellung trafen.
 pub static STUCK_DELIVERIES: AtomicU64 = AtomicU64::new(0);
 
@@ -468,6 +478,10 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     // bei belegtem Gate uebersprungen; damit verlor MonotonicTime genau die
     // Zeit, in der Syscalls liefen.
     shivacore::syscall::advance_monotonic_tick();
+    // Konsument der Eingabewarteschlange. Bewusst hier und nicht im
+    // Tastatur-Handler: der Handler soll nur ablegen. Acht Ereignisse pro Tick
+    // reichen fuer jede Tippgeschwindigkeit und begrenzen die Arbeit im IRQ.
+    drain_input_queue();
     let mut guard = USER_SCHEDULER.lock();
     let Some(scheduler) = guard.as_mut() else {
         acknowledge_timer_irq();
@@ -563,6 +577,58 @@ fn acknowledge_timer_irq() {
         unsafe {
             PICS.lock()
                 .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+        }
+    }
+}
+
+/// Holt abgelegte Tastenereignisse ab und protokolliert sie.
+///
+/// Bis zu acht pro Tick, damit ein Tippschwall den Tick nicht ueberzieht.
+fn drain_input_queue() {
+    let mut drained = 0;
+    while drained < 8 {
+        let event = INPUT_QUEUE.lock().pop();
+        let Some(event) = event else { break };
+        drained += 1;
+        INPUT_CONSUMED.fetch_add(1, Ordering::Relaxed);
+        let line = line_for_vector(KEYBOARD_VECTOR).map(|route| route.irq);
+        let dropped = INPUT_QUEUE.lock().dropped();
+        match event.character {
+            Some(character) if character.is_ascii_graphic() => {
+                serial_println!(
+                    "ShivaCore: Eingabe (Konsument): '{}' (Scancode {:#04X}) [Line {:?}, Bruecke {}, Rueckfall {}, Haenger {}, verworfen {}]",
+                    character as char,
+                    event.scancode,
+                    line,
+                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
+                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
+                    STUCK_DELIVERIES.load(Ordering::Relaxed),
+                    dropped
+                );
+            }
+            Some(character) => {
+                serial_println!(
+                    "ShivaCore: Eingabe (Konsument): <Zeichen {:#X}> (Scancode {:#04X}) [Line {:?}, Bruecke {}, Rueckfall {}, Haenger {}, verworfen {}]",
+                    character as u32,
+                    event.scancode,
+                    line,
+                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
+                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
+                    STUCK_DELIVERIES.load(Ordering::Relaxed),
+                    dropped
+                );
+            }
+            None => {
+                serial_println!(
+                    "ShivaCore: Eingabe (Konsument): <ohne Zeichen> (Scancode {:#04X}) [Line {:?}, Bruecke {}, Rueckfall {}, Haenger {}, verworfen {}]",
+                    event.scancode,
+                    line,
+                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
+                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
+                    STUCK_DELIVERIES.load(Ordering::Relaxed),
+                    dropped
+                );
+            }
         }
     }
 }
@@ -676,46 +742,14 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
     };
     // Die Line kommt aus der Routing-Tabelle: der Vektor allein sagt, wohin
     // zugestellt wurde, nicht wer der Absender ist.
-    let line = line_for_vector(KEYBOARD_VECTOR).map(|route| route.irq);
     if decoded.pressed {
-        match decoded.character {
-            Some(character) if character.is_ascii_graphic() => {
-                serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): '{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}, Haenger {}]",
-                    KEYBOARD_VECTOR,
-                    line,
-                    character as char,
-                    scancode,
-                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
-                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
-                    STUCK_DELIVERIES.load(Ordering::Relaxed)
-                );
-            }
-            Some(_) => {
-                serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): Leerzeichen (Scancode {:#04X})",
-                    KEYBOARD_VECTOR,
-                    line,
-                    scancode
-                );
-            }
-            None => {
-                serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): {:?} (Scancode {:#04X})",
-                    KEYBOARD_VECTOR,
-                    line,
-                    decoded.key,
-                    scancode
-                );
-            }
-        }
-    } else {
-        serial_println!(
-            "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): losgelassen (Scancode {:#04X})",
-            KEYBOARD_VECTOR,
-            line,
-            scancode
+        // Nur ablegen. Ob der Puffer voll ist, entscheidet der Puffer selbst
+        // und zaehlt es; hier wird nicht gewartet und nicht formatiert.
+        let event = shivacore::input_queue::InputEvent::new(
+            scancode,
+            decoded.character.map(|byte| byte as char),
         );
+        INPUT_QUEUE.lock().push(event);
     }
     if apic {
         // EOI zuerst, dann freigeben: der Vektor ist erst nach dem Quittieren
