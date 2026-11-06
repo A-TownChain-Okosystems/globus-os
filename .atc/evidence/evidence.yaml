@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: ace593218292d406c6b693abf1dcb1a99e4d299e
+bound_commit: 988cda18b92652c4ed791339260504b8fafe8eae
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: ace593218292d406c6b693abf1dcb1a99e4d299e
-  timestamp: 2026-11-07T09:25:00+00:00
+  commit: 988cda18b92652c4ed791339260504b8fafe8eae
+  timestamp: 2026-11-07T10:05:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -134,7 +134,14 @@ verification:
         Ereignisse pro Tick; bei vollem Puffer wird verworfen und gezaehlt.
         Beleg im Clone-Lauf: 0 Zeilen "Tastatur ueber Vektor" (Handler druckt
         nicht mehr), dafuer "Eingabe (Konsument): 'o' ... [Line Some(1),
-        Bruecke 1, Rueckfall 0, Haenger 0, verworfen 0]". 646 Tests. In frischem Clone fuer BIOS und UEFI
+        Bruecke 1, Rueckfall 0, Haenger 0, verworfen 0]". 646 Tests.
+        IPC-Syscalls sagen die Wahrheit: IpcReceive gab ok(arg1) zurueck
+        ("arg1 Bytes bereit"), obwohl es weder Nachricht noch Puffer und keine
+        Laufzeit-IpcSubsystem-Instanz gab. Die eingefrorene ABI traegt nur eine
+        Laenge, keinen Pufferzeiger. Jetzt: IpcSend mit payload_len > 0 ->
+        EndpointUnavailable (bestehender Code 5), IpcReceive ->
+        EndpointUnavailable mit value 0, Sendung ohne Nutzdaten bleibt ok,
+        Rechtepruefung bleibt zuerst. 4 Tests, 650 gesamt. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
