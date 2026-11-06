@@ -96,8 +96,14 @@ impl RemoteCapabilityTicket {
         payload.extend_from_slice(&self.resource.rights.bits().to_le_bytes());
         payload.extend_from_slice(&self.constraints.max_operations.to_le_bytes());
         // Deadline als ganzzahlige Mikrosekunden: f64 in einer Signaturbasis
-        // bringt NaN und -0.0 mit und ist nicht byte-stabil.
-        let deadline_us = (self.constraints.deadline_unix * 1_000_000.0).round() as i64;
+        // bringt NaN und -0.0 mit und ist nicht byte-stabil. Gerundet wird von
+        // Hand: `f64::round` setzt `std` voraus, dieser Crate ist `no_std`.
+        let scaled = self.constraints.deadline_unix * 1_000_000.0;
+        let deadline_us = if scaled < 0.0 {
+            (scaled - 0.5) as i64
+        } else {
+            (scaled + 0.5) as i64
+        };
         payload.extend_from_slice(&deadline_us.to_le_bytes());
         if let Some(eb) = self.constraints.energy_budget_uj {
             payload.extend_from_slice(&eb.to_le_bytes());
