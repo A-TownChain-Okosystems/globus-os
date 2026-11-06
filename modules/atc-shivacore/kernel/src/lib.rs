@@ -28,6 +28,7 @@ pub mod security;
 pub mod syscall;
 pub mod syscall_gate;
 pub mod system;
+pub mod irq;
 pub mod timer;
 pub mod user_sched;
 pub mod userspace;
