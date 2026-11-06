@@ -29,6 +29,38 @@ impl InputEvent {
             character,
         }
     }
+
+    /// Fasst das Ereignis in ein 64-Bit-Wort: Scancode in den unteren acht
+    /// Bits, das Zeichen (falls druckbar) in Bits 16..24.
+    ///
+    /// Die eingefrorene Syscall-ABI hat keinen Pufferzeiger, aber ein
+    /// Rueckgabewert von 64 Bit. Ein Tastenereignis passt genau hinein, ohne
+    /// dass ein Feld erfunden werden muss. 0 heisst "nichts anliegend", weil
+    /// Scancode 0 in Set 1 nicht vorkommt.
+    pub fn packed(&self) -> u64 {
+        let character = match self.character {
+            Some(c) => c as u32 as u64,
+            None => 0,
+        };
+        u64::from(self.scancode) | (character << 16)
+    }
+
+    /// Gegenrichtung zu `packed`, fuer Tests und den Userspace.
+    pub fn unpacked(word: u64) -> Option<Self> {
+        let scancode = (word & 0xFF) as u8;
+        if scancode == 0 {
+            return None;
+        }
+        let character = ((word >> 16) & 0xFF) as u8;
+        Some(Self {
+            scancode,
+            character: if character == 0 {
+                None
+            } else {
+                Some(character as char)
+            },
+        })
+    }
 }
 
 pub struct InputQueue {
@@ -97,6 +129,27 @@ impl InputQueue {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn packed_event_round_trips_through_a_single_word() {
+        let event = super::InputEvent::new(0x1E, Some('a'));
+        let word = event.packed();
+        assert_eq!(word & 0xFF, 0x1E);
+        assert_eq!((word >> 16) & 0xFF, u64::from(b'a'));
+        assert_eq!(super::InputEvent::unpacked(word), Some(event));
+    }
+
+    #[test]
+    fn zero_word_means_nothing_pending() {
+        assert_eq!(super::InputEvent::unpacked(0), None);
+    }
+
+    #[test]
+    fn named_keys_pack_without_a_character() {
+        let event = super::InputEvent::new(0x1C, None);
+        assert_eq!(event.packed(), 0x1C);
+        assert_eq!(super::InputEvent::unpacked(0x1C), Some(event));
+    }
+
     use super::*;
 
     #[test]
