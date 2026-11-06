@@ -236,6 +236,57 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     );
                 }
             }
+            // Zweite Line: die Tastatur bekommt den ersten freien Geraetevektor
+            // aus der Tabelle. Der IDT-Eintrag liegt auf KEYBOARD_VECTOR; laufen
+            // die beiden auseinander, meldet der Bootlauf es statt zu schweigen.
+            let keyboard_gsi = match madt {
+                Some(summary) => shivacore::madt::gsi_for_irq(&summary, 1),
+                None => 1,
+            };
+            match routing.assign_next_free(1, keyboard_gsi) {
+                Ok(route) => {
+                    serial_println!(
+                        "ShivaCore: IRQ-Routing: IRQ {} -> GSI {} -> Vektor {:#X}",
+                        route.irq,
+                        route.gsi,
+                        route.vector
+                    );
+                    if route.vector != crate::interrupts::KEYBOARD_VECTOR {
+                        serial_println!(
+                            "ShivaCore: WARNUNG -- Route {:#X} passt nicht zum IDT-Eintrag {:#X}",
+                            route.vector,
+                            crate::interrupts::KEYBOARD_VECTOR
+                        );
+                    }
+                    let mut keyboard_entry =
+                        shivacore::ioapic::RedirectionEntry::fixed(route.vector, lapic.id());
+                    keyboard_entry.masked = false;
+                    match ioapic.set_redirection_entry(route.gsi, keyboard_entry) {
+                        Ok(read_back) => {
+                            serial_println!(
+                                "ShivaCore: Tastatur auf IOAPIC: GSI {} -> Vektor {:#X}, maskiert={}",
+                                route.gsi,
+                                read_back.vector,
+                                read_back.masked
+                            );
+                        }
+                        Err(error) => {
+                            serial_println!(
+                                "ShivaCore: WARNUNG -- Tastatur-Eintrag fuer GSI {} fehlgeschlagen: {:?}",
+                                route.gsi,
+                                error
+                            );
+                        }
+                    }
+                }
+                Err(error) => {
+                    serial_println!(
+                        "ShivaCore: WARNUNG -- Tastatur-Route nicht eintragbar: {:?}",
+                        error
+                    );
+                }
+            }
+
             // Vor dem Umschalten messen, wie lange 20 zugestellte Ticks unter
             // der PIC dauern. Gleiche PIT-Frequenz (100 Hz), also ist der
             // TSC-Abstand direkt mit der IOAPIC-Phase vergleichbar.
