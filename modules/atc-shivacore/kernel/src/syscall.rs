@@ -8,6 +8,11 @@
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::ats1000::Pid;
+
+/// Kanal-ID des Kernel-Eingabekanals. Der Wert ist ein Default, kein
+/// ABI-Zusatz: `IpcReceive` mit dieser ID und READ-Recht liefert das naechste
+/// Tastenereignis im Rueckgabewert.
+pub const KERNEL_INPUT_CHANNEL: u64 = 1;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
@@ -97,6 +102,7 @@ impl SyscallDispatcher {
         pid: Pid,
         request: SyscallRequest,
         capabilities: &mut CapabilityTable,
+        input: &mut crate::input_queue::InputQueue,
     ) -> SyscallResponse {
         if !validate_abi_version(request.abi_version) {
             return SyscallResponse::err(AbiError::AbiVersionMismatch);
@@ -158,8 +164,23 @@ impl SyscallDispatcher {
                 // "arg1 Bytes liegen fuer dich bereit", obwohl weder ein Puffer
                 // noch eine Nachricht existiert — der Aufrufer haette in einen
                 // ungeschriebenen Puffer gelesen und den Inhalt fuer Eingabe
-                // gehalten. Ohne Pufferzeiger in der ABI gibt es nichts zu
-                // liefern, also sagt der Syscall das.
+                // gehalten. Ohne Pufferzeiger in der ABI gibt es keine Bytes.
+                //
+                // Ein Tastenereignis braucht aber keine Bytes: Scancode und
+                // Zeichen passen in das 64-Bit-Ergebnis (siehe
+                // `InputEvent::packed`). Fuer den Kernel-Eingabekanal liefert
+                // der Syscall deshalb das naechste Ereignis als Wert zurueck,
+                // 0 bedeutet "nichts anliegend". Fuer jeden anderen Kanal
+                // bleibt es beim ehrlichen "kein Transport".
+                if request.payload_len > 0 {
+                    return SyscallResponse::err(AbiError::EndpointUnavailable);
+                }
+                if request.arg0 == KERNEL_INPUT_CHANNEL {
+                    return SyscallResponse::ok(match input.pop() {
+                        Some(event) => event.packed(),
+                        None => 0,
+                    });
+                }
                 SyscallResponse::err(AbiError::EndpointUnavailable)
             }
             Syscall::CapabilityQuery => {
@@ -245,6 +266,7 @@ mod tests {
                 ..request(Syscall::Yield)
             },
             &mut CapabilityTable::new(),
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidSyscall));
     }
@@ -259,6 +281,7 @@ mod tests {
                 ..request(Syscall::Yield)
             },
             &mut CapabilityTable::new(),
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::AbiVersionMismatch));
     }
@@ -273,6 +296,7 @@ mod tests {
                 ..request(Syscall::Yield)
             },
             &mut CapabilityTable::new(),
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidPayload));
     }
@@ -280,6 +304,7 @@ mod tests {
     #[test]
     fn ipc_requires_matching_capability_and_right() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -290,6 +315,7 @@ mod tests {
                 ..request(Syscall::IpcSend)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, None);
         let denied = d.dispatch(
@@ -300,6 +326,7 @@ mod tests {
                 ..request(Syscall::IpcSend)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
     }
@@ -307,6 +334,7 @@ mod tests {
     #[test]
     fn ipc_receive_does_not_claim_bytes_it_cannot_deliver() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -318,6 +346,7 @@ mod tests {
                 ..request(Syscall::IpcReceive)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         // Kein Erfolg, kein Wert: ohne Pufferzeiger kann nichts angekommen sein.
         assert_eq!(r.error, Some(AbiError::EndpointUnavailable));
@@ -327,6 +356,7 @@ mod tests {
     #[test]
     fn ipc_send_with_payload_reports_the_missing_transport() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 8, Rights::WRITE);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -338,6 +368,7 @@ mod tests {
                 ..request(Syscall::IpcSend)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::EndpointUnavailable));
     }
@@ -345,6 +376,7 @@ mod tests {
     #[test]
     fn ipc_send_without_payload_is_a_truthful_signal() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 9, Rights::WRITE);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -355,6 +387,7 @@ mod tests {
                 ..request(Syscall::IpcSend)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, None, "ein Signal ohne Nutzdaten ist zulaessig");
     }
@@ -365,6 +398,7 @@ mod tests {
         // nicht, dass es keinen Transport gibt. Die Rechtepruefung bleibt
         // zuerst.
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 10, Rights::READ);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -376,25 +410,147 @@ mod tests {
                 ..request(Syscall::IpcReceive)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn kernel_input_channel_hands_out_the_next_event() {
+        use crate::input_queue::InputEvent;
+        let mut d = SyscallDispatcher::new();
+        let mut table = CapabilityTable::new();
+        let cap = table.create(
+            pid(1),
+            ResourceType::IpcChannel,
+            KERNEL_INPUT_CHANNEL,
+            Rights::READ,
+        );
+        let mut input = crate::input_queue::InputQueue::new();
+        input.push(InputEvent::new(0x1E, Some('a')));
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: KERNEL_INPUT_CHANNEL,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut table,
+            &mut input,
+        );
+        assert_eq!(r.error, None);
+        assert_eq!(
+            InputEvent::unpacked(r.value),
+            Some(InputEvent::new(0x1E, Some('a')))
+        );
+        assert_eq!(input.len(), 0, "das Ereignis ist verbraucht");
+    }
+
+    #[test]
+    fn empty_kernel_input_channel_reports_nothing() {
+        let mut d = SyscallDispatcher::new();
+        let mut table = CapabilityTable::new();
+        let cap = table.create(
+            pid(1),
+            ResourceType::IpcChannel,
+            KERNEL_INPUT_CHANNEL,
+            Rights::READ,
+        );
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: KERNEL_INPUT_CHANNEL,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut table,
+            &mut crate::input_queue::InputQueue::new(),
+        );
+        assert_eq!(r.error, None);
+        assert_eq!(
+            r.value, 0,
+            "0 heisst: nichts anliegend, nicht 'kein Transport'"
+        );
+    }
+
+    #[test]
+    fn receive_checks_the_right_before_handing_out_events() {
+        use crate::input_queue::InputEvent;
+        let mut d = SyscallDispatcher::new();
+        let mut table = CapabilityTable::new();
+        // Kanal 1 gibt es, aber der Prozess hat kein Recht darauf.
+        let cap = table.create(
+            pid(2),
+            ResourceType::IpcChannel,
+            KERNEL_INPUT_CHANNEL,
+            Rights::READ,
+        );
+        let mut input = crate::input_queue::InputQueue::new();
+        input.push(InputEvent::new(0x1E, Some('a')));
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: KERNEL_INPUT_CHANNEL,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut table,
+            &mut input,
+        );
+        assert_eq!(r.error, Some(AbiError::PermissionDenied));
+        assert_eq!(input.len(), 1, "ohne Recht bleibt das Ereignis liegen");
+    }
+
+    #[test]
+    fn foreign_channel_still_has_no_transport() {
+        let mut d = SyscallDispatcher::new();
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::READ);
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 42,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut table,
+            &mut crate::input_queue::InputQueue::new(),
+        );
+        assert_eq!(r.error, Some(AbiError::EndpointUnavailable));
     }
 
     #[test]
     fn monotonic_time_only_advances_on_tick() {
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
-        let a = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
-        let b = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
+        let mut input = crate::input_queue::InputQueue::new();
+        let a = d.dispatch(
+            pid(1),
+            request(Syscall::MonotonicTime),
+            &mut table,
+            &mut input,
+        );
+        let b = d.dispatch(
+            pid(1),
+            request(Syscall::MonotonicTime),
+            &mut table,
+            &mut input,
+        );
         assert_eq!(a.value, b.value, "Lesen darf die Zeit nicht veraendern");
         advance_monotonic_tick();
-        let c = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
+        let c = d.dispatch(
+            pid(1),
+            request(Syscall::MonotonicTime),
+            &mut table,
+            &mut input,
+        );
         assert_eq!(c.value, a.value + 1, "genau ein Tick pro Hardware-IRQ");
     }
 
     #[test]
     fn handle_close_revokes_the_capability() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
         assert_eq!(table.count(), 1);
         let mut d = SyscallDispatcher::new();
@@ -405,6 +561,7 @@ mod tests {
                 ..request(Syscall::HandleClose)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, None);
         assert_eq!(r.value, 1);
@@ -414,6 +571,7 @@ mod tests {
     #[test]
     fn handle_close_denies_foreign_owner() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
         let mut d = SyscallDispatcher::new();
         let denied = d.dispatch(
@@ -423,6 +581,7 @@ mod tests {
                 ..request(Syscall::HandleClose)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
         assert_eq!(table.count(), 1, "fremdes Handle bleibt bestehen");
@@ -431,6 +590,7 @@ mod tests {
     #[test]
     fn handle_close_rejects_unknown_handle() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
             pid(1),
@@ -439,6 +599,7 @@ mod tests {
                 ..request(Syscall::HandleClose)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidHandle));
     }
@@ -446,6 +607,7 @@ mod tests {
     #[test]
     fn capability_query_returns_rights_mask() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(
             pid(1),
             ResourceType::IpcChannel,
@@ -460,6 +622,7 @@ mod tests {
                 ..request(Syscall::CapabilityQuery)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, None);
         assert_eq!(r.value, (Rights::READ | Rights::INSPECT).bits() as u64);
@@ -468,6 +631,7 @@ mod tests {
     #[test]
     fn capability_query_requires_inspect_right() {
         let mut table = CapabilityTable::new();
+        let mut input = crate::input_queue::InputQueue::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
@@ -477,6 +641,7 @@ mod tests {
                 ..request(Syscall::CapabilityQuery)
             },
             &mut table,
+            &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::PermissionDenied));
     }
