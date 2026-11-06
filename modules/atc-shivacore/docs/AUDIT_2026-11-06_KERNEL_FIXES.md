@@ -284,3 +284,54 @@ Registerlogik (`LocalApic` gegen Fake) und Hardware (`MappedRegisters` in QEMU).
 die Frage, welcher IRQ welchen Vektor bekommt. Der APIC ist bedienbar, aber noch
 an kein Gerät gebunden. ACPI wird geprüft, nicht ausgewertet; das UEFI-Image
 wurde nie gestartet.
+
+## Nachtrag 22:30 — ACPI-Auswertung (MADT) und UEFI-Pfad
+
+**MADT.** Neues Modul `kernel/src/madt.rs`, reiner Parser über einen Byte-Slice,
+also ohne Hardware prüfbar:
+
+- Kopf: 36 Byte SDT plus LAPIC-Basis (Offset 36) und Flags.
+- Einträge ab Offset 44, jeweils Typ und Länge. Länge unter 2 Byte →
+  `BadEntryLength`, Eintrag über das Tabellenende → `EntryOverrun`. Beide Pfade
+  sind mit Tests abgedeckt, ebenso eine falsche Signatur.
+- Ausgewertet: Local APIC (Typ 0, inklusive Nutzbar-Flag), IOAPIC (Typ 1, mit
+  Adresse und GSI-Basis), Interrupt-Source-Override (Typ 2), Local-APIC-Override
+  (Typ 5), x2APIC (Typ 9, nur gezählt). Unbekannte Typen werden gezählt, nicht
+  verworfen.
+- `gsi_for_irq()` bildet einen ISA-IRQ auf die vorgeschriebene GSI ab.
+- 10 Tests.
+
+Im Bootpfad ersetzt die gemeldete Adresse die Konstante: `map_lapic_mmio()`
+bekommt die Basis aus der MADT, `LAPIC_DEFAULT_BASE` bleibt nur Rückfallebene.
+
+Seriell belegt (QEMU, BIOS):
+
+```text
+ShivaCore: ACPI RSDP/root/table checksums validated; tables=5
+ShivaCore: MADT local_apic=0xFEE00000 ioapic=0xFEC00000 gsi_base=0 cpus=1/1 overrides=5 x2apic=0 unknown=1
+```
+
+Damit sind IOAPIC-Adresse und GSI-Basis bekannt, und die 5 ISA-Overrides, die
+QEMU deklariert, sind gezählt. Der eine unbekannte Eintrag ist ehrlich als
+unbekannt ausgewiesen (QEMU liefert NMI-Einträge, die dieser Parser nicht
+auswertet).
+
+**UEFI.** Bisher war nur das BIOS-Image gestartet worden. Mit OVMF
+(`ovmf`-Paket, `/usr/share/OVMF/OVMF_CODE.fd`) bootet auch
+`shivacore-uefi.img`:
+
+```text
+Kernel-Einstiegspunkt erreicht     1
+CPU HAL compatibility check OK     1
+ACPI RSDP                          1
+LAPIC aktiv                        1
+KernelState::boot() -> Done        1
+USER-001 entering                  1
+```
+
+347 Kontextwechsel in 40 s, kein Panic. Das Skript kennt dafür jetzt
+`bash scripts/qemu_boot.sh 40 /tmp/uefi.log uefi`.
+
+**Weiterhin offen:** Der IOAPIC wird gelesen, aber nicht programmiert. Es gibt
+damit noch keine Zuordnung von Geräte-IRQ zu Vektor, und kein Gerät ist
+angebunden. Die MADT-Auswertung ist die Vorarbeit dafür, nicht die Umsetzung.
