@@ -79,13 +79,28 @@ Register mehr, sondern liest den Block in dieser Reihenfolge:
 Der Ring-3-Prozess legt den Block in seine Datenseite (0x0190_0000), nicht auf
 den Stack.
 
-### Offener Befund: ein Block auf dem Stack faultet
+### Berichtigt: der Fehler lag im Payload-Bau, nicht am Stack
 
-Die erste Fassung baute den Block auf dem Stack. Ergebnis: 5746 Seitenfehler in
-einem 30-Sekunden-Lauf, jeder bei RIP 0x1800020 (der Anweisung
-`mov [rsp+0x10], rdi`) mit CR2 0x4810247c. Die Messung im Timer-Tick zeigt
-gleichzeitig einen korrekten RSP (0x7FDFFC0) und einen korrekten RAX/RBX/R12 —
-die Zuordnung von Frame und Kontext ist also nicht offensichtlich falsch, und
-die Fehleradresse passt nicht zu [rsp+0x10]. Mit der Datenseite tritt kein
-einziger Seitenfehler auf. Der Stack-Pfad bleibt damit unerklaert und offen;
-solange er offen ist, taugt ein Ring-3-Programm mit Stack nicht als Beweis.
+Die erste Fassung baute den Block auf dem Stack und faultete mit 5746
+Seitenfehlern, scheinbar bei `mov [rsp+0x10], rdi` (RIP 0x1800020, CR2
+0x4810247c). Zwei Messungen haben den Verdacht gegen den Stack widerlegt:
+
+1. `Mapper::translate_addr` meldet die Stackseite des Prozesses als abgebildet
+   (0x07FDFFF0 -> Some(331760)).
+2. Ein absoluter Store aus Ring 3 auf 0x07FDFFC0 laeuft ohne Seitenfehler,
+   sobald der Payload korrekt gebaut ist.
+
+Die Ursache war ein selbst gezaehlter Offset: `mov rdi, <capability>` besteht aus
+zwei Opcode-Bytes plus acht Bytes Wert, also zehn Bytes, und der Wert beginnt
+bei Offset 2 — der Patch schrieb aber um ein Byte versetzt in die Anweisung.
+Der Prozess sprang damit in eine halbe Anweisung; die gemeldete Fehleradresse
+0x4810247c war der zufaellig entstandene Versatz, nicht der Stack.
+
+Damit das nicht wieder passiert, wird der Payload jetzt aus Bausteinen
+zusammengesetzt: `store_qword_at`, `mov_rdi`, und der Capability-Slot sowie das
+Ruecksprungziel werden aus der aktuellen Laenge berechnet. Es gibt keinen festen
+Offset mehr, der verrutschen kann.
+
+Der Prozess schreibt zusaetzlich einmal auf 0x07FDFFC0 in seiner Stackseite.
+Damit ist im Bootlauf belegt, dass Ring 3 seinen Stack benutzen darf, und nicht
+nur, dass eine Seite existiert.
