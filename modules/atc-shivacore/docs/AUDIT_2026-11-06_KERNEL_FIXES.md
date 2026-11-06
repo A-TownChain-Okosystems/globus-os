@@ -129,3 +129,35 @@ Längen, Deadline-Kodierung). Vorher ausgestellte Tickets sind nicht mehr
 verifizierbar und müssen neu ausgestellt werden. Ein Versionsfeld im Ticket
 selbst wäre der nächste Schritt, damit solche Brüche künftig erkennbar sind statt
 still zu scheitern.
+
+## Nachtrag 20:05 — SC-006 REQ-02/03: Maskierung bis ACK
+
+Befund: Zu den IRQ-Caps aus dem vorigen Nachtrag gab es keine Zustellungsschicht.
+`irq.rs` existierte nicht, `apic.rs` gibt es im kompilierten Satz nicht (auch nicht
+im Legacy-Satz), `interrupts.rs` schreibt nur `notify_end_of_interrupt`. Damit war
+weder "kein Re-Trigger vor ACK" noch "line bleibt maskiert" irgendwo festgehalten.
+
+Umgesetzt: `kernel/src/irq.rs` mit `IrqTable`.
+
+- `subscribe(cap)` verlangt `ResourceType::Irq` und `Rights::SUBSCRIBE`, trägt den
+  Cap-Eigentümer als Subskribenten ein und lehnt einen zweiten Subskribenten ab
+  (genau ein Empfänger je Line, REQ-SC006-01).
+- `deliver(line)` liefert den Empfänger nur beim Übergang ruhig → offen. Weitere
+  Trigger während einer offenen Zustellung werden gezählt, aber nicht zugestellt
+  (REQ-SC006-02, Trampolin-in-Notification ohne Re-Trigger).
+- `ack(cap)` verlangt `Rights::ACK`, den passenden Eigentümer und eine offene
+  Zustellung; erst dann wird die Line wieder freigegeben (REQ-SC006-03).
+- `IrqLine::is_masked()` ist die Abfrage, die der IRQ-Eintritt stellen muss,
+  bevor er erneut zustellt.
+
+Verifikation: 9 neue Tests in `irq::sc006_irq_delivery` (falscher Captyp,
+Eigentümerübernahme, zweiter Subskribent, kein Re-Trigger inkl. Zählung der
+Koaleszierung, ACK hebt Maske auf, ACK ohne Recht, ACK durch Fremden, doppeltes
+ACK, unbekannte Line). `cargo test -p shivacore --lib` → **574 passed**,
+Service Space 548 passed, Bare-Metal-ELF baut.
+
+**Grenze, ausdrücklich:** Das ist die Zustands- und Rechteschicht, nicht die
+Hardware-Maske. Die LAPIC-Anbindung (Maske setzen/löschen, EOI) fehlt im
+kompilierten Satz weiterhin; `IrqTable` liefert nur den Zustand, den der
+IRQ-Eintritt abfragen muss. Ohne diese Anbindung ist REQ-SC006-03 auf
+Hardware-Ebene nicht erfüllt, und ein Boot-Test in QEMU steht weiterhin aus.
