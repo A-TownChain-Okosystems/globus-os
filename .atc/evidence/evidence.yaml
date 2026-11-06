@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 9e0e62944ef4f062c805e940443d3d668fcf279f
+bound_commit: c1bf72b316647862261825cdd2cb03fcf099e80d
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 9e0e62944ef4f062c805e940443d3d668fcf279f
-  timestamp: 2026-11-07T05:45:00+00:00
+  commit: c1bf72b316647862261825cdd2cb03fcf099e80d
+  timestamp: 2026-11-07T06:40:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -112,7 +112,13 @@ verification:
         Enter, unter UEFI zusaetzlich CapsLock mit 'B' gross. 626 Tests.
         Routing-Tabelle lebt jetzt im Kernel (DEVICE_ROUTES) statt als lokale
         Variable in main: der Handler loest die Line per route_for_vector auf.
-        Beleg: "Tastatur ueber Vektor 0x30 (Line Some(1)): 'm'" im Clone-Lauf. In frischem Clone fuer BIOS und UEFI
+        Beleg: "Tastatur ueber Vektor 0x30 (Line Some(1)): 'm'" im Clone-Lauf.
+        IRQ-Bruecke im echten Pfad: Line 1 wird mit einer Kernel-Capability
+        (ResourceType::Irq, SUBSCRIBE|ACK, PID 0) abonniert, bevor der
+        IOAPIC-Eintrag freigegeben wird; Eintritt sperrt ueber die Tabelle,
+        ACK nach EOI gibt frei. Beleg: "IRQ-Bruecke: Line 1 abonniert" und
+        "[Bruecke 2, Rueckfall 0]" je Taste im Clone-Lauf — zwei Zustellungen
+        pro Taste, kein Rueckfall auf direktes Sperren. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
