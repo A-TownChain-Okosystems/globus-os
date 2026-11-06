@@ -1,18 +1,25 @@
-schema_version: 1.0.0
+# ATC Evidence SSOT — SCR-0080 (Owner-P0-01) — maschinenlesbar und EHRLICH
+# Statusleiter (verbindlich): SPECIFIED -> IMPLEMENTED -> TESTED -> VERIFIED -> AUDITED -> RELEASED
+# Regel: Kein Status-Claim ohne Evidence-Bundle (ATC-STD-REPO-AUDIT-001 / ATC-STD-MILESTONE-001).
+# CLAIMED != PASS · DOCUMENTED != IMPLEMENTED · IMPLEMENTED != VERIFIED
+schema_version: "1.0.0"
 repository: globus-os
-generated: '2026-11-06'
-generated_by: Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen
+generated: "2026-11-06"
+generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
 bound_commit: 0792c15560dfb89b170155e431c2b21fa38ce0cc
-maturity_class: C
+maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
-  status: partial
-  summary: UEFI→ShivaCore→globus-init→Userspace; M5 = CLAIMED, Evidence incomplete
-    (ehrlich)
+  status: partial        # substantial|partial|skeleton|docs_only
+  summary: "UEFI→ShivaCore→globus-init→Userspace; M5 = CLAIMED, Evidence incomplete (ehrlich)"
 tests:
-  status: pass_with_evidence
-  evidence: lokale Verifikation auf bound_commit (siehe verification); CI-Lauf weiterhin
-    blockiert
+  status: pass_with_evidence       # pass_with_evidence|not_run|not_applicable
+  evidence: "lokale Verifikation auf bound_commit (siehe verification); CI-Lauf weiterhin blockiert"
+  # WICHTIG: Die fruehere Fassung band einen CI-PASS an 7f50c9cb (Oktober). Dieser
+  # Claim war zum Zeitpunkt dieser Aenderung nicht mehr gueltig: main ist seither
+  # weitergelaufen und kein CI-Lauf kann derzeit starten (startup_failure, siehe
+  # ci_blocker). PASS wird hier nur fuer den Stand behauptet, der nachweislich
+  # getestet wurde.
 security:
   status: not_audited
 conformance:
@@ -20,122 +27,148 @@ conformance:
 release:
   status: development
 milestone_claims:
-  rule: M-Claims nur mit Evidence-Bundle (ATC-STD-MILESTONE-001)
+  rule: "M-Claims nur mit Evidence-Bundle (ATC-STD-MILESTONE-001)"
   latest_verified: null
-canonical_role:
+canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
   capability: os
   canonical: true
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 480e4f7634baadd81da83e0ba4a8660dd0cc85a5
-  timestamp: 2026-11-07 10:20:00+00:00
+  commit: 0792c15560dfb89b170155e431c2b21fa38ce0cc
+  timestamp: 2026-11-07T10:20:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
-  method: frischer Clone von bound_commit, cargo test + bare-metal build
-  toolchain: rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)
+  method: "frischer Clone von bound_commit, cargo test + bare-metal build"
+  toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
   results:
-  - suite: shivacore (kernel, --lib)
-    passed: 600
-    failed: 0
-  - suite: shivacore-service-space (--lib)
-    passed: 552
-    failed: 0
-  - suite: cargo check -p shivacore -p shivacore-service-space (no_std-Lib-Profil)
-    result: PASS
-  - suite: cargo fmt --all -- --check
-    result: PASS
-  - suite: cargo clippy -p shivacore -p shivacore-service-space --all-targets -D warnings
-    result: PASS
-  - suite: QEMU-Bootlauf (BIOS-Image, QEMU 7.2.22, headless)
-    result: PASS
-    detail: 'Kernel bootet bis in den Scheduler: Einstiegspunkt, CPU-HAL, ACPI (5
-      Tabellen), GDT/IDT/PIC, Paging+Heap, Box/Vec, KernelState::boot(), USER-001
-      Ring-3-Einstieg, danach 332 Kontextwechsel zwischen PID 1000 und 1001 in 35
-      s ohne Panic. Framebuffer belegt per screendump. LAPIC an MMIO angebunden: aktiv
-      (id=0, spurious=0x1FF), Maskentest Vektor 0x40 maskiert=true freigegeben=true.
-      MADT ausgewertet: local_apic=0xFEE00000, ioapic=0xFEC00000, gsi_base=0, cpus=1/1,
-      5 ISA-Overrides. UEFI-Image bootet unter OVMF mit denselben Meilensteinen (347
-      Kontextwechsel in 40 s). IOAPIC programmiert: id=0, version=0x170020, 24 Eintraege;
-      IRQ 0 ueber MADT-Override auf GSI 2 abgebildet und Vektor 0x50 geschrieben,
-      Ruecklesung bestaetigt. Eintrag bleibt maskiert (Zustellung noch PIC). Stabilitaet:
-      5 Laeufe aus frischem Clone (3 BIOS, 2 UEFI) ohne Panic, 96/97 bzw. 70 Kontextwechsel.
-      Der zuvor intermittierende SCHED-001-Panic (2 von 6 Laeufen) ist behoben: Aufwaermphase
-      vor dem ersten Payload-Tick. Zustellung laeuft jetzt ueber den IOAPIC statt
-      ueber die PIC: PIC auf 0xFF/0xFF maskiert, EOI ueber Local APIC (0x0B0), GSI
-      2 freigegeben auf Vektor 0x20. Beleg: 214 Kontextwechsel pro BIOS-Lauf, 158-196
-      pro UEFI-Lauf, 0 Panics; ohne korrektes APIC-EOI waere nach dem ersten Tick
-      Schluss. Tick-Rate gemessen (TSC gegen PIT kalibriert, PIT auf 100 Hz, Modus
-      2): PIC 98-99 Hz, IOAPIC 98 Hz, Verhaeltnis 1.0x. Der frueher gemessene Faktor
-      2 war die Rechteckwelle aus PIT-Modus 3 (zwei Flanken pro Periode, kantengetriggert
-      doppelt gezaehlt); mit Modus 2 liefern beide Wege im Rahmen der Messgenauigkeit
-      den Sollwert. Zeitquelle: MonotonicTime haengt nicht mehr am Syscall-Gate (try_lock
-      verschluckte Ticks, Zeit blieb unter Syscall-Last stehen). Jetzt lock-freier
-      AtomicU64; Messung an gemeinsamer Tick-Flanke zeigt 40 zugestellte Ticks und
-      40 MonotonicTime-Schritte, Drift 0, in BIOS und UEFI. SC-006 REQ-02/03: irq_bridge
-      verbindet IrqTable und Maskenregister — maskieren vor der Zustellung an den
-      Subskribenten, freigeben erst nach ACK. Sieben neue Tests (607 gesamt), Kernel
-      bootet in BIOS und UEFI unveraendert. Noch nicht im echten Interrupt-Pfad verdrahtet,
-      kein ABI-Syscall fuer das ACK (sechs Syscalls unveraendert). Nachgezogen: die
-      Maskierung laeuft jetzt im echten Timer-Pfad — Sperre beim Eintritt, EOI und
-      Freigabe im ACK. Bootlog beider Pfade: "41 Ticks ueber IOAPIC, 41 Sperren, 41
-      Freigaben", 0 Panics. Dazu irq_routing.rs: Line/GSI/Vektor in einer Tabelle
-      statt fester Zahl im Bootpfad (24 Zeilen, routbar ab 0x20, automatisch ab 0x30,
-      keine geteilten Vektoren). Bootlog "IRQ-Routing: IRQ 0 -> GSI 2 -> Vektor 0x20,
-      naechster freier Geraetevektor 0x30", BIOS und UEFI, 0 Panics, 616 Kernel-Tests.
-      Zweite Line: PS/2-Tastatur am IOAPIC statt an der PIC, Route aus der Tabelle
-      (IRQ 1 -> GSI 1 -> Vektor 0x30), gleicher Ablauf wie der Timer (sperren, lesen,
-      EOI, freigeben). Beleg: "Tastatur ueber Vektor 0x30: Scancode 0x1E/0x9E/0x1F/0x9F/0x20/0xA0"
-      fuer a, s, d — Druecken und Loslassen — im Clone-Lauf, BIOS und UEFI, 0 Panics.
-      Dazu keymap.rs: Set-1-Scancodes werden zu Zeichen (Shift, Caps Lock, Praefix
-      0xE0, Loslassen ohne Zeichen), 10 Tests inklusive aller 256 Codes ohne Panic.
-      Beleg im Clone-Lauf: ''a'', ShiftLeft, ''A'', ''1'', ''!'', Enter, unter UEFI
-      zusaetzlich CapsLock mit ''B'' gross. 626 Tests. Routing-Tabelle lebt jetzt
-      im Kernel (DEVICE_ROUTES) statt als lokale Variable in main: der Handler loest
-      die Line per route_for_vector auf. Beleg: "Tastatur ueber Vektor 0x30 (Line
-      Some(1)): ''m''" im Clone-Lauf. IRQ-Bruecke im echten Pfad: Line 1 wird mit
-      einer Kernel-Capability (ResourceType::Irq, SUBSCRIBE|ACK, PID 0) abonniert,
-      bevor der IOAPIC-Eintrag freigegeben wird; Eintritt sperrt ueber die Tabelle,
-      ACK nach EOI gibt frei. Beleg: "IRQ-Bruecke: Line 1 abonniert" und "[Bruecke
-      2, Rueckfall 0]" je Taste im Clone-Lauf — zwei Zustellungen pro Taste, kein
-      Rueckfall auf direktes Sperren. KernelCaps (kernel_caps.rs, Lib): die Abo-Capability
-      lebt in ihrer CapabilityTable statt als heimatlose Kopie, damit sie widerrufbar
-      ist; 6 Tests inkl. Widerruf entfernt die Capability. Beleg im Clone-Lauf: "[Bruecke
-      2, Rueckfall 0, Haenger 0]" je Taste, 632 Tests. Entwurf Tastenkanal (key_events.rs,
-      Lib, NICHT verdrahtet): der Kernel besitzt den IPC-Channel und sendet, der Prozess
-      haelt nur READ; bei vollem Puffer ChannelFull statt Warten im Handler. 8 Tests
-      belegen Empfang, FIFO, NoWriteCapability (kein Selbsteinspielsen), NoReadCapability
-      fuer Fremde und ChannelClosed. Keine neue Syscall-Nummer: IpcReceive traegt
-      die Nachricht. 640 Tests. Eingabewarteschlange (input_queue.rs, Lib, 6 Tests):
-      der Tastatur-Handler legt Scancode und Zeichen nur ab, der Tick leert hoechstens
-      acht Ereignisse pro Tick; bei vollem Puffer wird verworfen und gezaehlt. Beleg
-      im Clone-Lauf: 0 Zeilen "Tastatur ueber Vektor" (Handler druckt nicht mehr),
-      dafuer "Eingabe (Konsument): ''o'' ... [Line Some(1), Bruecke 1, Rueckfall 0,
-      Haenger 0, verworfen 0]". 646 Tests. IPC-Syscalls sagen die Wahrheit: IpcReceive
-      gab ok(arg1) zurueck ("arg1 Bytes bereit"), obwohl es weder Nachricht noch Puffer
-      und keine Laufzeit-IpcSubsystem-Instanz gab. Die eingefrorene ABI traegt nur
-      eine Laenge, keinen Pufferzeiger. Jetzt: IpcSend mit payload_len > 0 -> EndpointUnavailable
-      (bestehender Code 5), IpcReceive -> EndpointUnavailable mit value 0, Sendung
-      ohne Nutzdaten bleibt ok, Rechtepruefung bleibt zuerst. 4 Tests, 650 gesamt.
-      Erster echter Syscall aus CPL3: dritter Ring-3-Prozess PID 1002 fuehrt int 0x80
-      (Yield, ABI 1.0) aus. Dafuer musste der Scheduler repariert werden: pick_next
-      nahm den ersten lauffaehigen Prozess, der nicht der laufende war — bei drei
-      Prozessen wurde der dritte nie ausgewaehlt (Diagnoselauf: kein Warm-up-Tick
-      fuer PID 1002). Jetzt beginnt die Suche hinter dem laufenden Prozess und laeuft
-      im Kreis; Prioritaet bleibt erhalten. Log (BIOS+UEFI): "Syscall aus Ring 3:
-      Nr=1 PID=1002 Opcode=0x0001 Ergebnis=None". 2 Regressionstests, 652 gesamt.
-      In frischem Clone fuer BIOS und UEFI identisch, 0 Panics.'
-  - suite: shivacore (bare metal, --features x86-boot)
-    artifact: ELF x86_64-unknown-none, 145080 Bytes
-    symbols:
-    - shivacore_syscall_gate
-    - syscall_gate_rust
+    - suite: shivacore (kernel, --lib)
+      passed: 659
+      failed: 0
+    - suite: shivacore-service-space (--lib)
+      passed: 552
+      failed: 0
+    - suite: "cargo check -p shivacore -p shivacore-service-space (no_std-Lib-Profil)"
+      result: PASS
+    - suite: "cargo fmt --all -- --check"
+      result: PASS
+    - suite: "cargo clippy -p shivacore -p shivacore-service-space --all-targets -D warnings"
+      result: PASS
+    - suite: "QEMU-Bootlauf (BIOS-Image, QEMU 7.2.22, headless)"
+      result: PASS
+      detail: >-
+        Kernel bootet bis in den Scheduler: Einstiegspunkt, CPU-HAL, ACPI
+        (5 Tabellen), GDT/IDT/PIC, Paging+Heap, Box/Vec, KernelState::boot(),
+        USER-001 Ring-3-Einstieg, danach 332 Kontextwechsel zwischen PID 1000
+        und 1001 in 35 s ohne Panic. Framebuffer belegt per screendump.
+        LAPIC an MMIO angebunden: aktiv (id=0, spurious=0x1FF), Maskentest
+        Vektor 0x40 maskiert=true freigegeben=true.
+        MADT ausgewertet: local_apic=0xFEE00000, ioapic=0xFEC00000, gsi_base=0,
+        cpus=1/1, 5 ISA-Overrides. UEFI-Image bootet unter OVMF mit denselben
+        Meilensteinen (347 Kontextwechsel in 40 s).
+        IOAPIC programmiert: id=0, version=0x170020, 24 Eintraege; IRQ 0 ueber
+        MADT-Override auf GSI 2 abgebildet und Vektor 0x50 geschrieben,
+        Ruecklesung bestaetigt. Eintrag bleibt maskiert (Zustellung noch PIC).
+        Stabilitaet: 5 Laeufe aus frischem Clone (3 BIOS, 2 UEFI) ohne Panic,
+        96/97 bzw. 70 Kontextwechsel. Der zuvor intermittierende SCHED-001-Panic
+        (2 von 6 Laeufen) ist behoben: Aufwaermphase vor dem ersten Payload-Tick.
+        Zustellung laeuft jetzt ueber den IOAPIC statt ueber die PIC: PIC auf
+        0xFF/0xFF maskiert, EOI ueber Local APIC (0x0B0), GSI 2 freigegeben auf
+        Vektor 0x20. Beleg: 214 Kontextwechsel pro BIOS-Lauf, 158-196 pro
+        UEFI-Lauf, 0 Panics; ohne korrektes APIC-EOI waere nach dem ersten Tick
+        Schluss.
+        Tick-Rate gemessen (TSC gegen PIT kalibriert, PIT auf 100 Hz, Modus 2):
+        PIC 98-99 Hz, IOAPIC 98 Hz, Verhaeltnis 1.0x. Der frueher gemessene
+        Faktor 2 war die Rechteckwelle aus PIT-Modus 3 (zwei Flanken pro Periode,
+        kantengetriggert doppelt gezaehlt); mit Modus 2 liefern beide Wege im
+        Rahmen der Messgenauigkeit den Sollwert.
+        Zeitquelle: MonotonicTime haengt nicht mehr am Syscall-Gate (try_lock
+        verschluckte Ticks, Zeit blieb unter Syscall-Last stehen). Jetzt
+        lock-freier AtomicU64; Messung an gemeinsamer Tick-Flanke zeigt 40
+        zugestellte Ticks und 40 MonotonicTime-Schritte, Drift 0, in BIOS und
+        UEFI.
+        SC-006 REQ-02/03: irq_bridge verbindet IrqTable und Maskenregister —
+        maskieren vor der Zustellung an den Subskribenten, freigeben erst nach
+        ACK. Sieben neue Tests (607 gesamt), Kernel bootet in BIOS und UEFI
+        unveraendert. Noch nicht im echten Interrupt-Pfad verdrahtet, kein
+        ABI-Syscall fuer das ACK (sechs Syscalls unveraendert).
+        Nachgezogen: die Maskierung laeuft jetzt im echten Timer-Pfad —
+        Sperre beim Eintritt, EOI und Freigabe im ACK. Bootlog beider Pfade:
+        "41 Ticks ueber IOAPIC, 41 Sperren, 41 Freigaben", 0 Panics.
+        Dazu irq_routing.rs: Line/GSI/Vektor in einer Tabelle statt fester Zahl
+        im Bootpfad (24 Zeilen, routbar ab 0x20, automatisch ab 0x30, keine
+        geteilten Vektoren). Bootlog "IRQ-Routing: IRQ 0 -> GSI 2 -> Vektor
+        0x20, naechster freier Geraetevektor 0x30", BIOS und UEFI, 0 Panics,
+        616 Kernel-Tests.
+        Zweite Line: PS/2-Tastatur am IOAPIC statt an der PIC, Route aus der
+        Tabelle (IRQ 1 -> GSI 1 -> Vektor 0x30), gleicher Ablauf wie der Timer
+        (sperren, lesen, EOI, freigeben). Beleg: "Tastatur ueber Vektor 0x30:
+        Scancode 0x1E/0x9E/0x1F/0x9F/0x20/0xA0" fuer a, s, d — Druecken und
+        Loslassen — im Clone-Lauf, BIOS und UEFI, 0 Panics.
+        Dazu keymap.rs: Set-1-Scancodes werden zu Zeichen (Shift, Caps Lock,
+        Praefix 0xE0, Loslassen ohne Zeichen), 10 Tests inklusive aller 256
+        Codes ohne Panic. Beleg im Clone-Lauf: 'a', ShiftLeft, 'A', '1', '!',
+        Enter, unter UEFI zusaetzlich CapsLock mit 'B' gross. 626 Tests.
+        Routing-Tabelle lebt jetzt im Kernel (DEVICE_ROUTES) statt als lokale
+        Variable in main: der Handler loest die Line per route_for_vector auf.
+        Beleg: "Tastatur ueber Vektor 0x30 (Line Some(1)): 'm'" im Clone-Lauf.
+        IRQ-Bruecke im echten Pfad: Line 1 wird mit einer Kernel-Capability
+        (ResourceType::Irq, SUBSCRIBE|ACK, PID 0) abonniert, bevor der
+        IOAPIC-Eintrag freigegeben wird; Eintritt sperrt ueber die Tabelle,
+        ACK nach EOI gibt frei. Beleg: "IRQ-Bruecke: Line 1 abonniert" und
+        "[Bruecke 2, Rueckfall 0]" je Taste im Clone-Lauf — zwei Zustellungen
+        pro Taste, kein Rueckfall auf direktes Sperren.
+        KernelCaps (kernel_caps.rs, Lib): die Abo-Capability lebt in ihrer
+        CapabilityTable statt als heimatlose Kopie, damit sie widerrufbar ist;
+        6 Tests inkl. Widerruf entfernt die Capability. Beleg im Clone-Lauf:
+        "[Bruecke 2, Rueckfall 0, Haenger 0]" je Taste, 632 Tests.
+        Entwurf Tastenkanal (key_events.rs, Lib, NICHT verdrahtet): der Kernel
+        besitzt den IPC-Channel und sendet, der Prozess haelt nur READ; bei
+        vollem Puffer ChannelFull statt Warten im Handler. 8 Tests belegen
+        Empfang, FIFO, NoWriteCapability (kein Selbsteinspielsen),
+        NoReadCapability fuer Fremde und ChannelClosed. Keine neue
+        Syscall-Nummer: IpcReceive traegt die Nachricht. 640 Tests.
+        Eingabewarteschlange (input_queue.rs, Lib, 6 Tests): der Tastatur-Handler
+        legt Scancode und Zeichen nur ab, der Tick leert hoechstens acht
+        Ereignisse pro Tick; bei vollem Puffer wird verworfen und gezaehlt.
+        Beleg im Clone-Lauf: 0 Zeilen "Tastatur ueber Vektor" (Handler druckt
+        nicht mehr), dafuer "Eingabe (Konsument): 'o' ... [Line Some(1),
+        Bruecke 1, Rueckfall 0, Haenger 0, verworfen 0]". 646 Tests.
+        IPC-Syscalls sagen die Wahrheit: IpcReceive gab ok(arg1) zurueck
+        ("arg1 Bytes bereit"), obwohl es weder Nachricht noch Puffer und keine
+        Laufzeit-IpcSubsystem-Instanz gab. Die eingefrorene ABI traegt nur eine
+        Laenge, keinen Pufferzeiger. Jetzt: IpcSend mit payload_len > 0 ->
+        EndpointUnavailable (bestehender Code 5), IpcReceive ->
+        EndpointUnavailable mit value 0, Sendung ohne Nutzdaten bleibt ok,
+        Rechtepruefung bleibt zuerst. 4 Tests, 650 gesamt.
+        Erster echter Syscall aus CPL3: dritter Ring-3-Prozess PID 1002 fuehrt
+        int 0x80 (Yield, ABI 1.0) aus. Dafuer musste der Scheduler repariert
+        werden: pick_next nahm den ersten lauffaehigen Prozess, der nicht der
+        laufende war — bei drei Prozessen wurde der dritte nie ausgewaehlt
+        (Diagnoselauf: kein Warm-up-Tick fuer PID 1002). Jetzt beginnt die
+        Suche hinter dem laufenden Prozess und laeuft im Kreis; Prioritaet
+        bleibt erhalten. Log (BIOS+UEFI): "Syscall aus Ring 3: Nr=1 PID=1002
+        Opcode=0x0001 Ergebnis=None". 2 Regressionstests, 652 gesamt. In frischem Clone fuer BIOS und UEFI
+        identisch, 0 Panics.
+        Tastenereignisse erreichen einen Ring-3-Prozess, ohne ABI-Zusatz: der
+        Rueckgabewert eines Syscalls ist 64 Bit, ein Ereignis passt hinein.
+        IpcReceive auf dem Kernel-Eingabekanal (arg0=1) mit READ-Cap liefert
+        Scancode und Zeichen gepackt zurueck, 0 heisst "nichts anliegend";
+        ohne Cap bleibt es bei PermissionDenied, und die Warteschlange wird
+        nicht angefasst. Genau ein Konsument: solange ein Prozess abonniert
+        hat, sammelt der Tick nicht mehr ab (sonst verschwinden Tasten).
+        Beleg in BIOS, UEFI und frischem Clone: "Tastenereignis an Ring 3:
+        Nr=1 PID=1002 Zeichen='a' (Scancode 0x1E) [Bruecke 1, Rueckfall 0,
+        verworfen 0]" fuer jede der fuenf gesendeten Tasten, 0 Panics.
+        4 Empfangstests + 3 Packtests, 659 gesamt.
+    - suite: shivacore (bare metal, --features x86-boot)
+      artifact: "ELF x86_64-unknown-none, 145080 Bytes"
+      symbols: [shivacore_syscall_gate, syscall_gate_rust]
   not_verified:
-  - Boot-Lauf in QEMU (kein QEMU in der Audit-Umgebung)
-  - IRQ-Trampolin/ACK-Pfad (SC-006 REQ-02/03) nicht implementiert
+    - "Boot-Lauf in QEMU (kein QEMU in der Audit-Umgebung)"
+    - "IRQ-Trampolin/ACK-Pfad (SC-006 REQ-02/03) nicht implementiert"
 ci_blocker:
-  cause: GitHub-Konto ohne verifizierte E-Mail-Adresse
-  effect: alle Workflow-Laeufe enden in startup_failure; git push und Blob-API antworten
-    403
-  scope: blockiert CI-Evidenz fuer alle Repos; Behebung nur durch Kontoinhaber
+  cause: "GitHub-Konto ohne verifizierte E-Mail-Adresse"
+  effect: "alle Workflow-Laeufe enden in startup_failure; git push und Blob-API antworten 403"
+  scope: "blockiert CI-Evidenz fuer alle Repos; Behebung nur durch Kontoinhaber"
