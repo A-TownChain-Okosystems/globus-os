@@ -47,6 +47,7 @@ ShivaCore: Kernel-Einstiegspunkt erreicht.
 ShivaCore: CPU vendor=... apic=true ... nx=true
 ShivaCore: CPU HAL compatibility check OK.
 ShivaCore: ACPI RSDP/root/table checksums validated; tables=5
+ShivaCore: MADT local_apic=0xFEE00000 ioapic=0xFEC00000 gsi_base=0 cpus=1/1 overrides=5 x2apic=0 unknown=1
 EXCEPTION: BREAKPOINT                     <- Selbsttest aus main.rs (int3)
 ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).
 ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).
