@@ -97,3 +97,35 @@ Noch offen in SC-006: IRQ-Trampolin-in-Notification und ACK-vor-Re-Trigger
 (REQ-SC006-02/03) im Interrupt-Pfad, Maskierung bis ACK, DMA-Autorisierung über
 Device-Cap (REQ-SC006-09) sowie Geräte-Enumeration im Service Space (REQ-SC006-11).
 Die Cap-Typen sind die Voraussetzung dafür, nicht die Erfüllung.
+
+## Nachtrag 19:45 — Signatur-Vertrag der Remote-Capability-Tickets
+
+Befund (P0, Signatur-Vertrag): `RemoteCapabilityTicket::signing_payload()` verkettete
+die variablen Felder ohne Längenpräfix und ohne Domain-Trennung. Zusammen mit
+`Did::new()`, das jeden String ungeprüft übernimmt, heißt das: Issuer `"AB"` +
+Subject `"C"` ergeben byte-identische Signaturbasis wie Issuer `"A"` + Subject
+`"BC"`. Zwei verschiedene Tickets konnten damit dieselbe Signatur tragen; eine
+Ticket-Signatur war zudem gegen Signaturen anderer Protokolle austauschbar.
+Zusätzlich stand `deadline_unix` als rohes `f64` in der Signaturbasis
+(`-0.0` ≠ `0.0` in Bytes, NaN-Vergleiche undefiniert).
+
+Umgesetzt:
+
+- `RCT_DOMAIN_SEPARATION = b"ATC-RCT-v1\0"` als Präfix, gleiche Konvention wie
+  `p2p_secure::DOMAIN_SEPARATION`.
+- Alle variablen Felder (Issuer-DID, Subject-DID, Ressourcentyp, Nonce,
+  Parent-Nonce) mit `u32`-Längenpräfix über `push_field()`.
+- Deadline als ganzzahlige Mikrosekunden (`i64`) statt `f64`.
+
+Verifikation: 4 neue Tests in `remote_caps::rct_signature_contract`
+(Domain-Tag vorhanden, verschobene Feldgrenzen kollidieren nicht mehr inkl.
+Beleg der alten Ambiguität, Deadline byte-stabil für `-0.0`/`0.0` und gegen
+Sub-Mikrosekunden-Rauschen, Nonces bleiben unterscheidbar).
+`cargo test -p shivacore-service-space --lib` → **552 passed**, Kernel 565 passed,
+Bare-Metal-ELF baut.
+
+Folge für Bestandstickets: die Signaturbasis hat sich geändert (Domain-Tag,
+Längen, Deadline-Kodierung). Vorher ausgestellte Tickets sind nicht mehr
+verifizierbar und müssen neu ausgestellt werden. Ein Versionsfeld im Ticket
+selbst wäre der nächste Schritt, damit solche Brüche künftig erkennbar sind statt
+still zu scheitern.
