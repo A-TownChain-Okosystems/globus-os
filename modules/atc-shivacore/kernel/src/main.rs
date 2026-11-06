@@ -211,7 +211,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // TSC-Abstand direkt mit der IOAPIC-Phase vergleichbar.
             const PROBE_TICKS: u64 = 40;
             let tsc_per_second = calibrate_tsc(20);
-            let pic_delta = measure_ticks(PROBE_TICKS);
+            let pic_probe = measure_ticks(PROBE_TICKS);
+            let pic_delta = pic_probe.map(|(tsc, _)| tsc);
             let pic_rate = tsc_per_second.and_then(|tsc| measure_tick_rate(PROBE_TICKS, tsc));
 
             // SC-006: Zustellung von der PIC auf den IOAPIC umschalten.
@@ -244,7 +245,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     );
                 }
             }
-            let apic_delta = measure_ticks(PROBE_TICKS);
+            let apic_probe = measure_ticks(PROBE_TICKS);
+            let apic_delta = apic_probe.map(|(tsc, _)| tsc);
             let apic_rate = tsc_per_second.and_then(|tsc| measure_tick_rate(PROBE_TICKS, tsc));
             match (pic_delta, apic_delta) {
                 (Some(pic), Some(apic)) if apic > 0 => {
@@ -259,6 +261,22 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 }
                 _ => {
                     serial_println!("ShivaCore: WARNUNG -- Tick-Messung ohne Ergebnis.");
+                }
+            }
+            // Beide Zaehler werden an derselben Flanke gelesen, deshalb ist der
+            // Vergleich exakt und nicht um einen Tick verschoben.
+            match apic_probe {
+                Some((_, steps)) => {
+                    let drift = i128::from(steps) - i128::from(PROBE_TICKS);
+                    serial_println!(
+                        "ShivaCore: Zeitquelle: {} Ticks zugestellt, {} MonotonicTime-Schritte (Drift {:+})",
+                        PROBE_TICKS,
+                        steps,
+                        drift
+                    );
+                }
+                None => {
+                    serial_println!("ShivaCore: WARNUNG -- Zeitquellenmessung ohne Ergebnis.");
                 }
             }
             match (pic_rate, apic_rate) {
@@ -618,7 +636,7 @@ fn calibrate_tsc(periods: u32) -> Option<u64> {
 /// Misst, wie viele Ticks pro Sekunde tatsaechlich zugestellt werden.
 /// `tsc_per_second` stammt aus der PIT-Kalibrierung.
 fn measure_tick_rate(target: u64, tsc_per_second: u64) -> Option<u64> {
-    let delta = measure_ticks(target)?;
+    let (delta, _) = measure_ticks(target)?;
     if delta == 0 {
         return None;
     }
@@ -627,7 +645,7 @@ fn measure_tick_rate(target: u64, tsc_per_second: u64) -> Option<u64> {
 
 /// Misst den TSC-Abstand fuer eine feste Zahl zugestellter Timer-Ticks.
 /// Ohne bekannte TSC-Frequenz ist nur der Vergleich zweier Wege aussagekraeftig.
-fn measure_ticks(target: u64) -> Option<u64> {
+fn measure_ticks(target: u64) -> Option<(u64, u64)> {
     use core::sync::atomic::Ordering;
 
     // Erst an einer Tick-Flanke ausrichten. Ohne diesen Schritt enthaelt das
@@ -644,6 +662,7 @@ fn measure_ticks(target: u64) -> Option<u64> {
         core::hint::spin_loop();
     }
     seen = crate::interrupts::TIMER_TICKS.load(Ordering::Acquire);
+    let mono_start = shivacore::syscall::monotonic_ticks();
     let start = unsafe { core::arch::x86_64::_rdtsc() };
     while crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) < seen + target {
         guard += 1;
@@ -653,7 +672,8 @@ fn measure_ticks(target: u64) -> Option<u64> {
         core::hint::spin_loop();
     }
     let end = unsafe { core::arch::x86_64::_rdtsc() };
-    Some(end.saturating_sub(start))
+    let mono_end = shivacore::syscall::monotonic_ticks();
+    Some((end.saturating_sub(start), mono_end.wrapping_sub(mono_start)))
 }
 
 fn map_mmio_page(
