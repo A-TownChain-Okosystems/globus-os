@@ -41,11 +41,29 @@ qemu-system-x86_64 -drive format=raw,file=images/shivacore-bios.img \
   -serial stdio -display none -no-reboot
 ```
 
-Erwartete Ausgabe:
+Erwartete serielle Ausgabe (verifiziert am 2026-11-06, QEMU 7.2.22):
 ```text
 ShivaCore: Kernel-Einstiegspunkt erreicht.
-ShivaCore: Framebuffer-Ausgabe erfolgreich.
-ShivaCore: Boot vollstaendig. Uebergabe an Idle-Loop.
+ShivaCore: CPU vendor=... apic=true ... nx=true
+ShivaCore: CPU HAL compatibility check OK.
+ShivaCore: ACPI RSDP/root/table checksums validated; tables=5
+EXCEPTION: BREAKPOINT                     <- Selbsttest aus main.rs (int3)
+ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).
+ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).
+ShivaCore: Box-Test -- Wert: 41
+ShivaCore: Vec-Test -- Summe 0..10: 45
+ShivaCore: KernelState::boot() -> Done.
+ShivaCore: USER-001 entering PID=1000 with timer preemption target PID=1001
+ShivaCore: scheduler preemption -> context switch to PID=1001 RIP=0x1400000 RAX=0x0
+```
+Die Framebuffer-Meldungen (`ShivaCore Kernel v0.0.3 -- K-Sprint 2`,
+`Boot: OK | Serial: OK | Framebuffer: OK`) gehen auf den Bildschirm, nicht auf die
+serielle Schnittstelle. Beleg: `docs/assets/shivacore-boot-framebuffer.png`.
+
+Der komplette Lauf in einem Skript (baut ELF, Boot-Image und startet QEMU):
+
+```bash
+scripts/qemu_boot.sh 20
 ```
 
 ## Nächster Schritt: K-Sprint 1
