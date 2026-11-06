@@ -257,6 +257,24 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                             crate::interrupts::KEYBOARD_VECTOR
                         );
                     }
+                    // Abonnieren, bevor der Eintrag freigegeben wird: sonst
+                    // kaeme der erste Tastendruck an einer Line vorbei, die in
+                    // der Tabelle noch niemanden hat.
+                    match crate::interrupts::subscribe_kernel_line(u32::from(route.irq)) {
+                        Ok(line) => {
+                            serial_println!(
+                                "ShivaCore: IRQ-Bruecke: Line {} abonniert (Kernel-Cap SUBSCRIBE|ACK)",
+                                line
+                            );
+                        }
+                        Err(reason) => {
+                            serial_println!(
+                                "ShivaCore: WARNUNG -- Line {} nicht abonniert: {}",
+                                route.irq,
+                                reason
+                            );
+                        }
+                    }
                     let mut keyboard_entry =
                         shivacore::ioapic::RedirectionEntry::fixed(route.vector, lapic.id());
                     keyboard_entry.masked = false;
