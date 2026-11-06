@@ -4,9 +4,9 @@
 # CLAIMED != PASS · DOCUMENTED != IMPLEMENTED · IMPLEMENTED != VERIFIED
 schema_version: "1.0.0"
 repository: globus-os
-generated: "2026-09-10"
-generated_by: "SCR-0080 Enforcement-Welle (Aurora, Owner-P0-Definition 10.09. 12:21)"
-bound_commit: 7f50c9cb7aedfe5fd09ed799fe84d229e67908ab
+generated: "2026-11-06"
+generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
+bound_commit: b7a753c872e02a58bf77a82f00a6b1779637248d
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -14,7 +14,12 @@ implementation:
   summary: "UEFI→ShivaCore→globus-init→Userspace; M5 = CLAIMED, Evidence incomplete (ehrlich)"
 tests:
   status: pass_with_evidence       # pass_with_evidence|not_run|not_applicable
-  evidence: "Rust+npm gruen (SCR-0078-verifiziert)"
+  evidence: "lokale Verifikation auf bound_commit (siehe verification); CI-Lauf weiterhin blockiert"
+  # WICHTIG: Die fruehere Fassung band einen CI-PASS an 7f50c9cb (Oktober). Dieser
+  # Claim war zum Zeitpunkt dieser Aenderung nicht mehr gueltig: main ist seither
+  # weitergelaufen und kein CI-Lauf kann derzeit starten (startup_failure, siehe
+  # ci_blocker). PASS wird hier nur fuer den Stand behauptet, der nachweislich
+  # getestet wurde.
 security:
   status: not_audited
 conformance:
@@ -28,9 +33,29 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
   capability: os
   canonical: true
 test_run:
-  workflow: ATC Test Suite
-  run_id: 38085056635
-  commit: 7f50c9cb7aedfe5fd09ed799fe84d229e67908ab
-  timestamp: 2026-10-10T20:51:33.473877+00:00
+  workflow: lokale Verifikation (kein CI-Lauf moeglich)
+  run_id: null
+  commit: b7a753c872e02a58bf77a82f00a6b1779637248d
+  timestamp: 2026-11-06T19:45:00+00:00
   result: PASS
-  runner: github-actions
+  runner: local-sandbox
+verification:
+  method: "frischer Clone von bound_commit, cargo test + bare-metal build"
+  toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
+  results:
+    - suite: shivacore (kernel, --lib)
+      passed: 565
+      failed: 0
+    - suite: shivacore-service-space (--lib)
+      passed: 552
+      failed: 0
+    - suite: shivacore (bare metal, --features x86-boot)
+      artifact: "ELF x86_64-unknown-none, 145056 Bytes"
+      symbols: [shivacore_syscall_gate, syscall_gate_rust]
+  not_verified:
+    - "Boot-Lauf in QEMU (kein QEMU in der Audit-Umgebung)"
+    - "IRQ-Trampolin/ACK-Pfad (SC-006 REQ-02/03) nicht implementiert"
+ci_blocker:
+  cause: "GitHub-Konto ohne verifizierte E-Mail-Adresse"
+  effect: "alle Workflow-Laeufe enden in startup_failure; git push und Blob-API antworten 403"
+  scope: "blockiert CI-Evidenz fuer alle Repos; Behebung nur durch Kontoinhaber"
