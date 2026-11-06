@@ -332,10 +332,7 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     }
     let mut guard = USER_SCHEDULER.lock();
     let Some(scheduler) = guard.as_mut() else {
-        unsafe {
-            PICS.lock()
-                .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
-        }
+        acknowledge_timer_irq();
         return;
     };
 
@@ -402,9 +399,23 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
         frame.restore(next);
     }
 
-    unsafe {
-        PICS.lock()
-            .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+    acknowledge_timer_irq();
+}
+
+/// Vektor des Timer-IRQ, direkt aus dem IDT-Index abgeleitet. Damit kann der
+/// IOAPIC-Eintrag nicht auf einen anderen Vektor zeigen als der Handler.
+pub const TIMER_VECTOR: u8 = InterruptIndex::Timer as u8;
+
+/// Bestaetigt den Timer-IRQ auf dem Weg, ueber den er kam: Local APIC im
+/// IOAPIC-Betrieb, sonst die PIC. Beide Wege duerfen nicht gemischt werden.
+fn acknowledge_timer_irq() {
+    if shivacore::apic::acknowledges_via_apic() {
+        shivacore::apic::acknowledge_interrupt();
+    } else {
+        unsafe {
+            PICS.lock()
+                .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
+        }
     }
 }
 
