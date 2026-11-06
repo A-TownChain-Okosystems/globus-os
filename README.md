@@ -1,6 +1,6 @@
 ![ATC COMPLIANCE](https://img.shields.io/badge/ATC%20COMPLIANCE-R3%20%C2%B7%20ATC--STD--201%2F202%2F203-brightgreen)
 
-# GlobusOS
+# ATC GlobusOS
 
 > AI-native operating system and userspace platform built on the ShivaCore kernel.
 
@@ -104,17 +104,6 @@ UEFI / firmware
  → Aurora / desktop / applications
 ```
 
-## Development
-
-```bash
-cargo fmt --all -- --check
-cargo check --workspace --all-targets
-cargo test --workspace --all-targets
-cargo clippy --workspace --all-targets -- -D warnings
-```
-
-CI runs the same validation gates on pushes and pull requests.
-
 ## Architecture and governance
 
 See [`docs/SYSTEM_ARCHITECTURE.md`](docs/SYSTEM_ARCHITECTURE.md) for the normative system decomposition and trust boundaries and [`docs/OS_STANDARD_COMPONENTS.md`](docs/OS_STANDARD_COMPONENTS.md) for complete OS component coverage. Development follows `ATC-STD-000` and the applicable organization standards. `APPROVED`, `IMPLEMENTED`, `AUDITED` and `PRODUCTION_READY` remain independent states.
@@ -139,33 +128,12 @@ Security-sensitive issues must not be disclosed through public GitHub Issues. Fo
 
 Apache License 2.0. See [`LICENSE`](LICENSE).
 
-## Installation
 
-See the canonical repository documentation and applicable ATC standards.
 
-## Usage
 
-See the canonical repository documentation and applicable ATC standards.
 
-## Configuration
 
-See the canonical repository documentation and applicable ATC standards.
 
-## Testing
-
-See the canonical repository documentation and applicable ATC standards.
-
-## Governance
-
-See the canonical repository documentation and applicable ATC standards.
-
-## Contributing
-
-See the canonical repository documentation and applicable ATC standards.
-
-## Support
-
-See the canonical repository documentation and applicable ATC standards.
 
 
 ## Overview
@@ -192,6 +160,7 @@ Components include the system services, ShivaCore integration modules and SDK. D
 ├── system
 ├── modules
 ├── sdk
+├── scripts
 ├── docs
 └── tests
 ```
@@ -203,8 +172,11 @@ Rust stable and the repository's workspace toolchain are required.
 ```bash
 git clone https://github.com/A-TownChain-Okosystems/globus-os.git
 cd globus-os
-cargo check --workspace
+cargo check -p shivacore -p shivacore-service-space
 ```
+`cargo check --workspace` is not usable in this repository for the same reason the
+workspace-wide test command is not: the bare-metal crate's `bootloader` dependency has
+no host build.
 
 ## Configuration
 Configuration is defined by the workspace manifests and system-specific configuration files.
@@ -213,13 +185,34 @@ Configuration is defined by the workspace manifests and system-specific configur
 Build and test the workspace with Cargo commands documented by the repository workflows.
 
 ## Development
-Use the repository workflow and ATC engineering standards for changes.
+```bash
+cargo fmt --all -- --check
+cargo check --workspace
+cargo clippy -p shivacore -p shivacore-service-space --all-targets -- -D warnings
+```
+
+The push and pull request workflows run the same gates. They currently cannot start
+because the GitHub account's e-mail address is unverified; the commands above are the
+local equivalent.
 
 ## Testing
 ```bash
-cargo test --workspace --all-targets
+cargo test -p shivacore --lib               # 574 tests
+cargo test -p shivacore-service-space --lib # 552 tests
 ```
-Expected result: all applicable workspace tests pass.
+Expected result: 574 passed in `shivacore` and 552 passed in `shivacore-service-space`,
+zero failures, as of 2026-11-06.
+
+`cargo test --workspace --all-targets` is not a usable gate here: the bare-metal crate
+pulls in `bootloader`, whose build script does not run for a host test build, so the
+command aborts before a single test executes. The kernel image is built separately:
+
+```bash
+RUSTFLAGS='-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"' \
+  cargo +nightly build -p shivacore --release --target x86_64-unknown-none --features x86-boot
+```
+Expected result: an `x86_64-unknown-none` kernel ELF, about 145 KB. A QEMU boot run is
+not part of the current evidence.
 
 ## Security
 Security issues must not be disclosed publicly; use the repository's official security reporting process and ATC-STD-203.
