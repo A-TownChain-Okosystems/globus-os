@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 7e3ab90f2ad6bbaa136ac0c20b788a1c7ab5a4c5
+bound_commit: 06ff9791ce37177bd860c026e4ee74b7b1a06aaa
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 7e3ab90f2ad6bbaa136ac0c20b788a1c7ab5a4c5
-  timestamp: 2026-11-06T20:05:00+00:00
+  commit: 06ff9791ce37177bd860c026e4ee74b7b1a06aaa
+  timestamp: 2026-11-06T20:35:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -49,6 +49,12 @@ verification:
     - suite: shivacore-service-space (--lib)
       passed: 552
       failed: 0
+    - suite: "cargo check -p shivacore -p shivacore-service-space (no_std-Lib-Profil)"
+      result: PASS
+    - suite: "cargo fmt --all -- --check"
+      result: PASS
+    - suite: "cargo clippy -p shivacore -p shivacore-service-space --all-targets -D warnings"
+      result: PASS
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
       symbols: [shivacore_syscall_gate, syscall_gate_rust]
