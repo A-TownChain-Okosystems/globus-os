@@ -206,9 +206,36 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     );
                 }
             }
-            serial_println!(
-                "ShivaCore: IOAPIC-Eintrag bleibt maskiert; Zustellung laeuft weiter ueber die PIC."
-            );
+            // SC-006: Zustellung von der PIC auf den IOAPIC umschalten.
+            // Reihenfolge ist bindend: erst die PIC verstummen lassen, dann den
+            // Bestaetigungsweg umstellen, erst danach den Eintrag freigeben.
+            unsafe {
+                crate::interrupts::PICS.lock().write_masks(0xFF, 0xFF);
+            }
+            serial_println!("ShivaCore: PIC maskiert (0xFF/0xFF), nur noch ein Zustellweg.");
+            shivacore::apic::switch_acknowledge_to_apic(lapic_base);
+            serial_println!("ShivaCore: Bestaetigung laeuft ueber den Local APIC (EOI 0x0B0).");
+
+            let mut armed = entry;
+            armed.vector = crate::interrupts::TIMER_VECTOR;
+            armed.masked = false;
+            match ioapic.set_redirection_entry(timer_gsi, armed) {
+                Ok(read_back) => {
+                    serial_println!(
+                        "ShivaCore: Zustellung auf IOAPIC umgestellt: GSI {} -> Vektor 0x{:X}, maskiert={}",
+                        timer_gsi,
+                        read_back.vector,
+                        read_back.masked
+                    );
+                }
+                Err(error) => {
+                    serial_println!(
+                        "ShivaCore: WARNUNG -- Freigabe fuer GSI {} fehlgeschlagen: {:?}",
+                        timer_gsi,
+                        error
+                    );
+                }
+            }
         }
         _ => {
             serial_println!("ShivaCore: WARNUNG -- kein IOAPIC in der MADT gemeldet.");
