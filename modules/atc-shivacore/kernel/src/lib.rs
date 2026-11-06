@@ -25,6 +25,7 @@ pub mod ipc;
 pub mod irq;
 pub mod irq_bridge;
 pub mod irq_routing;
+pub mod kernel_caps;
 pub mod kernel_init;
 pub mod keymap;
 pub mod madt;
