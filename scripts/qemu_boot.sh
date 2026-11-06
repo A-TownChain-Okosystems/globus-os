@@ -2,7 +2,7 @@
 # ShivaCore QEMU-Bootlauf (BIOS-Image, headless, serielle Ausgabe).
 #
 # Belegt den Bootpfad ohne echte Hardware: Kernel-ELF -> Boot-Image -> QEMU.
-# Aufruf: scripts/qemu_boot.sh [Sekunden] [Logpfad]
+# Aufruf: scripts/qemu_boot.sh [Sekunden] [Logpfad] [bios|uefi]
 #
 # Zwei Fallstricke, die dieses Skript kapselt:
 #   1. `bootloader` 0.11 ruft in seinem Build-Skript intern `cargo` mit -Z auf.
@@ -18,6 +18,8 @@ KERNEL_ELF="$ROOT/target/x86_64-unknown-none/release/shivacore"
 IMAGE="$ROOT/images/shivacore-bios.img"
 
 die() { echo "FEHLER: $*" >&2; exit 1; }
+
+MODE="${3:-bios}"
 
 command -v qemu-system-x86_64 >/dev/null || die "qemu-system-x86_64 fehlt (apt-get install qemu-system-x86)"
 command -v cargo >/dev/null || die "cargo fehlt"
@@ -40,9 +42,23 @@ echo "== 3/4 Disk-Image erzeugen =="
 
 echo "== 4/4 QEMU $RUN_SECONDS s (Log: $LOG) =="
 set +e
-timeout "$RUN_SECONDS" qemu-system-x86_64 \
-  -drive format=raw,file="$IMAGE" \
-  -serial file:"$LOG" -display none -no-reboot -m 256M
+case "$MODE" in
+  bios)
+    timeout "$RUN_SECONDS" qemu-system-x86_64 \
+      -drive format=raw,file="$IMAGE" \
+      -serial file:"$LOG" -display none -no-reboot -m 256M
+    ;;
+  uefi)
+    # OVMF stellt das UEFI-Firmware-Image bereit (Paket ovmf).
+    OVMF="${OVMF_CODE:-/usr/share/OVMF/OVMF_CODE.fd}"
+    [ -f "$OVMF" ] || die "OVMF-Firmware fehlt: apt-get install ovmf"
+    timeout "$RUN_SECONDS" qemu-system-x86_64 \
+      -drive format=raw,file="$ROOT/images/shivacore-uefi.img" \
+      -drive if=pflash,format=raw,readonly=on,file="$OVMF" \
+      -serial file:"$LOG" -display none -no-reboot -m 256M
+    ;;
+  *) die "Modus '$MODE' unbekannt (bios|uefi)" ;;
+esac
 status=$?
 set -e
 # Exit 124 heisst: der Kernel lief bis zum Timeout weiter. Das ist der Normalfall.
@@ -54,7 +70,7 @@ echo "-- Meilensteine --"
 for marker in "Kernel-Einstiegspunkt erreicht" "CPU HAL compatibility check OK" \
               "ACPI RSDP/root/table checksums validated" "GDT/IDT/PIC OK" \
               "Paging-Mapper + Heap initialisiert" "KernelState::boot() -> Done" \
-              "USER-001 entering"; do
+              "MADT local_apic=" "USER-001 entering"; do
   if grep -q "$marker" "$LOG"; then echo "  [OK] $marker"; else echo "  [FEHLT] $marker"; fi
 done
 echo "  Kontextwechsel: $(grep -c 'context switch' "$LOG")"
