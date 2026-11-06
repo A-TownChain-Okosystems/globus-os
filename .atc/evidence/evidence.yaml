@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: b7a753c872e02a58bf77a82f00a6b1779637248d
+bound_commit: 7e3ab90f2ad6bbaa136ac0c20b788a1c7ab5a4c5
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: b7a753c872e02a58bf77a82f00a6b1779637248d
-  timestamp: 2026-11-06T19:45:00+00:00
+  commit: 7e3ab90f2ad6bbaa136ac0c20b788a1c7ab5a4c5
+  timestamp: 2026-11-06T20:05:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -44,13 +44,13 @@ verification:
   toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
   results:
     - suite: shivacore (kernel, --lib)
-      passed: 565
+      passed: 574
       failed: 0
     - suite: shivacore-service-space (--lib)
       passed: 552
       failed: 0
     - suite: shivacore (bare metal, --features x86-boot)
-      artifact: "ELF x86_64-unknown-none, 145056 Bytes"
+      artifact: "ELF x86_64-unknown-none, 145080 Bytes"
       symbols: [shivacore_syscall_gate, syscall_gate_rust]
   not_verified:
     - "Boot-Lauf in QEMU (kein QEMU in der Audit-Umgebung)"
