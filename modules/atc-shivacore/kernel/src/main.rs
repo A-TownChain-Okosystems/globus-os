@@ -503,28 +503,32 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_pid_2 = ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
-    // Dritter Ring-3-Prozess: fuehrt echte Syscalls aus. Die Musterpruefung in
-    // interrupts.rs deckt nur PID 1000/1001 ab, dieser Prozess stoert sie also
-    // nicht — und sein Registerbild ist ohnehin durch die Rueckgabewerte
-    // bestimmt (RAX = Wert, RBX = Status).
+    // Dritter Ring-3-Prozess: holt Tastenereignisse ueber IpcReceive ab.
     //
-    // Maschinencode (Set-1, keine Abhaengigkeit auf einen Assembler):
-    //   31 FF              xor  edi, edi        ; Cap-Slot 0 = kein Cap
-    //   BE 01 00 00 00     mov  esi, 0x0001     ; Opcode Yield
-    //   41 B9 00 00 01 00  mov  r9d, 0x00010000 ; ABI 1.0
+    // Die eingefrorene ABI hat keinen Pufferzeiger, aber einen 64-Bit-Rueck-
+    // gabewert. Ein Tastenereignis passt dort hinein (Scancode in Bits 0..8,
+    // Zeichen in Bits 16..24), deshalb braucht der Kanal keinen ABI-Zusatz.
+    //
+    // Der Cap-Slot ist eine Immediate im Code: die Nummer vergibt die
+    // Capability-Tabelle, deshalb wird sie hier erfragt und in den Bytes
+    // eingesetzt, nicht hartkodiert.
+    //
+    // Maschinencode:
+    //   48 BF imm64        mov  rdi, <cap-slot>     (Cap fuer den Eingabekanal)
+    //   BE 11 00 00 00     mov  esi, 0x11           (IpcReceive)
+    //   41 B9 00 00 01 00  mov  r9d, 0x00010000     (ABI 1.0)
+    //   48 C7 C2 01 00 00 00  mov rdx, 1            (Kanal-ID des Eingabekanals)
     //   CD 80              int  0x80
     //   EB FC              jmp  zurueck auf int 0x80
-    let user_binary_3 = userspace::UserBinary::from_bytes(
-        "ring3-syscall",
-        alloc::vec![
-            0x31, 0xFF, // xor edi, edi
-            0xBE, 0x01, 0x00, 0x00, 0x00, // mov esi, Yield
-            0x41, 0xB9, 0x00, 0x00, 0x01, 0x00, // mov r9d, ABI 1.0
-            0xCD, 0x80, // int 0x80
-            0xEB, 0xF9, // jmp zurueck auf int 0x80
-        ],
-        0x0180_0000,
-    );
+    let input_cap = interrupts::grant_input_read(ats1000::Pid(1002))
+        .expect("ShivaCore: Leserecht auf den Eingabekanal");
+    let mut syscall_loop = alloc::vec![
+        0x48, 0xBF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0xBE, 0x11, 0x00, 0x00, 0x00,
+        0x41, 0xB9, 0x00, 0x00, 0x01, 0x00, 0x48, 0xC7, 0xC2, 0x01, 0x00, 0x00, 0x00, 0xCD, 0x80,
+        0xEB, 0xFC,
+    ];
+    syscall_loop[2..10].copy_from_slice(&input_cap.to_le_bytes());
+    let user_binary_3 = userspace::UserBinary::from_bytes("ring3-input", syscall_loop, 0x0180_0000);
     let user_addr_space_3 = userspace::UserAddressSpace {
         code_base: 0x0180_0000,
         code_size: 0x0010_0000,
