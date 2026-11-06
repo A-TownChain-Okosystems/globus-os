@@ -794,3 +794,44 @@ Nachweis je Line waere eine eigene Zaehlertabelle.
 meldet Rohcodes. Und das ACK eines Userspace-Subskribenten ist nach wie vor eine
 Spec-Entscheidung; die Bruecke mit Rechtepruefung liegt bereit, angeschlossen ist
 weiterhin nur der Kernel als Empfaenger.
+
+## Nachtrag 04:55 — Die Tastatur meldete Zahlen, keine Tasten
+
+Der Handler las den Rohcode und schrieb ihn ins Log. Damit war bewiesen, dass
+ein Interrupt ankommt, aber nicht, welche Taste er bedeutet. Kein Treiber, ein
+Zaehler.
+
+**Neu: `kernel/src/keymap.rs`.** Set-1-Codes werden zu Zeichen: Bit 7 heisst
+losgelassen, `0xE0` ist ein Praefix fuer die naechste Taste, Shift und Caps Lock
+sind Zustand statt Zeichen. `decode(scancode, &mut ModifierState)` schreibt den
+Zustand fort und liefert `Decoded { key, pressed, character, state_changed }`.
+Reine Funktion, kein Portzugriff — 10 Tests, darunter alle 256 Codes ohne Panic,
+Caps-und-Shift-heben-sich-auf, und Loslassen erzeugt kein Zeichen.
+
+Im Lauf mit gesendeten Tasten:
+
+```text
+Tastatur ueber Vektor 0x30: 'a' (Scancode 0x1E)
+Tastatur ueber Vektor 0x30: ShiftLeft (Scancode 0x2A)
+Tastatur ueber Vektor 0x30: 'A' (Scancode 0x1E)
+Tastatur ueber Vektor 0x30: '1' (Scancode 0x02)
+Tastatur ueber Vektor 0x30: '!' (Scancode 0x02)
+Tastatur ueber Vektor 0x30: Enter (Scancode 0x1C)
+```
+
+Unter UEFI zusaetzlich Caps Lock: `z`, `Shift`, `Z`, `CapsLock`, `B` — das letzte
+gross, weil Caps Lock noch an war.
+
+**Dreimal derselbe Fehler, einmal ein neuer.** `serial_println!` als Match-Arm
+ohne Klammern ist mir jetzt zum dritten Mal passiert ("trailing semicolon in
+macro used in expression position"). Die Klammern gehoeren zum Arm, nicht zum
+Makro. Neu und schlimmer: Ich wollte die vier Arme per regulaerem Ausdruck
+klammern und habe damit den Rest der Datei zerschnitten — der Compiler meldete
+`timer_interrupt_entry_addr` und drei weitere Namen "defined multiple times".
+Rettung war `git checkout` der Datei und zwei exakte Textersetzungen. Lehre: bei
+strukturellen Aenderungen an Rust-Code keine Regex ueber mehrzeilige Bloecke,
+sondern entweder exakte Zeichenketten oder ein Neu-Schreiben des Blocks.
+
+**Weiterhin offen.** Die Belegung ist US-amerikanisch; eine deutsche ist eine
+Tabelle mehr, keine Architekturentscheidung. Und die Tastenfolge endet im Log:
+Es gibt noch keinen Kanal, ueber den Zeichen an einen Userspace-Prozess gehen.
