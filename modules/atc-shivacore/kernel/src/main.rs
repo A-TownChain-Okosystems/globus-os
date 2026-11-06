@@ -209,8 +209,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // Vor dem Umschalten messen, wie lange 20 zugestellte Ticks unter
             // der PIC dauern. Gleiche PIT-Frequenz (100 Hz), also ist der
             // TSC-Abstand direkt mit der IOAPIC-Phase vergleichbar.
-            const PROBE_TICKS: u64 = 20;
-            let tsc_per_second = calibrate_tsc(5);
+            const PROBE_TICKS: u64 = 40;
+            let tsc_per_second = calibrate_tsc(20);
             let pic_delta = measure_ticks(PROBE_TICKS);
             let pic_rate = tsc_per_second.and_then(|tsc| measure_tick_rate(PROBE_TICKS, tsc));
 
@@ -630,10 +630,22 @@ fn measure_tick_rate(target: u64, tsc_per_second: u64) -> Option<u64> {
 fn measure_ticks(target: u64) -> Option<u64> {
     use core::sync::atomic::Ordering;
 
-    let start_ticks = crate::interrupts::TIMER_TICKS.load(Ordering::Acquire);
-    let start = unsafe { core::arch::x86_64::_rdtsc() };
+    // Erst an einer Tick-Flanke ausrichten. Ohne diesen Schritt enthaelt das
+    // gemessene Intervall bis zu eine volle Periode Wartezeit auf den ersten
+    // Tick und die Rate wird systematisch zu niedrig geschaetzt (bei 20 Ticks
+    // bis zu 5 Prozent).
+    let mut seen = crate::interrupts::TIMER_TICKS.load(Ordering::Acquire);
     let mut guard: u64 = 0;
-    while crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) < start_ticks + target {
+    while crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) == seen {
+        guard += 1;
+        if guard > 50_000_000_000 {
+            return None;
+        }
+        core::hint::spin_loop();
+    }
+    seen = crate::interrupts::TIMER_TICKS.load(Ordering::Acquire);
+    let start = unsafe { core::arch::x86_64::_rdtsc() };
+    while crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) < seen + target {
         guard += 1;
         if guard > 50_000_000_000 {
             return None;
