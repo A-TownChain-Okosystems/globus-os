@@ -7,7 +7,15 @@
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
 
-pub const ABI_MAJOR: u16 = 1;
+/// ABI 2.0.0: Der Syscall-Aufruf uebergibt keine losen Registerargumente mehr,
+/// sondern einen versionierten Argumentblock im Userspace-Speicher.
+///
+/// Warum eine Major-Version: In 1.x lagen Opcode, Cap-Slot, vier Argumentwoerter
+/// UND die Nutzlaenge in sechs Registern — `R8` war gleichzeitig Argumentwort
+/// und Laengenfeld, ein Pufferzeiger hatte keinen Platz. Ein solcher Aufruf
+/// kann nicht wachsen. Der Block traegt seine eigene Groesse, der Kernel liest
+/// nur die Felder, die er kennt.
+pub const ABI_MAJOR: u16 = 2;
 pub const ABI_MINOR: u16 = 0;
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
@@ -73,6 +81,149 @@ impl AbiHandshake {
     pub const fn compatible(self) -> bool {
         self.major == ABI_MAJOR
     }
+}
+
+/// Kleinste Blockgroesse, die ABI 2.0.0 versteht: sieben 64-Bit-Felder.
+pub const SYSCALL_BLOCK_MIN_SIZE: usize = 56;
+
+/// Groesster Block, den der Kernel liest. Begrenzt die Kopie aus dem
+/// Userspace-Speicher, bevor irgendetwas interpretiert wird.
+pub const SYSCALL_BLOCK_MAX_SIZE: usize = 256;
+
+/// Flags im Opcode-Feld. Unbekannte Bits werden abgelehnt: ein Aufruf darf
+/// nicht stillschweigend anders gemeint sein, als der Aufrufer denkt.
+pub const SYSCALL_FLAG_NONE: u16 = 0;
+
+/// Aufbau des Argumentblocks (alles little endian, 64 Bit):
+///
+/// ```text
+/// Offset  0: size        Gesamtgroesse des Blocks, mindestens 56
+/// Offset  8: opcode u16 | flags u16 | reserviert u32
+/// Offset 16: capability  Cap-Handle, 0 = keine
+/// Offset 24: arg0
+/// Offset 32: arg1
+/// Offset 40: buffer_ptr  Zeiger auf Nutzdaten im Userspace, 0 = keine
+/// Offset 48: buffer_len  Laenge der Nutzdaten
+/// ```
+///
+/// Erweiterbarkeit: Ein spaeterer Minor-Stand haengt Felder ab Offset 56 an und
+/// erhoeht `size`. Der Kernel liest `min(size, was er kennt)` und ignoriert den
+/// Rest; ein alter Kernel akzeptiert einen neuen Block also weiterhin. Ein
+/// neuer Kernel akzeptiert alte Bloecke, weil `size` klein bleiben darf.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyscallBlock {
+    pub size: usize,
+    pub opcode: Syscall,
+    pub flags: u16,
+    pub capability: Option<CapabilityHandle>,
+    pub arg0: u64,
+    pub arg1: u64,
+    pub buffer_ptr: u64,
+    pub buffer_len: usize,
+}
+
+impl SyscallBlock {
+    /// Baut einen Block ohne Nutzdaten.
+    pub const fn new(opcode: Syscall, capability: Option<CapabilityHandle>) -> Self {
+        Self {
+            size: SYSCALL_BLOCK_MIN_SIZE,
+            opcode,
+            flags: SYSCALL_FLAG_NONE,
+            capability,
+            arg0: 0,
+            arg1: 0,
+            buffer_ptr: 0,
+            buffer_len: 0,
+        }
+    }
+
+    /// Liest einen Block aus rohen Bytes. Geprueft wird die Struktur, nicht die
+    /// Absicht: Groesse, Opcode, Flags und Laengen. Die Rechtepruefung bleibt
+    /// beim Dispatcher.
+    pub fn parse(bytes: &[u8]) -> Result<Self, AbiError> {
+        if bytes.len() < 8 || bytes.len() > SYSCALL_BLOCK_MAX_SIZE {
+            return Err(AbiError::InvalidPayload);
+        }
+        let size = u64::from_le_bytes(read8(bytes, 0)?);
+        if size < SYSCALL_BLOCK_MIN_SIZE as u64
+            || size > bytes.len() as u64
+            || size > SYSCALL_BLOCK_MAX_SIZE as u64
+        {
+            return Err(AbiError::InvalidPayload);
+        }
+        let word = u64::from_le_bytes(read8(bytes, 8)?);
+        let opcode_id = (word & 0xFFFF) as u16;
+        let flags = ((word >> 16) & 0xFFFF) as u16;
+        let opcode = match opcode_id {
+            x if x == Syscall::Yield.id() => Syscall::Yield,
+            x if x == Syscall::IpcSend.id() => Syscall::IpcSend,
+            x if x == Syscall::IpcReceive.id() => Syscall::IpcReceive,
+            x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
+            x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
+            x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
+            _ => return Err(AbiError::InvalidSyscall),
+        };
+        if flags != SYSCALL_FLAG_NONE {
+            return Err(AbiError::InvalidPayload);
+        }
+        let capability = match u64::from_le_bytes(read8(bytes, 16)?) {
+            0 => None,
+            handle => Some(CapabilityHandle(handle)),
+        };
+        let arg0 = u64::from_le_bytes(read8(bytes, 24)?);
+        let arg1 = u64::from_le_bytes(read8(bytes, 32)?);
+        let buffer_ptr = u64::from_le_bytes(read8(bytes, 40)?);
+        let buffer_len = u64::from_le_bytes(read8(bytes, 48)?);
+        if buffer_len > MAX_SYSCALL_PAYLOAD as u64 {
+            return Err(AbiError::InvalidPayload);
+        }
+        if buffer_len > 0 && buffer_ptr == 0 {
+            return Err(AbiError::InvalidPayload);
+        }
+        Ok(Self {
+            size: size as usize,
+            opcode,
+            flags,
+            capability,
+            arg0,
+            arg1,
+            buffer_ptr,
+            buffer_len: buffer_len as usize,
+        })
+    }
+
+    /// Schreibt den Block so, wie ihn der Kernel erwartet. Wird vom
+    /// Userspace-Compiler und von Tests genutzt.
+    pub fn write_to(&self, out: &mut [u8]) -> Result<usize, AbiError> {
+        let size = self.size.max(SYSCALL_BLOCK_MIN_SIZE);
+        if size > out.len() || size > SYSCALL_BLOCK_MAX_SIZE {
+            return Err(AbiError::InvalidPayload);
+        }
+        out[..size].fill(0);
+        out[0..8].copy_from_slice(&(size as u64).to_le_bytes());
+        let word = u64::from(self.opcode.id()) | (u64::from(self.flags) << 16);
+        out[8..16].copy_from_slice(&word.to_le_bytes());
+        let cap = self.capability.map(|c| c.0).unwrap_or(0);
+        out[16..24].copy_from_slice(&cap.to_le_bytes());
+        out[24..32].copy_from_slice(&self.arg0.to_le_bytes());
+        out[32..40].copy_from_slice(&self.arg1.to_le_bytes());
+        out[40..48].copy_from_slice(&self.buffer_ptr.to_le_bytes());
+        out[48..56].copy_from_slice(&(self.buffer_len as u64).to_le_bytes());
+        Ok(size)
+    }
+}
+
+const fn read8(bytes: &[u8], offset: usize) -> Result<[u8; 8], AbiError> {
+    if offset + 8 > bytes.len() {
+        return Err(AbiError::InvalidPayload);
+    }
+    let mut out = [0u8; 8];
+    let mut i = 0;
+    while i < 8 {
+        out[i] = bytes[offset + i];
+        i += 1;
+    }
+    Ok(out)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -159,9 +310,106 @@ mod tests {
 
     #[test]
     fn abi_version_is_stable() {
-        assert_eq!(ABI_VERSION, 0x0001_0000);
-        assert!(validate_abi_version(0x0001_ffff));
-        assert!(!validate_abi_version(0x0002_0000));
+        assert_eq!(ABI_VERSION, 0x0002_0000);
+        // Minor bleibt kompatibel, Major nicht.
+        assert!(validate_abi_version(0x0002_ffff));
+        assert!(!validate_abi_version(0x0001_0000));
+        assert!(!validate_abi_version(0x0003_0000));
+    }
+
+    #[test]
+    fn block_round_trips_through_bytes() {
+        let mut block = SyscallBlock::new(Syscall::IpcReceive, Some(CapabilityHandle(7)));
+        block.arg0 = 1;
+        block.arg1 = 64;
+        block.buffer_ptr = 0x400000;
+        block.buffer_len = 64;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        let written = block.write_to(&mut bytes).expect("Block schreiben");
+        assert_eq!(written, SYSCALL_BLOCK_MIN_SIZE);
+        assert_eq!(SyscallBlock::parse(&bytes[..written]), Ok(block));
+    }
+
+    #[test]
+    fn block_must_declare_at_least_the_minimum_size() {
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        bytes[0..8].copy_from_slice(&8u64.to_le_bytes());
+        assert_eq!(SyscallBlock::parse(&bytes), Err(AbiError::InvalidPayload));
+    }
+
+    #[test]
+    fn block_may_not_claim_more_bytes_than_it_occupies() {
+        // size = 200, geliefert werden 56 Byte: der Aufrufer luegt ueber seinen
+        // eigenen Puffer, bevor der Kernel irgendetwas liest.
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        bytes[0..8].copy_from_slice(&200u64.to_le_bytes());
+        assert_eq!(
+            SyscallBlock::parse(&bytes[..SYSCALL_BLOCK_MIN_SIZE]),
+            Err(AbiError::InvalidPayload)
+        );
+    }
+
+    #[test]
+    fn unknown_opcode_is_rejected() {
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        bytes[0..8].copy_from_slice(&(SYSCALL_BLOCK_MIN_SIZE as u64).to_le_bytes());
+        bytes[8..16].copy_from_slice(&0x7777u64.to_le_bytes());
+        assert_eq!(SyscallBlock::parse(&bytes), Err(AbiError::InvalidSyscall));
+    }
+
+    #[test]
+    fn unknown_flags_are_rejected_instead_of_ignored() {
+        let mut block = SyscallBlock::new(Syscall::Yield, None);
+        block.flags = 0b10;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        block.write_to(&mut bytes).expect("schreiben");
+        assert_eq!(SyscallBlock::parse(&bytes), Err(AbiError::InvalidPayload));
+    }
+
+    #[test]
+    fn newer_block_with_extra_fields_stays_readable() {
+        // Erweiterbarkeit: ein spaeterer Minor-Stand haengt Felder an und
+        // erhoeht size. Ein 2.0-Kernel muss den Block weiterhin verstehen.
+        let mut block = SyscallBlock::new(Syscall::MonotonicTime, None);
+        block.size = SYSCALL_BLOCK_MIN_SIZE + 40;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        let written = block.write_to(&mut bytes).expect("schreiben");
+        assert_eq!(written, SYSCALL_BLOCK_MIN_SIZE + 40);
+        let parsed = SyscallBlock::parse(&bytes[..written]).expect("lesbar");
+        assert_eq!(parsed.opcode, Syscall::MonotonicTime);
+        assert_eq!(parsed.size, SYSCALL_BLOCK_MIN_SIZE + 40);
+    }
+
+    #[test]
+    fn buffer_length_without_pointer_is_rejected() {
+        let mut block = SyscallBlock::new(Syscall::IpcSend, Some(CapabilityHandle(1)));
+        block.buffer_len = 16;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        block.write_to(&mut bytes).expect("schreiben");
+        assert_eq!(
+            SyscallBlock::parse(&bytes[..SYSCALL_BLOCK_MIN_SIZE]),
+            Err(AbiError::InvalidPayload)
+        );
+    }
+
+    #[test]
+    fn oversized_buffer_is_rejected() {
+        let mut block = SyscallBlock::new(Syscall::IpcSend, None);
+        block.buffer_ptr = 0x400000;
+        block.buffer_len = MAX_SYSCALL_PAYLOAD + 1;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        block.write_to(&mut bytes).expect("schreiben");
+        assert_eq!(
+            SyscallBlock::parse(&bytes[..SYSCALL_BLOCK_MIN_SIZE]),
+            Err(AbiError::InvalidPayload)
+        );
+    }
+
+    #[test]
+    fn block_does_not_write_past_the_caller_buffer() {
+        let block = SyscallBlock::new(Syscall::Yield, None);
+        let mut small = [0u8; 32];
+        assert_eq!(block.write_to(&mut small), Err(AbiError::InvalidPayload));
     }
 
     #[test]
@@ -187,11 +435,18 @@ mod tests {
     fn handshake_accepts_minor_changes() {
         assert!(
             AbiHandshake {
-                major: 1,
+                major: ABI_MAJOR,
                 minor: 99
             }
             .compatible()
         );
-        assert!(!AbiHandshake { major: 2, minor: 0 }.compatible());
+        assert!(!AbiHandshake { major: 1, minor: 0 }.compatible());
+        assert!(
+            AbiHandshake {
+                major: 2,
+                minor: 42
+            }
+            .compatible()
+        );
     }
 }
