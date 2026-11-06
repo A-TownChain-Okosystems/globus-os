@@ -249,3 +249,38 @@ Was der Lauf NICHT belegt:
 Reproduzierbar: `scripts/qemu_boot.sh 20` baut ELF, Boot-Image und startet QEMU.
 Das Skript kapselt zwei Stolpersteine: `bootloader` 0.11 ruft intern `cargo` mit
 `-Z` auf (braucht `RUSTUP_TOOLCHAIN=nightly`) und verlangt `llvm-tools-preview`.
+
+## Nachtrag 21:55 — LAPIC am MMIO, im Bootlauf nachgewiesen
+
+Damit ist die Lücke aus dem vorigen Nachtrag geschlossen: `apic.rs` hängt jetzt
+wirklich an Hardware.
+
+- `ApicRegisters` hat eine zweite Implementierung: `MappedRegisters` liest und
+  schreibt volatil über einen rohen Zeiger auf das MMIO-Fenster.
+- `map_lapic_mmio()` in `main.rs` mappt `0xFEE0_0000` als Gerätespeicher
+  (`PRESENT | WRITABLE | NO_EXECUTE`, eine 4-KiB-Seite deckt alle Register bis
+  Offset 0x3F0). Ein bereits vorhandenes Identity-Mapping wird als
+  `PageAlreadyMapped` akzeptiert.
+- Im Bootpfad nach Heap-Init: APIC aktivieren, ID lesen, Vektor 0x40 maskieren,
+  Maskenzustand zurücklesen, freigeben, erneut prüfen.
+
+Seriell belegt im QEMU-Lauf:
+
+```text
+ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).
+ShivaCore: LAPIC aktiv (id=0, spurious=0x1FF).
+ShivaCore: LAPIC-Maskentest Vektor 0x40: maskiert=true freigegeben=true
+```
+
+`spurious=0x1FF` ist genau Vektor 0xFF plus Enable-Bit 0x100, also der erwartete
+Wert. Der Maskentest beweist, dass Lesen und Schreiben im Interrupt-Enable-
+Register auf dem echten (emulierten) APIC wirken und nicht nur im Testdouble.
+Der Lauf endete nach 25 s mit 230 Kontextwechseln und ohne Panic.
+
+Damit ist SC-006 auf allen drei Ebenen belegt: Spec-Zustand (`IrqTable`),
+Registerlogik (`LocalApic` gegen Fake) und Hardware (`MappedRegisters` in QEMU).
+
+**Weiterhin offen:** die Zuordnung Vektor → Line und die Geräte-Enumeration, also
+die Frage, welcher IRQ welchen Vektor bekommt. Der APIC ist bedienbar, aber noch
+an kein Gerät gebunden. ACPI wird geprüft, nicht ausgewertet; das UEFI-Image
+wurde nie gestartet.
