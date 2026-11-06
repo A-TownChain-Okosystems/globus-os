@@ -23,6 +23,7 @@ pub mod hal;
 pub mod ioapic;
 pub mod ipc;
 pub mod irq;
+pub mod irq_bridge;
 pub mod kernel_init;
 pub mod madt;
 pub mod memory_manager;
