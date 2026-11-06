@@ -201,3 +201,51 @@ Vektoren im selben Wort, EOI-Register, ISR-Auswertung, ACK-Reihenfolge).
 **Grenze:** Die Registerschicht ist nicht mit dem MMIO-Fenster verbunden. Das
 Mapping von `LAPIC_DEFAULT_BASE` (0xFEE00000) und die Zuordnung Vektor → Line
 (Geräte-Enumeration, SC-006 Punkt 11) fehlen weiterhin, ebenso ein QEMU-Bootlauf.
+
+## Nachtrag 21:20 — Erster echter Bootlauf in QEMU
+
+Bis hierher war alles nur im Testprofil belegt. Jetzt gibt es einen Bootlauf.
+
+Aufbau: Kernel-ELF (`--features x86-boot`, `x86_64-unknown-none`, 145.080 Bytes)
+→ `boot`-Crate erzeugt `shivacore-bios.img` (2.589.696 Bytes) → QEMU 7.2.22,
+`-display none -serial file -m 256M`, Laufzeit 35 s.
+
+Ergebnis, seriell belegt:
+
+```text
+ShivaCore: Kernel-Einstiegspunkt erreicht.
+ShivaCore: CPU vendor=AMD family=15 model=107 stepping=1 apic=true x2apic=false nx=true
+ShivaCore: CPU HAL compatibility check OK.
+ShivaCore: ACPI RSDP/root/table checksums validated; tables=5
+EXCEPTION: BREAKPOINT            <- int3() aus main.rs, Handler fängt und kehrt zurück
+ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).
+ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).
+ShivaCore: Box-Test -- Wert: 41
+ShivaCore: Vec-Test -- Summe 0..10: 45
+ShivaCore: KernelState::boot() -> Done.
+ShivaCore: USER-001 mapped PID=1000 RIP=0x400000 RSP=0x7ffff000
+ShivaCore: USER-001 entering PID=1000 with timer preemption target PID=1001
+ShivaCore: scheduler preemption -> context switch to PID=1001 ...
+```
+
+Nach 35 s Laufzeit: 332 Kontextwechsel zwischen PID 1000 und 1001, 3.324
+Register-Checkpoints, kein Panic, QEMU lief bis zum Timeout (Exit 124 = der
+Kernel lief weiter). Der Ring-3-Einstieg über IRETQ und die zeitgesteuerte
+Verdrängung funktionieren also auf echter Hardware-Semantik, nicht nur im Test.
+
+Der Framebuffer ist ebenfalls belegt: `screendump` über den QEMU-Monitor zeigt
+1280x720 mit `ShivaCore Kernel v0.0.3 -- K-Sprint 2` und
+`Boot: OK | Serial: OK | Framebuffer: OK`. Bild:
+`docs/assets/shivacore-boot-framebuffer.png`.
+
+Was der Lauf NICHT belegt:
+
+- Die LAPIC-Registerschicht aus `apic.rs` läuft noch nicht: sie ist nicht an das
+  MMIO-Fenster angebunden, der Vektor-zu-Line-Pfad fehlt. Der Screenshot zeigt
+  die VGA-Framebuffer-Ausgabe über den Bootloader, nicht die APIC-Anbindung.
+- Kein Gerät wird bedient. ACPI wird geprüft, nicht ausgewertet.
+- Der UEFI-Pfad wurde nicht gestartet, nur das BIOS-Image.
+
+Reproduzierbar: `scripts/qemu_boot.sh 20` baut ELF, Boot-Image und startet QEMU.
+Das Skript kapselt zwei Stolpersteine: `bootloader` 0.11 ruft intern `cargo` mit
+`-Z` auf (braucht `RUSTUP_TOOLCHAIN=nightly`) und verlangt `llvm-tools-preview`.
