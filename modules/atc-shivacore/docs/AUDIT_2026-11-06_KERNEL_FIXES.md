@@ -1043,3 +1043,46 @@ ohne Panic, Tastatur weiter ueber `Line Some(1)`.
 verdrahten". Bevor ein Prozess Tastenereignisse empfaengt, muss die ABI einen
 Pufferzeiger bekommen — sonst kann der Kernel die Nachricht nicht abliefern,
 egal wie gut der Kanal vorbereitet ist.
+
+## Nachtrag 10:55 — Der dritte Prozess kam nie an die Reihe
+
+Ziel war der erste echte Syscall aus Ring 3: neuer Prozess PID 1002 mit einer
+Schleife aus `int 0x80`. Der erste Lauf zeigte **keinen** Syscall. Die Ursache
+war nicht der Gate (DPL 3 steht korrekt im IDT-Eintrag), sondern der Scheduler.
+
+**Befund:** `pick_next` nahm den ersten lauffaehigen Prozess, der nicht der
+laufende war. Bei zwei Prozessen ist das korrektes Round-Robin, bei dreien wird
+der dritte **nie** ausgewaehlt. Der Prozess existierte, war eingetragen und
+lief nie — im Log nicht einmal ein Warm-up-Tick.
+
+Beweis vor dem Fix (Diagnoselauf mit Musterprozess statt Syscall):
+
+```text
+SCHED-001 register pattern established PID=1000 ...
+SCHED-001 register pattern established PID=1001 ...
+# PID=1002 fehlt vollstaendig
+```
+
+**Fix** (`user_sched.rs`): die Suche beginnt hinter dem laufenden Prozess und
+laeuft einmal im Kreis. Prioritaet (niedrigere Zahl zuerst) bleibt erhalten; bei
+Gleichrangigen gewinnt der erste Kandidat **in Ringreihenfolge**, und weil die
+Ringreihenfolge hinter dem laufenden Prozess beginnt, rotiert die Auswahl.
+Zwei neue Tests: `three_equal_processes_rotate_instead_of_starving_the_last`
+(1000 → 1001 → 1002 → 1000) und `rotation_and_priority_work_together`
+(Prioritaet schlaegt Ringreihenfolge, Rotation gilt unter Gleichrangigen).
+
+**Ergebnis**, BIOS und UEFI:
+
+```text
+SCHED-001 scheduler armed: PID=1000 + PID=1001 + PID=1002 (Syscall-Schleife)
+Syscall aus Ring 3: Nr=1 PID=1002 Opcode=0x0001 Ergebnis=None
+```
+
+Das ist der erste Syscall, den in diesem Kernel ein Prozess aus CPL3 ausfuehrt:
+`Yield`, ABI 1.0, ohne Fehler. Die Musterpruefung fuer PID 1000/1001 bleibt
+unberuehrt, weil sie nur diese beiden PIDs kennt — der Syscall-Prozess hat kein
+Registermuster, sein RAX/RBX sind per ABI die Rueckgabewerte.
+
+Nebenbei: die Registerkonvention ist weiterhin offen (SC-DEC-L §13), die
+Payload-Bytes setzen sie explizit (RDI=Cap-Slot, RSI=Opcode, R9=ABI-Version).
+652 Kernel-Tests, check/fmt/clippy sauber.
