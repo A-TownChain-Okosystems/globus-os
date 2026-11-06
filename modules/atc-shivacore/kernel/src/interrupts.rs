@@ -334,11 +334,10 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     // Ein Hardware-Tick -> genau ein MonotonicTime-Schritt.
     // try_lock: faellt das Gate gerade in einem Syscall, wird der Tick
     // uebersprungen (monoton bleibt monoton) statt im IRQ zu blockieren.
-    if let Some(mut guard) = SYSCALL_GATE.try_lock() {
-        if let Some(gate) = guard.as_mut() {
-            gate.on_tick();
-        }
-    }
+    // Zeit fortschreiben, ohne auf das Gate zu warten. Frueher wurde der Tick
+    // bei belegtem Gate uebersprungen; damit verlor MonotonicTime genau die
+    // Zeit, in der Syscalls liefen.
+    shivacore::syscall::advance_monotonic_tick();
     let mut guard = USER_SCHEDULER.lock();
     let Some(scheduler) = guard.as_mut() else {
         acknowledge_timer_irq();
