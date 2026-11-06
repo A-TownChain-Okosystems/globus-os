@@ -25,7 +25,27 @@ pub struct SyscallRequest {
     pub capability: Option<CapabilityHandle>,
     pub arg0: u64,
     pub arg1: u64,
-    pub payload_len: usize,
+    /// Zeiger auf die Nutzdaten im Userspace-Speicher (0 = keine).
+    pub buffer_ptr: u64,
+    /// Laenge der Nutzdaten. ABI 2.0.0 trennt Zeiger und Laenge; in 1.x gab es
+    /// nur eine Laenge, die sich ein Register mit einem Argumentwort teilte.
+    pub buffer_len: usize,
+}
+
+impl SyscallRequest {
+    /// Uebersetzt einen Argumentblock in die interne Anfrage. Struktur und
+    /// Version sind zu diesem Zeitpunkt bereits geprueft.
+    pub fn from_block(block: &libshivacore::SyscallBlock) -> Self {
+        Self {
+            abi_version: libshivacore::ABI_VERSION,
+            syscall_id: block.opcode.id(),
+            capability: block.capability,
+            arg0: block.arg0,
+            arg1: block.arg1,
+            buffer_ptr: block.buffer_ptr,
+            buffer_len: block.buffer_len,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -107,7 +127,7 @@ impl SyscallDispatcher {
         if !validate_abi_version(request.abi_version) {
             return SyscallResponse::err(AbiError::AbiVersionMismatch);
         }
-        if request.payload_len > MAX_SYSCALL_PAYLOAD {
+        if request.buffer_len > MAX_SYSCALL_PAYLOAD {
             return SyscallResponse::err(AbiError::InvalidPayload);
         }
 
@@ -135,13 +155,13 @@ impl SyscallDispatcher {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
                 // Die eingefrorene ABI uebertraegt keine Bytes: `SyscallRequest`
-                // traegt eine Laenge (`payload_len`, heute aus R8), aber keinen
-                // Pufferzeiger, aus dem der Kernel lesen koennte. Ein `ok` bei
-                // payload_len > 0 waere die Behauptung, Daten seien unterwegs —
-                // genau das darf ein Syscall im TCB nicht behaupten. Eine
-                // Sendung ohne Nutzdaten (payload_len == 0) ist dagegen ein
-                // reines Signal und damit wahr.
-                if request.payload_len > 0 {
+                // ABI 2.0.0 traegt Pufferzeiger und Laenge getrennt, der Aufruf
+                // ist also nicht mehr strukturell blind. Was noch fehlt, ist die
+                // Kopie in den bzw. aus dem Userspace-Adressraum: die macht der
+                // Trampolin, nachdem er den Zeiger gegen die Prozessabbildung
+                // geprueft hat. Bis dahin bleibt ein `ok` bei Nutzdaten die
+                // Behauptung, Daten seien unterwegs.
+                if request.buffer_len > 0 {
                     return SyscallResponse::err(AbiError::EndpointUnavailable);
                 }
                 SyscallResponse::ok(0)
@@ -172,7 +192,7 @@ impl SyscallDispatcher {
                 // der Syscall deshalb das naechste Ereignis als Wert zurueck,
                 // 0 bedeutet "nichts anliegend". Fuer jeden anderen Kanal
                 // bleibt es beim ehrlichen "kein Transport".
-                if request.payload_len > 0 {
+                if request.buffer_len > 0 {
                     return SyscallResponse::err(AbiError::EndpointUnavailable);
                 }
                 if request.arg0 == KERNEL_INPUT_CHANNEL {
@@ -252,7 +272,8 @@ mod tests {
             capability: None,
             arg0: 0,
             arg1: 0,
-            payload_len: 0,
+            buffer_ptr: 0,
+            buffer_len: 0,
         }
     }
 
@@ -277,7 +298,7 @@ mod tests {
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
-                abi_version: 0x0002_0000,
+                abi_version: 0x0003_0000,
                 ..request(Syscall::Yield)
             },
             &mut CapabilityTable::new(),
@@ -292,7 +313,7 @@ mod tests {
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
-                payload_len: MAX_SYSCALL_PAYLOAD + 1,
+                buffer_len: MAX_SYSCALL_PAYLOAD + 1,
                 ..request(Syscall::Yield)
             },
             &mut CapabilityTable::new(),
@@ -364,7 +385,8 @@ mod tests {
             SyscallRequest {
                 capability: Some(CapabilityHandle(cap.0)),
                 arg0: 8,
-                payload_len: 16,
+                buffer_len: 16,
+                buffer_ptr: 0x400000,
                 ..request(Syscall::IpcSend)
             },
             &mut table,
@@ -413,6 +435,38 @@ mod tests {
             &mut crate::input_queue::InputQueue::new(),
         );
         assert_eq!(r.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn a_parsed_block_becomes_a_request_with_pointer_and_length() {
+        let mut block = libshivacore::SyscallBlock::new(
+            libshivacore::Syscall::IpcSend,
+            Some(libshivacore::CapabilityHandle(9)),
+        );
+        block.arg0 = 3;
+        block.buffer_ptr = 0x0040_1000;
+        block.buffer_len = 32;
+        let request = SyscallRequest::from_block(&block);
+        assert_eq!(request.syscall_id, libshivacore::Syscall::IpcSend.id());
+        assert_eq!(request.capability, Some(libshivacore::CapabilityHandle(9)));
+        assert_eq!(request.buffer_ptr, 0x0040_1000);
+        assert_eq!(request.buffer_len, 32);
+        assert!(libshivacore::validate_abi_version(request.abi_version));
+    }
+
+    #[test]
+    fn a_block_round_trips_through_the_byte_parser() {
+        let mut block = libshivacore::SyscallBlock::new(
+            libshivacore::Syscall::IpcReceive,
+            Some(libshivacore::CapabilityHandle(1)),
+        );
+        block.arg0 = crate::syscall::KERNEL_INPUT_CHANNEL;
+        let mut bytes = [0u8; libshivacore::SYSCALL_BLOCK_MAX_SIZE];
+        let written = block.write_to(&mut bytes).expect("Block schreiben");
+        let parsed = libshivacore::SyscallBlock::parse(&bytes[..written]).expect("Block lesen");
+        let request = SyscallRequest::from_block(&parsed);
+        assert_eq!(request.arg0, crate::syscall::KERNEL_INPUT_CHANNEL);
+        assert_eq!(request.buffer_len, 0);
     }
 
     #[test]
