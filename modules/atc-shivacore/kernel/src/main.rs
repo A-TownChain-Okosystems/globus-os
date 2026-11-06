@@ -522,24 +522,51 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     //   EB FC              jmp  zurueck auf int 0x80
     let input_cap = interrupts::grant_input_read(ats1000::Pid(1002))
         .expect("ShivaCore: Leserecht auf den Eingabekanal");
-    // ABI 2.0.0: Der Prozess legt einen Argumentblock in seine Datenseite und
-    // uebergibt den Zeiger. Die Datenseite ist gemappt, sobald das Binary Daten
-    // mitbringt — der Stack bleibt hier unberuehrt.
-    //
-    // Block bei 0x0190_0000: Groesse, Opcode/Flags, Capability, Kanal, arg1,
-    // Pufferzeiger, Pufferlaenge. Danach laeuft nur noch der Aufruf.
-    let mut syscall_loop: alloc::vec::Vec<u8> = alloc::vec![
-        0x48, 0xC7, 0x04, 0x25, 0x00, 0x00, 0x90, 0x01, 0x38, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x04,
-        0x25, 0x08, 0x00, 0x90, 0x01, 0x11, 0x00, 0x00, 0x00, 0x48, 0xBF, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x48, 0x89, 0x3C, 0x25, 0x10, 0x00, 0x90, 0x01, 0x48, 0xC7, 0x04,
-        0x25, 0x18, 0x00, 0x90, 0x01, 0x01, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x04, 0x25, 0x20, 0x00,
-        0x90, 0x01, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x04, 0x25, 0x28, 0x00, 0x90, 0x01, 0x00,
-        0x00, 0x00, 0x00, 0x48, 0xC7, 0x04, 0x25, 0x30, 0x00, 0x90, 0x01, 0x00, 0x00, 0x00, 0x00,
-        0x48, 0xBF, 0x00, 0x00, 0x90, 0x01, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0xC6, 0x38, 0x00,
-        0x00, 0x00, 0x48, 0xBA, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00, 0xCD, 0x80, 0xEB,
-        0xE1
-    ];
-    syscall_loop[26..34].copy_from_slice(&input_cap.to_le_bytes());
+    // ABI 2.0.0: Der Prozess baut einen Argumentblock in seiner Datenseite und
+    // uebergibt den Zeiger. Das Abbild der Anweisungen wird hier aufgebaut, und
+    // alle Spruenge und der Platz der Capability werden aus der jeweils
+    // aktuellen Laenge berechnet. Von Hand gezaehlte Offsets waren zuvor um ein
+    // Byte verrutscht; mit dieser Bauart kann das nicht mehr passieren, weil es
+    // keinen festen Offset mehr gibt.
+    fn store_qword_at(address: u32, value: u32) -> [u8; 12] {
+        let a = address.to_le_bytes();
+        let v = value.to_le_bytes();
+        [
+            0x48, 0xC7, 0x04, 0x25, a[0], a[1], a[2], a[3], v[0], v[1], v[2], v[3],
+        ]
+    }
+    fn mov_rdi(value: u64) -> [u8; 10] {
+        let v = value.to_le_bytes();
+        [0x48, 0xBF, v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7]]
+    }
+
+    const DATA_BASE: u32 = 0x0190_0000;
+    // Adresse in der Stackseite des Prozesses: ein Schreibzugriff dorthin
+    // beweist, dass Ring 3 seinen Stack benutzen darf.
+    const STACK_PROBE: u32 = 0x07FD_FFC0;
+
+    let mut syscall_loop: alloc::vec::Vec<u8> = alloc::vec::Vec::new();
+    syscall_loop.extend_from_slice(&store_qword_at(STACK_PROBE, 1));
+
+    // Block: Groesse, Opcode/Flags, Capability, Kanal, arg1, Puffer, Laenge.
+    syscall_loop.extend_from_slice(&store_qword_at(DATA_BASE, 56));
+    syscall_loop.extend_from_slice(&store_qword_at(DATA_BASE + 8, 0x0011));
+    let capability_slot = syscall_loop.len() + 2;
+    syscall_loop.extend_from_slice(&mov_rdi(0));
+    syscall_loop.extend_from_slice(&[0x48, 0x89, 0x3C, 0x25, 0x10, 0x00, 0x90, 0x01]);
+    for (offset, value) in [(24u32, 1u32), (32, 0), (40, 0), (48, 0)] {
+        syscall_loop.extend_from_slice(&store_qword_at(DATA_BASE + offset, value));
+    }
+
+    let loop_entry = syscall_loop.len();
+    syscall_loop.extend_from_slice(&mov_rdi(DATA_BASE as u64));
+    syscall_loop.extend_from_slice(&[0x48, 0xC7, 0xC6, 0x38, 0x00, 0x00, 0x00]);
+    syscall_loop.extend_from_slice(&[0x48, 0xBA, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x00, 0x00]);
+    syscall_loop.extend_from_slice(&[0xCD, 0x80]);
+    let jump_back = (loop_entry as isize - (syscall_loop.len() as isize + 2)) as i8;
+    syscall_loop.extend_from_slice(&[0xEB, jump_back as u8]);
+    syscall_loop[capability_slot..capability_slot + 8].copy_from_slice(&input_cap.to_le_bytes());
+
     let mut user_binary_3 =
         userspace::UserBinary::from_bytes("ring3-input", syscall_loop, 0x0180_0000);
     // Datenseite anfordern: map_user_binary legt sie nur an, wenn Daten da sind.
