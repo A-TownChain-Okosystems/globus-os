@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 0e8c22e13f73c33acb9e43b936f0b9713b43283b
+bound_commit: 9e0e62944ef4f062c805e940443d3d668fcf279f
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 0e8c22e13f73c33acb9e43b936f0b9713b43283b
-  timestamp: 2026-11-07T05:00:00+00:00
+  commit: 9e0e62944ef4f062c805e940443d3d668fcf279f
+  timestamp: 2026-11-07T05:45:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -109,7 +109,10 @@ verification:
         Dazu keymap.rs: Set-1-Scancodes werden zu Zeichen (Shift, Caps Lock,
         Praefix 0xE0, Loslassen ohne Zeichen), 10 Tests inklusive aller 256
         Codes ohne Panic. Beleg im Clone-Lauf: 'a', ShiftLeft, 'A', '1', '!',
-        Enter, unter UEFI zusaetzlich CapsLock mit 'B' gross. 626 Tests. In frischem Clone fuer BIOS und UEFI
+        Enter, unter UEFI zusaetzlich CapsLock mit 'B' gross. 626 Tests.
+        Routing-Tabelle lebt jetzt im Kernel (DEVICE_ROUTES) statt als lokale
+        Variable in main: der Handler loest die Line per route_for_vector auf.
+        Beleg: "Tastatur ueber Vektor 0x30 (Line Some(1)): 'm'" im Clone-Lauf. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
