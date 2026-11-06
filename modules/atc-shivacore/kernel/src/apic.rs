@@ -52,6 +52,36 @@ pub trait ApicRegisters {
     fn write(&mut self, offset: u32, value: u32);
 }
 
+/// Registersatz auf einem gemappten MMIO-Fenster. Alle Zugriffe sind volatil,
+/// weil die Hardware die Werte hinter dem Ruecken des Compilers aendert.
+pub struct MappedRegisters {
+    base: *mut u32,
+}
+
+impl MappedRegisters {
+    /// # Safety
+    /// `base` muss auf ein gemapptes, 4 KiB ausgerichtetes LAPIC-Fenster zeigen,
+    /// das mindestens bis Offset 0x3F0 reicht.
+    pub unsafe fn new(base: *mut u32) -> Self {
+        Self { base }
+    }
+
+    fn slot(&self, offset: u32) -> *mut u32 {
+        // Register liegen auf 16-Byte-Grenzen; das Fenster wird als u32 gelesen.
+        unsafe { self.base.add((offset / 4) as usize) }
+    }
+}
+
+impl ApicRegisters for MappedRegisters {
+    fn read(&self, offset: u32) -> u32 {
+        unsafe { core::ptr::read_volatile(self.slot(offset)) }
+    }
+
+    fn write(&mut self, offset: u32, value: u32) {
+        unsafe { core::ptr::write_volatile(self.slot(offset), value) }
+    }
+}
+
 /// Local APIC mit Masken-, Quittungs- und In-Service-Abfrage.
 pub struct LocalApic<M: ApicRegisters> {
     regs: M,
