@@ -19,22 +19,17 @@ crate-type = ["lib"]
 
 [features]
 default = []
-x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:pc-keyboard", "dep:volatile", "dep:noto-sans-mono-bitmap"]
+x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:noto-sans-mono-bitmap"]
 
 [dependencies]
 bootloader_api = { version = "0.11", optional = true }
-volatile = { version = "0.6.1", optional = true }
 spin = "0.12"
 x86_64 = { version = "0.15", optional = true }
 uart_16550 = { version = "0.8", optional = true }
 pic8259 = { version = "0.11", optional = true }
-pc-keyboard = { version = "0.9", optional = true }
 lazy_static = { version = "1.5", features = ["spin_no_std"] }
 linked_list_allocator = "0.10"
 noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = ["regular", "size_16"], optional = true }
-rand = { version = "0.10", default-features = false }
-ed25519-dalek = { version = "3.0", default-features = false, features = ["alloc"] }
-libm = "0.2"
 globus-diagnostics = { path = "../../../system/diagnostics" }
 libshivacore = { path = "../../../system/shivacore-api" }
 
