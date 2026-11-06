@@ -651,3 +651,54 @@ verdrahtet, und es gibt keinen ABI-Syscall fuer das ACK; die sechs Syscalls in
 SHIVA-SYSCALL-ABI-001 bleiben unveraendert, statt die ABI eigenmaechtig zu
 erweitern. Das ACK muss an einer bestehenden Stelle ankommen, etwa beim
 Konsumieren der Notification, und das braucht eine Spec-Entscheidung.
+
+## Nachtrag 03:20 — Die Brücke läuft jetzt im echten Interrupt-Pfad
+
+Der Handler sperrt die Line beim Eintritt und gibt sie erst im ACK wieder frei:
+
+```rust
+// interrupts.rs, timer_trap_rust
+if shivacore::apic::acknowledges_via_apic() {
+    shivacore::apic::mask_interrupt_vector(TIMER_VECTOR);
+}
+...
+fn acknowledge_timer_irq() {
+    if shivacore::apic::acknowledges_via_apic() {
+        shivacore::apic::acknowledge_interrupt();          // EOI
+        shivacore::apic::unmask_interrupt_vector(TIMER_VECTOR);  // Freigabe
+    }
+}
+```
+
+`apic.rs` hat dafuer `mask_interrupt_vector`/`unmask_interrupt_vector` (Wort =
+`vector/32`, Stride 0x10, Bit = `vector%32`, volatil) plus zwei Zaehler.
+
+```text
+ShivaCore: IRQ-Pfad: 41 Ticks ueber IOAPIC, 41 Sperren, 41 Freigaben
+```
+
+Zwei BIOS-Laeufe und ein UEFI-Lauf, jeweils ohne Panic, Sperren und Freigaben
+jedes Mal gleich hoch.
+
+**Drei Messfehler auf dem Weg dahin, alle meine.** Erstens meldete der erste
+Versuch `0 Sperren` bei `basis=0xfee00000`: die Zaehler standen noch vor dem
+Umschalten auf den IOAPIC, also vor dem ersten maskierten Tick. Zweitens
+behauptete die Handprobe im Bootpfad "funktioniert", was nur die Helfer prueft,
+nicht den Handler. Drittens zeigte die Sicht aus dem Handler `apic=false`, was
+ich erst fuer einen zweiten Modulzustand hielt — es war schlicht derselbe
+Reihenfolgefehler: die Diagnosezeile lief vor dem Umschalten. Erst die
+Verlegung der Messung hinter `switch_acknowledge_to_apic` machte den Pfad
+sichtbar. Lehre: eine Zaehlermessung im Bootpfad gehoert hinter den Zustand, den
+sie belegen soll, sonst misst sie den Vorher-Zustand.
+
+Ausserdem bleibt festgehalten: mit dem Vektor 0x20 und den acht IER-Worten liegt
+das beschriebene Register bei 0x360 bis 0x370, also sicher im gemappten 4-KiB-
+Fenster; Vektoren unter 32 werden nicht zugelassen, damit kein Exception-Vektor
+gesperrt wird.
+
+**Weiterhin offen.** Es gibt keinen ABI-Syscall fuer das ACK; die sechs Syscalls
+aus SHIVA-SYSCALL-ABI-001 bleiben unveraendert. Solange der Kernel selbst der
+Empfaenger ist, genuegt das ACK am Handlerende. Sobald ein Userspace-Prozess
+eine Geraete-Line abonniert, braucht es eine Spec-Entscheidung, wo sein ACK
+ankommt. Die Bruecke aus `irq_bridge.rs` (Tabelle plus Rechtepruefung) ist dafuer
+vorbereitet, aber noch nicht angeschlossen.
