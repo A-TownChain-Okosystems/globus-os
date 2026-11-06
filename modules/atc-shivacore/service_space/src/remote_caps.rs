@@ -68,13 +68,26 @@ pub struct RemoteCapabilityTicket {
     pub parent_ticket_nonce: Option<String>,
 }
 
+/// Domain-Separation fuer Remote-Capability-Tickets, gleiche Konvention wie
+/// `p2p_secure::DOMAIN_SEPARATION`. Ohne diesen Tag waere eine Ticket-Signatur
+/// gegen Signaturen anderer Protokolle austauschbar.
+pub const RCT_DOMAIN_SEPARATION: &[u8] = b"ATC-RCT-v1\0";
+
+/// Laengenpraefix fuer variable Felder: sonst sind Feldgrenzen nicht eindeutig
+/// und zwei verschiedene Tickets koennen dieselbe Signaturbasis haben.
+fn push_field(out: &mut Vec<u8>, bytes: &[u8]) {
+    out.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+    out.extend_from_slice(bytes);
+}
+
 impl RemoteCapabilityTicket {
     /// Deterministische Byte-Repraesentation fuer Signatur/Verifikation.
     pub fn signing_payload(&self) -> Vec<u8> {
         let mut payload = Vec::new();
-        payload.extend_from_slice(self.issuer_did.value.as_bytes());
-        payload.extend_from_slice(self.subject_did.value.as_bytes());
-        payload.extend_from_slice(self.resource.resource_type.as_bytes());
+        payload.extend_from_slice(RCT_DOMAIN_SEPARATION);
+        push_field(&mut payload, self.issuer_did.value.as_bytes());
+        push_field(&mut payload, self.subject_did.value.as_bytes());
+        push_field(&mut payload, self.resource.resource_type.as_bytes());
         payload.extend_from_slice(&self.resource.resource_id.to_le_bytes());
         // Rechte sind seit SC-006 16 Bit breit (SUBSCRIBE/ACK/SET_DEADLINE/
         // ACCESS kamen hinzu). Bis dahin war es ein Byte; Tickets aus der Zeit
@@ -82,16 +95,19 @@ impl RemoteCapabilityTicket {
         // gegengeprueft.
         payload.extend_from_slice(&self.resource.rights.bits().to_le_bytes());
         payload.extend_from_slice(&self.constraints.max_operations.to_le_bytes());
-        payload.extend_from_slice(&self.constraints.deadline_unix.to_le_bytes());
+        // Deadline als ganzzahlige Mikrosekunden: f64 in einer Signaturbasis
+        // bringt NaN und -0.0 mit und ist nicht byte-stabil.
+        let deadline_us = (self.constraints.deadline_unix * 1_000_000.0).round() as i64;
+        payload.extend_from_slice(&deadline_us.to_le_bytes());
         if let Some(eb) = self.constraints.energy_budget_uj {
             payload.extend_from_slice(&eb.to_le_bytes());
             payload.push(1);
         } else {
             payload.push(0);
         }
-        payload.extend_from_slice(self.nonce.as_bytes());
+        push_field(&mut payload, self.nonce.as_bytes());
         if let Some(ref parent) = self.parent_ticket_nonce {
-            payload.extend_from_slice(parent.as_bytes());
+            push_field(&mut payload, parent.as_bytes());
             payload.push(1);
         } else {
             payload.push(0);
@@ -774,5 +790,83 @@ mod tests {
         let cap = resolver.resolve_chain::<SoftwareSigner>(&chain).unwrap();
         assert_eq!(cap.constraints.max_operations, 10);
         assert_eq!(cap.resource.rights, Rights::READ);
+    }
+}
+
+#[cfg(test)]
+mod rct_signature_contract {
+    use super::*;
+
+    fn ticket(issuer: &str, subject: &str, deadline: f64) -> RemoteCapabilityTicket {
+        RemoteCapabilityTicket {
+            issuer_did: Did::new(issuer),
+            subject_did: Did::new(subject),
+            resource: ResourceDescriptor {
+                resource_type: "ipc".to_string(),
+                resource_id: 7,
+                rights: Rights::READ,
+            },
+            constraints: Constraints {
+                max_operations: 10,
+                deadline_unix: deadline,
+                energy_budget_uj: None,
+            },
+            nonce: "n1".to_string(),
+            issuer_signature: vec![],
+            parent_ticket_nonce: None,
+        }
+    }
+
+    #[test]
+    fn payload_carries_domain_separation() {
+        let p = ticket("did:shivacore:aa", "did:shivacore:bb", 1.0).signing_payload();
+        assert!(
+            p.starts_with(RCT_DOMAIN_SEPARATION),
+            "Ticket-Signaturen brauchen einen Domain-Tag"
+        );
+    }
+
+    #[test]
+    fn shifted_field_boundaries_do_not_collide() {
+        // Ohne Laengenpraefix ergaben diese beiden Tickets identische Bytes:
+        // "AB" + "C" == "A" + "BC". Mit Laengenpraefix nicht mehr.
+        let a = ticket("AB", "C", 1.0).signing_payload();
+        let b = ticket("A", "BC", 1.0).signing_payload();
+        assert_ne!(a, b, "Feldgrenzen muessen eindeutig sein");
+
+        let mut naive = Vec::new();
+        naive.extend_from_slice(b"AB");
+        naive.extend_from_slice(b"C");
+        let mut naive2 = Vec::new();
+        naive2.extend_from_slice(b"A");
+        naive2.extend_from_slice(b"BC");
+        assert_eq!(naive, naive2, "Beleg fuer die alte Ambiguitaet");
+    }
+
+    #[test]
+    fn deadline_is_encoded_stably() {
+        // -0.0 und 0.0 sind derselbe Zeitpunkt und muessen dieselben Bytes
+        // ergeben; rohe f64-Bytes haetten sich unterschieden.
+        assert_eq!(
+            ticket("i", "s", -0.0).signing_payload(),
+            ticket("i", "s", 0.0).signing_payload()
+        );
+        // Sub-Mikrosekunden-Rauschen darf die Signaturbasis nicht kippen.
+        assert_eq!(
+            ticket("i", "s", 1.5).signing_payload(),
+            ticket("i", "s", 1.5000000001).signing_payload()
+        );
+        assert_ne!(
+            ticket("i", "s", 1.5).signing_payload(),
+            ticket("i", "s", 1.6).signing_payload()
+        );
+    }
+
+    #[test]
+    fn different_nonces_stay_distinct() {
+        let mut t = ticket("i", "s", 1.0);
+        let a = t.signing_payload();
+        t.nonce = "n2".to_string();
+        assert_ne!(a, t.signing_payload());
     }
 }
