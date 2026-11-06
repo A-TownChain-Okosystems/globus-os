@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 988cda18b92652c4ed791339260504b8fafe8eae
+bound_commit: 480e4f7634baadd81da83e0ba4a8660dd0cc85a5
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 988cda18b92652c4ed791339260504b8fafe8eae
-  timestamp: 2026-11-07T10:05:00+00:00
+  commit: 480e4f7634baadd81da83e0ba4a8660dd0cc85a5
+  timestamp: 2026-11-07T10:20:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -141,7 +141,15 @@ verification:
         Laenge, keinen Pufferzeiger. Jetzt: IpcSend mit payload_len > 0 ->
         EndpointUnavailable (bestehender Code 5), IpcReceive ->
         EndpointUnavailable mit value 0, Sendung ohne Nutzdaten bleibt ok,
-        Rechtepruefung bleibt zuerst. 4 Tests, 650 gesamt. In frischem Clone fuer BIOS und UEFI
+        Rechtepruefung bleibt zuerst. 4 Tests, 650 gesamt.
+        Erster echter Syscall aus CPL3: dritter Ring-3-Prozess PID 1002 fuehrt
+        int 0x80 (Yield, ABI 1.0) aus. Dafuer musste der Scheduler repariert
+        werden: pick_next nahm den ersten lauffaehigen Prozess, der nicht der
+        laufende war — bei drei Prozessen wurde der dritte nie ausgewaehlt
+        (Diagnoselauf: kein Warm-up-Tick fuer PID 1002). Jetzt beginnt die
+        Suche hinter dem laufenden Prozess und laeuft im Kreis; Prioritaet
+        bleibt erhalten. Log (BIOS+UEFI): "Syscall aus Ring 3: Nr=1 PID=1002
+        Opcode=0x0001 Ergebnis=None". 2 Regressionstests, 652 gesamt. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
