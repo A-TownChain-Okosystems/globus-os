@@ -55,6 +55,8 @@ ShivaCore: LAPIC aktiv (id=0, spurious=0x1FF).
 ShivaCore: LAPIC-Maskentest Vektor 0x40: maskiert=true freigegeben=true
 ShivaCore: IOAPIC id=0 version=0x170020 gsi_base=0 entries=24
 ShivaCore: IOAPIC GSI 2 -> Vektor 0x50 programmiert (maskiert=true, Ruecklesung=true)
+ShivaCore: PIC maskiert (0xFF/0xFF), nur noch ein Zustellweg.
+ShivaCore: Zustellung auf IOAPIC umgestellt: GSI 2 -> Vektor 0x20, maskiert=false
 ShivaCore: Box-Test -- Wert: 41
 ShivaCore: Vec-Test -- Summe 0..10: 45
 ShivaCore: KernelState::boot() -> Done.
