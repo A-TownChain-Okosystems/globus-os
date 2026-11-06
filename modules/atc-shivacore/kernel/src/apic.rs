@@ -37,6 +37,11 @@ pub fn switch_acknowledge_to_apic(mapped_base: u64) {
     DELIVERY_VIA_APIC.store(true, Ordering::Release);
 }
 
+/// Gemappte LAPIC-Basis (0 = nicht gemappt).
+pub fn apic_base() -> u64 {
+    EOI_BASE.load(Ordering::Acquire)
+}
+
 /// Meldet, ob der Local-APIC-Weg aktiv ist.
 pub fn acknowledges_via_apic() -> bool {
     DELIVERY_VIA_APIC.load(Ordering::Acquire)
@@ -57,6 +62,61 @@ pub fn acknowledge_interrupt() {
     unsafe {
         core::ptr::write_volatile((base + EOI_BASE_OFFSET) as *mut u32, 0);
     }
+}
+
+/// Zaehlt Sperren und Freigaben im echten Interrupt-Pfad. Beide muessen gleich
+/// oft auftreten; ein Auseinanderlaufen hiesse, dass eine Line haengen bleibt.
+static MASK_COUNT: AtomicU64 = AtomicU64::new(0);
+static UNMASK_COUNT: AtomicU64 = AtomicU64::new(0);
+
+/// Sperrt einen Vektor im Interrupt-Enable-Register des gemappten LAPIC.
+/// Rueckgabe sagt, ob geschrieben wurde (falsch ohne gemappte Basis).
+pub fn mask_interrupt_vector(vector: u8) -> bool {
+    set_vector_mask(vector, true)
+}
+
+/// Gibt den Vektor wieder frei. Das ist die eigentliche ACK-Handlung: ohne
+/// Freigabe bleibt die Line stumm.
+pub fn unmask_interrupt_vector(vector: u8) -> bool {
+    set_vector_mask(vector, false)
+}
+
+fn set_vector_mask(vector: u8, masked: bool) -> bool {
+    let base = EOI_BASE.load(Ordering::Acquire);
+    if base == 0 {
+        return false;
+    }
+    // Nutzvektoren liegen ab 32, deshalb ist das Wort nie 0 und der Offset
+    // bleibt im 4-KiB-Fenster (Wort 7 endet bei 0x3F0).
+    let word = u32::from(vector) / 32;
+    let bit = u32::from(vector) % 32;
+    let address = (base + u64::from(REG_IRQ_ENABLE) + u64::from(word) * u64::from(REGISTER_STRIDE))
+        as *mut u32;
+    // SAFETY: address liegt im gemappten LAPIC-Fenster (map_mmio_page deckt
+    // 0x350 bis 0x3F0 ab), Zugriff volatil, weil Hardware mitliest.
+    unsafe {
+        let current = core::ptr::read_volatile(address);
+        let next = if masked {
+            current | (1 << bit)
+        } else {
+            current & !(1 << bit)
+        };
+        core::ptr::write_volatile(address, next);
+    }
+    if masked {
+        MASK_COUNT.fetch_add(1, Ordering::Relaxed);
+    } else {
+        UNMASK_COUNT.fetch_add(1, Ordering::Relaxed);
+    }
+    true
+}
+
+/// Stand der Sperren und Freigaben im Interrupt-Pfad.
+pub fn mask_unmask_counts() -> (u64, u64) {
+    (
+        MASK_COUNT.load(Ordering::Relaxed),
+        UNMASK_COUNT.load(Ordering::Relaxed),
+    )
 }
 
 const EOI_BASE_OFFSET: u64 = 0x0B0;
@@ -236,6 +296,17 @@ mod sc006_lapic_masking {
 
     fn apic() -> LocalApic<FakeApic> {
         LocalApic::new(FakeApic::new())
+    }
+
+    #[test]
+    fn masking_without_a_mapped_base_writes_nothing() {
+        // Vor dem Mapping ist EOI_BASE null: die Helfer duerfen dann weder
+        // schreiben noch zaehlen, sonst behauptet der Bootpfad eine Sperre,
+        // die es nicht gibt.
+        assert_eq!(apic_base(), 0);
+        assert!(!mask_interrupt_vector(0x20));
+        assert!(!unmask_interrupt_vector(0x20));
+        assert_eq!(mask_unmask_counts(), (0, 0));
     }
 
     #[test]
