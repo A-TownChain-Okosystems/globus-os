@@ -245,8 +245,19 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     );
                 }
             }
+            let (masks_before, unmasks_before) = shivacore::apic::mask_unmask_counts();
             let apic_probe = measure_ticks(PROBE_TICKS);
             let apic_delta = apic_probe.map(|(tsc, _)| tsc);
+            // Ab hier ist der IOAPIC der Zustellweg: die Sperren und
+            // Freigaben dieses Fensters zeigen, ob der Handler wirklich
+            // maskiert und erst im ACK freigibt.
+            let (masks_after, unmasks_after) = shivacore::apic::mask_unmask_counts();
+            serial_println!(
+                "ShivaCore: IRQ-Pfad: {} Ticks ueber IOAPIC, {} Sperren, {} Freigaben",
+                masks_after.saturating_sub(masks_before),
+                masks_after.saturating_sub(masks_before),
+                unmasks_after.saturating_sub(unmasks_before)
+            );
             let apic_rate = tsc_per_second.and_then(|tsc| measure_tick_rate(PROBE_TICKS, tsc));
             match (pic_delta, apic_delta) {
                 (Some(pic), Some(apic)) if apic > 0 => {
