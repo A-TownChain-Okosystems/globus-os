@@ -89,7 +89,8 @@ mod tests {
             capability: None,
             arg0: 0,
             arg1: 0,
-            payload_len: 0,
+            buffer_ptr: 0,
+            buffer_len: 0,
         }
     }
 
