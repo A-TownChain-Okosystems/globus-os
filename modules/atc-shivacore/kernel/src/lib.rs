@@ -20,6 +20,7 @@ pub mod cross_subsystem;
 pub mod diagnostics;
 pub mod elf_loader;
 pub mod hal;
+pub mod ioapic;
 pub mod ipc;
 pub mod irq;
 pub mod kernel_init;
