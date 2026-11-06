@@ -873,3 +873,42 @@ getestet; dass der Handler sie benutzt, zeigt sich an der Zeile im Log, nicht an
 einem Unit-Test — im Bin-Target gibt es keine Testunterstuetzung.
 
 626 Kernel-Tests, check/fmt/clippy sauber, BIOS und UEFI ohne Panic.
+
+## Nachtrag 06:35 — Die IRQ-Bruecke hatte noch nie einen Aufrufer
+
+`irq_bridge.rs` lag seit dem SC-006-Sprint im Baum: Tabelle, Rechtepruefung,
+Sperren bis ACK, Tests. Im echten Pfad rief sie niemand. Die Tastatur sperrte
+ihren Vektor direkt ueber `apic::mask_interrupt_vector` — dieselbe Wirkung, aber
+an der Tabelle vorbei, ohne Capability und ohne ACK-Buchhaltung.
+
+**Jetzt laeuft Line 1 durch die Bruecke.** Der Kernel legt beim Boot eine
+Capability mit `ResourceType::Irq` und dem von SC-006 vorgeschriebenen Satz
+`SUBSCRIBE|ACK` an (`create_typed`, Eigentuemer PID 0), abonniert damit die Line
+und gibt erst danach den IOAPIC-Eintrag frei:
+
+```text
+ShivaCore: IRQ-Bruecke: Line 1 abonniert (Kernel-Cap SUBSCRIBE|ACK)
+```
+
+Im Handler: `on_interrupt(line, vector)` sperrt ueber die Tabelle, nach dem
+Scancode folgt EOI, dann `ack(&cap, vector)` — erst das gibt den Vektor frei.
+
+**Nachweis, dass es nicht nur so aussieht.** Zwei Zaehler stehen an jeder
+Tastenzeile: Zustellungen ueber die Bruecke und Rueckfaelle auf direktes Sperren.
+
+```text
+Tastatur ueber Vektor 0x30 (Line Some(1)): 'b' (Scancode 0x30) [Bruecke 2, Rueckfall 0]
+Tastatur ueber Vektor 0x30 (Line Some(1)): 'c' (Scancode 0x2E) [Bruecke 4, Rueckfall 0]
+```
+
+Zwei Zustellungen je Taste, Druecken und Loslassen, kein Rueckfall. Unter UEFI
+dasselbe. Die erste Zeile zeigt 0, weil der Zaehler nach dem Log erhoeht wird —
+nicht null Zustellungen, sondern noch keine gezaehlte.
+
+**Der Rueckfall ist Absicht, nicht Rest.** Ist die Line nicht eingetragen, fehlt
+die Capability oder scheitert das Sperren, sperrt der Handler direkt und zaehlt
+das in `DIRECT_FALLBACKS`. Ein stiller Umweg waere schlimmer als ein sichtbarer.
+
+**Grenze.** Die Bruecke traegt bisher eine Line mit einem Kernel-Subskribenten.
+Dass ein Userspace-Prozess ACK gibt, braucht eine Syscall-Entscheidung; das
+bleibt offen und ist der Grund, warum die Zeile im Log endet.
