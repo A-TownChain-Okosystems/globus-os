@@ -75,8 +75,7 @@ impl Rights {
     pub const SET_DEADLINE: Rights = Rights(128);
     /// SC-006: Zugriff auf genau ein Geraet (MMIO/DMA).
     pub const ACCESS: Rights = Rights(256);
-    pub const ALL: Rights =
-        Rights(1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256);
+    pub const ALL: Rights = Rights(1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256);
 
     pub fn has(self, other: Rights) -> bool {
         (self.0 & other.0) == other.0
