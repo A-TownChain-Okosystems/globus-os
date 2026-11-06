@@ -503,7 +503,57 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_pid_2 = ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
 
-    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2);
+    // Dritter Ring-3-Prozess: fuehrt echte Syscalls aus. Die Musterpruefung in
+    // interrupts.rs deckt nur PID 1000/1001 ab, dieser Prozess stoert sie also
+    // nicht — und sein Registerbild ist ohnehin durch die Rueckgabewerte
+    // bestimmt (RAX = Wert, RBX = Status).
+    //
+    // Maschinencode (Set-1, keine Abhaengigkeit auf einen Assembler):
+    //   31 FF              xor  edi, edi        ; Cap-Slot 0 = kein Cap
+    //   BE 01 00 00 00     mov  esi, 0x0001     ; Opcode Yield
+    //   41 B9 00 00 01 00  mov  r9d, 0x00010000 ; ABI 1.0
+    //   CD 80              int  0x80
+    //   EB FC              jmp  zurueck auf int 0x80
+    let user_binary_3 = userspace::UserBinary::from_bytes(
+        "ring3-syscall",
+        alloc::vec![
+            0x31, 0xFF, // xor edi, edi
+            0xBE, 0x01, 0x00, 0x00, 0x00, // mov esi, Yield
+            0x41, 0xB9, 0x00, 0x00, 0x01, 0x00, // mov r9d, ABI 1.0
+            0xCD, 0x80, // int 0x80
+            0xEB, 0xF9, // jmp zurueck auf int 0x80
+        ],
+        0x0180_0000,
+    );
+    let user_addr_space_3 = userspace::UserAddressSpace {
+        code_base: 0x0180_0000,
+        code_size: 0x0010_0000,
+        data_base: 0x0190_0000,
+        data_size: 0x0010_0000,
+        stack_base: 0x07FE_0000,
+        stack_size: 0x0000_8000,
+        heap_base: 0x01A0_0000,
+        heap_size: 0x0010_0000,
+    };
+    unsafe {
+        userspace::map_user_binary(
+            &mut mapper,
+            &mut frame_allocator,
+            phys_mem_offset,
+            &user_binary_3,
+            &user_addr_space_3,
+        )
+        .expect("ShivaCore: third USER-001 user page mapping failed");
+    }
+    let user_pid_3 = ats1000::Pid(1002);
+    let user_ctx_3 = userspace::UserContext::new(user_pid_3, &user_binary_3, user_addr_space_3);
+    serial_println!(
+        "ShivaCore: USER-001 dritter Prozess PID={} RIP={:#x} (Syscall-Schleife)",
+        user_pid_3.0,
+        user_ctx_3.rip
+    );
+
+    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2, &user_ctx_3);
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
