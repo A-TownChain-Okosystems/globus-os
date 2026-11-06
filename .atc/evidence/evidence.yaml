@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 1d77fd83ae2eb6c437fd9e852f6a38ba305cab7f
+bound_commit: 2aab11fda65b5388e618e8eb7c3a975118797ef5
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 1d77fd83ae2eb6c437fd9e852f6a38ba305cab7f
-  timestamp: 2026-11-07T07:35:00+00:00
+  commit: 2aab11fda65b5388e618e8eb7c3a975118797ef5
+  timestamp: 2026-11-07T08:35:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -122,7 +122,13 @@ verification:
         KernelCaps (kernel_caps.rs, Lib): die Abo-Capability lebt in ihrer
         CapabilityTable statt als heimatlose Kopie, damit sie widerrufbar ist;
         6 Tests inkl. Widerruf entfernt die Capability. Beleg im Clone-Lauf:
-        "[Bruecke 2, Rueckfall 0, Haenger 0]" je Taste, 632 Tests. In frischem Clone fuer BIOS und UEFI
+        "[Bruecke 2, Rueckfall 0, Haenger 0]" je Taste, 632 Tests.
+        Entwurf Tastenkanal (key_events.rs, Lib, NICHT verdrahtet): der Kernel
+        besitzt den IPC-Channel und sendet, der Prozess haelt nur READ; bei
+        vollem Puffer ChannelFull statt Warten im Handler. 8 Tests belegen
+        Empfang, FIFO, NoWriteCapability (kein Selbsteinspielsen),
+        NoReadCapability fuer Fremde und ChannelClosed. Keine neue
+        Syscall-Nummer: IpcReceive traegt die Nachricht. 640 Tests. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
