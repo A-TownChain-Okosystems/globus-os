@@ -186,7 +186,37 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 Some(summary) => shivacore::madt::gsi_for_irq(&summary, 0),
                 None => 0,
             };
+            // Die Zuordnung Line -> GSI -> Vektor gehoert in eine Tabelle, nicht
+            // in eine Zahl: sonst weiss niemand, welche Vektoren noch frei sind.
+            let mut routing = shivacore::irq_routing::IrqRouting::new();
             let timer_vector: u8 = 0x50;
+            // Der Vektor, auf den zugestellt wird, ist der des IDT-Handlers;
+            // timer_vector (0x50) ist nur der Probedruck vor dem Umschalten.
+            let timer_route =
+                match routing.assign_fixed(0, timer_gsi, crate::interrupts::TIMER_VECTOR) {
+                    Ok(route) => route,
+                    Err(error) => {
+                        serial_println!(
+                            "ShivaCore: WARNUNG -- Timer-Route nicht eintragbar: {:?}",
+                            error
+                        );
+                        shivacore::irq_routing::IrqRoute {
+                            irq: 0,
+                            gsi: timer_gsi,
+                            vector: crate::interrupts::TIMER_VECTOR,
+                        }
+                    }
+                };
+            serial_println!(
+                "ShivaCore: IRQ-Routing: IRQ {} -> GSI {} -> Vektor 0x{:X}, naechster freier Geraetevektor {}",
+                timer_route.irq,
+                timer_route.gsi,
+                timer_route.vector,
+                match routing.next_free_vector() {
+                    Some(vector) => format_hex(vector),
+                    None => alloc::format!("keiner"),
+                }
+            );
             let entry = shivacore::ioapic::RedirectionEntry::fixed(timer_vector, lapic.id());
             match ioapic.set_redirection_entry(timer_gsi, entry) {
                 Ok(read_back) => {
@@ -226,7 +256,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             serial_println!("ShivaCore: Bestaetigung laeuft ueber den Local APIC (EOI 0x0B0).");
 
             let mut armed = entry;
-            armed.vector = crate::interrupts::TIMER_VECTOR;
+            armed.vector = timer_route.vector;
             armed.masked = false;
             match ioapic.set_redirection_entry(timer_gsi, armed) {
                 Ok(read_back) => {
@@ -619,6 +649,10 @@ fn pit_read_counter() -> u16 {
 /// Kalibriert den TSC gegen den PIT. Der PIT laeuft mit der in `init_pics`
 /// programmierten Frequenz; damit wird der TSC zu einer absoluten Zeitbasis,
 /// die unabhaengig von der Interrupt-Zustellung ist.
+fn format_hex(value: u8) -> alloc::string::String {
+    alloc::format!("0x{:X}", value)
+}
+
 fn calibrate_tsc(periods: u32) -> Option<u64> {
     const PIT_HZ: u64 = 100;
     let mut previous = pit_read_counter();
