@@ -702,3 +702,55 @@ Empfaenger ist, genuegt das ACK am Handlerende. Sobald ein Userspace-Prozess
 eine Geraete-Line abonniert, braucht es eine Spec-Entscheidung, wo sein ACK
 ankommt. Die Bruecke aus `irq_bridge.rs` (Tabelle plus Rechtepruefung) ist dafuer
 vorbereitet, aber noch nicht angeschlossen.
+
+## Nachtrag 03:50 — Vektor 0x20 stand als Zahl im Bootpfad
+
+Die Zuordnung Line → Vektor gab es nicht. Der Timer-Eintrag auf 0x20 stand als
+feste Zahl im Bootpfad, und niemand haette sagen koennen, welcher Vektor fuer
+eine zweite Line noch frei ist.
+
+**Neu: `kernel/src/irq_routing.rs`.** Eine Tabelle (24 Zeilen, so viele hat die
+Redirection Table eines IOAPIC) haelt fest, welche Line welchen Vektor belegt:
+
+```rust
+let mut routing = IrqRouting::new();
+let timer = routing.assign_fixed(0, timer_gsi, TIMER_VECTOR)?;   // 0x20 bleibt
+routing.next_free_vector()                                        // -> 0x30
+```
+
+`assign_next_free` vergibt den naechsten freien Vektor, `assign_fixed` traegt
+einen vorgegebenen ein. Beide lehnen Vektoren unter 0x20 ab (Prozessor-
+Exceptions), beide verhindern, dass zwei Lines denselben Vektor teilen.
+`route_for_vector` ist der Weg zurueck fuer den Interrupt-Pfad, der nur den
+Vektor kennt; `route_for_gsi` der fuer den IOAPIC.
+
+**Zwei Begriffe statt einem.** Mein erster Entwurf hatte nur "Geraetevektor ab
+0x30". Ein Test hat die eigene Annahme widerlegt: der Timer sitzt auf 0x20,
+also unterhalb dieses Fensters. Jetzt heisst es getrennt "routbar ab 0x20" und
+"automatisch vergebbar ab 0x30". Der Timer bleibt damit eintragbar, ohne dass
+die automatische Vergabe in seinen Vektor laeuft.
+
+**Ein Fehler mit Panic.** Beim Verdrahten trug ich die Route zunaechst mit
+`timer_vector` (0x50) ein, also dem Vektor des Probedrucks, nicht mit dem des
+IDT-Handlers (0x20). Der IOAPIC stellte danach auf 0x50 zu, dort lag kein
+Handler: `Panic=1`. Die Bootmeldung zeigte es sofort ("GSI 2 -> Vektor 0x50"),
+die Korrektur war die Zuordnung, nicht der Handler.
+
+Beleg aus dem Lauf:
+
+```text
+ShivaCore: IRQ-Routing: IRQ 0 -> GSI 2 -> Vektor 0x20, naechster freier Geraetevektor 0x30
+ShivaCore: Zustellung auf IOAPIC umgestellt: GSI 2 -> Vektor 0x20, maskiert=false
+ShivaCore: IRQ-Pfad: 41 Ticks ueber IOAPIC, 41 Sperren, 41 Freigaben
+```
+
+Zwei BIOS-Laeufe und ein UEFI-Lauf, kein Panic. 616 Kernel-Tests (8 neue).
+
+**Ein Befund wie bei den IRQ-Caps.** Das Vektorfenster umfasst 193 Vektoren, die
+Tabelle nur 24 Zeilen. `NoVectorLeft` ist mit dieser Groesse nicht erreichbar;
+der Test prueft deshalb `TableFull` und behauptet nicht die unerreichbare
+Variante.
+
+**Weiterhin offen.** Es gibt genau eine Line mit Eintrag (den Timer). Ein
+zweites Geraet braucht einen Treiber, einen IDT-Eintrag und einen Handler, die
+Tabelle ist dafuer die Voraussetzung, nicht der Ersatz.
