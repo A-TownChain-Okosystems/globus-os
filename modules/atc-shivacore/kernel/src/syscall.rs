@@ -66,11 +66,22 @@ impl SyscallDispatcher {
         Self { monotonic_ticks: 0 }
     }
 
+    /// Vom Timer-Interrupt aufzurufen: genau ein Tick pro Hardware-IRQ.
+    /// Die Zeit fortschreiben darf nur die Hardware, nicht der Leser.
+    pub fn on_tick(&mut self) {
+        self.monotonic_ticks = self.monotonic_ticks.saturating_add(1);
+    }
+
+    /// Aktueller Tick-Stand (fuer Diagnose und Tests).
+    pub const fn ticks(&self) -> u64 {
+        self.monotonic_ticks
+    }
+
     pub fn dispatch(
         &mut self,
         pid: Pid,
         request: SyscallRequest,
-        capabilities: &CapabilityTable,
+        capabilities: &mut CapabilityTable,
     ) -> SyscallResponse {
         if !validate_abi_version(request.abi_version) {
             return SyscallResponse::err(AbiError::AbiVersionMismatch);
@@ -128,18 +139,27 @@ impl SyscallDispatcher {
                 if !capabilities.check_any(pid, cap.0, Rights::INSPECT) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
-                SyscallResponse::ok(1)
+                match capabilities.get(CapId(cap.0)) {
+                    Some(c) => SyscallResponse::ok(c.rights.bits() as u64),
+                    None => SyscallResponse::err(AbiError::InvalidHandle),
+                }
             }
             Syscall::HandleClose => {
-                if request.capability.is_none() {
+                // SC-005: Schliessen widerruft die Capability wirklich (inkl. Nachfahren).
+                let Some(handle) = request.capability else {
                     return SyscallResponse::err(AbiError::InvalidHandle);
+                };
+                let cap_id = CapId(handle.0);
+                match capabilities.get(cap_id) {
+                    Some(cap) if cap.owner == pid => {
+                        capabilities.revoke(cap_id);
+                        SyscallResponse::ok(1)
+                    }
+                    Some(_) => SyscallResponse::err(AbiError::PermissionDenied),
+                    None => SyscallResponse::err(AbiError::InvalidHandle),
                 }
-                SyscallResponse::ok(0)
             }
-            Syscall::MonotonicTime => {
-                self.monotonic_ticks = self.monotonic_ticks.wrapping_add(1);
-                SyscallResponse::ok(self.monotonic_ticks)
-            }
+            Syscall::MonotonicTime => SyscallResponse::ok(self.monotonic_ticks),
         }
     }
 
@@ -193,7 +213,7 @@ mod tests {
                 syscall_id: 0xffff,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidSyscall));
     }
@@ -207,7 +227,7 @@ mod tests {
                 abi_version: 0x0002_0000,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(r.error, Some(AbiError::AbiVersionMismatch));
     }
@@ -221,7 +241,7 @@ mod tests {
                 payload_len: MAX_SYSCALL_PAYLOAD + 1,
                 ..request(Syscall::Yield)
             },
-            &CapabilityTable::new(),
+            &mut CapabilityTable::new(),
         );
         assert_eq!(r.error, Some(AbiError::InvalidPayload));
     }
@@ -238,7 +258,7 @@ mod tests {
                 arg0: 42,
                 ..request(Syscall::IpcSend)
             },
-            &table,
+            &mut table,
         );
         assert_eq!(r.error, None);
         let denied = d.dispatch(
@@ -248,25 +268,94 @@ mod tests {
                 arg0: 42,
                 ..request(Syscall::IpcSend)
             },
-            &table,
+            &mut table,
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
     }
 
     #[test]
-    fn monotonic_time_is_kernel_owned() {
+    fn monotonic_time_only_advances_on_tick() {
         let mut d = SyscallDispatcher::new();
-        let a = d.dispatch(
+        let mut table = CapabilityTable::new();
+        let a = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
+        let b = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
+        assert_eq!(a.value, b.value, "Lesen darf die Zeit nicht veraendern");
+        d.on_tick();
+        let c = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
+        assert_eq!(c.value, a.value + 1, "genau ein Tick pro Hardware-IRQ");
+    }
+
+    #[test]
+    fn handle_close_revokes_the_capability() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
+        assert_eq!(table.count(), 1);
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
             pid(1),
-            request(Syscall::MonotonicTime),
-            &CapabilityTable::new(),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                ..request(Syscall::HandleClose)
+            },
+            &mut table,
         );
-        let b = d.dispatch(
+        assert_eq!(r.error, None);
+        assert_eq!(r.value, 1);
+        assert_eq!(table.count(), 0, "HandleClose muss widerrufen");
+    }
+
+    #[test]
+    fn handle_close_denies_foreign_owner() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
+        let mut d = SyscallDispatcher::new();
+        let denied = d.dispatch(
+            pid(2),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                ..request(Syscall::HandleClose)
+            },
+            &mut table,
+        );
+        assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+        assert_eq!(table.count(), 1, "fremdes Handle bleibt bestehen");
+    }
+
+    #[test]
+    fn handle_close_rejects_unknown_handle() {
+        let mut table = CapabilityTable::new();
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
             pid(1),
-            request(Syscall::MonotonicTime),
-            &CapabilityTable::new(),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(9999)),
+                ..request(Syscall::HandleClose)
+            },
+            &mut table,
         );
-        assert_eq!(a.value + 1, b.value);
+        assert_eq!(r.error, Some(AbiError::InvalidHandle));
+    }
+
+    #[test]
+    fn capability_query_returns_rights_mask() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(
+            pid(1),
+            ResourceType::IpcChannel,
+            7,
+            Rights::READ | Rights::INSPECT,
+        );
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                ..request(Syscall::CapabilityQuery)
+            },
+            &mut table,
+        );
+        assert_eq!(r.error, None);
+        assert_eq!(r.value, (Rights::READ | Rights::INSPECT).bits() as u64);
     }
 
     #[test]
@@ -280,7 +369,7 @@ mod tests {
                 capability: Some(CapabilityHandle(cap.0)),
                 ..request(Syscall::CapabilityQuery)
             },
-            &table,
+            &mut table,
         );
         assert_eq!(r.error, Some(AbiError::PermissionDenied));
     }
