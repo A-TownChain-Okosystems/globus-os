@@ -39,6 +39,46 @@ lazy_static! {
         });
 }
 
+lazy_static! {
+    /// Die Routing-Tabelle lebt im Kernel, nicht im Bootpfad. Vorher war sie
+    /// eine lokale Variable in `main`: nach dem Boot wusste niemand mehr, welche
+    /// Line auf welchem Vektor liegt. Sie wird waehrend des Boots befuellt (dort
+    /// auch zum ersten Mal initialisiert), danach greift nur der IRQ-Pfad zu.
+    static ref DEVICE_ROUTES: Mutex<shivacore::irq_routing::IrqRouting> =
+        Mutex::new(shivacore::irq_routing::IrqRouting::new());
+}
+
+/// Traegt eine Line mit vorgegebenem Vektor ein (Timer, dessen Vektor im IDT steht).
+pub fn fix_route(
+    irq: u8,
+    gsi: u32,
+    vector: u8,
+) -> Result<shivacore::irq_routing::IrqRoute, shivacore::irq_routing::RouteError> {
+    DEVICE_ROUTES.lock().assign_fixed(irq, gsi, vector)
+}
+
+/// Vergibt den naechsten freien Geraetevektor an eine Line.
+pub fn route_line(
+    irq: u8,
+    gsi: u32,
+) -> Result<shivacore::irq_routing::IrqRoute, shivacore::irq_routing::RouteError> {
+    DEVICE_ROUTES.lock().assign_next_free(irq, gsi)
+}
+
+/// Weg zurueck fuer den Handler, der nur den Vektor kennt.
+pub fn line_for_vector(vector: u8) -> Option<shivacore::irq_routing::IrqRoute> {
+    DEVICE_ROUTES.lock().route_for_vector(vector)
+}
+
+/// Naechster freier Geraetevektor, ohne einen zu belegen.
+pub fn next_free_vector() -> Option<u8> {
+    DEVICE_ROUTES.lock().next_free_vector()
+}
+
+pub fn routed_lines() -> usize {
+    DEVICE_ROUTES.lock().len()
+}
+
 /// Zaehlt jeden zugestellten Timer-Tick. Dient der Messung, ob ein
 /// Zustellweg Ticks verliert.
 pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
@@ -534,27 +574,33 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         let mut state = KEY_STATE.lock();
         shivacore::keymap::decode(scancode, &mut state)
     };
+    // Die Line kommt aus der Routing-Tabelle: der Vektor allein sagt, wohin
+    // zugestellt wurde, nicht wer der Absender ist.
+    let line = line_for_vector(KEYBOARD_VECTOR).map(|route| route.irq);
     if decoded.pressed {
         match decoded.character {
             Some(character) if character.is_ascii_graphic() => {
                 serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X}: '{}' (Scancode {:#04X})",
+                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): '{}' (Scancode {:#04X})",
                     KEYBOARD_VECTOR,
+                    line,
                     character as char,
                     scancode
                 );
             }
             Some(_) => {
                 serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X}: Leerzeichen (Scancode {:#04X})",
+                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): Leerzeichen (Scancode {:#04X})",
                     KEYBOARD_VECTOR,
+                    line,
                     scancode
                 );
             }
             None => {
                 serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X}: {:?} (Scancode {:#04X})",
+                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): {:?} (Scancode {:#04X})",
                     KEYBOARD_VECTOR,
+                    line,
                     decoded.key,
                     scancode
                 );
@@ -562,8 +608,9 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         }
     } else {
         serial_println!(
-            "ShivaCore: Tastatur ueber Vektor {:#X}: losgelassen (Scancode {:#04X})",
+            "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): losgelassen (Scancode {:#04X})",
             KEYBOARD_VECTOR,
+            line,
             scancode
         );
     }
