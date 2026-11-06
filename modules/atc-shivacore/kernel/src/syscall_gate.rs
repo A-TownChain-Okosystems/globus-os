@@ -36,7 +36,8 @@ impl SyscallGate {
 
     /// Ein Syscall vom Userspace: Dispatch inkl. Capability-Pruefung.
     pub fn handle(&mut self, pid: Pid, request: SyscallRequest) -> SyscallResponse {
-        self.dispatcher.dispatch(pid, request, &mut self.capabilities)
+        self.dispatcher
+            .dispatch(pid, request, &mut self.capabilities)
     }
 
     /// Ein Hardware-Tick (Timer-IRQ) — die einzige Quelle fuer MonotonicTime.
@@ -88,9 +89,9 @@ mod tests {
     #[test]
     fn gate_enforces_capability_ownership() {
         let mut gate = SyscallGate::new();
-        let cap = gate
-            .capabilities_mut()
-            .create(pid(1), ResourceType::IpcChannel, 5, Rights::WRITE);
+        let cap =
+            gate.capabilities_mut()
+                .create(pid(1), ResourceType::IpcChannel, 5, Rights::WRITE);
         let req = SyscallRequest {
             capability: Some(CapabilityHandle(cap.0)),
             arg0: 5,
@@ -106,9 +107,9 @@ mod tests {
     #[test]
     fn gate_close_revokes_through_the_table() {
         let mut gate = SyscallGate::new();
-        let cap = gate
-            .capabilities_mut()
-            .create(pid(1), ResourceType::Memory, 0x1000, Rights::READ);
+        let cap =
+            gate.capabilities_mut()
+                .create(pid(1), ResourceType::Memory, 0x1000, Rights::READ);
         let req = SyscallRequest {
             capability: Some(CapabilityHandle(cap.0)),
             ..request(Syscall::HandleClose)
