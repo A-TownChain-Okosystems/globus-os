@@ -154,6 +154,15 @@ pub static INPUT_QUEUE: Mutex<shivacore::input_queue::InputQueue> =
 /// Wie viele Ereignisse der Konsument insgesamt abgeholt hat.
 pub static INPUT_CONSUMED: AtomicU64 = AtomicU64::new(0);
 
+/// Wie oft der Syscall einem Ring-3-Prozess ein Tastenereignis ausgehaendigt hat.
+pub static INPUT_DELIVERED: AtomicU64 = AtomicU64::new(0);
+
+/// Sobald ein Prozess den Eingabekanal haelt, ist er der Konsument. Der Tick
+/// darf dann nicht mehr abraeumen: zwei Leser auf einer Warteschlange nehmen
+/// sich gegenseitig die Ereignisse weg (im ersten Lauf kam 'a' nie beim
+/// Prozess an, weil der Tick schneller war).
+pub static INPUT_CONSUMER_USERSPACE: AtomicBool = AtomicBool::new(false);
+
 /// Zustellungen, die auf eine offene (nie quittierte) Zustellung trafen.
 pub static STUCK_DELIVERIES: AtomicU64 = AtomicU64::new(0);
 
@@ -180,13 +189,33 @@ pub fn init_user_scheduler(first: &UserContext, second: &UserContext, third: &Us
     scheduler.add_process(third.pid, third, 0);
     let _ = scheduler.schedule(None);
     *USER_SCHEDULER.lock() = Some(scheduler);
-    *SYSCALL_GATE.lock() = Some(SyscallGate::new());
+    {
+        let mut gate = SYSCALL_GATE.lock();
+        if gate.is_none() {
+            *gate = Some(SyscallGate::new());
+        }
+    }
     serial_println!(
         "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={} + PID={} (Syscall-Schleife)",
         first.pid.0,
         second.pid.0,
         third.pid.0
     );
+}
+
+/// Gibt einem Prozess das Leserecht auf den Kernel-Eingabekanal und liefert die
+/// Cap-Nummer zurueck, die der Prozess im Cap-Slot-Register braucht.
+///
+/// Muss laufen, bevor ein Payload gebaut wird, in dem die Nummer als Immediate
+/// steckt: die Nummer vergibt die Tabelle, nicht der Payload.
+pub fn grant_input_read(pid: Pid) -> Option<u64> {
+    let mut gate = SYSCALL_GATE.lock();
+    // Das Gate frueh anlegen: der Payload braucht die Cap-Nummer, bevor der
+    // Scheduler laeuft. `init_user_scheduler` ersetzt es deshalb nicht mehr.
+    let gate = gate.get_or_insert_with(SyscallGate::new);
+    let cap = gate.grant_channel_read(pid, shivacore::syscall::KERNEL_INPUT_CHANNEL);
+    INPUT_CONSUMER_USERSPACE.store(true, Ordering::Release);
+    Some(cap.0)
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -590,6 +619,9 @@ fn acknowledge_timer_irq() {
 ///
 /// Bis zu acht pro Tick, damit ein Tippschwall den Tick nicht ueberzieht.
 fn drain_input_queue() {
+    if INPUT_CONSUMER_USERSPACE.load(Ordering::Relaxed) {
+        return;
+    }
     let mut drained = 0;
     while drained < 8 {
         let event = INPUT_QUEUE.lock().pop();
@@ -671,7 +703,7 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         .unwrap_or(Pid(0));
 
     let response = match SYSCALL_GATE.lock().as_mut() {
-        Some(gate) => gate.handle(pid, request),
+        Some(gate) => gate.handle(pid, request, &mut *INPUT_QUEUE.lock()),
         None => {
             frame.rax = 0;
             frame.rbx = libshivacore::AbiError::EndpointUnavailable as u64;
@@ -691,6 +723,36 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
             request.syscall_id,
             response.error
         );
+    }
+
+    // Ein ausgeliefertes Tastenereignis ist der Beweis, dass der Userspace
+    // wirklich abholt. Tasten sind selten, deshalb ist eine Zeile je Ereignis
+    // vertretbar; Syscall-Zaehler werden nur beim ersten Aufruf gemeldet.
+    if response.error.is_none() && response.value != 0 && request.syscall_id == 0x0011 {
+        let delivered = INPUT_DELIVERED.fetch_add(1, Ordering::Relaxed) + 1;
+        let event = shivacore::input_queue::InputEvent::unpacked(response.value);
+        match event.and_then(|event| event.character) {
+            Some(character) => {
+                serial_println!(
+                    "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Zeichen='{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}, verworfen {}]",
+                    delivered,
+                    pid.0,
+                    character,
+                    response.value & 0xFF,
+                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
+                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
+                    INPUT_QUEUE.lock().dropped()
+                );
+            }
+            None => {
+                serial_println!(
+                    "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Scancode={:#04X}",
+                    delivered,
+                    pid.0,
+                    response.value & 0xFF
+                );
+            }
+        }
     }
 
     frame.rax = response.value;
