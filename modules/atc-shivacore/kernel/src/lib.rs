@@ -23,6 +23,7 @@ pub mod hal;
 pub mod ipc;
 pub mod irq;
 pub mod kernel_init;
+pub mod madt;
 pub mod memory_manager;
 pub mod process;
 pub mod scheduler;
