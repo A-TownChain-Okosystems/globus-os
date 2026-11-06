@@ -79,6 +79,76 @@ pub fn routed_lines() -> usize {
     DEVICE_ROUTES.lock().len()
 }
 
+/// Maskenebene fuer die Bruecke: benutzt dieselben APIC-Funktionen, die auch
+/// der direkte Pfad nimmt. Nur aktiv, wenn ueber den LAPIC quittiert wird.
+pub struct KernelMasking;
+
+impl shivacore::irq_bridge::IrqMasking for KernelMasking {
+    fn mask_vector(&mut self, vector: u32) -> Result<(), shivacore::apic::ApicError> {
+        if !(32..=255).contains(&vector) {
+            return Err(shivacore::apic::ApicError::ReservedVector);
+        }
+        if shivacore::apic::mask_interrupt_vector(vector as u8) {
+            Ok(())
+        } else {
+            Err(shivacore::apic::ApicError::ReservedVector)
+        }
+    }
+
+    fn unmask_vector(&mut self, vector: u32) -> Result<(), shivacore::apic::ApicError> {
+        if !(32..=255).contains(&vector) {
+            return Err(shivacore::apic::ApicError::ReservedVector);
+        }
+        if shivacore::apic::unmask_interrupt_vector(vector as u8) {
+            Ok(())
+        } else {
+            Err(shivacore::apic::ApicError::ReservedVector)
+        }
+    }
+}
+
+lazy_static! {
+    /// Die Bruecke aus SC-006, erstmals im echten Pfad benutzt.
+    static ref IRQ_BRIDGE: Mutex<shivacore::irq_bridge::IrqBridge<KernelMasking>> =
+        Mutex::new(shivacore::irq_bridge::IrqBridge::new(KernelMasking));
+    /// Kernel-Capability der abonnierten Line. Das ACK prueft Eigentuemer und
+    /// Rechte daran, nicht an einer Zahl.
+    static ref SUBSCRIBER_CAP: Mutex<Option<shivacore::capability::Capability>> = Mutex::new(None);
+}
+
+/// Abonniert eine Line mit einer Kernel-Capability (Eigentuemer PID 0).
+/// Muss vor dem Freigeben des IOAPIC-Eintrags laufen, sonst kommt der erste
+/// Interrupt ohne Eintrag in der Tabelle.
+pub fn subscribe_kernel_line(line: u32) -> Result<u32, &'static str> {
+    use shivacore::capability::{CapabilityTable, ResourceType, Rights};
+    let mut caps = CapabilityTable::new();
+    let cap_id = caps
+        .create_typed(
+            Pid(0),
+            ResourceType::Irq,
+            u64::from(line),
+            Rights(Rights::SUBSCRIBE.0 | Rights::ACK.0),
+        )
+        .map_err(|_| "Kernel-Capability fuer die Line abgelehnt")?;
+    let cap = caps
+        .get(cap_id)
+        .cloned()
+        .ok_or("Capability nach dem Anlegen nicht gefunden")?;
+    let mut bridge = IRQ_BRIDGE.lock();
+    let line = bridge
+        .subscribe(&cap)
+        .map_err(|_| "Line bereits abonniert oder Rechte fehlen")?;
+    drop(bridge);
+    *SUBSCRIBER_CAP.lock() = Some(cap);
+    Ok(line)
+}
+
+/// Zaehlt Zustellungen, die ueber die Bruecke liefen und solche, die im
+/// Rueckfall direkt gesperrt wurden. Beide Zahlen im Log machen sichtbar, ob
+/// der Pfad wirklich ueber die Tabelle geht.
+pub static BRIDGED_DELIVERIES: AtomicU64 = AtomicU64::new(0);
+pub static DIRECT_FALLBACKS: AtomicU64 = AtomicU64::new(0);
+
 /// Zaehlt jeden zugestellten Timer-Tick. Dient der Messung, ob ein
 /// Zustellweg Ticks verliert.
 pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
@@ -563,8 +633,36 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
 ) {
     use x86_64::instructions::port::Port;
     KEYSTROKES.fetch_add(1, Ordering::Relaxed);
-    if shivacore::apic::acknowledges_via_apic() {
-        shivacore::apic::mask_interrupt_vector(KEYBOARD_VECTOR);
+    let vector = u32::from(KEYBOARD_VECTOR);
+    let apic = shivacore::apic::acknowledges_via_apic();
+    // Eintritt: sperren ueber die rechtegepruefte Bruecke. Der Rueckfall auf
+    // direktes Sperren ist gezaehlt, damit ein stiller Umweg auffaellt.
+    let mut bridged = false;
+    let mut release = false;
+    if apic {
+        let line = line_for_vector(KEYBOARD_VECTOR).map(|route| u32::from(route.irq));
+        let through_bridge = match line {
+            Some(line) => {
+                let mut bridge = IRQ_BRIDGE.lock();
+                match bridge.on_interrupt(line, vector) {
+                    Ok(Some(_)) => {
+                        bridged = true;
+                        release = true;
+                        true
+                    }
+                    // Offene Zustellung: die Line bleibt gesperrt, bis sie
+                    // quittiert wird. Nicht freigeben und nicht neu zustellen.
+                    Ok(None) => true,
+                    Err(_) => false,
+                }
+            }
+            None => false,
+        };
+        if !through_bridge {
+            shivacore::apic::mask_interrupt_vector(KEYBOARD_VECTOR);
+            release = true;
+            DIRECT_FALLBACKS.fetch_add(1, Ordering::Relaxed);
+        }
     }
     let mut port: Port<u8> = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
@@ -581,11 +679,13 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         match decoded.character {
             Some(character) if character.is_ascii_graphic() => {
                 serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): '{}' (Scancode {:#04X})",
+                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): '{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}]",
                     KEYBOARD_VECTOR,
                     line,
                     character as char,
-                    scancode
+                    scancode,
+                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
+                    DIRECT_FALLBACKS.load(Ordering::Relaxed)
                 );
             }
             Some(_) => {
@@ -614,9 +714,25 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
             scancode
         );
     }
-    if shivacore::apic::acknowledges_via_apic() {
+    if apic {
+        // EOI zuerst, dann freigeben: der Vektor ist erst nach dem Quittieren
+        // wieder zustellbar.
         shivacore::apic::acknowledge_interrupt();
-        shivacore::apic::unmask_interrupt_vector(KEYBOARD_VECTOR);
+        if bridged {
+            BRIDGED_DELIVERIES.fetch_add(1, Ordering::Relaxed);
+            let cap = SUBSCRIBER_CAP.lock().clone();
+            let mut acked = false;
+            if let Some(cap) = cap {
+                let mut bridge = IRQ_BRIDGE.lock();
+                acked = bridge.ack(&cap, vector).is_ok();
+            }
+            if !acked {
+                shivacore::apic::unmask_interrupt_vector(KEYBOARD_VECTOR);
+                DIRECT_FALLBACKS.fetch_add(1, Ordering::Relaxed);
+            }
+        } else if release {
+            shivacore::apic::unmask_interrupt_vector(KEYBOARD_VECTOR);
+        }
     } else {
         unsafe {
             PICS.lock().notify_end_of_interrupt(KEYBOARD_VECTOR);
