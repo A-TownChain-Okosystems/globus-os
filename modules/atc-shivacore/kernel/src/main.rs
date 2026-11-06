@@ -206,6 +206,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     );
                 }
             }
+            // Vor dem Umschalten messen, wie lange 20 zugestellte Ticks unter
+            // der PIC dauern. Gleiche PIT-Frequenz (100 Hz), also ist der
+            // TSC-Abstand direkt mit der IOAPIC-Phase vergleichbar.
+            const PROBE_TICKS: u64 = 20;
+            let tsc_per_second = calibrate_tsc(5);
+            let pic_delta = measure_ticks(PROBE_TICKS);
+            let pic_rate = tsc_per_second.and_then(|tsc| measure_tick_rate(PROBE_TICKS, tsc));
+
             // SC-006: Zustellung von der PIC auf den IOAPIC umschalten.
             // Reihenfolge ist bindend: erst die PIC verstummen lassen, dann den
             // Bestaetigungsweg umstellen, erst danach den Eintrag freigeben.
@@ -234,6 +242,35 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                         timer_gsi,
                         error
                     );
+                }
+            }
+            let apic_delta = measure_ticks(PROBE_TICKS);
+            let apic_rate = tsc_per_second.and_then(|tsc| measure_tick_rate(PROBE_TICKS, tsc));
+            match (pic_delta, apic_delta) {
+                (Some(pic), Some(apic)) if apic > 0 => {
+                    serial_println!(
+                        "ShivaCore: Tick-Messung {} Ticks: PIC={} TSC, IOAPIC={} TSC, Verhaeltnis={}.{}x",
+                        PROBE_TICKS,
+                        pic,
+                        apic,
+                        pic / apic,
+                        (pic % apic) * 10 / apic
+                    );
+                }
+                _ => {
+                    serial_println!("ShivaCore: WARNUNG -- Tick-Messung ohne Ergebnis.");
+                }
+            }
+            match (pic_rate, apic_rate) {
+                (Some(pic), Some(apic)) => {
+                    serial_println!(
+                        "ShivaCore: Tick-Rate (PIT soll 100 Hz): PIC={} Hz, IOAPIC={} Hz",
+                        pic,
+                        apic
+                    );
+                }
+                _ => {
+                    serial_println!("ShivaCore: WARNUNG -- PIT-Kalibrierung fehlgeschlagen.");
                 }
             }
         }
@@ -536,6 +573,77 @@ fn panic(info: &PanicInfo) -> ! {
 
 /// Mappt ein MMIO-Fenster (LAPIC oder IOAPIC) als Geraetespeicher.
 /// Eine 4-KiB-Seite deckt LAPIC (bis 0x3F0) wie IOAPIC (bis 0x10) ab.
+/// Liest den PIT-Kanal 0 (latch, dann LSB/MSB). Der Zaehler laeuft rueckwaerts
+/// und wird bei 0 mit dem Divisor neu geladen.
+fn pit_read_counter() -> u16 {
+    use x86_64::instructions::port::Port;
+    unsafe {
+        let mut command: Port<u8> = Port::new(0x43);
+        let mut channel0: Port<u8> = Port::new(0x40);
+        command.write(0x00); // Kanal 0 festhalten
+        let low = channel0.read() as u16;
+        let high = channel0.read() as u16;
+        (high << 8) | low
+    }
+}
+
+/// Kalibriert den TSC gegen den PIT. Der PIT laeuft mit der in `init_pics`
+/// programmierten Frequenz; damit wird der TSC zu einer absoluten Zeitbasis,
+/// die unabhaengig von der Interrupt-Zustellung ist.
+fn calibrate_tsc(periods: u32) -> Option<u64> {
+    const PIT_HZ: u64 = 100;
+    let mut previous = pit_read_counter();
+    let start = unsafe { core::arch::x86_64::_rdtsc() };
+    let mut seen = 0u32;
+    let mut guard: u64 = 0;
+    while seen < periods {
+        let current = pit_read_counter();
+        // Rueckwaertslaufender Zaehler: ein Sprung nach oben ist ein Neuladen.
+        if current > previous && current - previous > 1000 {
+            seen += 1;
+        }
+        previous = current;
+        guard += 1;
+        if guard > 200_000_000 {
+            return None;
+        }
+    }
+    let end = unsafe { core::arch::x86_64::_rdtsc() };
+    let elapsed = end.saturating_sub(start);
+    let periods = u64::from(periods);
+    // TSC pro Sekunde = elapsed / (periods / PIT_HZ)
+    Some(elapsed.saturating_mul(PIT_HZ) / periods)
+}
+
+/// Misst, wie viele Ticks pro Sekunde tatsaechlich zugestellt werden.
+/// `tsc_per_second` stammt aus der PIT-Kalibrierung.
+fn measure_tick_rate(target: u64, tsc_per_second: u64) -> Option<u64> {
+    let delta = measure_ticks(target)?;
+    if delta == 0 {
+        return None;
+    }
+    Some(target.saturating_mul(tsc_per_second) / delta)
+}
+
+/// Misst den TSC-Abstand fuer eine feste Zahl zugestellter Timer-Ticks.
+/// Ohne bekannte TSC-Frequenz ist nur der Vergleich zweier Wege aussagekraeftig.
+fn measure_ticks(target: u64) -> Option<u64> {
+    use core::sync::atomic::Ordering;
+
+    let start_ticks = crate::interrupts::TIMER_TICKS.load(Ordering::Acquire);
+    let start = unsafe { core::arch::x86_64::_rdtsc() };
+    let mut guard: u64 = 0;
+    while crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) < start_ticks + target {
+        guard += 1;
+        if guard > 50_000_000_000 {
+            return None;
+        }
+        core::hint::spin_loop();
+    }
+    let end = unsafe { core::arch::x86_64::_rdtsc() };
+    Some(end.saturating_sub(start))
+}
+
 fn map_mmio_page(
     mapper: &mut x86_64::structures::paging::mapper::OffsetPageTable,
     frame_allocator: &mut crate::memory::BootInfoFrameAllocator,
