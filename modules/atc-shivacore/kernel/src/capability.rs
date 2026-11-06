@@ -26,11 +26,38 @@ pub enum ResourceType {
     Accelerator,
     FileSystem,
     Network,
+    /// SC-006 REQ-SC006-01: Interrupt-Line, Zugriff nur ueber IRQ-Cap {SUBSCRIBE, ACK}.
+    Irq,
+    /// SC-006 REQ-SC006-05: Timer, Zugriff nur ueber Timer-Cap {SET_DEADLINE, ACK}.
+    Timer,
+    /// SC-006 REQ-SC006-08: genau ein Geraet, Zugriff nur ueber Device-Cap {ACCESS}.
+    Device,
+}
+
+impl ResourceType {
+    /// Rechte, die SC-006 fuer diesen Ressourcentyp vorschreibt.
+    ///
+    /// Fuer die aelteren Typen (Memory, IpcChannel, ...) ist das noch nicht
+    /// spezifiziert; dort bleibt der Satz leer und `create_typed` verhaelt sich
+    /// wie `create`.
+    pub const fn required_rights(self) -> Rights {
+        match self {
+            ResourceType::Irq => Rights(Rights::SUBSCRIBE.0 | Rights::ACK.0),
+            ResourceType::Timer => Rights(Rights::SET_DEADLINE.0 | Rights::ACK.0),
+            ResourceType::Device => Rights(Rights::ACCESS.0),
+            _ => Rights::NONE,
+        }
+    }
+
+    /// SC-006-Typ, dessen Rechtesatz erzwungen wird?
+    pub const fn has_declared_rights(self) -> bool {
+        !self.required_rights().is_empty()
+    }
 }
 
 /// Zugriffsrechte als Bitfield
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct Rights(pub u8);
+pub struct Rights(pub u16);
 
 impl Rights {
     pub const NONE: Rights = Rights(0);
@@ -40,18 +67,27 @@ impl Rights {
     pub const DELEGATE: Rights = Rights(8);
     /// Observing capability/metadata without mutating (query, list, inspect).
     pub const INSPECT: Rights = Rights(16);
-    pub const ALL: Rights = Rights(1 | 2 | 4 | 8 | 16);
+    /// SC-006: IRQ-Line abonnieren.
+    pub const SUBSCRIBE: Rights = Rights(32);
+    /// SC-006: IRQ/Timer quittieren (Re-Trigger erst nach ACK).
+    pub const ACK: Rights = Rights(64);
+    /// SC-006: absolute Deadline auf einem Timer setzen.
+    pub const SET_DEADLINE: Rights = Rights(128);
+    /// SC-006: Zugriff auf genau ein Geraet (MMIO/DMA).
+    pub const ACCESS: Rights = Rights(256);
+    pub const ALL: Rights =
+        Rights(1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256);
 
     pub fn has(self, other: Rights) -> bool {
         (self.0 & other.0) == other.0
     }
-    pub fn from_bits_truncate(bits: u8) -> Rights {
+    pub fn from_bits_truncate(bits: u16) -> Rights {
         Rights(bits & Self::ALL.bits())
     }
-    pub fn bits(self) -> u8 {
+    pub fn bits(self) -> u16 {
         self.0
     }
-    pub fn is_empty(self) -> bool {
+    pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
 }
@@ -212,6 +248,33 @@ impl CapabilityTable {
             .get(&CapId(cap_id))
             .map(|cap| cap.owner == pid && cap.rights.has(required))
             .unwrap_or(false)
+    }
+
+    /// Wie `create`, erzwingt aber den SC-006-Rechtesatz des Ressourcentyps.
+    ///
+    /// Der Kernel vergibt fuer IRQ/Timer/Device genau den von SC-006
+    /// vorgeschriebenen Rechtesatz. Ein IRQ-Cap mit READ oder ein Device-Cap
+    /// mit WRITE wird abgelehnt (RightsExceeded), statt ein zu weites Cap zu
+    /// erzeugen; ein Teil-Satz wird auf den vollen Satz ergaenzt.
+    pub fn create_typed(
+        &mut self,
+        owner: Pid,
+        resource_type: ResourceType,
+        resource_id: u64,
+        rights: Rights,
+    ) -> Result<CapId, CapabilityError> {
+        // Typen ohne spezifizierten Satz verhalten sich wie `create`.
+        if !resource_type.has_declared_rights() {
+            return Ok(self.create(owner, resource_type, resource_id, rights));
+        }
+        // SC-006 setzt den Rechtesatz fest: der Kernel vergibt genau diesen Satz.
+        // Angefragte Rechte ausserhalb des Satzes werden abgelehnt, nicht
+        // stillschweigend beschnitten.
+        let required = resource_type.required_rights();
+        if (rights.0 & !required.0) != 0 {
+            return Err(CapabilityError::RightsExceeded);
+        }
+        Ok(self.create(owner, resource_type, resource_id, required))
     }
 
     pub fn get(&self, id: CapId) -> Option<&Capability> {
@@ -387,7 +450,89 @@ mod tests {
             Rights::INSPECT
         );
         assert_eq!(Rights::from_bits_truncate(Rights::ALL.bits()), Rights::ALL);
-        assert_eq!(Rights::from_bits_truncate(0x20), Rights::NONE);
-        assert_eq!(Rights::from_bits_truncate(0xFF), Rights::ALL);
+        // SC-006: 0x20 (SUBSCRIBE) und 0xFF sind jetzt bekannte Bits; unbekannt
+        // ist erst alles oberhalb der belegten 9 Bit.
+        assert_eq!(Rights::from_bits_truncate(0x20), Rights::SUBSCRIBE);
+        // 0xFF sind alles belegte Bits (READ..ACCESS ohne ACCESS).
+        assert_eq!(Rights::from_bits_truncate(0xFF), Rights(0xFF));
+        assert_eq!(Rights::from_bits_truncate(0x200), Rights::NONE);
+        assert_eq!(Rights::ALL.bits(), 0x1FF);
+    }
+}
+
+#[cfg(test)]
+mod sc006_types {
+    use super::*;
+
+    fn pid(n: u32) -> Pid {
+        Pid(n)
+    }
+
+    #[test]
+    fn irq_cap_gets_subscribe_and_ack() {
+        let mut t = CapabilityTable::new();
+        let id = t
+            .create_typed(pid(1), ResourceType::Irq, 9, Rights::SUBSCRIBE)
+            .expect("IRQ-Cap");
+        assert_eq!(
+            t.get(id).map(|c| c.rights),
+            Some(Rights::SUBSCRIBE | Rights::ACK)
+        );
+    }
+
+    #[test]
+    fn timer_cap_gets_set_deadline_and_ack() {
+        let mut t = CapabilityTable::new();
+        let id = t
+            .create_typed(pid(1), ResourceType::Timer, 0, Rights::ACK)
+            .expect("Timer-Cap");
+        assert_eq!(
+            t.get(id).map(|c| c.rights),
+            Some(Rights::SET_DEADLINE | Rights::ACK)
+        );
+    }
+
+    #[test]
+    fn device_cap_gets_access() {
+        let mut t = CapabilityTable::new();
+        let id = t
+            .create_typed(pid(1), ResourceType::Device, 0x1f, Rights::ACCESS)
+            .expect("Device-Cap");
+        assert_eq!(t.get(id).map(|c| c.rights), Some(Rights::ACCESS));
+    }
+
+    #[test]
+    fn irq_cap_without_ack_is_rejected() {
+        let mut t = CapabilityTable::new();
+        assert!(matches!(
+            t.create_typed(pid(1), ResourceType::Irq, 9, Rights::READ),
+            Err(CapabilityError::RightsExceeded)
+        ));
+        assert_eq!(t.count(), 0, "abgelehntes Cap darf nicht entstehen");
+    }
+
+    #[test]
+    fn device_cap_rejects_read_only() {
+        let mut t = CapabilityTable::new();
+        assert!(matches!(
+            t.create_typed(pid(1), ResourceType::Device, 0x1f, Rights::READ),
+            Err(CapabilityError::RightsExceeded)
+        ));
+    }
+
+    #[test]
+    fn legacy_types_keep_untouched_behaviour() {
+        let mut t = CapabilityTable::new();
+        let id = t
+            .create_typed(pid(1), ResourceType::Memory, 0x4000, Rights::READ)
+            .expect("Memory-Cap");
+        assert_eq!(t.get(id).map(|c| c.rights), Some(Rights::READ));
+    }
+
+    #[test]
+    fn rights_bitset_survives_truncation() {
+        let all = Rights::ALL;
+        assert_eq!(Rights::from_bits_truncate(u16::MAX), all);
+        assert!(all.has(Rights::SUBSCRIBE | Rights::ACK | Rights::SET_DEADLINE | Rights::ACCESS));
     }
 }
