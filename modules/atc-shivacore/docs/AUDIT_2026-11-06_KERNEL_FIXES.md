@@ -68,3 +68,32 @@ Hochzählen beim Lesen als Sollverhalten festgeschrieben.
   `hw_drivers.rs` liegt jetzt in `legacy/`.
 - `globus-init` fehlt; Boot-Kette folgt SHIVA-BOOT-001, nicht AD-013(9).
 - Evidence in `.atc/evidence/evidence.yaml` ist an `7f50c9cb` gebunden.
+
+## Nachtrag 19:40 — SC-006-Kernseite: IRQ-/Timer-/Device-Caps
+
+Befund: SC-006 (FROZEN) fordert IRQ-Caps {SUBSCRIBE, ACK}, Timer-Caps
+{SET_DEADLINE, ACK} und Device-Caps {ACCESS}. `ResourceType` kannte keinen dieser
+drei Typen, `Rights` hatte keine passenden Rechte — ein IRQ-, Timer- oder
+Device-Cap liess sich im Kernel also gar nicht erzeugen. Die Deadline-Queue
+(REQ-SC006-06, sortiert, ticklos) existierte dagegen bereits in `timer.rs`
+(`TimerManager`, `BTreeMap<deadline_ns, TimerEvent>`).
+
+Umgesetzt:
+
+- `ResourceType::Irq`, `Timer`, `Device` plus `required_rights()` je Typ.
+- `Rights` von `u8` auf `u16` erweitert, neue Bits `SUBSCRIBE` (32), `ACK` (64),
+  `SET_DEADLINE` (128), `ACCESS` (256); `ALL` = 0x1FF.
+- `CapabilityTable::create_typed()` vergibt für diese drei Typen **genau** den
+  vorgeschriebenen Satz und lehnt angefragte Rechte außerhalb des Satzes mit
+  `RightsExceeded` ab. Alttypen verhalten sich unverändert wie `create`.
+- `remote_caps::signing_payload()` schreibt die Rechte jetzt als 2 Byte LE statt
+  1 Byte. Tickets, die vor dieser Änderung signiert wurden, haben eine andere
+  Signaturbasis und werden nicht mehr verifiziert.
+
+Verifikation: `cargo test -p shivacore --lib` → **565 passed**, `-p
+shivacore-service-space --lib` → 548 passed, Bare-Metal-ELF baut.
+
+Noch offen in SC-006: IRQ-Trampolin-in-Notification und ACK-vor-Re-Trigger
+(REQ-SC006-02/03) im Interrupt-Pfad, Maskierung bis ACK, DMA-Autorisierung über
+Device-Cap (REQ-SC006-09) sowie Geräte-Enumeration im Service Space (REQ-SC006-11).
+Die Cap-Typen sind die Voraussetzung dafür, nicht die Erfüllung.
