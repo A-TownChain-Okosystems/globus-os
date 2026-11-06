@@ -682,25 +682,29 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
 ///   RAX = Resultat 1 (Wert) · RBX = Resultat 2 (Status: 0 = Erfolg, sonst AbiError)
 #[no_mangle]
 extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
-    let cap_slot = frame.rdi;
-    let request = SyscallRequest {
-        abi_version: frame.r9 as u32,
-        syscall_id: frame.rsi as u16,
-        capability: if cap_slot == 0 {
-            None
-        } else {
-            Some(CapabilityHandle(cap_slot))
-        },
-        arg0: frame.rdx,
-        arg1: frame.rcx,
-        // Uebergangsform: die Registerkonvention aus 1.x ist noch im Payload,
-        // sie kann nur EINEN Pufferwert tragen. ABI 2.0.0 trennt Zeiger und
-        // Laenge im Argumentblock; bis das Trampolin den Block liest, gilt
-        // hier "Zeiger ohne Laenge", was jeder Aufruf als "keine Nutzdaten"
-        // behandelt. Der Blockpfad ist der naechste Schritt.
-        buffer_ptr: frame.r8,
-        buffer_len: 0,
+    // ABI 2.0.0: RDI = Zeiger auf den Argumentblock, RSI = Blocklaenge,
+    // RDX = ABI-Version. Reihenfolge ist bindend: erst die Version, dann die
+    // Laenge, dann die Rechte am Adressraum, dann die Kopie. Ein Zeiger aus dem
+    // Userspace ist ein Vorschlag, keine Zusage.
+    let version = frame.rdx as u32;
+    let block_ptr = frame.rdi;
+    let block_len = frame.rsi as usize;
+
+    let reply = |frame: &mut UserTrapFrame, value: u64, error: Option<libshivacore::AbiError>| {
+        frame.rax = value;
+        frame.rbx = error.map(|e| e as u64).unwrap_or(0);
     };
+
+    if !libshivacore::validate_abi_version(version) {
+        reply(frame, 0, Some(libshivacore::AbiError::AbiVersionMismatch));
+        return;
+    }
+    if !(libshivacore::SYSCALL_BLOCK_MIN_SIZE..=libshivacore::SYSCALL_BLOCK_MAX_SIZE)
+        .contains(&block_len)
+    {
+        reply(frame, 0, Some(libshivacore::AbiError::InvalidPayload));
+        return;
+    }
 
     let pid = USER_SCHEDULER
         .lock()
@@ -708,20 +712,46 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         .and_then(|s| s.current_pid())
         .unwrap_or(Pid(0));
 
+    // Ohne das Abbild des Aufrufers gibt es keine Grundlage fuer eine Pruefung.
+    let space = USER_SCHEDULER
+        .lock()
+        .as_ref()
+        .and_then(|s| s.address_space(pid));
+    match space {
+        Some(space) if space.range_writable(block_ptr, block_len) => {}
+        _ => {
+            reply(frame, 0, Some(libshivacore::AbiError::InvalidPayload));
+            return;
+        }
+    }
+
+    // Kopie in den Kernel, danach wird nur noch der Kernspeicher gelesen.
+    let mut block_bytes = [0u8; libshivacore::SYSCALL_BLOCK_MAX_SIZE];
+    // Der Bereich ist als beschreibbarer User-Bereich geprueft und die Laenge
+    // ist auf SYSCALL_BLOCK_MAX_SIZE begrenzt — die Kopie bleibt im Fenster.
+    unsafe {
+        core::ptr::copy_nonoverlapping(block_ptr as *const u8, block_bytes.as_mut_ptr(), block_len);
+    }
+
+    let block = match libshivacore::SyscallBlock::parse(&block_bytes[..block_len]) {
+        Ok(block) => block,
+        Err(error) => {
+            reply(frame, 0, Some(error));
+            return;
+        }
+    };
+    let request = SyscallRequest::from_block(&block);
+
+    let entries = SYSCALL_ENTRIES.fetch_add(1, Ordering::Relaxed) + 1;
     let response = match SYSCALL_GATE.lock().as_mut() {
         Some(gate) => gate.handle(pid, request, &mut *INPUT_QUEUE.lock()),
         None => {
-            frame.rax = 0;
-            frame.rbx = libshivacore::AbiError::EndpointUnavailable as u64;
+            reply(frame, 0, Some(libshivacore::AbiError::EndpointUnavailable));
             return;
         }
     };
 
-    // Beweis, dass der Gate aus Ring 3 erreichbar ist. Nicht jede Zustellung
-    // loggen: die Serienausgabe ist der Flaschenhals (11,5 kB/s), ein
-    // Syscall-Dauerlauf wuerde den Bootlauf sonst ersticken.
-    let entries = SYSCALL_ENTRIES.fetch_add(1, Ordering::Relaxed) + 1;
-    if entries == 1 || entries % 100_000 == 0 {
+    if entries == 1 || entries % 1_000_000 == 0 {
         serial_println!(
             "ShivaCore: Syscall aus Ring 3: Nr={} PID={} Opcode={:#06X} Ergebnis={:?}",
             entries,
@@ -731,38 +761,43 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         );
     }
 
-    // Ein ausgeliefertes Tastenereignis ist der Beweis, dass der Userspace
-    // wirklich abholt. Tasten sind selten, deshalb ist eine Zeile je Ereignis
-    // vertretbar; Syscall-Zaehler werden nur beim ersten Aufruf gemeldet.
-    if response.error.is_none() && response.value != 0 && request.syscall_id == 0x0011 {
+    if request.syscall_id == libshivacore::Syscall::IpcReceive.id() && response.value != 0 {
         let delivered = INPUT_DELIVERED.fetch_add(1, Ordering::Relaxed) + 1;
-        let event = shivacore::input_queue::InputEvent::unpacked(response.value);
-        match event.and_then(|event| event.character) {
-            Some(character) => {
-                serial_println!(
-                    "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Zeichen='{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}, verworfen {}]",
-                    delivered,
-                    pid.0,
-                    character,
-                    response.value & 0xFF,
-                    BRIDGED_DELIVERIES.load(Ordering::Relaxed),
-                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
-                    INPUT_QUEUE.lock().dropped()
-                );
-            }
-            None => {
-                serial_println!(
-                    "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Scancode={:#04X}",
-                    delivered,
-                    pid.0,
-                    response.value & 0xFF
-                );
-            }
+        let word = response.value;
+        let scancode = word & 0xFF;
+        let character = (word >> 16) & 0xFF;
+        let queue = INPUT_QUEUE.lock();
+        let (bridged, fallbacks) = (
+            BRIDGED_DELIVERIES.load(Ordering::Relaxed),
+            DIRECT_FALLBACKS.load(Ordering::Relaxed),
+        );
+        let dropped = queue.dropped();
+        drop(queue);
+        if character != 0 {
+            serial_println!(
+                "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Zeichen='{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}, verworfen {}]",
+                delivered,
+                pid.0,
+                character as u8 as char,
+                scancode,
+                bridged,
+                fallbacks,
+                dropped
+            );
+        } else {
+            serial_println!(
+                "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Scancode {:#04X} [Bruecke {}, Rueckfall {}, verworfen {}]",
+                delivered,
+                pid.0,
+                scancode,
+                bridged,
+                fallbacks,
+                dropped
+            );
         }
     }
 
-    frame.rax = response.value;
-    frame.rbx = response.error.map(|e| e as u64).unwrap_or(0);
+    reply(frame, response.value, response.error);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
