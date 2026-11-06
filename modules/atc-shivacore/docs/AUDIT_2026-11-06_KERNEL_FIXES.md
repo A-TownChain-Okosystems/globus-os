@@ -477,3 +477,39 @@ Tick verloren ging, solange die ISR bis zum EOI nach der langsamen
 Serienausgabe belegt war. Belegt ist das nicht, und ich trage es auch nicht als
 Behauptung ein. Zu prüfen wäre es mit einem Tick-Zähler gegen eine unabhängige
 Zeitquelle.
+
+## Nachtrag 00:55 — Die offene Wechselrate ist gemessen
+
+Im vorigen Nachtrag blieb offen, warum die Wechselrate nach der Umschaltung
+ungefähr doppelt so hoch war. Vermutung war Tickverlust unter der PIC, belegt war
+nichts. Jetzt ist es gemessen.
+
+**Aufbau.** Der TSC wird gegen den PIT kalibriert (`calibrate_tsc`): Zählerstand
+von Kanal 0 zweimal lesen, Neuladen erkennen, TSC-Abstand über fünf Perioden
+messen. Damit ist der TSC eine Zeitbasis, die von der Interrupt-Zustellung
+unabhängig ist. Dann werden je Weg 20 zugestellte Ticks gegen diese Basis
+gemessen (`measure_tick_rate`). Beide Messungen laufen im Bootpfad, bevor der
+Scheduler scharf ist, also ohne Serienausgabe im Handler.
+
+**Ergebnis**, PIT in `init_pics` auf 100 Hz programmiert:
+
+```text
+ShivaCore: Tick-Messung 20 Ticks: PIC=468449544 TSC, IOAPIC=238698216 TSC, Verhaeltnis=1.9x
+ShivaCore: Tick-Rate (PIT soll 100 Hz): PIC=45 Hz, IOAPIC=91 Hz
+```
+
+Damit ist die Frage entschieden, und zwar in die vermutete Richtung: die PIC
+liefert etwa die Hälfte der Ticks (45 statt 100 Hz), der IOAPIC liegt mit 91 Hz
+nahe am Sollwert. Es ist also kein Doppelzählen des IOAPIC, sondern Verlust auf
+dem PIC-Weg.
+
+**Grenze der Aussage.** Die Kalibrierung hängt an der Annahme, dass der PIT
+wirklich mit 100 Hz läuft; ein Fehler darin verschiebt beide Zahlen gemeinsam,
+das Verhältnis 1,9x bleibt davon unberührt. Die verbleibenden 9 % zwischen 91 und
+100 Hz lassen sich mit dieser Genauigkeit nicht sauber von einem Kalibrierfehler
+trennen. Ob Zeitrechnung dadurch 9 % zu langsam läuft, ist damit offen und nicht
+behauptet.
+
+**Nebenwirkung.** Weil der TSC jetzt kalibriert wird, sind absolute Raten künftig
+prüfbar; die beiden Zeilen stehen in der README als Teil der erwarteten
+Boot-Ausgabe.
