@@ -11,7 +11,8 @@
 //! testbar bleibt — die Bin haelt nur eine `Mutex<Option<SyscallGate>>`.
 
 use crate::ats1000::Pid;
-use crate::capability::CapabilityTable;
+use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
+use crate::input_queue::InputQueue;
 use crate::syscall::{SyscallDispatcher, SyscallRequest, SyscallResponse};
 
 /// Dispatcher + Capability-Tabelle als eine Einheit.
@@ -35,9 +36,22 @@ impl SyscallGate {
     }
 
     /// Ein Syscall vom Userspace: Dispatch inkl. Capability-Pruefung.
-    pub fn handle(&mut self, pid: Pid, request: SyscallRequest) -> SyscallResponse {
+    pub fn handle(
+        &mut self,
+        pid: Pid,
+        request: SyscallRequest,
+        input: &mut InputQueue,
+    ) -> SyscallResponse {
         self.dispatcher
-            .dispatch(pid, request, &mut self.capabilities)
+            .dispatch(pid, request, &mut self.capabilities, input)
+    }
+
+    /// Gibt einem Prozess das Leserecht auf einen Kanal. Fuer den
+    /// Kernel-Eingabekanal ist das der einzige Weg, an Tastenereignisse zu
+    /// kommen; ohne Cap beantwortet der Syscall nur "kein Transport".
+    pub fn grant_channel_read(&mut self, pid: Pid, channel: u64) -> CapId {
+        self.capabilities
+            .create(pid, ResourceType::IpcChannel, channel, Rights::READ)
     }
 
     /// Ein Hardware-Tick (Timer-IRQ) — die einzige Quelle fuer MonotonicTime.
@@ -82,7 +96,7 @@ mod tests {
     #[test]
     fn gate_dispatches_yield_for_any_pid() {
         let mut gate = SyscallGate::new();
-        let r = gate.handle(pid(7), request(Syscall::Yield));
+        let r = gate.handle(pid(7), request(Syscall::Yield), &mut InputQueue::new());
         assert_eq!(r.error, None);
     }
 
@@ -97,9 +111,9 @@ mod tests {
             arg0: 5,
             ..request(Syscall::IpcSend)
         };
-        assert_eq!(gate.handle(pid(1), req).error, None);
+        assert_eq!(gate.handle(pid(1), req, &mut InputQueue::new()).error, None);
         assert_eq!(
-            gate.handle(pid(2), req).error,
+            gate.handle(pid(2), req, &mut InputQueue::new()).error,
             Some(AbiError::PermissionDenied)
         );
     }
@@ -114,17 +128,29 @@ mod tests {
             capability: Some(CapabilityHandle(cap.0)),
             ..request(Syscall::HandleClose)
         };
-        assert_eq!(gate.handle(pid(1), req).value, 1);
+        assert_eq!(gate.handle(pid(1), req, &mut InputQueue::new()).value, 1);
         assert_eq!(gate.capabilities().count(), 0);
     }
 
     #[test]
     fn gate_time_only_moves_with_ticks() {
         let mut gate = SyscallGate::new();
-        let a = gate.handle(pid(1), request(Syscall::MonotonicTime)).value;
+        let a = gate
+            .handle(
+                pid(1),
+                request(Syscall::MonotonicTime),
+                &mut InputQueue::new(),
+            )
+            .value;
         gate.on_tick();
         gate.on_tick();
-        let b = gate.handle(pid(1), request(Syscall::MonotonicTime)).value;
+        let b = gate
+            .handle(
+                pid(1),
+                request(Syscall::MonotonicTime),
+                &mut InputQueue::new(),
+            )
+            .value;
         assert_eq!(b, a + 2, "zwei Ticks, zwei Schritte");
     }
 
@@ -136,7 +162,7 @@ mod tests {
             ..request(Syscall::Yield)
         };
         assert_eq!(
-            gate.handle(pid(1), req).error,
+            gate.handle(pid(1), req, &mut InputQueue::new()).error,
             Some(AbiError::InvalidSyscall)
         );
     }
