@@ -957,3 +957,49 @@ zerrissen ("unclosed delimiter") — dieselbe Lehre wie vorhin: keine Ersetzunge
 ueber Stellen, die mitten in einem Kommentar beginnen.
 
 632 Kernel-Tests, check/fmt/clippy sauber, BIOS und UEFI ohne Panic.
+
+## Nachtrag 08:20 — Der Interrupt hat formatiert statt abgelegt
+
+Der Tastatur-Handler machte pro Taste die Uebersetzung, die Formatierung und die
+Serienausgabe. Serienausgabe im Interrupt ist Arbeit, die niemand dort haben
+will: sie blockiert den Kern fuer die Dauer der Uebertragung, und genau das war
+der Verdacht bei der doppelten Tick-Rate unter PIC.
+
+**Jetzt legt der Handler ab, der Tick liest aus.** Neu: `kernel/src/input_queue.rs`
+(Lib, 6 Tests): `InputEvent { scancode, character }`, fester Puffer
+`INPUT_CAPACITY = 64` ohne Allokation (im Interrupt darf nichts allokieren),
+`push` liefert `false` und zaehlt, wenn voll — kein Warten.
+
+Der Handler macht nur noch:
+
+```rust
+let event = InputEvent::new(scancode, decoded.character.map(|b| b as char));
+INPUT_QUEUE.lock().push(event);
+```
+
+Geleert wird im Tick, hoechstens acht Ereignisse pro Tick, damit ein Tippschwall
+den Tick nicht ueberzieht:
+
+```text
+Eingabe (Konsument): 'h' (Scancode 0x23) [Line Some(1), Bruecke 1, Rueckfall 0, Haenger 0, verworfen 0]
+Eingabe (Konsument): 'i' (Scancode 0x17) [Line Some(1), Bruecke 3, Rueckfall 0, Haenger 0, verworfen 0]
+```
+
+`0` Zeilen "Tastatur ueber Vektor" im ganzen Lauf. Das Zeichen wird beim
+Druecken uebersetzt und mitgespeichert, nicht beim Leeren: sonst koennte eine
+innerhalb eines Ticks geloeste Umschalttaste das Zeichen nachtraeglich
+verfaelschen. Die Bruecken-Zaehler sind mitgezogen, damit der Umbau keine
+Evidenz kostet.
+
+**Entschieden, weil reversibel und Impact mittel** (Owner-Regel: Defaults
+dokumentieren statt blockieren): Empfaenger ist genau ein Konsument; Puffergroesse
+64; bei Ueberlauf wird das neue Ereignis verworfen und gezaehlt statt die Line zu
+maskieren; das Layout bleibt vorerst im Kernel (US), weil eine Verlagerung in den
+Prozess erst mit einem echten Ring-3-Konsumenten sinnvoll ist.
+
+**Grenze.** Der Konsument ist der Tick, nicht ein Prozess. Der Payload ist
+weiterhin ein einzelnes `HLT` (`UserBinary::hello_world`), ein Ring-3-Programm mit
+`IpcReceive`-Schleife ist der naechste Schritt. Was jetzt steht, ist der Pfad
+dahin: der Handler kennt keinen Empfaenger mehr.
+
+646 Kernel-Tests, check/fmt/clippy sauber, BIOS und UEFI ohne Panic.
