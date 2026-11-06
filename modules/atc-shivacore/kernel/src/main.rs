@@ -65,6 +65,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         "ShivaCore: ACPI RSDP/root/table checksums validated; tables={}",
         validated_tables
     );
+    let ioapic_info = madt.and_then(|summary| summary.ioapic);
     let lapic_base = match madt {
         Some(summary) => {
             let ioapic = match summary.ioapic {
@@ -123,7 +124,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     // SC-006 REQ-03: Die LAPIC-Registerschicht an das MMIO-Fenster anbinden.
     // Ohne diesen Schritt blieb `apic.rs` folgenlos.
-    let lapic_address = map_lapic_mmio(&mut mapper, &mut frame_allocator, lapic_base);
+    let lapic_address = map_mmio_page(&mut mapper, &mut frame_allocator, lapic_base);
     let mut lapic = unsafe {
         shivacore::apic::LocalApic::new(shivacore::apic::MappedRegisters::new(
             lapic_address.as_u64() as *mut u32,
@@ -150,6 +151,69 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         masked,
         released
     );
+
+    // SC-006 REQ-03: IOAPIC programmieren. Der Treiber liest die Eintragszahl
+    // aus dem Versionsregister und beschreibt die Redirection-Tabelle.
+    match ioapic_info {
+        Some(info) if info.address != 0 => {
+            serial_println!(
+                "ShivaCore: IOAPIC-Mapping base=0x{:X} startet.",
+                info.address
+            );
+            let ioapic_base =
+                map_mmio_page(&mut mapper, &mut frame_allocator, u64::from(info.address));
+            serial_println!(
+                "ShivaCore: IOAPIC-Fenster bei 0x{:X}.",
+                ioapic_base.as_u64()
+            );
+            let mut ioapic = shivacore::ioapic::IoApic::new(
+                unsafe {
+                    shivacore::ioapic::MappedRegisters::new(ioapic_base.as_u64() as *mut u32)
+                },
+                info.gsi_base,
+            );
+            serial_println!(
+                "ShivaCore: IOAPIC id={} version=0x{:X} gsi_base={} entries={}",
+                ioapic.id(),
+                ioapic.version(),
+                ioapic.gsi_base(),
+                ioapic.max_entries()
+            );
+
+            // IRQ 0 (PIT) auf seine GSI abbilden: die MADT-Overrides entscheiden,
+            // nicht die Annahme GSI == IRQ.
+            let timer_gsi = match madt {
+                Some(summary) => shivacore::madt::gsi_for_irq(&summary, 0),
+                None => 0,
+            };
+            let timer_vector: u8 = 0x50;
+            let entry = shivacore::ioapic::RedirectionEntry::fixed(timer_vector, lapic.id());
+            match ioapic.set_redirection_entry(timer_gsi, entry) {
+                Ok(read_back) => {
+                    serial_println!(
+                        "ShivaCore: IOAPIC GSI {} -> Vektor 0x{:X} programmiert (maskiert={}, Ruecklesung={})",
+                        timer_gsi,
+                        read_back.vector,
+                        read_back.masked,
+                        read_back.vector == timer_vector
+                    );
+                }
+                Err(error) => {
+                    serial_println!(
+                        "ShivaCore: WARNUNG -- IOAPIC-Eintrag fuer GSI {} nicht schreibbar: {:?}",
+                        timer_gsi,
+                        error
+                    );
+                }
+            }
+            serial_println!(
+                "ShivaCore: IOAPIC-Eintrag bleibt maskiert; Zustellung laeuft weiter ueber die PIC."
+            );
+        }
+        _ => {
+            serial_println!("ShivaCore: WARNUNG -- kein IOAPIC in der MADT gemeldet.");
+        }
+    }
 
     // Heap live testen: Box + Vec muessen funktionieren, ohne zu crashen.
     let boxed = Box::new(41);
@@ -443,9 +507,9 @@ fn panic(info: &PanicInfo) -> ! {
     }
 }
 
-/// Mappt das LAPIC-MMIO-Fenster (Standardbasis 0xFEE0_0000) als Geraetespeicher.
-/// Eine 4-KiB-Seite deckt alle Register bis Offset 0x3F0 ab.
-fn map_lapic_mmio(
+/// Mappt ein MMIO-Fenster (LAPIC oder IOAPIC) als Geraetespeicher.
+/// Eine 4-KiB-Seite deckt LAPIC (bis 0x3F0) wie IOAPIC (bis 0x10) ab.
+fn map_mmio_page(
     mapper: &mut x86_64::structures::paging::mapper::OffsetPageTable,
     frame_allocator: &mut crate::memory::BootInfoFrameAllocator,
     base: u64,
@@ -455,17 +519,15 @@ fn map_lapic_mmio(
     };
     use x86_64::{PhysAddr, VirtAddr};
 
-    let virt = VirtAddr::new(shivacore::apic::LAPIC_DEFAULT_BASE);
+    let virt = VirtAddr::new(base);
     let page = Page::<Size4KiB>::containing_address(virt);
-    let frame = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(
-        shivacore::apic::LAPIC_DEFAULT_BASE,
-    ));
+    let frame = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(base));
     let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
     match unsafe { mapper.map_to(page, frame, flags, frame_allocator) } {
         Ok(flush) => flush.flush(),
         // Der Bootloader kann die Seite bereits identity-gemappt haben.
         Err(MapToError::PageAlreadyMapped(_)) => {}
-        Err(error) => panic!("LAPIC-MMIO-Mapping fehlgeschlagen: {:?}", error),
+        Err(error) => panic!("MMIO-Mapping bei 0x{:X} fehlgeschlagen: {:?}", base, error),
     }
     virt
 }
