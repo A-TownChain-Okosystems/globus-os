@@ -383,3 +383,45 @@ mehr ausgeben als raten.
 PIC-IRQ 0 maskieren, IOAPIC-Eintrag freigeben und die Interrupt-Zählung
 vergleichen. Das ändert den funktionierenden Preemption-Pfad, deshalb ist es ein
 eigener Schritt und nicht stillschweigend mitgezogen.
+
+## Nachtrag 23:40 — Intermittierender Panic im Scheduler-Selbsttest behoben
+
+Beim Prüfen der IOAPIC-Änderung fiel auf, dass Bootläufe sporadisch starben:
+
+```text
+ShivaCore: KERNEL PANIC -- panicked at interrupts.rs:350:
+SCHED-001 register corruption: PID=1000 RAX=0x0 RBX=0x10000014f48 R12=0x8000017890
+```
+
+Erste Vermutung war ein UEFI-Problem, weil der UEFI-Lauf zuerst auffiel. Die
+Wiederholung zeigte etwas anderes: 1 von 3 BIOS-Läufen starb genauso. Also kein
+Firmware-Unterschied, sondern eine Race.
+
+**Ursache.** `timer_trap_rust` prüft bei jedem Tick, ob der laufende Ring-3-Prozess
+sein Register-Muster trägt (PID 1000: RAX=0x1000, RBX=0x1001, R12=0x1012). Feuert
+der Timer, bevor der Payload seine `mov`-Befehle ausgeführt hat, steht dort noch
+der Anfangszustand (RAX=0x0) und die Invariante schlägt zu Recht an — nur ist das
+keine Korruption, sondern die Zeit vor dem ersten Befehl.
+
+**Fix.** Ein `PATTERN_ESTABLISHED: [AtomicBool; 2]` merkt je Prozess, ob sein
+Muster einmal beobachtet wurde. Davor ist ein Tick Aufwärmphase und wird als
+solche protokolliert, danach gilt die Invariante unverändert und jeder Abweichler
+panict weiterhin. Die Prüfung wird also nicht abgeschwächt, sondern ihre
+Vorbedingung wird explizit gemacht.
+
+Seriell sichtbar:
+
+```text
+ShivaCore: SCHED-001 warm-up tick PID=1000 RAX=0x0 RBX=0x18000014f48 R12=0x10000017a00
+ShivaCore: SCHED-001 register pattern established PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012
+ShivaCore: SCHED-001 register pattern established PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012
+```
+
+**Beleg.** 8 Läufe hintereinander, 4 BIOS und 4 UEFI, je 12 s: 0 Panics,
+100 Kontextwechsel pro BIOS-Lauf, 67 bis 69 pro UEFI-Lauf. Vorher: 2 von 6
+Läufen tot.
+
+**Offen:** Der Grund, warum der Timer vor dem ersten Payload-Befehl feuert, ist
+nicht beseitigt, nur die Fehlbewertung. Sauberer wäre, die Interrupts erst nach
+dem `iretq` in den Ring 3 freizugeben. Das ist ein eigener Schritt, weil er den
+Einstiegspfad in `userspace.rs` betrifft.
