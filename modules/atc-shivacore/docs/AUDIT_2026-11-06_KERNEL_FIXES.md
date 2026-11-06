@@ -335,3 +335,51 @@ USER-001 entering                  1
 **Weiterhin offen:** Der IOAPIC wird gelesen, aber nicht programmiert. Es gibt
 damit noch keine Zuordnung von Geräte-IRQ zu Vektor, und kein Gerät ist
 angebunden. Die MADT-Auswertung ist die Vorarbeit dafür, nicht die Umsetzung.
+
+## Nachtrag 23:10 — IOAPIC programmierbar, im Bootlauf nachgewiesen
+
+Der vorige Nachtrag endete mit: IOAPIC gelesen, aber nicht programmiert. Das ist
+jetzt behoben.
+
+**Treiber.** Neues Modul `kernel/src/ioapic.rs`:
+
+- `RedirectionEntry` mit `encode()`/`decode()` (Vektor Bit 0..8, Delivery-Mode
+  8..11, Zielmodus 11, Polarität 13, Auslösung 15, Maske 16, Ziel 24..32 der
+  High-Hälfte). Roundtrip getestet.
+- `IoApicRegisters`-Trait mit zwei Implementierungen: Fake für Tests,
+  `MappedRegisters` volatile über rohen Zeiger für Hardware.
+- `IoApic<M>`: `id()`, `version()`, `max_entries()` (aus Bits 16..24 des
+  Versionsregisters), `redirection_entry()`, `set_redirection_entry()` mit
+  Rücklesung, `mask()`/`unmask()` die nur das Maskenbit ändern.
+- GSI unterhalb der Basis → `GsiBelowBase`, oberhalb der Tabelle →
+  `GsiOutOfRange`. 9 Tests.
+
+**Bootpfad.** `map_mmio_page()` (vorher `map_lapic_mmio`) mappt jetzt beliebige
+MMIO-Fenster. IOAPIC-Adresse und GSI-Basis kommen aus der MADT. Der IRQ 0 wird
+über die MADT-Overrides auf GSI 2 abgebildet, nicht über die Annahme GSI == IRQ.
+
+Seriell belegt:
+
+```text
+ShivaCore: IOAPIC id=0 version=0x170020 gsi_base=0 entries=24
+ShivaCore: IOAPIC GSI 2 -> Vektor 0x50 programmiert (maskiert=true, Ruecklesung=true)
+```
+
+`0x170020`: höchster Eintragsindex 0x17 = 23, also 24 Einträge, Version 2. Die
+Rücklesung bestätigt, dass der geschriebene Eintrag im Chip steht.
+
+**Ein Fehler unterwegs, der es wert ist, festgehalten zu werden.** Der erste
+Versuch endete in einem DOUBLE FAULT. Ursache war nicht der IOAPIC, sondern ein
+stiller Patch: `map_lapic_mmio()` war zuvor von `rustfmt` umformatiert worden,
+mein späterer Textersatz passte nicht mehr und lief ins Leere. Ergebnis: der
+Parameter `base` wurde ignoriert, das Fenster landete bei `0xFEE00000` und
+überschrieb den LAPIC. Diagnosepunkte im Bootpfad haben es sofort gezeigt
+("IOAPIC-Fenster bei 0xFEE00000" bei gemeldeter Basis `0xFEC00000`). Lehre:
+Textersatz auf formatierten Code prüfen, und im Bootpfad lieber eine Zeile
+mehr ausgeben als raten.
+
+**Weiterhin offen:** Der Eintrag bleibt maskiert, die Zustellung läuft weiter
+über die PIC. Der nächste Schritt wäre: Handler für Vektor 0x50 registrieren,
+PIC-IRQ 0 maskieren, IOAPIC-Eintrag freigeben und die Interrupt-Zählung
+vergleichen. Das ändert den funktionierenden Preemption-Pfad, deshalb ist es ein
+eigener Schritt und nicht stillschweigend mitgezogen.
