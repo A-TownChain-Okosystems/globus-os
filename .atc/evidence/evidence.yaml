@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: d1c70ce1b278a1116eb65b348182e1452033e152
+bound_commit: 88149d1c1202f2b278ae422e0b5cfadd32f15ce2
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: d1c70ce1b278a1116eb65b348182e1452033e152
-  timestamp: 2026-11-07T01:00:00+00:00
+  commit: 88149d1c1202f2b278ae422e0b5cfadd32f15ce2
+  timestamp: 2026-11-07T01:35:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -78,9 +78,11 @@ verification:
         Vektor 0x20. Beleg: 214 Kontextwechsel pro BIOS-Lauf, 158-196 pro
         UEFI-Lauf, 0 Panics; ohne korrektes APIC-EOI waere nach dem ersten Tick
         Schluss.
-        Tick-Rate gemessen (TSC gegen PIT kalibriert, PIT auf 100 Hz): PIC 45 Hz,
-        IOAPIC 91 Hz, Verhaeltnis 1.9x — die PIC verliert rund die Haelfte, der
-        IOAPIC liegt nahe am Sollwert. In frischem Clone fuer BIOS und UEFI
+        Tick-Rate gemessen (TSC gegen PIT kalibriert, PIT auf 100 Hz, Modus 2):
+        PIC 98-99 Hz, IOAPIC 98 Hz, Verhaeltnis 1.0x. Der frueher gemessene
+        Faktor 2 war die Rechteckwelle aus PIT-Modus 3 (zwei Flanken pro Periode,
+        kantengetriggert doppelt gezaehlt); mit Modus 2 liefern beide Wege im
+        Rahmen der Messgenauigkeit den Sollwert. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
