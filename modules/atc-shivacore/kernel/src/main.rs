@@ -89,6 +89,36 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("Heap-Initialisierung fehlgeschlagen");
     serial_println!("ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).");
 
+    // SC-006 REQ-03: Die LAPIC-Registerschicht an das MMIO-Fenster anbinden.
+    // Ohne diesen Schritt blieb `apic.rs` folgenlos.
+    let lapic_address = map_lapic_mmio(&mut mapper, &mut frame_allocator);
+    let mut lapic = unsafe {
+        shivacore::apic::LocalApic::new(shivacore::apic::MappedRegisters::new(
+            lapic_address.as_u64() as *mut u32,
+        ))
+    };
+    let spurious = lapic.enable();
+    serial_println!(
+        "ShivaCore: LAPIC aktiv (id={}, spurious=0x{:X}).",
+        lapic.id(),
+        spurious
+    );
+    let probe_vector = 0x40u32;
+    lapic
+        .mask(probe_vector)
+        .expect("LAPIC-Maske fehlgeschlagen");
+    let masked = lapic.is_masked(probe_vector).unwrap_or(false);
+    lapic
+        .unmask(probe_vector)
+        .expect("LAPIC-Freigabe fehlgeschlagen");
+    let released = !lapic.is_masked(probe_vector).unwrap_or(true);
+    serial_println!(
+        "ShivaCore: LAPIC-Maskentest Vektor 0x{:X}: maskiert={} freigegeben={}",
+        probe_vector,
+        masked,
+        released
+    );
+
     // Heap live testen: Box + Vec muessen funktionieren, ohne zu crashen.
     let boxed = Box::new(41);
     serial_println!("ShivaCore: Box-Test -- Wert: {}", *boxed);
@@ -373,4 +403,30 @@ fn panic(info: &PanicInfo) -> ! {
     loop {
         x86_64::instructions::hlt();
     }
+}
+
+/// Mappt das LAPIC-MMIO-Fenster (Standardbasis 0xFEE0_0000) als Geraetespeicher.
+/// Eine 4-KiB-Seite deckt alle Register bis Offset 0x3F0 ab.
+fn map_lapic_mmio(
+    mapper: &mut x86_64::structures::paging::mapper::OffsetPageTable,
+    frame_allocator: &mut crate::memory::BootInfoFrameAllocator,
+) -> x86_64::VirtAddr {
+    use x86_64::structures::paging::{
+        mapper::MapToError, page::Page, FrameAllocator, Mapper, PageTableFlags, PhysFrame, Size4KiB,
+    };
+    use x86_64::{PhysAddr, VirtAddr};
+
+    let virt = VirtAddr::new(shivacore::apic::LAPIC_DEFAULT_BASE);
+    let page = Page::<Size4KiB>::containing_address(virt);
+    let frame = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(
+        shivacore::apic::LAPIC_DEFAULT_BASE,
+    ));
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+    match unsafe { mapper.map_to(page, frame, flags, frame_allocator) } {
+        Ok(flush) => flush.flush(),
+        // Der Bootloader kann die Seite bereits identity-gemappt haben.
+        Err(MapToError::PageAlreadyMapped(_)) => {}
+        Err(error) => panic!("LAPIC-MMIO-Mapping fehlgeschlagen: {:?}", error),
+    }
+    virt
 }
