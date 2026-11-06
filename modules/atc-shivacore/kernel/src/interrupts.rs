@@ -9,6 +9,10 @@ use crate::serial_println;
 use core::arch::global_asm;
 use lazy_static::lazy_static;
 use pic8259::ChainedPics;
+use libshivacore::CapabilityHandle;
+use shivacore::ats1000::Pid;
+use shivacore::syscall::SyscallRequest;
+use shivacore::syscall_gate::SyscallGate;
 use shivacore::user_sched::{SavedContext, UserScheduler};
 use shivacore::userspace::UserContext;
 use spin::Mutex;
@@ -26,12 +30,16 @@ pub static PICS: Mutex<ChainedPics> =
 
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 
+/// Der einzige Userspace->Kernel-Pfad: Dispatcher + Capability-Tabelle.
+static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
+
 pub fn init_user_scheduler(first: &UserContext, second: &UserContext) {
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
     let _ = scheduler.schedule(None);
     *USER_SCHEDULER.lock() = Some(scheduler);
+    *SYSCALL_GATE.lock() = Some(SyscallGate::new());
     serial_println!(
         "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={}",
         first.pid.0,
@@ -71,8 +79,12 @@ lazy_static! {
         };
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
         // User-mode software interrupt gate. DPL3 permits CPL3 to enter the kernel.
-        idt[0x80].set_handler_fn(syscall_interrupt_handler)
-            .set_privilege_level(x86_64::PrivilegeLevel::Ring3);
+        // Volles Register-Gate statt Handler-Stub (Audit-Befund K-01).
+        unsafe {
+            idt[0x80]
+                .set_handler_addr(syscall_gate_entry_addr())
+                .set_privilege_level(x86_64::PrivilegeLevel::Ring3)
+        };
         idt
     };
 }
@@ -210,7 +222,57 @@ impl UserTrapFrame {
 
 extern "C" {
     fn shivacore_timer_trampoline();
+    fn shivacore_syscall_gate();
 }
+
+fn syscall_gate_entry_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_syscall_gate as *const () as usize as u64)
+}
+
+// Syscall-Gate: identische Stack-Disziplin wie das Timer-Trampolin (Interrupt-
+// Gate ohne Error-Code, 15 GP-Register, 16-Byte-Alignment via `mov rdi, rsp`).
+// Ergebnis wird in die gesicherten Slots von RAX (Wert) und RBX (Status)
+// zurueckgeschrieben und beim `pop` wiederhergestellt.
+global_asm!(
+    r#"
+    .global shivacore_syscall_gate
+shivacore_syscall_gate:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov rdi, rsp
+    call {handler}
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    iretq
+"#,
+    handler = sym syscall_gate_rust
+);
 
 global_asm!(
     r#"
@@ -255,6 +317,14 @@ shivacore_timer_trampoline:
 
 #[no_mangle]
 extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
+    // Ein Hardware-Tick -> genau ein MonotonicTime-Schritt.
+    // try_lock: faellt das Gate gerade in einem Syscall, wird der Tick
+    // uebersprungen (monoton bleibt monoton) statt im IRQ zu blockieren.
+    if let Some(mut guard) = SYSCALL_GATE.try_lock() {
+        if let Some(gate) = guard.as_mut() {
+            gate.on_tick();
+        }
+    }
     let mut guard = USER_SCHEDULER.lock();
     let Some(scheduler) = guard.as_mut() else {
         unsafe {
@@ -311,13 +381,45 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_timer_trampoline as usize as u64)
 }
 
-extern "x86-interrupt" fn syscall_interrupt_handler(stack_frame: InterruptStackFrame) {
-    serial_println!(
-        "ShivaCore: CPL3 syscall gate entered at RIP={:#x}",
-        stack_frame.instruction_pointer.as_u64()
-    );
-    // Return to the interrupted userspace instruction for now. The ABI dispatcher
-    // is wired next; this gate is intentionally observable before SCHED-001/SYS-001.
+/// Register-Konvention nach SC-004 §3 (Cap-Slot, Opcode, 4 Argument-Woerter,
+/// 2 Resultat-Woerter). Die konkrete Registerzuordnung ist SC-DEC-L §13 und
+/// damit noch offen; hier gilt:
+///   RDI = Cap-Slot (0 = kein Cap) · RSI = Opcode
+///   RDX, RCX, R8, R9 = die vier Argument-Woerter
+///   RAX = Resultat 1 (Wert) · RBX = Resultat 2 (Status: 0 = Erfolg, sonst AbiError)
+#[no_mangle]
+extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
+    let cap_slot = frame.rdi;
+    let request = SyscallRequest {
+        abi_version: frame.r9 as u32,
+        syscall_id: frame.rsi as u16,
+        capability: if cap_slot == 0 {
+            None
+        } else {
+            Some(CapabilityHandle(cap_slot))
+        },
+        arg0: frame.rdx,
+        arg1: frame.rcx,
+        payload_len: frame.r8 as usize,
+    };
+
+    let pid = USER_SCHEDULER
+        .lock()
+        .as_ref()
+        .and_then(|s| s.current_pid())
+        .unwrap_or(Pid(0));
+
+    let response = match SYSCALL_GATE.lock().as_mut() {
+        Some(gate) => gate.handle(pid, request),
+        None => {
+            frame.rax = 0;
+            frame.rbx = libshivacore::AbiError::EndpointUnavailable as u64;
+            return;
+        }
+    };
+
+    frame.rax = response.value;
+    frame.rbx = response.error.map(|e| e as u64).unwrap_or(0);
 }
 
 extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStackFrame) {
