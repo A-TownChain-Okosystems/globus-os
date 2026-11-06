@@ -120,7 +120,11 @@ pub fn init_pics() {
             x86_64::instructions::port::Port::new(0x43);
         let mut channel0: x86_64::instructions::port::Port<u8> =
             x86_64::instructions::port::Port::new(0x40);
-        command.write(0x36); // channel 0, lobyte/hibyte, mode 3, binary
+        // Modus 2 (Rate Generator) statt Modus 3 (Rechteck): Modus 2 erzeugt
+        // genau eine Flanke pro Periode. Die Rechteckwelle aus Modus 3 hat zwei
+        // Flanken, was bei kantengetriggerter Zustellung zu doppelten
+        // Interrupts fuehrt und die Zeitrechnung beschleunigt.
+        command.write(0x34); // channel 0, lobyte/hibyte, mode 2, binary
         channel0.write((divisor & 0x00ff) as u8);
         channel0.write((divisor >> 8) as u8);
     }
