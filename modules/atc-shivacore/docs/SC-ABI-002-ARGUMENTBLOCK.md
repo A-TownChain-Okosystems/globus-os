@@ -59,3 +59,33 @@ das verdrahtet ist, gilt im Kernel weiter: Nutzdaten in `IpcSend` enden als
 `EndpointUnavailable` statt als vorgetaeuschter Erfolg. Der Empfang des
 Tastaturereignisses laeuft derzeit ueber den Rueckgabewert (64 Bit reichen fuer
 Scancode und Zeichen), nicht ueber den Puffer.
+
+## Umsetzung: Der Kernel liest den Block wirklich
+
+Stand 07.11.2026, im Bootlauf belegt. Das Trampolin uebersetzt keine losen
+Register mehr, sondern liest den Block in dieser Reihenfolge:
+
+1. Version aus RDX. Stimmt die Major-Version nicht, endet der Aufruf mit
+   `AbiVersionMismatch` — ohne dass ein Zeiger aus dem Userspace gelesen wurde.
+2. Laenge aus RSI gegen `SYSCALL_BLOCK_MIN_SIZE..=SYSCALL_BLOCK_MAX_SIZE`.
+3. Zeiger aus RDI gegen das Abbild des Aufrufers. `UserAddressSpace::range_writable`
+   verlangt, dass der ganze Bereich in Daten-, Heap- oder Stackbereich liegt, und
+   lehnt Ueberlauf ab. Code wird abgelehnt: lesbar, aber ein Puffer dort ist ein
+   Fehler des Aufrufers. Dafuer traegt der Scheduler-Eintrag jetzt das Abbild
+   (`SchedEntry::addr_space`), sonst waere jede Pruefung nur eine Behauptung.
+4. Erst dann die Kopie in einen Kernpuffer (max. 256 Byte) und das Parsen des
+   Blocks. Ab hier liest der Kernel nur noch eigenen Speicher.
+
+Der Ring-3-Prozess legt den Block in seine Datenseite (0x0190_0000), nicht auf
+den Stack.
+
+### Offener Befund: ein Block auf dem Stack faultet
+
+Die erste Fassung baute den Block auf dem Stack. Ergebnis: 5746 Seitenfehler in
+einem 30-Sekunden-Lauf, jeder bei RIP 0x1800020 (der Anweisung
+`mov [rsp+0x10], rdi`) mit CR2 0x4810247c. Die Messung im Timer-Tick zeigt
+gleichzeitig einen korrekten RSP (0x7FDFFC0) und einen korrekten RAX/RBX/R12 —
+die Zuordnung von Frame und Kontext ist also nicht offensichtlich falsch, und
+die Fehleradresse passt nicht zu [rsp+0x10]. Mit der Datenseite tritt kein
+einziger Seitenfehler auf. Der Stack-Pfad bleibt damit unerklaert und offen;
+solange er offen ist, taugt ein Ring-3-Programm mit Stack nicht als Beweis.
