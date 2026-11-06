@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: bcd045499aeb20b1e06bf26c06bf25ac1f303c45
+bound_commit: 518a88aa1b82ff86fb7f077dbbce0a5474a51218
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: bcd045499aeb20b1e06bf26c06bf25ac1f303c45
-  timestamp: 2026-11-07T03:55:00+00:00
+  commit: 518a88aa1b82ff86fb7f077dbbce0a5474a51218
+  timestamp: 2026-11-07T04:25:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -100,7 +100,12 @@ verification:
         im Bootpfad (24 Zeilen, routbar ab 0x20, automatisch ab 0x30, keine
         geteilten Vektoren). Bootlog "IRQ-Routing: IRQ 0 -> GSI 2 -> Vektor
         0x20, naechster freier Geraetevektor 0x30", BIOS und UEFI, 0 Panics,
-        616 Kernel-Tests. In frischem Clone fuer BIOS und UEFI
+        616 Kernel-Tests.
+        Zweite Line: PS/2-Tastatur am IOAPIC statt an der PIC, Route aus der
+        Tabelle (IRQ 1 -> GSI 1 -> Vektor 0x30), gleicher Ablauf wie der Timer
+        (sperren, lesen, EOI, freigeben). Beleg: "Tastatur ueber Vektor 0x30:
+        Scancode 0x1E/0x9E/0x1F/0x9F/0x20/0xA0" fuer a, s, d — Druecken und
+        Loslassen — im Clone-Lauf, BIOS und UEFI, 0 Panics. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
