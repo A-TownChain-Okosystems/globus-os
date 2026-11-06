@@ -76,7 +76,11 @@ impl RemoteCapabilityTicket {
         payload.extend_from_slice(self.subject_did.value.as_bytes());
         payload.extend_from_slice(self.resource.resource_type.as_bytes());
         payload.extend_from_slice(&self.resource.resource_id.to_le_bytes());
-        payload.push(self.resource.rights.0);
+        // Rechte sind seit SC-006 16 Bit breit (SUBSCRIBE/ACK/SET_DEADLINE/
+        // ACCESS kamen hinzu). Bis dahin war es ein Byte; Tickets aus der Zeit
+        // davor haben eine andere Signatur-Basis und werden nicht mehr
+        // gegengeprueft.
+        payload.extend_from_slice(&self.resource.rights.bits().to_le_bytes());
         payload.extend_from_slice(&self.constraints.max_operations.to_le_bytes());
         payload.extend_from_slice(&self.constraints.deadline_unix.to_le_bytes());
         if let Some(eb) = self.constraints.energy_budget_uj {
