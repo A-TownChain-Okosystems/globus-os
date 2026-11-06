@@ -425,3 +425,55 @@ Läufen tot.
 nicht beseitigt, nur die Fehlbewertung. Sauberer wäre, die Interrupts erst nach
 dem `iretq` in den Ring 3 freizugeben. Das ist ein eigener Schritt, weil er den
 Einstiegspfad in `userspace.rs` betrifft.
+
+## Nachtrag 00:20 — Zustellung von PIC auf IOAPIC umgestellt
+
+Damit ist der letzte offene Punkt der IRQ-Kette geschlossen: der Timer läuft
+nicht mehr über die PIC, sondern über den IOAPIC.
+
+**Zur Vorbemerkung „Interrupts erst nach iretq freigeben".** Die ist erledigt,
+aber anders als gedacht. `userspace.rs` setzt im Frame `rflags = 0x202`, also IF.
+Das Scharfschalten passiert damit durch `iretq` selbst, nicht vorher; ein
+ausstehender Tick wird eine Instruktion später zugestellt. Die SCHED-001-Race aus
+dem vorigen Nachtrag ist daher kein Timing-Fehler, sondern unvermeidbar: der
+Payload hat vor seiner ersten Instruktion noch kein Registermuster. Die
+protokollierte Aufwärmphase bleibt die richtige Antwort.
+
+**Umschaltung.** Reihenfolge im Bootpfad, bewusst so:
+
+1. PIC vollständig maskieren (`write_masks(0xFF, 0xFF)`). Ab hier gibt es genau
+   einen Zustellweg.
+2. Bestätigung auf den Local APIC umstellen (`switch_acknowledge_to_apic`), EOI
+   über Register `0x0B0`.
+3. Erst jetzt den IOAPIC-Eintrag freigeben: GSI 2 (IRQ 0 über MADT-Override) auf
+   den Timer-Vektor, `maskiert=false`.
+
+Wird die Reihenfolge verletzt, hängt der erste Interrupt: ohne APIC-EOI liefert
+der Local APIC nichts mehr nach.
+
+**Der Vektor.** `TIMER_VECTOR` wird jetzt aus `InterruptIndex::Timer as u8`
+abgeleitet statt als Literal gepflegt. Damit kann der IOAPIC-Eintrag nicht auf
+einen anderen Vektor zeigen als der IDT-Handler. Der ursprünglich geplante Test
+dafür ist entfallen, weil das Bin-Target keine Testunterstützung hat (`cargo
+test --bins` meldet „no targets matched"); ein Test, der nie läuft, wäre eine
+Behauptung ohne Deckung.
+
+Seriell belegt:
+
+```text
+ShivaCore: PIC maskiert (0xFF/0xFF), nur noch ein Zustellweg.
+ShivaCore: Bestaetigung laeuft ueber den Local APIC (EOI 0x0B0).
+ShivaCore: Zustellung auf IOAPIC umgestellt: GSI 2 -> Vektor 0x20, maskiert=false
+```
+
+**Wirkung.** 5 Läufe, 3 BIOS und 2 UEFI, je 12 s: 0 Panics, 214 Kontextwechsel
+pro BIOS-Lauf, 158/159 pro UEFI-Lauf, in jedem Lauf die Umschaltmeldung. Dass
+überhaupt weiter gewechselt wird, ist der eigentliche Beweis: ohne korrektes EOI
+am Local APIC käme nach dem ersten Tick kein zweiter.
+
+**Offene Beobachtung.** Die Wechselrate ist gegenüber dem PIC-Betrieb ungefähr
+doppelt (vorher rund 9/s, jetzt rund 18/s). Plausibel ist, dass unter der PIC ein
+Tick verloren ging, solange die ISR bis zum EOI nach der langsamen
+Serienausgabe belegt war. Belegt ist das nicht, und ich trage es auch nicht als
+Behauptung ein. Zu prüfen wäre es mit einem Tick-Zähler gegen eine unabhängige
+Zeitquelle.
