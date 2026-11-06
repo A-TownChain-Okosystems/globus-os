@@ -111,35 +111,31 @@ lazy_static! {
     /// Die Bruecke aus SC-006, erstmals im echten Pfad benutzt.
     static ref IRQ_BRIDGE: Mutex<shivacore::irq_bridge::IrqBridge<KernelMasking>> =
         Mutex::new(shivacore::irq_bridge::IrqBridge::new(KernelMasking));
-    /// Kernel-Capability der abonnierten Line. Das ACK prueft Eigentuemer und
-    /// Rechte daran, nicht an einer Zahl.
-    static ref SUBSCRIBER_CAP: Mutex<Option<shivacore::capability::Capability>> = Mutex::new(None);
+    /// Tabelle, in der die Abo-Capability wirklich liegt, samt ihrer Id.
+    ///
+    /// Vorher habe ich die Tabelle nach dem Anlegen verworfen und nur eine
+    /// Kopie der Capability behalten. Eine Capability ausserhalb ihrer Tabelle
+    /// laesst sich nicht widerrufen, ihre Abstammung kennt niemand, und
+    /// `revoke` haette nie etwas gefunden. Jetzt ist die Tabelle der Ort, an dem
+    /// die Capability lebt; der Handler holt sie bei jedem ACK dort ab.
+    static ref KERNEL_CAPS: Mutex<shivacore::kernel_caps::KernelCaps> =
+        Mutex::new(shivacore::kernel_caps::KernelCaps::new());
 }
 
 /// Abonniert eine Line mit einer Kernel-Capability (Eigentuemer PID 0).
 /// Muss vor dem Freigeben des IOAPIC-Eintrags laufen, sonst kommt der erste
 /// Interrupt ohne Eintrag in der Tabelle.
 pub fn subscribe_kernel_line(line: u32) -> Result<u32, &'static str> {
-    use shivacore::capability::{CapabilityTable, ResourceType, Rights};
-    let mut caps = CapabilityTable::new();
-    let cap_id = caps
-        .create_typed(
-            Pid(0),
-            ResourceType::Irq,
-            u64::from(line),
-            Rights(Rights::SUBSCRIBE.0 | Rights::ACK.0),
-        )
+    // Anlegen in der Tabelle, damit die Capability widerrufbar bleibt.
+    let cap = KERNEL_CAPS
+        .lock()
+        .grant(line)
         .map_err(|_| "Kernel-Capability fuer die Line abgelehnt")?;
-    let cap = caps
-        .get(cap_id)
-        .cloned()
-        .ok_or("Capability nach dem Anlegen nicht gefunden")?;
     let mut bridge = IRQ_BRIDGE.lock();
     let line = bridge
         .subscribe(&cap)
         .map_err(|_| "Line bereits abonniert oder Rechte fehlen")?;
     drop(bridge);
-    *SUBSCRIBER_CAP.lock() = Some(cap);
     Ok(line)
 }
 
@@ -148,6 +144,8 @@ pub fn subscribe_kernel_line(line: u32) -> Result<u32, &'static str> {
 /// der Pfad wirklich ueber die Tabelle geht.
 pub static BRIDGED_DELIVERIES: AtomicU64 = AtomicU64::new(0);
 pub static DIRECT_FALLBACKS: AtomicU64 = AtomicU64::new(0);
+/// Zustellungen, die auf eine offene (nie quittierte) Zustellung trafen.
+pub static STUCK_DELIVERIES: AtomicU64 = AtomicU64::new(0);
 
 /// Zaehlt jeden zugestellten Timer-Tick. Dient der Messung, ob ein
 /// Zustellweg Ticks verliert.
@@ -652,7 +650,11 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
                     }
                     // Offene Zustellung: die Line bleibt gesperrt, bis sie
                     // quittiert wird. Nicht freigeben und nicht neu zustellen.
-                    Ok(None) => true,
+                    // Ohne Meldung saehe das aus wie eine tote Tastatur.
+                    Ok(None) => {
+                        STUCK_DELIVERIES.fetch_add(1, Ordering::Relaxed);
+                        true
+                    }
                     Err(_) => false,
                 }
             }
@@ -679,13 +681,14 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         match decoded.character {
             Some(character) if character.is_ascii_graphic() => {
                 serial_println!(
-                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): '{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}]",
+                    "ShivaCore: Tastatur ueber Vektor {:#X} (Line {:?}): '{}' (Scancode {:#04X}) [Bruecke {}, Rueckfall {}, Haenger {}]",
                     KEYBOARD_VECTOR,
                     line,
                     character as char,
                     scancode,
                     BRIDGED_DELIVERIES.load(Ordering::Relaxed),
-                    DIRECT_FALLBACKS.load(Ordering::Relaxed)
+                    DIRECT_FALLBACKS.load(Ordering::Relaxed),
+                    STUCK_DELIVERIES.load(Ordering::Relaxed)
                 );
             }
             Some(_) => {
@@ -720,7 +723,7 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         shivacore::apic::acknowledge_interrupt();
         if bridged {
             BRIDGED_DELIVERIES.fetch_add(1, Ordering::Relaxed);
-            let cap = SUBSCRIBER_CAP.lock().clone();
+            let cap = KERNEL_CAPS.lock().subscriber_cap();
             let mut acked = false;
             if let Some(cap) = cap {
                 let mut bridge = IRQ_BRIDGE.lock();
