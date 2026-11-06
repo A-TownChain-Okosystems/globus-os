@@ -161,3 +161,43 @@ Hardware-Maske. Die LAPIC-Anbindung (Maske setzen/löschen, EOI) fehlt im
 kompilierten Satz weiterhin; `IrqTable` liefert nur den Zustand, den der
 IRQ-Eintritt abfragen muss. Ohne diese Anbindung ist REQ-SC006-03 auf
 Hardware-Ebene nicht erfüllt, und ein Boot-Test in QEMU steht weiterhin aus.
+
+## Nachtrag 20:50 — SC-006 REQ-03, LAPIC-Registerschicht
+
+Befund: `IrqTable` wusste, ob eine Line maskiert ist, konnte sie aber nicht
+maskieren. Ein APIC-Modul existierte nicht, weder kompiliert noch im Legacy-Satz.
+REQ-SC006-03 war damit nur als Zustand vorhanden, nicht als Wirkung.
+
+Umgesetzt: `kernel/src/apic.rs` mit `LocalApic<M: ApicRegisters>`. Die
+Registerzugriffe laufen über das Trait, damit die Logik ohne Hardware prüfbar ist.
+
+- `enable()` setzt Spurious-Vektor `0xFF` und das Enable-Bit; `is_enabled()`
+  liest es zurück.
+- `mask(vector)`/`unmask(vector)` schreiben das Interrupt-Enable-Register. Die
+  Wortadresse wird aus dem Vektor berechnet (Wort = Vektor / 32, Stride 0x10),
+  Vektoren unter 32 werden als `ReservedVector` abgelehnt, weil dort die
+  Prozessor-Exceptions liegen.
+- `eoi()` quittiert, `in_service(vector)` liest das ISR-Wort.
+- Vektor 40 landet in Wort 1 (`0x360`, Bit 8), Vektor 70 in Wort 2 — die
+  Tests belegen genau diese Adressrechnung, nicht nur das Bit.
+
+Zusammenspiel mit der Zustandsschicht, wie es der IRQ-Pfad fahren muss:
+
+1. `IrqTable::deliver(line)` liefert den Empfänger nur beim Übergang ruhig →
+   offen.
+2. `LocalApic::mask(vector)` sperrt die Line, dann geht die Notification raus.
+3. Der Handler ruft `IrqTable::ack(cap)`, danach `LocalApic::eoi()` und
+   `LocalApic::unmask(vector)`.
+4. Kommt ein Trigger zwischen 2 und 4, zählt `IrqTable` ihn als koalesziert und
+   stellt nichts zu.
+
+Verifikation: 8 neue Tests in `apic::sc006_lapic_masking` (Enable/Spurious,
+abgelehnte reservierte Vektoren inklusive Nachweis, dass nichts geschrieben
+wird, Masken-Roundtrip, Wortrechnung für hohe Vektoren, Unabhängigkeit zweier
+Vektoren im selben Wort, EOI-Register, ISR-Auswertung, ACK-Reihenfolge).
+`cargo test -p shivacore --lib` → **582 passed**, Service Space 552,
+`cargo check`, `fmt --check` und `clippy -D warnings` sauber, Bare-Metal-ELF baut.
+
+**Grenze:** Die Registerschicht ist nicht mit dem MMIO-Fenster verbunden. Das
+Mapping von `LAPIC_DEFAULT_BASE` (0xFEE00000) und die Zuordnung Vektor → Line
+(Geräte-Enumeration, SC-006 Punkt 11) fehlen weiterhin, ebenso ein QEMU-Bootlauf.
