@@ -1086,3 +1086,39 @@ Registermuster, sein RAX/RBX sind per ABI die Rueckgabewerte.
 Nebenbei: die Registerkonvention ist weiterhin offen (SC-DEC-L §13), die
 Payload-Bytes setzen sie explizit (RDI=Cap-Slot, RSI=Opcode, R9=ABI-Version).
 652 Kernel-Tests, check/fmt/clippy sauber.
+
+## Nachtrag 12:20 — Tasten erreichen den Userspace, ohne ABI-Zusatz
+
+Der Kanal zu einem Prozess fehlte, und die ABI hat keinen Pufferzeiger. Beides
+zusammen sah nach einer Spec-Entscheidung aus. Es geht trotzdem: die ABI hat
+einen 64-Bit-RUECKGABEWERT. Scancode in Bits 0..8, Zeichen in Bits 16..24 passen
+hinein (`InputEvent::packed`). Der Syscall `IpcReceive` mit Kanal-ID 1 und
+READ-Recht liefert das naechste Ereignis als Wert, 0 heisst "nichts anliegend".
+Kein neues Feld, keine neue Nummer, kein geaenderter Opcode.
+
+Reihenfolge bleibt: Rechtepruefung zuerst. Ohne READ-Cap bekommt der Aufrufer
+`PermissionDenied` und das Ereignis bleibt liegen (Test
+`receive_checks_the_right_before_handing_out_events`). Fuer jeden anderen Kanal
+sagt der Syscall weiter `EndpointUnavailable`.
+
+Zwei Fehler auf dem Weg, beide lehrreich:
+
+1. `grant_input_read` lief, bevor `init_user_scheduler` das Gate anlegte →
+   `expect` panikte ("Leserecht auf den Eingabekanal"). Das Gate wird jetzt per
+   `get_or_insert_with` frueh angelegt und vom Scheduler nicht mehr ersetzt.
+
+2. ZWEI KONSUMENTEN AUF EINER WARTESCHLANGE: Der Tick raeumte weiter ab, waehrend
+   der Prozess pollte. Im ersten Lauf kam 'a' nie beim Prozess an — der Tick war
+   schneller. Eine Warteschlange braucht genau einen Leser. `INPUT_CONSUMER_USERSPACE`
+   schaltet den Tick-Konsumenten ab, sobald ein Prozess die Cap haelt.
+
+Beleg (BIOS): "Tastenereignis an Ring 3: Nr=1 PID=1002 Zeichen='a' (Scancode
+0x1E) [Bruecke 1, Rueckfall 0, verworfen 0]" fuer a, Shift, B, Enter, c — fuenf
+von fuenf, nichts verworfen, Tick-Konsument 0 Zeilen. UEFI ebenso ('z', Shift,
+'A'). Payload: `mov rdi, <cap-slot>` (Nummer aus der Tabelle, als Immediate
+eingesetzt), `mov esi, 0x11`, `mov r9d, 0x00010000`, `mov rdx, 1`, `int 0x80`,
+`jmp` zurueck auf 0xFC — der falsche 0xF9-Ruecksprung ist damit weg.
+
+Grenze: Der Prozess POLLT in einer engen Schleife. Ein blockierendes Warten
+(Prozess schlafen bis Ereignis) braucht einen Syscall mit Wartesemantik und
+damit eine ABI-Entscheidung. 659 Tests, BIOS+UEFI 0 Panics.
