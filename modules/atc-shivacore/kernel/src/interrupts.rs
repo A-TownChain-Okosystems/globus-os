@@ -29,6 +29,16 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
+lazy_static! {
+    /// Modifikatorzustand der PS/2-Tastatur. Nur der IRQ-Handler greift zu.
+    static ref KEY_STATE: Mutex<shivacore::keymap::ModifierState> =
+        Mutex::new(shivacore::keymap::ModifierState {
+            shift: false,
+            caps_lock: false,
+            extended: false,
+        });
+}
+
 /// Zaehlt jeden zugestellten Timer-Tick. Dient der Messung, ob ein
 /// Zustellweg Ticks verliert.
 pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
@@ -518,11 +528,45 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
     }
     let mut port: Port<u8> = Port::new(0x60);
     let scancode: u8 = unsafe { port.read() };
-    serial_println!(
-        "ShivaCore: Tastatur ueber Vektor {:#X}: Scancode {:#04X}",
-        KEYBOARD_VECTOR,
-        scancode
-    );
+    // Rohcode uebersetzen: erst damit ist der Interrupt eine Taste und keine
+    // Zahl. Der Zustand (Shift, Caps Lock, Praefix) liegt daneben.
+    let decoded = {
+        let mut state = KEY_STATE.lock();
+        shivacore::keymap::decode(scancode, &mut state)
+    };
+    if decoded.pressed {
+        match decoded.character {
+            Some(character) if character.is_ascii_graphic() => {
+                serial_println!(
+                    "ShivaCore: Tastatur ueber Vektor {:#X}: '{}' (Scancode {:#04X})",
+                    KEYBOARD_VECTOR,
+                    character as char,
+                    scancode
+                );
+            }
+            Some(_) => {
+                serial_println!(
+                    "ShivaCore: Tastatur ueber Vektor {:#X}: Leerzeichen (Scancode {:#04X})",
+                    KEYBOARD_VECTOR,
+                    scancode
+                );
+            }
+            None => {
+                serial_println!(
+                    "ShivaCore: Tastatur ueber Vektor {:#X}: {:?} (Scancode {:#04X})",
+                    KEYBOARD_VECTOR,
+                    decoded.key,
+                    scancode
+                );
+            }
+        }
+    } else {
+        serial_println!(
+            "ShivaCore: Tastatur ueber Vektor {:#X}: losgelassen (Scancode {:#04X})",
+            KEYBOARD_VECTOR,
+            scancode
+        );
+    }
     if shivacore::apic::acknowledges_via_apic() {
         shivacore::apic::acknowledge_interrupt();
         shivacore::apic::unmask_interrupt_vector(KEYBOARD_VECTOR);
