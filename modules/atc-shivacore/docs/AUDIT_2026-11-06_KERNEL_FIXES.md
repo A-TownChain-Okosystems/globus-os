@@ -604,3 +604,50 @@ Fehler lag in der Messung, nicht im Kernel, und ist mit der Flankenausrichtung
 behoben. Zweitens zeigte ein einzelner Bootlauf 138 Hz auf beiden Wegen: die
 TSC-Kalibrierung lag in diesem Lauf daneben. Die Rate wird deshalb immer über
 mehrere Läufe geprüft und nicht aus einem einzelnen Lauf behauptet.
+
+## Nachtrag 02:45 — Die IRQ-Tabelle hatte keinen Aufrufer
+
+`irq::IrqTable` konnte Subskribenten fuehren, Zustellungen koaleszieren und ACKs
+pruefen. Nur rief sie niemand auf: im Kernel war sie nirgends instanziiert, und
+`deliver()` hatte ausserhalb der Tests keinen Aufrufer. "Maskiert bis ACK" war
+damit eine Eigenschaft einer Datenstruktur, nicht des Interrupt-Pfads.
+
+**Was jetzt da ist.** `kernel/src/irq_bridge.rs` verbindet Tabelle und
+Maskenregister. Die Maskenebene haengt hinter dem schmalen Trait `IrqMasking`,
+den `LocalApic<M>` implementiert; im Test ist es ein Mitschreiber.
+
+```rust
+pub fn on_interrupt(&mut self, line: u32, vector: u32) -> Result<Option<Pid>, BridgeError> {
+    let Some(pid) = self.table.deliver(line) else { return Ok(None); };
+    self.masking.mask_vector(vector)?;   // sperren, bevor der Subskribent laeuft
+    Ok(Some(pid))
+}
+```
+
+`ack(cap, vector)` prueft Rechte und Eigentuemer in der Tabelle und gibt erst
+danach die Sperre frei.
+
+**Reihenfolge und warum sie stimmt.** Der Vektor ist waehrend des Handlers in
+Bearbeitung, ein verschachtelter Interrupt derselben Line ist ausgeschlossen.
+Entscheidend ist, dass die Sperre steht, bevor der Handler zum Subskribenten
+zurueckkehrt; genau das macht `on_interrupt`. Scheitert das Sperren, kommt der
+Fehler zurueck und der Aufrufer darf die Zustellung nicht als abgesichert
+werten.
+
+**Sieben neue Tests** (607 gesamt): Sperre vor Zustellung, Koaleszierung ohne
+zweite Sperre, ACK gibt frei und der naechste Trigger sperrt erneut, fremder
+Eigentuemer kann nicht quittieren, Line ohne Subskribent sperrt nichts,
+Maskenfehler wird gemeldet, falscher Resourcentyp quittiert nicht.
+
+**Ein Befund aus dem Testbau.** Ein IRQ-Cap ohne ACK-Recht laesst sich ueber
+`CapabilityTable::create_typed` nicht erzeugen: fuer `ResourceType::Irq` vergibt
+die Tabelle immer `SUBSCRIBE|ACK`. Der Zweig "ACK ohne Recht" ist damit ueber die
+oeffentliche API unerreichbar. Der Test prueft deshalb die erreichbare Schranke
+(falscher Resourcentyp) statt einen Zustand zu behaupten, den der Rest des
+Systems gar nicht herstellen kann.
+
+**Weiterhin offen.** Die Bruecke ist noch nicht im echten Interrupt-Pfad
+verdrahtet, und es gibt keinen ABI-Syscall fuer das ACK; die sechs Syscalls in
+SHIVA-SYSCALL-ABI-001 bleiben unveraendert, statt die ABI eigenmaechtig zu
+erweitern. Das ACK muss an einer bestehenden Stelle ankommen, etwa beim
+Konsumieren der Notification, und das braucht eine Spec-Entscheidung.
