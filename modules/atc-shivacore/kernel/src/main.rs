@@ -188,12 +188,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             };
             // Die Zuordnung Line -> GSI -> Vektor gehoert in eine Tabelle, nicht
             // in eine Zahl: sonst weiss niemand, welche Vektoren noch frei sind.
-            let mut routing = shivacore::irq_routing::IrqRouting::new();
             let timer_vector: u8 = 0x50;
             // Der Vektor, auf den zugestellt wird, ist der des IDT-Handlers;
             // timer_vector (0x50) ist nur der Probedruck vor dem Umschalten.
             let timer_route =
-                match routing.assign_fixed(0, timer_gsi, crate::interrupts::TIMER_VECTOR) {
+                match crate::interrupts::fix_route(0, timer_gsi, crate::interrupts::TIMER_VECTOR) {
                     Ok(route) => route,
                     Err(error) => {
                         serial_println!(
@@ -212,7 +211,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 timer_route.irq,
                 timer_route.gsi,
                 timer_route.vector,
-                match routing.next_free_vector() {
+                match crate::interrupts::next_free_vector() {
                     Some(vector) => format_hex(vector),
                     None => alloc::format!("keiner"),
                 }
@@ -243,7 +242,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 Some(summary) => shivacore::madt::gsi_for_irq(&summary, 1),
                 None => 1,
             };
-            match routing.assign_next_free(1, keyboard_gsi) {
+            match crate::interrupts::route_line(1, keyboard_gsi) {
                 Ok(route) => {
                     serial_println!(
                         "ShivaCore: IRQ-Routing: IRQ {} -> GSI {} -> Vektor {:#X}",
