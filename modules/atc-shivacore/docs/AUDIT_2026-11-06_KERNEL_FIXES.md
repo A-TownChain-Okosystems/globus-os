@@ -1003,3 +1003,43 @@ weiterhin ein einzelnes `HLT` (`UserBinary::hello_world`), ein Ring-3-Programm m
 dahin: der Handler kennt keinen Empfaenger mehr.
 
 646 Kernel-Tests, check/fmt/clippy sauber, BIOS und UEFI ohne Panic.
+
+## Nachtrag 09:40 — Der Syscall hat einen Empfang behauptet, den es nicht gibt
+
+`IpcReceive` gab `ok(request.arg1)` zurueck, also "arg1 Bytes liegen fuer dich
+bereit". Es gab weder eine Nachricht noch einen Puffer, und es gab keine
+Laufzeit-`IpcSubsystem`-Instanz im Kernel — der Aufruf war eine Rechtepruefung
+mit angehaengter Erfolgsmeldung. Ein Prozess haette in einen ungeschriebenen
+Puffer gelesen und den Inhalt fuer Eingabe gehalten. Im TCB ist das kein
+Schoenheitsfehler, sondern eine Luege an der Schnittstelle.
+
+**Warum kein echter Transport?** Die eingefrorene ABI uebertraegt keine Bytes:
+`SyscallRequest` traegt eine Laenge (`payload_len`, heute aus R8), aber keinen
+Pufferzeiger. Die Registerkonvention selbst ist offen (SC-DEC-L §13), und R8
+dient gleichzeitig als Argumentwort und als Laengenfeld. Ohne Zeiger kann der
+Kernel nicht lesen, wohin er schreiben soll — das ist eine Spec-Entscheidung,
+keine Fleissarbeit.
+
+**Also sagt der Syscall jetzt die Wahrheit**, ohne ABI-Aenderung:
+
+| Aufruf | vorher | jetzt |
+|---|---|---|
+| `IpcSend`, `payload_len > 0` | `ok(0)` | `EndpointUnavailable` |
+| `IpcSend`, `payload_len == 0` | `ok(0)` | `ok(0)` — ein Signal ohne Nutzdaten ist wahr |
+| `IpcReceive` | `ok(arg1)` | `EndpointUnavailable`, `value = 0` |
+| ohne Recht | `PermissionDenied` | `PermissionDenied`, **zuerst** |
+
+`EndpointUnavailable` existiert bereits in `libshivacore::AbiError` (Wert 5),
+es wird keine Fehlernummer erfunden. Die Reihenfolge ist Teil des Fixes: ein
+Unbefugter darf nicht einmal erfahren, dass kein Transport existiert.
+
+Vier Tests halten das fest (`ipc_receive_does_not_claim_bytes_it_cannot_deliver`,
+`ipc_send_with_payload_reports_the_missing_transport`,
+`ipc_send_without_payload_is_a_truthful_signal`,
+`ipc_checks_the_right_before_the_transport`). 650 Kernel-Tests, BIOS und UEFI
+ohne Panic, Tastatur weiter ueber `Line Some(1)`.
+
+**Folge fuer den geplanten Userspace-Kanal:** Er laesst sich nicht "einfach
+verdrahten". Bevor ein Prozess Tastenereignisse empfaengt, muss die ABI einen
+Pufferzeiger bekommen — sonst kann der Kernel die Nachricht nicht abliefern,
+egal wie gut der Kanal vorbereitet ist.
