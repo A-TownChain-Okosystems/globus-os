@@ -128,6 +128,16 @@ impl SyscallDispatcher {
                 ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
+                // Die eingefrorene ABI uebertraegt keine Bytes: `SyscallRequest`
+                // traegt eine Laenge (`payload_len`, heute aus R8), aber keinen
+                // Pufferzeiger, aus dem der Kernel lesen koennte. Ein `ok` bei
+                // payload_len > 0 waere die Behauptung, Daten seien unterwegs —
+                // genau das darf ein Syscall im TCB nicht behaupten. Eine
+                // Sendung ohne Nutzdaten (payload_len == 0) ist dagegen ein
+                // reines Signal und damit wahr.
+                if request.payload_len > 0 {
+                    return SyscallResponse::err(AbiError::EndpointUnavailable);
+                }
                 SyscallResponse::ok(0)
             }
             Syscall::IpcReceive => {
@@ -144,7 +154,13 @@ impl SyscallDispatcher {
                 ) {
                     return SyscallResponse::err(AbiError::PermissionDenied);
                 }
-                SyscallResponse::ok(request.arg1)
+                // Frueher: `ok(request.arg1)`. Das meldete dem Prozess
+                // "arg1 Bytes liegen fuer dich bereit", obwohl weder ein Puffer
+                // noch eine Nachricht existiert — der Aufrufer haette in einen
+                // ungeschriebenen Puffer gelesen und den Inhalt fuer Eingabe
+                // gehalten. Ohne Pufferzeiger in der ABI gibt es nichts zu
+                // liefern, also sagt der Syscall das.
+                SyscallResponse::err(AbiError::EndpointUnavailable)
             }
             Syscall::CapabilityQuery => {
                 let cap = match request.capability {
@@ -286,6 +302,82 @@ mod tests {
             &mut table,
         );
         assert_eq!(denied.error, Some(AbiError::PermissionDenied));
+    }
+
+    #[test]
+    fn ipc_receive_does_not_claim_bytes_it_cannot_deliver() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 7, Rights::READ);
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 7,
+                arg1: 64,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut table,
+        );
+        // Kein Erfolg, kein Wert: ohne Pufferzeiger kann nichts angekommen sein.
+        assert_eq!(r.error, Some(AbiError::EndpointUnavailable));
+        assert_eq!(r.value, 0, "kein Byte darf als geliefert gelten");
+    }
+
+    #[test]
+    fn ipc_send_with_payload_reports_the_missing_transport() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 8, Rights::WRITE);
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 8,
+                payload_len: 16,
+                ..request(Syscall::IpcSend)
+            },
+            &mut table,
+        );
+        assert_eq!(r.error, Some(AbiError::EndpointUnavailable));
+    }
+
+    #[test]
+    fn ipc_send_without_payload_is_a_truthful_signal() {
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 9, Rights::WRITE);
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
+            pid(1),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 9,
+                ..request(Syscall::IpcSend)
+            },
+            &mut table,
+        );
+        assert_eq!(r.error, None, "ein Signal ohne Nutzdaten ist zulaessig");
+    }
+
+    #[test]
+    fn ipc_checks_the_right_before_the_transport() {
+        // Ein Unbefugter darf nichts ueber den Kanalzustand erfahren — auch
+        // nicht, dass es keinen Transport gibt. Die Rechtepruefung bleibt
+        // zuerst.
+        let mut table = CapabilityTable::new();
+        let cap = table.create(pid(1), ResourceType::IpcChannel, 10, Rights::READ);
+        let mut d = SyscallDispatcher::new();
+        let r = d.dispatch(
+            pid(2),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(cap.0)),
+                arg0: 10,
+                arg1: 32,
+                ..request(Syscall::IpcReceive)
+            },
+            &mut table,
+        );
+        assert_eq!(r.error, Some(AbiError::PermissionDenied));
     }
 
     #[test]
