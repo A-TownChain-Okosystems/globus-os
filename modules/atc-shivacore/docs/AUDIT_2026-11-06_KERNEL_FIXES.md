@@ -754,3 +754,43 @@ Variante.
 **Weiterhin offen.** Es gibt genau eine Line mit Eintrag (den Timer). Ein
 zweites Geraet braucht einen Treiber, einen IDT-Eintrag und einen Handler, die
 Tabelle ist dafuer die Voraussetzung, nicht der Ersatz.
+
+## Nachtrag 04:20 — Die zweite Line war bisher nur eine Moeglichkeit
+
+Nach der Routing-Tabelle gab es einen Eintrag und einen Vektor. Dass die Tabelle
+ein zweites Geraet traegt, war eine Behauptung ohne Zustellung. Jetzt haengt die
+PS/2-Tastatur am IOAPIC statt an der PIC, auf dem ersten automatisch vergebenen
+Vektor:
+
+```text
+ShivaCore: IRQ-Routing: IRQ 0 -> GSI 2 -> Vektor 0x20, naechster freier Geraetevektor 0x30
+ShivaCore: IRQ-Routing: IRQ 1 -> GSI 1 -> Vektor 0x30
+ShivaCore: Tastatur auf IOAPIC: GSI 1 -> Vektor 0x30, maskiert=false
+ShivaCore: Tastatur ueber Vektor 0x30: Scancode 0x1E
+ShivaCore: Tastatur ueber Vektor 0x30: Scancode 0x9E
+```
+
+Die drei Tasten `a`, `b`, `c` im QEMU-Lauf erscheinen als Druecken und
+Loslassen (0x1E/0x9E, 0x30/0xB0, 0x2E). Unter UEFI dasselbe Bild mit `x`, `y`.
+Der Handler macht denselben Ablauf wie der Timer: sperren beim Eintritt, Scancode
+lesen, APIC-EOI, freigeben. `KEYBOARD_VECTOR` ist
+`irq_routing::FIRST_DEVICE_VECTOR`, und der Bootpfad warnt, wenn die Route nicht
+zu diesem IDT-Eintrag passt — sonst zeigt ein IOAPIC-Eintrag auf einen Vektor,
+an dem niemand sitzt, und der Rechner schweigt.
+
+**Zwei Kompilierhuerden, beide schon einmal gesehen.** `serial_println!` als
+Match-Arm ohne Klammern ergibt "trailing semicolon in macro used in expression
+position"; die Arme brauchen `{ ... }`. Und die IDT ist in x86_64 0.15.5 nur
+ueber `u8` indizierbar (`impl Index<u8>`), nicht ueber `usize` — die vorhandenen
+Eintraege machen es vor, ich hatte es beim neuen Eintrag anders geschrieben.
+
+**Ehrliche Grenze.** Die Sperr- und Freigabezaehler in `apic.rs` sind global,
+nicht je Vektor. Die Zeile "41 Sperren, 41 Freigaben" bezieht sich auf das
+Messfenster vor dem Tastaturverkehr; sobald Tasten dazukommen, zaehlen sie mit.
+Fuer die Aussage "jede Zustellung sperrt und gibt frei" ist das ausreichend, ein
+Nachweis je Line waere eine eigene Zaehlertabelle.
+
+**Weiterhin offen.** Die Tastatur hat noch kein Scancode-zu-Keycode-Mapping, sie
+meldet Rohcodes. Und das ACK eines Userspace-Subskribenten ist nach wie vor eine
+Spec-Entscheidung; die Bruecke mit Rechtepruefung liegt bereit, angeschlossen ist
+weiterhin nur der Kernel als Empfaenger.
