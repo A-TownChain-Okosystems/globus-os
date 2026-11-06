@@ -237,6 +237,10 @@ pub struct SchedEntry {
     pub total_cpu_ticks: u64,
     pub context_switches: u64,
     pub wake_tick: Option<u64>, // When to wake (for Sleep)
+    /// Abbild des Prozesses. Der Syscall-Pfad braucht es, um einen Zeiger aus
+    /// dem Userspace gegen die richtige Prozessabbildung zu pruefen; ohne diese
+    /// Angabe waere jede Pruefung nur eine Behauptung.
+    pub addr_space: crate::userspace::UserAddressSpace,
 }
 
 impl SchedEntry {
@@ -250,6 +254,7 @@ impl SchedEntry {
             total_cpu_ticks: 0,
             context_switches: 0,
             wake_tick: None,
+            addr_space: ctx.addr_space.clone(),
         }
     }
 
@@ -339,6 +344,11 @@ impl UserScheduler {
     /// Get a scheduler entry by PID
     pub fn get_entry(&self, pid: Pid) -> Option<&SchedEntry> {
         self.entries.iter().find(|e| e.pid == pid)
+    }
+
+    /// Abbild des laufenden Prozesses (fuer Zeigerpruefung im Syscall-Pfad).
+    pub fn address_space(&self, pid: Pid) -> Option<crate::userspace::UserAddressSpace> {
+        self.get_entry(pid).map(|e| e.addr_space.clone())
     }
     pub fn get_entry_mut(&mut self, pid: Pid) -> Option<&mut SchedEntry> {
         self.entries.iter_mut().find(|e| e.pid == pid)
