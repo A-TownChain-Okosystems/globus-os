@@ -5,6 +5,8 @@
 //! versioned libshivacore ABI; unknown syscall IDs and malformed requests
 //! fail closed before any kernel operation is reached.
 
+use core::sync::atomic::{AtomicU64, Ordering};
+
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use libshivacore::{
@@ -50,10 +52,23 @@ impl From<AbiError> for DispatchError {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SyscallDispatcher {
-    monotonic_ticks: u64,
+/// Einzige Zeitquelle des Systems: ein Hardware-Tick ist ein Schritt.
+/// Bewusst lock-frei — ein belegtes Gate darf keinen Tick verschlucken, sonst
+/// verliert `MonotonicTime` Zeit, sobald Syscalls laufen.
+static MONOTONIC_TICKS: AtomicU64 = AtomicU64::new(0);
+
+/// Vom Timer-Interrupt aufzurufen. Ohne Sperre, ohne Bedingung.
+pub fn advance_monotonic_tick() {
+    MONOTONIC_TICKS.fetch_add(1, Ordering::Relaxed);
 }
+
+/// Aktueller Tick-Stand.
+pub fn monotonic_ticks() -> u64 {
+    MONOTONIC_TICKS.load(Ordering::Relaxed)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SyscallDispatcher {}
 
 impl Default for SyscallDispatcher {
     fn default() -> Self {
@@ -63,18 +78,18 @@ impl Default for SyscallDispatcher {
 
 impl SyscallDispatcher {
     pub const fn new() -> Self {
-        Self { monotonic_ticks: 0 }
+        Self {}
     }
 
     /// Vom Timer-Interrupt aufzurufen: genau ein Tick pro Hardware-IRQ.
     /// Die Zeit fortschreiben darf nur die Hardware, nicht der Leser.
     pub fn on_tick(&mut self) {
-        self.monotonic_ticks = self.monotonic_ticks.saturating_add(1);
+        advance_monotonic_tick();
     }
 
     /// Aktueller Tick-Stand (fuer Diagnose und Tests).
-    pub const fn ticks(&self) -> u64 {
-        self.monotonic_ticks
+    pub fn ticks(&self) -> u64 {
+        monotonic_ticks()
     }
 
     pub fn dispatch(
@@ -159,7 +174,7 @@ impl SyscallDispatcher {
                     None => SyscallResponse::err(AbiError::InvalidHandle),
                 }
             }
-            Syscall::MonotonicTime => SyscallResponse::ok(self.monotonic_ticks),
+            Syscall::MonotonicTime => SyscallResponse::ok(monotonic_ticks()),
         }
     }
 
@@ -280,7 +295,7 @@ mod tests {
         let a = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
         let b = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
         assert_eq!(a.value, b.value, "Lesen darf die Zeit nicht veraendern");
-        d.on_tick();
+        advance_monotonic_tick();
         let c = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
         assert_eq!(c.value, a.value + 1, "genau ein Tick pro Hardware-IRQ");
     }
