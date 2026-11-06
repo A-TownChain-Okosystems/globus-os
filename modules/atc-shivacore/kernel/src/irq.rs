@@ -35,6 +35,8 @@ pub enum IrqError {
     AlreadySubscribed,
     /// Es liegt keine offene Zustellung vor.
     NotPending,
+    /// Fuer diese Line ist kein Abonnement ausgesetzt.
+    NotSuspended,
 }
 
 /// Zustand einer Line: ruhig oder mit offener, noch nicht quittierter Zustellung.
@@ -135,6 +137,23 @@ impl IrqTable {
         Ok(line)
     }
 
+    /// Gibt eine offene Zustellung ohne Subskribenten-ACK frei.
+    ///
+    /// Das ist ausdruecklich kein ACK: es ist das Sicherheitsnetz gegen einen
+    /// Prozess, der die Quittung nie liefert. Die Kernel-Autoritaet reicht,
+    /// weil die Alternative eine dauerhaft gesperrte Line ist, also ein
+    /// stiller Ausfall genau des Geraets, das der Subskribent abonniert hat.
+    /// Der Aufrufer zaehlt den Vorgang als verpasste Quittung; hier wird nur
+    /// der Zustand freigegeben.
+    pub fn reclaim(&mut self, line: u32) -> Result<Pid, IrqError> {
+        let entry = self.lines.get_mut(&line).ok_or(IrqError::NotSubscriber)?;
+        if entry.state != IrqState::Pending {
+            return Err(IrqError::NotPending);
+        }
+        entry.state = IrqState::Idle;
+        Ok(entry.subscriber)
+    }
+
     pub fn get(&self, line: u32) -> Option<&IrqLine> {
         self.lines.get(&line)
     }
@@ -228,6 +247,20 @@ mod sc006_irq_delivery {
         assert_eq!(irqs.ack(table.get(cap).unwrap()), Ok(9));
         assert!(!irqs.get(9).unwrap().is_masked());
         assert_eq!(irqs.deliver(9), Some(pid(7)));
+    }
+
+    #[test]
+    fn reclaim_releases_a_pending_line_without_a_subscriber_ack() {
+        let mut caps = CapabilityTable::new();
+        let id = irq_cap(&mut caps, 7, 3);
+        let mut table = IrqTable::new();
+        assert_eq!(table.subscribe(caps.get(id).unwrap()), Ok(3));
+        assert!(table.deliver(3).is_some());
+        assert_eq!(table.get(3).map(|l| l.state), Some(IrqState::Pending));
+        assert_eq!(table.reclaim(3), Ok(Pid(7)));
+        assert_eq!(table.get(3).map(|l| l.state), Some(IrqState::Idle));
+        // Zweimal freigeben ist ein Fehler, kein stiller Erfolg.
+        assert_eq!(table.reclaim(3), Err(IrqError::NotPending));
     }
 
     #[test]
