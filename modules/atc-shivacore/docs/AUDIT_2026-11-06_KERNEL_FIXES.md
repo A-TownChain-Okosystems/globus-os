@@ -835,3 +835,41 @@ sondern entweder exakte Zeichenketten oder ein Neu-Schreiben des Blocks.
 **Weiterhin offen.** Die Belegung ist US-amerikanisch; eine deutsche ist eine
 Tabelle mehr, keine Architekturentscheidung. Und die Tastenfolge endet im Log:
 Es gibt noch keinen Kanal, ueber den Zeichen an einen Userspace-Prozess gehen.
+
+## Nachtrag 05:40 — Die Routing-Tabelle starb am Ende des Boots
+
+Der unauffaelligste Fehler der letzten Runde: `IrqRouting` wurde in `main` als
+lokale Variable gebaut. Nach dem Boot war sie weg. Der Interrupt-Pfad konnte
+nicht fragen, welche Line auf seinem Vektor liegt, und benutzte deshalb eine
+Konstante — die Tabelle war fuer die Laufzeit bedeutungslos, sobald sie befuellt
+war.
+
+**Jetzt lebt sie im Kernel.** `interrupts.rs` haelt `DEVICE_ROUTES:
+Mutex<IrqRouting>` und bietet vier Zugriffe: `fix_route`, `route_line`,
+`line_for_vector`, `next_free_vector`. `main` befuellt sie beim Boot, der Handler
+liest sie:
+
+```rust
+let line = line_for_vector(KEYBOARD_VECTOR).map(|route| route.irq);
+```
+
+Beleg aus dem Lauf:
+
+```text
+Tastatur ueber Vektor 0x30 (Line Some(1)): 'a' (Scancode 0x1E)
+Tastatur ueber Vektor 0x30 (Line Some(1)): Enter (Scancode 0x1C)
+```
+
+Die Line stammt aus der Tabelle, nicht aus dem Code. Wer eine dritte Line
+eintraegt, bekommt sie im Log ohne eine Zeile Handler-Aenderung.
+
+**Zwei Grenzen, ehrlich benannt.** Erstens: `lazy_static` initialisiert beim
+ersten Zugriff. Der passiert beim Boot in `fix_route`, also lange vor dem ersten
+Geraete-Interrupt; kaeme der erste Zugriff aus dem Handler, wuerde die
+Initialisierung dort laufen. Das ist der Grund, die Tabelle im Boot zu befuellen,
+bevor der IOAPIC-Eintrag freigegeben wird. Zweitens: Die Verdrahtung selbst ist
+nur im Bootlog nachweisbar. Die Tabelle ist als reine Logik in `irq_routing`
+getestet; dass der Handler sie benutzt, zeigt sich an der Zeile im Log, nicht an
+einem Unit-Test — im Bin-Target gibt es keine Testunterstuetzung.
+
+626 Kernel-Tests, check/fmt/clippy sauber, BIOS und UEFI ohne Panic.
