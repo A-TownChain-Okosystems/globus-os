@@ -87,6 +87,9 @@ lazy_static! {
                 .set_handler_addr(timer_interrupt_entry_addr())
         };
         idt[InterruptIndex::Keyboard.as_u8()].set_handler_fn(keyboard_interrupt_handler);
+        // Zweite Line: die Tastatur kommt ueber den IOAPIC auf dem ersten
+        // automatisch vergebenen Geraetevektor.
+        idt[KEYBOARD_VECTOR].set_handler_fn(keyboard_interrupt_handler_at_device_vector);
         // User-mode software interrupt gate. DPL3 permits CPL3 to enter the kernel.
         // Volles Register-Gate statt Handler-Stub (Audit-Befund K-01).
         unsafe {
@@ -423,6 +426,14 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
 /// IOAPIC-Eintrag nicht auf einen anderen Vektor zeigen als der Handler.
 pub const TIMER_VECTOR: u8 = InterruptIndex::Timer as u8;
 
+/// Vektor der PS/2-Tastatur. Kommt aus der Routing-Tabelle: der erste
+/// automatisch vergebene Geraetevektor. Der IOAPIC-Eintrag wird beim Boot auf
+/// genau diesen Vektor gelegt, damit Eintrag und IDT nicht auseinanderlaufen.
+pub const KEYBOARD_VECTOR: u8 = shivacore::irq_routing::FIRST_DEVICE_VECTOR;
+
+/// Zaehlt zugestellte Tastatur-Interrupts.
+pub static KEYSTROKES: AtomicU64 = AtomicU64::new(0);
+
 /// Bestaetigt den Timer-IRQ auf dem Weg, ueber den er kam: Local APIC im
 /// IOAPIC-Betrieb, sonst die PIC. Beide Wege duerfen nicht gemischt werden.
 fn acknowledge_timer_irq() {
@@ -491,5 +502,33 @@ extern "x86-interrupt" fn keyboard_interrupt_handler(_stack_frame: InterruptStac
     unsafe {
         PICS.lock()
             .notify_end_of_interrupt(InterruptIndex::Keyboard.as_u8());
+    }
+}
+
+/// Tastatur ueber die zweite Line: derselbe Ablauf wie beim Timer, damit
+/// SC-006 nicht nur fuer einen Vektor gilt. Scancode wird gemeldet statt
+/// verworfen, sonst waere die Zustellung nicht nachweisbar.
+extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
+    _stack_frame: InterruptStackFrame,
+) {
+    use x86_64::instructions::port::Port;
+    KEYSTROKES.fetch_add(1, Ordering::Relaxed);
+    if shivacore::apic::acknowledges_via_apic() {
+        shivacore::apic::mask_interrupt_vector(KEYBOARD_VECTOR);
+    }
+    let mut port: Port<u8> = Port::new(0x60);
+    let scancode: u8 = unsafe { port.read() };
+    serial_println!(
+        "ShivaCore: Tastatur ueber Vektor {:#X}: Scancode {:#04X}",
+        KEYBOARD_VECTOR,
+        scancode
+    );
+    if shivacore::apic::acknowledges_via_apic() {
+        shivacore::apic::acknowledge_interrupt();
+        shivacore::apic::unmask_interrupt_vector(KEYBOARD_VECTOR);
+    } else {
+        unsafe {
+            PICS.lock().notify_end_of_interrupt(KEYBOARD_VECTOR);
+        }
     }
 }
