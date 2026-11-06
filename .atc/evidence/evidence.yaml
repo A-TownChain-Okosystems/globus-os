@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: ec183f27a9195769895c29780845d5e9d04decb4
+bound_commit: 7cb04fd5dad7437aa0324a83ee8610fc90695f60
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: ec183f27a9195769895c29780845d5e9d04decb4
-  timestamp: 2026-11-06T23:50:00+00:00
+  commit: 7cb04fd5dad7437aa0324a83ee8610fc90695f60
+  timestamp: 2026-11-07T00:25:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -73,6 +73,11 @@ verification:
         Stabilitaet: 5 Laeufe aus frischem Clone (3 BIOS, 2 UEFI) ohne Panic,
         96/97 bzw. 70 Kontextwechsel. Der zuvor intermittierende SCHED-001-Panic
         (2 von 6 Laeufen) ist behoben: Aufwaermphase vor dem ersten Payload-Tick.
+        Zustellung laeuft jetzt ueber den IOAPIC statt ueber die PIC: PIC auf
+        0xFF/0xFF maskiert, EOI ueber Local APIC (0x0B0), GSI 2 freigegeben auf
+        Vektor 0x20. Beleg: 214 Kontextwechsel pro BIOS-Lauf, 158-196 pro
+        UEFI-Lauf, 0 Panics; ohne korrektes APIC-EOI waere nach dem ersten Tick
+        Schluss.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
       symbols: [shivacore_syscall_gate, syscall_gate_rust]
