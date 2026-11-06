@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 4283f33a7e0bbfe8cd2cf3f5a035505bda25e428
+bound_commit: 0b1c93f905e852bcb58c46a64648cb717b6d6097
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 4283f33a7e0bbfe8cd2cf3f5a035505bda25e428
-  timestamp: 2026-11-06T22:35:00+00:00
+  commit: 0b1c93f905e852bcb58c46a64648cb717b6d6097
+  timestamp: 2026-11-06T23:15:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -44,7 +44,7 @@ verification:
   toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
   results:
     - suite: shivacore (kernel, --lib)
-      passed: 592
+      passed: 600
       failed: 0
     - suite: shivacore-service-space (--lib)
       passed: 552
@@ -67,6 +67,9 @@ verification:
         MADT ausgewertet: local_apic=0xFEE00000, ioapic=0xFEC00000, gsi_base=0,
         cpus=1/1, 5 ISA-Overrides. UEFI-Image bootet unter OVMF mit denselben
         Meilensteinen (347 Kontextwechsel in 40 s).
+        IOAPIC programmiert: id=0, version=0x170020, 24 Eintraege; IRQ 0 ueber
+        MADT-Override auf GSI 2 abgebildet und Vektor 0x50 geschrieben,
+        Ruecklesung bestaetigt. Eintrag bleibt maskiert (Zustellung noch PIC).
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
       symbols: [shivacore_syscall_gate, syscall_gate_rust]
