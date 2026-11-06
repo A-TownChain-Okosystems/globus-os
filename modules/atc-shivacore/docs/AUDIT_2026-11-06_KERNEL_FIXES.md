@@ -912,3 +912,48 @@ das in `DIRECT_FALLBACKS`. Ein stiller Umweg waere schlimmer als ein sichtbarer.
 **Grenze.** Die Bruecke traegt bisher eine Line mit einem Kernel-Subskribenten.
 Dass ein Userspace-Prozess ACK gibt, braucht eine Syscall-Entscheidung; das
 bleibt offen und ist der Grund, warum die Zeile im Log endet.
+
+## Nachtrag 07:30 — Eine Capability ohne Tabelle ist nicht widerrufbar
+
+Der Fehler steckte in meiner eigenen Verdrahtung von vorhin: `subscribe_kernel_line`
+legte eine Capability an, warf die `CapabilityTable` weg und behielt nur eine
+Kopie. Damit war die Capability heimatlos — `revoke(&mut self, cap_id)` haette
+nie etwas gefunden, die Abstammung kannte niemand, und "der Kernel besitzt ein
+Abo" war eine Behauptung ohne Ort, an dem sie nachpruefbar waere.
+
+**Jetzt liegt sie in der Tabelle.** Neu: `kernel/src/kernel_caps.rs` (Lib, also
+testbar) mit `KernelCaps { table, subscriber }`, `grant(line)` ueber
+`create_typed` (Rechtesatz aus SC-006, nicht aus dem Aufruf), `subscriber_cap()`
+liest die Capability bei jedem ACK aus der Tabelle statt aus einer Kopie, und
+`revoke_subscription()` widerruft sie. Der Handler fragt nur noch:
+
+```rust
+let cap = KERNEL_CAPS.lock().subscriber_cap();
+```
+
+**Der Widerruf hat einen Test, keine Behauptung.** 6 neue Tests, darunter:
+`revoke_removes_the_capability_from_the_table` (der eigentliche Punkt), erneutes
+Abonnieren nach Widerruf ergibt eine neue Id, doppelter Widerruf meldet ehrlich
+`false`, und die Capability traegt `SUBSCRIBE|ACK` mit `resource_id` der Line.
+
+**Zweiter, kleinerer Fund.** Traf eine Zustellung auf eine offene (nie
+quittierte) Zustellung, blieb die Line gesperrt und der Handler loggte nichts.
+Das haette wie eine tote Tastatur ausgesehen. Jetzt zaehlt `STUCK_DELIVERIES`
+solche Faelle, und die Tastenzeile zeigt sie:
+
+```text
+Tastatur ueber Vektor 0x30 (Line Some(1)): 'c' (Scancode 0x2E) [Bruecke 4, Rueckfall 0, Haenger 0]
+```
+
+`Haenger 0` heisst: keine Zustellung blieb unbeantwortet. Eine echte
+Wiederherstellung fuer eine haengende Line gibt es nicht — SC-006 sagt "maskiert
+bis ACK", ein erzwungenes Freigeben waere eine Spec-Entscheidung und steht nicht
+mir zu.
+
+**Eigener Umweg, ehrlich notiert.** Ich hatte fuer `grant` kurz einen
+`IntoOk`-Trait gebaut, nur um `Ok(cap)` nicht zweimal zu schreiben. Das war
+Unsinn und ist entfernt. Und mein erster Textersatz hat den Doc-Kommentar
+zerrissen ("unclosed delimiter") — dieselbe Lehre wie vorhin: keine Ersetzungen
+ueber Stellen, die mitten in einem Kommentar beginnen.
+
+632 Kernel-Tests, check/fmt/clippy sauber, BIOS und UEFI ohne Panic.
