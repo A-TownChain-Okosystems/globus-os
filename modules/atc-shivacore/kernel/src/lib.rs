@@ -20,6 +20,7 @@ pub mod cross_subsystem;
 pub mod diagnostics;
 pub mod elf_loader;
 pub mod hal;
+pub mod input_queue;
 pub mod ioapic;
 pub mod ipc;
 pub mod irq;
