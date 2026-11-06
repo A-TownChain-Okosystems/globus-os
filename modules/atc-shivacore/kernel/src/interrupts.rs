@@ -331,6 +331,15 @@ shivacore_timer_trampoline:
 #[no_mangle]
 extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     TIMER_TICKS.fetch_add(1, Ordering::Relaxed);
+    // SC-006 REQ-02/03 im echten Pfad: die Line wird gesperrt, bevor der
+    // Handler arbeitet, und erst im ACK wieder freigegeben. Ein Trigger
+    // waehrend der Bearbeitung bleibt im IOAPIC liegen (kein Re-Trigger).
+    // SC-006 REQ-02/03: Line sperren, bevor der Handler arbeitet; die
+    // Freigabe passiert im ACK (acknowledge_timer_irq). Ein Trigger waehrend
+    // der Bearbeitung bleibt im IOAPIC liegen statt zu verschachteln.
+    if shivacore::apic::acknowledges_via_apic() {
+        shivacore::apic::mask_interrupt_vector(TIMER_VECTOR);
+    }
     // Ein Hardware-Tick -> genau ein MonotonicTime-Schritt.
     // try_lock: faellt das Gate gerade in einem Syscall, wird der Tick
     // uebersprungen (monoton bleibt monoton) statt im IRQ zu blockieren.
@@ -419,6 +428,8 @@ pub const TIMER_VECTOR: u8 = InterruptIndex::Timer as u8;
 fn acknowledge_timer_irq() {
     if shivacore::apic::acknowledges_via_apic() {
         shivacore::apic::acknowledge_interrupt();
+        // Freigabe ist Teil des ACK, nicht ein spaeterer Schritt.
+        shivacore::apic::unmask_interrupt_vector(TIMER_VECTOR);
     } else {
         unsafe {
             PICS.lock()
