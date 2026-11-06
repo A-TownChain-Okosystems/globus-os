@@ -346,32 +346,47 @@ impl UserScheduler {
 
     /// Pick the next process to run (round-robin with priority)
     fn pick_next(&self) -> Option<usize> {
-        // Priority: find highest-priority (lowest number) runnable process
-        // that isn't the current one
-        let current_pid = self.current;
+        // Round-Robin: die Suche beginnt HINTER dem laufenden Prozess und
+        // laeuft einmal im Kreis. Die frueherere Fassung nahm einfach den
+        // ersten lauffaehigen Prozess, der nicht der laufende war — bei drei
+        // Prozessen wurde der dritte dadurch nie ausgewaehlt (Verhungern), und
+        // genau das hat den Ring-3-Syscall-Test scheinbar wirkungslos gemacht.
+        let n = self.entries.len();
+        if n == 0 {
+            return None;
+        }
+        let current_idx = self
+            .current
+            .and_then(|pid| self.entries.iter().position(|e| e.pid == pid));
+        let start = match current_idx {
+            Some(i) => (i + 1) % n,
+            None => 0,
+        };
 
         let mut best: Option<(usize, u8)> = None;
-        for (i, entry) in self.entries.iter().enumerate() {
+        for step in 0..n {
+            let i = (start + step) % n;
+            let entry = &self.entries[i];
             if !entry.is_runnable() {
                 continue;
             }
-            if Some(entry.pid) == current_pid {
+            if Some(entry.pid) == self.current {
                 continue;
-            } // Skip current (round-robin)
+            }
             match best {
+                // Niedrigere Zahl = hoehere Prioritaet, wie bisher. Bei
+                // gleicher Prioritaet gewinnt der erste Kandidat in
+                // Ringreihenfolge — dadurch rotiert die Auswahl.
                 None => best = Some((i, entry.priority)),
                 Some((_, bp)) if entry.priority < bp => best = Some((i, entry.priority)),
                 _ => {}
             }
         }
 
-        // If no other runnable process, keep current if it's still runnable
         if best.is_none() {
-            if let Some(cpid) = current_pid {
-                if let Some(idx) = self.entries.iter().position(|e| e.pid == cpid) {
-                    if self.entries[idx].is_runnable() {
-                        return Some(idx);
-                    }
+            if let Some(idx) = current_idx {
+                if self.entries[idx].is_runnable() {
+                    return Some(idx);
                 }
             }
         }
@@ -1111,6 +1126,69 @@ mod tests {
         let (pid, _) = result.unwrap();
         assert_eq!(pid, Pid(1001)); // Switched to P1001
         assert_eq!(sched.preemptions(), 1);
+    }
+
+    #[test]
+    fn three_equal_processes_rotate_instead_of_starving_the_last() {
+        // Regression: `pick_next` nahm den ersten lauffaehigen Prozess, der
+        // nicht der laufende war. Bei drei Prozessen wurde der dritte nie
+        // ausgewaehlt — im Bootlauf hiess das: der Ring-3-Syscall-Prozess kam
+        // nie an die Reihe.
+        let mut sched = UserScheduler::new();
+        let ctx1 = make_context(1000);
+        let ctx2 = make_context(1001);
+        let ctx3 = make_context(1002);
+        sched.add_process(Pid(1000), &ctx1, 0);
+        sched.add_process(Pid(1001), &ctx2, 0);
+        sched.add_process(Pid(1002), &ctx3, 0);
+        sched.schedule(None);
+        assert_eq!(sched.current_pid(), Some(Pid(1000)));
+
+        let contexts = alloc::vec![ctx1, ctx2, ctx3];
+        let mut seen = alloc::vec::Vec::new();
+        for _ in 0..3 {
+            let pid = sched.current_pid().expect("laufender Prozess");
+            let index = (pid.0 - 1000) as usize;
+            if let Some(entry) = sched.get_entry_mut(pid) {
+                entry.quantum = Quantum::new(1);
+            }
+            let (next, _) = sched.timer_tick(&contexts[index]).expect("Wechsel");
+            seen.push(next);
+        }
+        assert_eq!(seen, alloc::vec![Pid(1001), Pid(1002), Pid(1000)]);
+    }
+
+    #[test]
+    fn rotation_and_priority_work_together() {
+        // schedule() waehlt zuerst nach Prioritaet, die Rotation gilt unter
+        // Gleichrangigen. Beides muss nebeneinander gelten: der priorisierte
+        // Prozess kommt zwischen zwei Gleichrangigen wieder dran, obwohl die
+        // Ringreihenfolge einen anderen zuerst anbietet.
+        let mut sched = UserScheduler::new();
+        let ctx1 = make_context(1000);
+        let ctx2 = make_context(1001);
+        let ctx3 = make_context(1002);
+        sched.add_process(Pid(1000), &ctx1, 5);
+        sched.add_process(Pid(1001), &ctx2, 1); // hoechste Prioritaet
+        sched.add_process(Pid(1002), &ctx3, 5);
+        sched.schedule(None);
+        assert_eq!(sched.current_pid(), Some(Pid(1001)));
+
+        if let Some(e) = sched.get_entry_mut(Pid(1001)) {
+            e.quantum = Quantum::new(1);
+        }
+        let (next, _) = sched.timer_tick(&ctx2).expect("Wechsel");
+        assert_eq!(next, Pid(1002), "unter Gleichrangigen rotiert es weiter");
+
+        if let Some(e) = sched.get_entry_mut(Pid(1002)) {
+            e.quantum = Quantum::new(1);
+        }
+        let (next, _) = sched.timer_tick(&ctx3).expect("Wechsel");
+        assert_eq!(
+            next,
+            Pid(1001),
+            "die hoehere Prioritaet gewinnt gegen die Ringreihenfolge"
+        );
     }
 
     #[test]
