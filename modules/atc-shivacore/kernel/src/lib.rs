@@ -12,6 +12,7 @@ extern crate std;
 
 #[cfg(test)]
 pub mod allocator;
+pub mod apic;
 pub mod atcfs;
 pub mod ats1000;
 pub mod capability;
