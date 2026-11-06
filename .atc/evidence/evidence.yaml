@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 34c5977434421356ff77a96ba22d3c965f49ede3
+bound_commit: 7b44f45d6351858f9d951ecc075ebd7fc3ef6e4b
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 34c5977434421356ff77a96ba22d3c965f49ede3
-  timestamp: 2026-11-06T21:30:00+00:00
+  commit: 7b44f45d6351858f9d951ecc075ebd7fc3ef6e4b
+  timestamp: 2026-11-06T22:00:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -62,6 +62,8 @@ verification:
         (5 Tabellen), GDT/IDT/PIC, Paging+Heap, Box/Vec, KernelState::boot(),
         USER-001 Ring-3-Einstieg, danach 332 Kontextwechsel zwischen PID 1000
         und 1001 in 35 s ohne Panic. Framebuffer belegt per screendump.
+        LAPIC an MMIO angebunden: aktiv (id=0, spurious=0x1FF), Maskentest
+        Vektor 0x40 maskiert=true freigegeben=true.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
       symbols: [shivacore_syscall_gate, syscall_gate_rust]
