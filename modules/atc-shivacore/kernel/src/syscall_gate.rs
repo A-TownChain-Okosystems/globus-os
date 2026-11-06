@@ -125,7 +125,7 @@ mod tests {
         gate.on_tick();
         gate.on_tick();
         let b = gate.handle(pid(1), request(Syscall::MonotonicTime)).value;
-        assert_eq!(b, a + 2);
+        assert_eq!(b, a + 2, "zwei Ticks, zwei Schritte");
     }
 
     #[test]
