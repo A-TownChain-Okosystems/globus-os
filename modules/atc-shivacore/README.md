@@ -63,7 +63,7 @@ serielle Schnittstelle. Beleg: `docs/assets/shivacore-boot-framebuffer.png`.
 Der komplette Lauf in einem Skript (baut ELF, Boot-Image und startet QEMU):
 
 ```bash
-scripts/qemu_boot.sh 20
+bash scripts/qemu_boot.sh 20   # kein Exec-Bit nach Contents-API-Push: ueber bash starten
 ```
 
 ## Nächster Schritt: K-Sprint 1
