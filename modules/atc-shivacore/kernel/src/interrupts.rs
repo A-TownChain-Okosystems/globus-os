@@ -693,7 +693,13 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         },
         arg0: frame.rdx,
         arg1: frame.rcx,
-        payload_len: frame.r8 as usize,
+        // Uebergangsform: die Registerkonvention aus 1.x ist noch im Payload,
+        // sie kann nur EINEN Pufferwert tragen. ABI 2.0.0 trennt Zeiger und
+        // Laenge im Argumentblock; bis das Trampolin den Block liest, gilt
+        // hier "Zeiger ohne Laenge", was jeder Aufruf als "keine Nutzdaten"
+        // behandelt. Der Blockpfad ist der naechste Schritt.
+        buffer_ptr: frame.r8,
+        buffer_len: 0,
     };
 
     let pid = USER_SCHEDULER
