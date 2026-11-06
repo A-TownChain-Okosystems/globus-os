@@ -513,3 +513,43 @@ behauptet.
 **Nebenwirkung.** Weil der TSC jetzt kalibriert wird, sind absolute Raten künftig
 prüfbar; die beiden Zeilen stehen in der README als Teil der erwarteten
 Boot-Ausgabe.
+
+## Nachtrag 01:30 — Korrektur: die PIC hat nie Ticks verloren
+
+Der vorige Nachtrag schloss aus 45 gegen 91 Hz, die PIC verliere rund die Hälfte
+der Ticks. Diese Schlussfolgerung war falsch. Zwei Fehler steckten darin, einer
+davon in meiner Messung.
+
+**Fehler 1, Messaufbau.** `measure_ticks` las den TSC-Start, bevor die erste
+Tick-Flanke eintraf. Das gemessene Intervall enthielt damit bis zu eine volle
+Periode Wartezeit; bei 20 Ticks sind das bis zu 5 %. Behoben: die Messung richtet
+sich jetzt erst an einer Flanke aus und zählt dann. Zusätzlich 40 statt 20 Ticks
+und 20 statt 5 PIT-Perioden zur Kalibrierung. Danach: PIC 49 Hz, IOAPIC 97 Hz,
+Verhältnis exakt 2,0x.
+
+**Fehler 2, die eigentliche Ursache.** Das Verhältnis war nicht halb, sondern
+doppelt. Der PIT lief in Modus 3, einer Rechteckwelle mit zwei Flanken pro
+Periode. Der IOAPIC-Eintrag ist kantengetriggert und hat beide Flanken als
+Interrupt gezählt, die PIC nur eine. Der Timer lief also mit doppelter Frequenz,
+und `MonotonicTime` wäre entsprechend doppelt so schnell gelaufen.
+
+**Der Fix.** PIT-Kanal 0 läuft jetzt in Modus 2 (Rate Generator, Kommando `0x34`
+statt `0x36`). Modus 2 erzeugt genau eine Flanke pro Periode, das ist die
+Betriebsart für periodische Timer.
+
+**Ergebnis**, gleiche Messung, gleiches Programm:
+
+```text
+ShivaCore: Tick-Messung 40 Ticks: PIC=959793960 TSC, IOAPIC=958219944 TSC, Verhaeltnis=1.0x
+ShivaCore: Tick-Rate (PIT soll 100 Hz): PIC=98 Hz, IOAPIC=99 Hz
+```
+
+Beide Zustellwege liegen jetzt innerhalb der Messgenauigkeit am Sollwert, das
+Verhältnis ist 1,0. Damit ist auch die Frage von vorhin beantwortet: der
+Unterschied zwischen den Wegen war ein Artefakt der Rechteckwelle, kein Verlust
+auf dem PIC-Weg.
+
+**Was das über die früheren Zahlen sagt.** Die niedrigen Wechselraten aus den
+Bootläufen (rund 9 bis 19 pro Sekunde, obwohl 100 Hz programmiert waren) sind
+kein Tickverlust: der Handler schreibt bei jedem Tick zwei Serienzeilen, und die
+Serienausgabe ist der Flaschenhals, nicht die Zustellung.
