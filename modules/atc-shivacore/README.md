@@ -50,6 +50,8 @@ ShivaCore: ACPI RSDP/root/table checksums validated; tables=5
 EXCEPTION: BREAKPOINT                     <- Selbsttest aus main.rs (int3)
 ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).
 ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).
+ShivaCore: LAPIC aktiv (id=0, spurious=0x1FF).
+ShivaCore: LAPIC-Maskentest Vektor 0x40: maskiert=true freigegeben=true
 ShivaCore: Box-Test -- Wert: 41
 ShivaCore: Vec-Test -- Summe 0..10: 45
 ShivaCore: KernelState::boot() -> Done.
@@ -63,7 +65,7 @@ serielle Schnittstelle. Beleg: `docs/assets/shivacore-boot-framebuffer.png`.
 Der komplette Lauf in einem Skript (baut ELF, Boot-Image und startet QEMU):
 
 ```bash
-bash scripts/qemu_boot.sh 20   # kein Exec-Bit nach Contents-API-Push: ueber bash starten
+scripts/qemu_boot.sh 20
 ```
 
 ## Nächster Schritt: K-Sprint 1
