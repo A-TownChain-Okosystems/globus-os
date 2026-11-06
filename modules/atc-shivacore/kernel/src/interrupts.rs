@@ -156,6 +156,8 @@ pub static INPUT_CONSUMED: AtomicU64 = AtomicU64::new(0);
 
 /// Wie oft der Syscall einem Ring-3-Prozess ein Tastenereignis ausgehaendigt hat.
 pub static INPUT_DELIVERED: AtomicU64 = AtomicU64::new(0);
+/// Verpasste ACK-Fristen (SC-006): sichtbar, auch wenn sie nie auftreten.
+pub static ACK_TIMEOUTS: AtomicU64 = AtomicU64::new(0);
 
 /// Sobald ein Prozess den Eingabekanal haelt, ist er der Konsument. Der Tick
 /// darf dann nicht mehr abraeumen: zwei Leser auf einer Warteschlange nehmen
@@ -516,6 +518,22 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     // Tastatur-Handler: der Handler soll nur ablegen. Acht Ereignisse pro Tick
     // reichen fuer jede Tippgeschwindigkeit und begrenzen die Arbeit im IRQ.
     drain_input_queue();
+    // ACK-Fristen: haengt ein Subskribent, gibt der Kernel die Line frei und
+    // zaehlt die verpasste Quittung. Ohne diesen Schritt waere "maskiert bis
+    // ACK" fuer einen haengenden Prozess eine dauerhafte Sperre.
+    let now = TIMER_TICKS.load(Ordering::Relaxed);
+    let expired: alloc::vec::Vec<shivacore::irq_bridge::AckTimeout> =
+        IRQ_BRIDGE.lock().sweep_acks(now);
+    for timeout in expired {
+        ACK_TIMEOUTS.fetch_add(1, Ordering::Relaxed);
+        serial_println!(
+            "ShivaCore: SC-006 ACK-Frist verpasst: Line={} PID={} Serie={} ausgesetzt={}",
+            timeout.line,
+            timeout.pid.0,
+            timeout.strikes,
+            timeout.suspended
+        );
+    }
     let mut guard = USER_SCHEDULER.lock();
     let Some(scheduler) = guard.as_mut() else {
         acknowledge_timer_irq();
@@ -830,7 +848,8 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         let through_bridge = match line {
             Some(line) => {
                 let mut bridge = IRQ_BRIDGE.lock();
-                match bridge.on_interrupt(line, vector) {
+                let now = TIMER_TICKS.load(Ordering::Relaxed);
+                match bridge.on_interrupt_at(line, vector, now) {
                     Ok(Some(_)) => {
                         bridged = true;
                         release = true;
