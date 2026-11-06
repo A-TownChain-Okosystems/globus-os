@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 2aab11fda65b5388e618e8eb7c3a975118797ef5
+bound_commit: ace593218292d406c6b693abf1dcb1a99e4d299e
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,8 +35,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 2aab11fda65b5388e618e8eb7c3a975118797ef5
-  timestamp: 2026-11-07T08:35:00+00:00
+  commit: ace593218292d406c6b693abf1dcb1a99e4d299e
+  timestamp: 2026-11-07T09:25:00+00:00
   result: PASS
   runner: local-sandbox
 verification:
@@ -128,7 +128,13 @@ verification:
         vollem Puffer ChannelFull statt Warten im Handler. 8 Tests belegen
         Empfang, FIFO, NoWriteCapability (kein Selbsteinspielsen),
         NoReadCapability fuer Fremde und ChannelClosed. Keine neue
-        Syscall-Nummer: IpcReceive traegt die Nachricht. 640 Tests. In frischem Clone fuer BIOS und UEFI
+        Syscall-Nummer: IpcReceive traegt die Nachricht. 640 Tests.
+        Eingabewarteschlange (input_queue.rs, Lib, 6 Tests): der Tastatur-Handler
+        legt Scancode und Zeichen nur ab, der Tick leert hoechstens acht
+        Ereignisse pro Tick; bei vollem Puffer wird verworfen und gezaehlt.
+        Beleg im Clone-Lauf: 0 Zeilen "Tastatur ueber Vektor" (Handler druckt
+        nicht mehr), dafuer "Eingabe (Konsument): 'o' ... [Line Some(1),
+        Bruecke 1, Rueckfall 0, Haenger 0, verworfen 0]". 646 Tests. In frischem Clone fuer BIOS und UEFI
         identisch, 0 Panics.
     - suite: shivacore (bare metal, --features x86-boot)
       artifact: "ELF x86_64-unknown-none, 145080 Bytes"
