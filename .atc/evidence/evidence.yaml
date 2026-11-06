@@ -6,7 +6,7 @@ schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-06"
 generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: 85da046a0a1e0767ef0261adcbb69394fb7fefa4
+bound_commit: 5fc18000a4da6954022dcdb0fbb06d40bba45336
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -35,7 +35,7 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 85da046a0a1e0767ef0261adcbb69394fb7fefa4
+  commit: 5fc18000a4da6954022dcdb0fbb06d40bba45336
   timestamp: 2026-11-07T10:20:00+00:00
   result: PASS
   runner: local-sandbox
