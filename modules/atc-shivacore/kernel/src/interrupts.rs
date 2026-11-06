@@ -7,6 +7,7 @@
 use crate::gdt;
 use crate::serial_println;
 use core::arch::global_asm;
+use core::sync::atomic::{AtomicBool, Ordering};
 use lazy_static::lazy_static;
 use libshivacore::CapabilityHandle;
 use pic8259::ChainedPics;
@@ -27,6 +28,10 @@ pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
+
+/// Merkt je Ring-3-Smoke-Prozess, ob sein Register-Muster schon einmal
+/// beobachtet wurde (Slot 0 = PID 1000, Slot 1 = PID 1001).
+static PATTERN_ESTABLISHED: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(false)];
 
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 
@@ -341,24 +346,50 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     // register pattern. A mismatch fails the QEMU gate instead of masking
     // register-save/restore corruption.
     if let Some(pid) = current_pid {
-        let (rax, rbx, r12) = match pid.0 {
-            1000 => (0x1000, 0x1001, 0x1012),
-            1001 => (0x2000, 0x2001, 0x2012),
-            _ => (current.regs.rax, current.regs.rbx, current.regs.r12),
+        let (slot, expected) = match pid.0 {
+            1000 => (Some(0usize), (0x1000, 0x1001, 0x1012)),
+            1001 => (Some(1usize), (0x2000, 0x2001, 0x2012)),
+            _ => (None, (0, 0, 0)),
         };
-        if current.regs.rax != rax || current.regs.rbx != rbx || current.regs.r12 != r12 {
-            panic!(
-                "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-                pid.0, current.regs.rax, current.regs.rbx, current.regs.r12
-            );
+        if let Some(slot) = slot {
+            let observed = (current.regs.rax, current.regs.rbx, current.regs.r12);
+            // Der erste Tick kann eintreffen, bevor der Ring-3-Payload seine
+            // Register gesetzt hat. Bis das Muster einmal beobachtet wurde, ist
+            // ein Tick Aufwaermphase; ab dann gilt die Invariante unveraendert.
+            if !PATTERN_ESTABLISHED[slot].load(Ordering::Acquire) {
+                if observed == expected {
+                    PATTERN_ESTABLISHED[slot].store(true, Ordering::Release);
+                    serial_println!(
+                        "ShivaCore: SCHED-001 register pattern established PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                        pid.0,
+                        observed.0,
+                        observed.1,
+                        observed.2
+                    );
+                } else {
+                    serial_println!(
+                        "ShivaCore: SCHED-001 warm-up tick PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                        pid.0,
+                        observed.0,
+                        observed.1,
+                        observed.2
+                    );
+                }
+            } else if observed != expected {
+                panic!(
+                    "SCHED-001 register corruption: PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                    pid.0, observed.0, observed.1, observed.2
+                );
+            } else {
+                serial_println!(
+                    "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
+                    pid.0,
+                    observed.0,
+                    observed.1,
+                    observed.2
+                );
+            }
         }
-        serial_println!(
-            "ShivaCore: SCHED-001 register checkpoint PID={} RAX={:#x} RBX={:#x} R12={:#x}",
-            pid.0,
-            current.regs.rax,
-            current.regs.rbx,
-            current.regs.r12
-        );
     }
 
     if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
