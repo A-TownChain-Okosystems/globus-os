@@ -23,7 +23,7 @@
 | 3 | `drivers/input_driver.atc` | 493 | .atc | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
 | 4 | `drivers/network_driver.atc` | 416 | .atc | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
 | 5 | `drivers/storage_driver.atc` | 378 | .atc | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
-| 6 | `kernel/src/hw_drivers.rs` | 1,267 | .rs | ShivaCore — K-Sprint 35: Hardware Driver Framework |
+| 6 | `service_space/src/hw_drivers.rs` (vormals `kernel/src/hw_drivers.rs`) | 1,4xx | .rs | ShivaCore — K-Sprint 35: Hardware Driver Framework |
 | 7 | `src/components/HardwareDriversView.tsx` | 376 | .tsx | — |
 
 ---
@@ -90,9 +90,13 @@
 
 ---
 
-### 6. `kernel/src/hw_drivers.rs`
+### 6. `service_space/src/hw_drivers.rs`
 
-**Datei:** `kernel/src/hw_drivers.rs`
+**Datei:** `modules/atc-shivacore/service_space/src/hw_drivers.rs` — am 07.11.2026 aus
+`modules/atc-drivers/kernel/src/hw_drivers.rs` dorthin portiert. Dort lag die Datei
+ohne Cargo.toml und ohne `mod`-Deklaration, wurde also nie uebersetzt; laut AD-012
+gehoeren Treiber in den Service Space, nicht in den Kernel. Erst dort sind die 61
+Tests tatsaechlich gelaufen (drei Erwartungen waren falsch, siehe Audit-Dokument).
 **Zeilen:** 1,267
 **Typ:** .rs
 **Beschreibung:** ShivaCore — K-Sprint 35: Hardware Driver Framework
