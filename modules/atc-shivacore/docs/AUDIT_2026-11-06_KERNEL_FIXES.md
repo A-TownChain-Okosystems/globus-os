@@ -1293,3 +1293,51 @@ die Registratur uebergeben — dazwischen liegt die Crate-Grenze (der Service
 Space baut auf dem Kernel auf, nicht umgekehrt). ACPI/MADT als zweite Quelle
 fehlt ebenfalls, ebenso Busse oberhalb von Bus 0 hinter Bridges.
 
+## Nachtrag 07.11. 11:20 — Von der Enum-Quelle in die Registratur
+
+Die beiden vorigen Stufen standen nebeneinander: der Kernel fand Geraete und
+protokollierte sie, der Service Space konnte Geraete verwalten, aber niemand
+brachte sie zusammen. Diese Stufe schliesst den Weg.
+
+Die Crate-Grenze laeuft in eine Richtung — der Service Space baut auf dem Kernel
+auf —, also liegt die Uebersetzung dort: `device_registry.rs` liest
+`shivacore::pci_scan` und uebersetzt.
+
+Drei Entscheidungen, die den Unterschied machen:
+
+- **Die Kennung kommt aus der Hardware, nicht aus einem Zaehler.** Bus, Geraet
+  und Funktion passen in 24 Bit (`pci_device_id`). Damit liefert dieselbe
+  Maschine nach jedem Neustart dieselben Kennungen — sonst waere jede
+  gespeicherte Device-Cap nach dem naechsten Boot wertlos.
+- **Uebernahme ohne Cap, und zwar sichtbar.** `adopt_discovered` prueft keine
+  Cap, weil der Kernel Gewalt ueber die Geraete hat: er liest den
+  Konfigurationsraum, ein Prozess kann das nicht. `register` bleibt der Weg fuer
+  Prozesse und prueft weiterhin die Device-Cap. Damit die Ausnahme nicht
+  verschwindet, zaehlt `discovered_without_cap()` mit, wie viel ungeprueft
+  hereinkam.
+- **Ein gefundenes Geraet hat keinen Besitzer.** Finden ist offen, Besitzen
+  bleibt geprueft: der erste `claim` mit passender Cap entscheidet. Ein Test
+  haelt genau das fest — der Eintrag ist sichtbar, eine Memory-Cap oeffnet ihn
+  nicht.
+
+Der Abgleich ist wiederholbar: `sync_from_hardware` zaehlt Bekanntes
+(`already_known`) statt es doppelt einzutragen, ein zweiter Boot mit derselben
+Hardware aendert also nichts.
+
+Klassenabbildung: Storage, Network, Display, Input, Audio, Usb werden
+uebernommen, Bruecken und Unbekanntes landen als `Other`. `Gpu` wird bewusst
+nicht vergeben — PCI-Klasse 0x03 heisst "Display" und deckt Bildschirm wie
+Beschleuniger ab; ob ein Geraet eine GPU ist, weiss der Treiber, nicht der
+Klassencode. Der Rundlauf `kind -> class -> kind` ist bis auf diesen einen Fall
+identisch und wird getestet.
+
+Verifikation: 9 neue Tests, zusammen 18 in `device_registry`, darunter
+Kennungsstabilität, vollstaendige Klassentabelle, doppelte Uebernahme, fehlender
+Besitzer nach Uebernahme, Memory-Cap oeffnet kein gefundenes Geraet,
+idempotenter zweiter Abgleich und Anspruch mit passender Cap nach dem Abgleich.
+
+**Noch offen:** Der Aufruf selbst fehlt im Boot — die Registratur lebt im
+Service Space, und der laeuft im Kernel-Image noch nicht. Die Uebersetzung steht
+und ist geprueft; angeschlossen wird sie, wenn der Service Space beim Boot
+startet.
+
