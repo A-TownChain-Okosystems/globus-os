@@ -257,7 +257,7 @@
 | `modules/atc-shivacore/STATUS.md` | 114 |
 | `modules/atc-shivacore/boot/Cargo.toml` | 15 |
 | `modules/atc-shivacore/boot/src/main.rs` | 72 |
-| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.275 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.318 |
 | `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
 | `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
@@ -276,7 +276,7 @@
 | `modules/atc-shivacore/kernel/.cargo/config.toml` | 2 |
 | `modules/atc-shivacore/kernel/.gitignore` | 1 |
 | `modules/atc-shivacore/kernel/Cargo.toml` | 40 |
-| `modules/atc-shivacore/kernel/src/addr_space.rs` | 207 |
+| `modules/atc-shivacore/kernel/src/addr_space.rs` | 275 |
 | `modules/atc-shivacore/kernel/src/allocator.rs` | 49 |
 | `modules/atc-shivacore/kernel/src/apic.rs` | 410 |
 | `modules/atc-shivacore/kernel/src/atcfs.rs` | 709 |
@@ -293,7 +293,7 @@
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 209 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 254 |
-| `modules/atc-shivacore/kernel/src/interrupts.rs` | 1.328 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 1.376 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 382 |
 | `modules/atc-shivacore/kernel/src/ipc.rs` | 717 |
 | `modules/atc-shivacore/kernel/src/irq.rs` | 322 |
@@ -305,7 +305,7 @@
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 401 |
 | `modules/atc-shivacore/kernel/src/lib.rs` | 59 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.398 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1.270 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1.352 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 64 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 912 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 558 |
@@ -318,8 +318,8 @@
 | `modules/atc-shivacore/kernel/src/syscall_gate.rs` | 170 |
 | `modules/atc-shivacore/kernel/src/system.rs` | 1.367 |
 | `modules/atc-shivacore/kernel/src/timer.rs` | 549 |
-| `modules/atc-shivacore/kernel/src/user_sched.rs` | 1.469 |
-| `modules/atc-shivacore/kernel/src/userspace.rs` | 1.155 |
+| `modules/atc-shivacore/kernel/src/user_sched.rs` | 1.490 |
+| `modules/atc-shivacore/kernel/src/userspace.rs` | 1.180 |
 | `modules/atc-shivacore/kernel/src/vfs.rs` | 1.198 |
 | `modules/atc-shivacore/kernel/src/vmm.rs` | 1.472 |
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/README.md` | 20 |
