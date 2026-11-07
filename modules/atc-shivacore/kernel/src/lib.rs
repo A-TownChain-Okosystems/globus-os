@@ -10,7 +10,12 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
-pub mod acpi_devices;
+// Enumerationstypen liegen in der gemeinsamen API-Crate (`libshivacore`), nicht
+// mehr im Kernel: der Service Space braucht sie und haengt an `shivacore`, was
+// den Kernel daran hindert, den Service Space einzubinden. Der Re-Export haelt
+// die alten Pfade `shivacore::madt::…` am Leben.
+pub use libshivacore::{acpi_devices, madt};
+
 #[cfg(test)]
 pub mod allocator;
 pub mod apic;
@@ -32,7 +37,6 @@ pub mod kernel_caps;
 pub mod kernel_init;
 pub mod key_events;
 pub mod keymap;
-pub mod madt;
 pub mod memory_manager;
 pub mod process;
 pub mod scheduler;
