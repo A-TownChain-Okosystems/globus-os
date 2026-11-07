@@ -19,6 +19,7 @@ pub mod consensus;
 // container_net.rs: dormant (std-basiert, im Kernel ebenfalls nicht registriert).
 // Aktivierung erfordert Portierung auf alloc/core + Ord-Derives.
 pub mod contract;
+pub mod device_registry;
 pub mod did;
 pub mod genesis;
 pub mod genesis_bridge;
