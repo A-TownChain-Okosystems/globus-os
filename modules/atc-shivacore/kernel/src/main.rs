@@ -259,31 +259,63 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             let bytes = unsafe {
                 core::slice::from_raw_parts(ramdisk_address as *const u8, ramdisk_len as usize)
             };
-            match shivacore::elf_loader::ElfParser::parse(bytes) {
-                Ok(parser) => {
-                    let code_len = parser
-                        .code_segment()
-                        .and_then(|segment| parser.segment_data(segment).ok())
-                        .map(|data| data.len())
-                        .unwrap_or(0);
-                    serial_println!(
-                        "ShivaCore: Ramdisk {} Bytes, ELF-Einstieg {:#x}, Code {} Bytes",
-                        ramdisk_len,
-                        parser.entry_point(),
-                        code_len
-                    );
-                    if let Some(segment) = parser.code_segment() {
-                        if let Ok(code) = parser.segment_data(segment) {
-                            ramdisk_program = Some((code.to_vec(), parser.entry_point()));
+            // Zwei Formen: ein Verzeichnis (dann wird nach Namen gewaehlt) oder
+            // ein nacktes Programm (dann ist es das Init). Ein Image ohne
+            // Verzeichnis soll weiter booten.
+            let program: Option<(alloc::string::String, &[u8])> =
+                if shivacore::ramdisk::is_container(bytes) {
+                    match shivacore::ramdisk::parse(bytes) {
+                        Ok(entries) => {
+                            let names: Vec<&str> =
+                                entries.iter().map(|entry| entry.name.as_str()).collect();
+                            serial_println!(
+                                "ShivaCore: Ramdisk-Verzeichnis: {} Programme ({})",
+                                entries.len(),
+                                names.join(", ")
+                            );
+                            shivacore::ramdisk::find(&entries, "init")
+                                .or_else(|| entries.first())
+                                .and_then(|entry| {
+                                    entry.data(bytes).map(|data| (entry.name.clone(), data))
+                                })
+                        }
+                        Err(error) => {
+                            serial_println!("ShivaCore: Ramdisk-Verzeichnis unlesbar: {:?}", error);
+                            None
                         }
                     }
-                }
-                Err(error) => {
-                    serial_println!(
-                        "ShivaCore: Ramdisk {} Bytes, aber kein lesbares ELF: {:?}",
-                        ramdisk_len,
-                        error
-                    );
+                } else {
+                    Some((alloc::string::String::from("programm"), bytes))
+                };
+
+            if let Some((name, program_bytes)) = program {
+                match shivacore::elf_loader::ElfParser::parse(program_bytes) {
+                    Ok(parser) => {
+                        let code_len = parser
+                            .code_segment()
+                            .and_then(|segment| parser.segment_data(segment).ok())
+                            .map(|data| data.len())
+                            .unwrap_or(0);
+                        serial_println!(
+                            "ShivaCore: Programm '{}' aus Ramdisk: {} Bytes ELF, Einstieg {:#x}, Code {} Bytes",
+                            name,
+                            program_bytes.len(),
+                            parser.entry_point(),
+                            code_len
+                        );
+                        if let Some(segment) = parser.code_segment() {
+                            if let Ok(code) = parser.segment_data(segment) {
+                                ramdisk_program = Some((code.to_vec(), parser.entry_point()));
+                            }
+                        }
+                    }
+                    Err(error) => {
+                        serial_println!(
+                            "ShivaCore: Programm '{}' ist kein lesbares ELF: {:?}",
+                            name,
+                            error
+                        );
+                    }
                 }
             }
         } else {
