@@ -1950,3 +1950,47 @@ Checkpoint-Zeilen verschwanden aus dem Log, 0 statt 495). Erst der Bootvergleich
 beider Varianten hat das gezeigt, nicht die Tests: im Bin-Target gibt es keine
 Testunterstuetzung, also traegt hier allein der Bootlauf die Beweiskraft.
 
+## Nachtrag 07.11. 18:35 — die Ramdisk bekommt ein Verzeichnis (Format SRAM)
+
+Bisher trug die Ramdisk genau ein ELF: der Kernel las die Bytes und konnte nicht
+sagen, was darin liegt. Sobald mehr als ein Programm mitreisen soll, braucht sie
+ein Verzeichnis, auch wenn das noch kein Dateisystem ist.
+
+**Format** (`kernel/src/ramdisk.rs`, 12 Tests): Kopf mit Kennung `SRAM`, Fassung,
+Anzahl; Eintraege zu je 24 Byte aus Name (16 Byte, ASCII, nullgefuellt),
+Offset und Laenge, little endian. Regeln, dieselbe Haltung wie bei den
+Syscall-Bloecken: erst pruefen, dann zeigen (jeder Eintrag muss vollstaendig im
+Abbild liegen, sonst ist die ganze Tabelle ungueltig); keine zwei Wahrheiten
+(doppelte Namen werden abgelehnt, nicht ueberschrieben); Nutzdaten bleiben
+undurchsichtig, was darin steht entscheidet der ELF-Parser.
+
+**Boot-Builder** nimmt ab dem dritten Argument Programme als `name=pfad`, baut
+daraus das Verzeichnis und legt es als Ramdisk ins Image. Weil der Bau im
+Kernel-Crate liegt, pflegen Werkzeug und Kernel nicht zwei Fassungen des
+Formats; der Builder haengt dafuer an `shivacore`.
+
+**Kernel** erkennt die Form: mit Kennung wird das Verzeichnis gelesen und ein
+Programm **per Namen** gewaehlt (`init`, sonst der erste Eintrag), ohne Kennung
+gilt das Abbild weiterhin als ein nacktes Programm. Ein Image ohne Verzeichnis
+bootet also weiter.
+
+**Belegt in QEMU, BIOS und UEFI, 0 Panics:**
+```
+ShivaCore: Ramdisk-Verzeichnis: 2 Programme (init, shell)
+ShivaCore: Programm 'init' aus Ramdisk: 6568 Bytes ELF, Einstieg 0x400000, Code 89 Bytes
+ShivaCore: Syscall aus Ring 3: Nr=1 PID=1000 Opcode=0x0001
+```
+Beide Eintraege tragen hier dasselbe Binary; belegt ist damit das Verzeichnis
+und die Auswahl nach Namen, nicht zwei verschiedene Programme.
+
+**Zwei eigene Fehler unterwegs:** `MAGIC` war als `[u8; 4]` deklariert, die
+Zeichenkette aber fuenf Byte lang (`SRAMD`), also Compile-Fehler statt
+stiller Abschneidung. Und die Auswahl gab `&str` auf den Namen zurueck, waehrend
+die Eintraege im `match`-Arm starben; jetzt reist der Name als eigener `String`,
+nur die Nutzdaten bleiben geliehen.
+
+**Was das noch nicht ist:** Das Verzeichnis liegt im Speicher, nicht auf einem
+Datentraeger; es gibt keine Bloecke, keine Inodes, kein Schreiben. Der naechste
+Schritt ist ein Programm, das ein zweites startet (dafuer fehlt ein Spawn-Weg
+in der ABI), oder ein Treiber, der das Verzeichnis von Platte liest.
+
