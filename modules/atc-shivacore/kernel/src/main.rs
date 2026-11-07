@@ -237,6 +237,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // braucht eine Liste, die nicht geraten ist; hier wird sie gelesen.
     // Die Entdeckung vergibt keine Rechte — wer ein Geraet benutzen darf,
     // entscheidet weiterhin die Device-Cap.
+    // Programm aus der Ramdisk, falls eine mitgegeben wurde. Es ersetzt weiter
+    // unten den eingebauten Platzhalter: dieselben Seiten, derselbe Weg nach
+    // Ring 3, nur mit echtem Code von einem Datentraeger.
+    let mut ramdisk_program: Option<(alloc::vec::Vec<u8>, u64)> = None;
+
     // Die Ramdisk traegt das erste echte Userspace-Programm. Ohne sie ist der
     // Kernel ein geschlossenes Ganzes; mit ihr kommt ein Programm von einem
     // Datentraeger.
@@ -267,6 +272,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                         parser.entry_point(),
                         code_len
                     );
+                    if let Some(segment) = parser.code_segment() {
+                        if let Ok(code) = parser.segment_data(segment) {
+                            ramdisk_program = Some((code.to_vec(), parser.entry_point()));
+                        }
+                    }
                 }
                 Err(error) => {
                     serial_println!(
@@ -614,17 +624,35 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
-    let user_binary = userspace::UserBinary::from_bytes(
-        "ring3-smoke",
-        alloc::vec![
-            0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x1000
-            0x48, 0xBB, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x1001
-            0x49, 0xBC, 0x12, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x1012
-            0xEB, 0xFE, // loop forever until timer preemption
-        ],
-        0x0040_0000,
-    );
-    let user_addr_space = userspace::UserAddressSpace::default();
+    //
+    // Mit Ramdisk laeuft hier das erste echte Programm: der Code kommt aus dem
+    // ELF auf dem Datentraeger, nicht aus diesem Quelltext. Ohne Ramdisk bleibt
+    // der eingebaute Platzhalter, damit ein nacktes Image weiter bootet.
+    let (user_binary, user_addr_space, source) = match ramdisk_program.take() {
+        Some((code, entry)) => {
+            let mut space = userspace::UserAddressSpace::default();
+            space.code_base = entry;
+            (
+                userspace::UserBinary::from_bytes("ramdisk-init", code, entry),
+                space,
+                "Ramdisk",
+            )
+        }
+        None => (
+            userspace::UserBinary::from_bytes(
+                "ring3-smoke",
+                alloc::vec![
+                    0x48, 0xB8, 0x00, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RAX=0x1000
+                    0x48, 0xBB, 0x01, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // RBX=0x1001
+                    0x49, 0xBC, 0x12, 0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, // R12=0x1012
+                    0xEB, 0xFE, // loop forever until timer preemption
+                ],
+                0x0040_0000,
+            ),
+            userspace::UserAddressSpace::default(),
+            "eingebaut",
+        ),
+    };
     unsafe {
         userspace::map_user_binary(
             &mut mapper,
@@ -638,10 +666,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let user_pid = ats1000::Pid(1000);
     let user_ctx = userspace::UserContext::new(user_pid, &user_binary, user_addr_space);
     serial_println!(
-        "ShivaCore: USER-001 mapped PID={} RIP={:#x} RSP={:#x}",
+        "ShivaCore: USER-001 mapped PID={} RIP={:#x} RSP={:#x} (Quelle: {})",
         user_pid.0,
         user_ctx.rip,
-        user_ctx.rsp
+        user_ctx.rsp,
+        source
     );
 
     // Second real Ring-3 image. Both processes intentionally share the current
