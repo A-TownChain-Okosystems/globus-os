@@ -1669,3 +1669,47 @@ ueber die GitHub-Trees-API am 10.09.). Jetzt aus `git ls-files` erzeugt: 503
 Eintraege, 0 fehlende Pfade, 0 Differenz zur Dateiliste. Damit sind beide
 Register zum ersten Mal deckungsgleich mit dem Baum.
 
+## Nachtrag 07.11. 13:45 — der Service Space uebersetzt jetzt fuer Bare Metal
+
+Der Blocker aus der vorigen Stunde ist geloest, aber nicht so, wie ich zuerst dachte.
+Die Fehlermeldung zeigte auf `sha2`; die Ursache war eine Kette.
+
+**1. `system/devices` war ein std-Crate.** Der Service Space ist no_std und haengt
+an dieser Vertragsschicht. Beim Bau fuer `x86_64-unknown-none` kam zuerst
+`can't find crate for std` und dann 40 Folgefehler (`derive` unbekannt, weil das
+Praeadlude fehlte). Umstellung war klein: `#![cfg_attr(not(test), no_std)]`,
+`extern crate alloc`, **eine** echte std-Stelle (`std::ops::Range` →
+`core::ops::Range` in `block.rs`) und `alloc`-Importe in 13 Modulen. Tests
+behalten std.
+
+**2. `sha2` ist fuer dieses Ziel nicht uebersetzbar, und das ist nicht unsere
+Schuld.** Der Abbruch lautet
+`rustc-LLVM ERROR: Do not know how to split the result of this operator!` —
+ein LLVM-Backend-Absturz, keine Rust-Diagnose. Nachgewiesen in einem **minimalen
+no_std-Crate** (`sha2` allein, 6 Zeilen Code) gegen: Versionen 0.10.4, 0.10.6,
+0.10.8, 0.10.9, 0.11.0 — alle gleich; Toolchains stable 1.99.1 und nightly
+1.101.0 — beide gleich; Flags `+sse2`, `+sse3+ssse3+sse4.1`, `target-cpu=x86-64`,
+`x86-64-v2`, `nehalem` — alle gleich. Es gibt also keinen Schalter, den wir
+umlegen koennten. `sha2` kommt ueber `ed25519-dalek` herein, das nur `did.rs`
+benutzt (Signature, Signer, SigningKey, Verifier, VerifyingKey).
+
+**3. Entscheidung: Feature `crypto`, standardmaessig AN, fuer das Image AUS.**
+`ed25519-dalek` ist jetzt optional (`version = "2.1"` statt 3.0, weil 3.0
+zusaetzlich `sha2` 0.11 zieht und sha2 0.11 auf diesem Ziel zusaetzlich am
+LLVM-Backend scheitert), und `did` sowie `remote_caps` haengen an
+`#[cfg(feature = "crypto")]`. `remote_caps` faellt mit, weil es
+`did::SoftwareSigner` braucht; sonst haengt kein Modul an den beiden.
+
+**Ergebnis, belegt:** Host-Tests unveraendert **1687** (745 im Service Space,
+also kein Test verloren — das Feature ist per Default an), und
+`cargo +stable build -p shivacore-service-space --target x86_64-unknown-none
+--no-default-features` endet mit `Finished` (Artefakt
+`libshivacore_service_space.rlib`, 48,8 MB debug). `clippy -D warnings` ist in
+beiden Konfigurationen still.
+
+**Was das ehrlich bedeutet:** Der Service Space ist jetzt linkbar, aber ohne DID
+und ohne entfernte Capabilities. Wer die braucht, muss zuerst das
+SHA-512-Problem loesen — entweder eine eigene Implementierung (das Projekt
+verlangt ohnehin from-scratch) oder ein Toolchain-/Upstream-Fix. Das ist ein
+eigener Auftrag und steht jetzt als solcher da, statt als "irgendwas mit sha2".
+
