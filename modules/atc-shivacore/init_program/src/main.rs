@@ -22,8 +22,6 @@
 use core::panic::PanicInfo;
 use core::sync::atomic::{compiler_fence, Ordering};
 
-use libshivacore::Syscall;
-
 // ─────────────────────────────────────────────────────────────────────────
 // Speicher
 //
@@ -86,15 +84,36 @@ static ALLOCATOR: Arena = Arena {
     used: core::sync::atomic::AtomicUsize::new(0),
 };
 
-/// Ein Syscall ohne Argumente. Der Kernel liest die Nummer aus dem Register.
+/// Ein `Yield` als echter ABI-2.0-Aufruf.
+///
+/// Der Gate verlangt seit ABI 2.0 keinen nackten Opcode im Register, sondern
+/// einen Argumentblock im Userspace-Speicher: Groesse, Opcode, Cap, Argumente.
+/// Ohne Block antwortet der Kernel mit `AbiVersionMismatch` und zaehlt den
+/// Aufruf nicht einmal — genau das war beim ersten Lauf zu sehen.
+///
+/// Der Block liegt auf dem Stack, weil `map_user_binary` nur Code- und
+/// Datenseite abbildet; ein `.bss`-Vorrat waere nicht erreichbar.
 #[inline(always)]
-fn syscall(number: u16) {
-    // `int 0x80` ist der Torweg, den der Kernel auf DPL 3 geoeffnet hat.
+fn syscall_yield() {
+    // 7 Woerter = 56 Bytes = SYSCALL_BLOCK_MIN_SIZE.
+    let mut block = [0u64; 7];
+    block[0] = libshivacore::SYSCALL_BLOCK_MIN_SIZE as u64;
+    // Offset 8 traegt Opcode (u16) und Flags (u16) in einem Wort.
+    block[1] = u64::from(libshivacore::Syscall::Yield.id());
+    // Capability, Argumente, Puffer bleiben null: Yield braucht keins davon.
+
     unsafe {
         core::arch::asm!(
             "int 0x80",
-            in("rax") u64::from(number),
-            options(nostack, preserves_flags)
+            in("rdi") block.as_ptr(),
+            in("rsi") libshivacore::SYSCALL_BLOCK_MIN_SIZE,
+            in("rdx") u64::from(libshivacore::ABI_VERSION),
+            // RBX ist bei LLVM intern belegt und darf hier nicht als Operand
+            // stehen. Der Kernel schreibt den Status dorthin; gelesen wird er
+            // erst, wenn das Programm Fehler auswertet.
+            lateout("rax") _,
+            clobber_abi("sysv64"),
+            options(nostack)
         );
     }
 }
@@ -108,7 +127,7 @@ pub extern "C" fn _start() -> ! {
         core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
     }
     loop {
-        syscall(Syscall::Yield as u16);
+        syscall_yield();
         compiler_fence(Ordering::SeqCst);
     }
 }
