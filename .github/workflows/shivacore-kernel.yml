@@ -54,9 +54,11 @@ jobs:
         id: build_images
         run: |
           mkdir -p target/boot-images
-          cargo run -p boot --release -- \
-            target/x86_64-unknown-none/release/shivacore \
-            target/boot-images
+          # Der Boot-Builder ist kein Workspace-Mitglied mehr (Nightly-Zwang
+          # des bootloader-Crates). Er wird in seinem Verzeichnis gebaut.
+          ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
+            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/release/shivacore" \
+            "$GITHUB_WORKSPACE/target/boot-images" )
 
       - name: Install QEMU
         run: |
