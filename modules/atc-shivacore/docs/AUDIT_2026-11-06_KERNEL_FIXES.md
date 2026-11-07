@@ -1564,3 +1564,44 @@ Fuenf neue Tests belegen die Klammern selbst (mehrblockiges Lesen, Nur-Lese-
 Ablehnung, zu kurzer Puffer, Frame-Rundlauf, Timer in Hz/ns). Stand: **66 Tests**
 im Treibermodul, **1683 im Workspace**.
 
+## Nachtrag 07.11. 12:45 — Ortsprüfung: liegt alles, wo es hingehört?
+
+Auftrag war die Gegenprüfung, nicht die nächste Baustelle. Befund in drei Teilen.
+
+**1. Der Treiber-Ort ist begründet, aber nicht eindeutig.** Es gibt zwei
+Kandidaten: den Service Space (gewählt) und `modules/atc-drivers`, das laut
+Cargo-Beschreibung genau dafür da ist ("Hardware-Treiber — USB, GPU, Audio,
+SATA/NVMe, HID, Network"). Nachgesehen: dort stehen `audio.rs`, `gpu.rs`,
+`hid.rs`, `net.rs`, `storage.rs`, `usb.rs` mit je **zwei Zeilen** Inhalt
+("PLANNED, noch nicht implementiert"), nur `driver_framework.rs` hat 112 Zeilen.
+Der Treiber steht also dort, wo er laut AD-012 hingehört (Service Space, nicht
+Kernel), und das deklarierte Treiber-Crate ist bis auf ein Framework leer.
+Das ist kein Fehler, aber eine offene Frage an den Owner: wird `atc-drivers`
+das Zuhause (dann gehoert `hw_drivers` spaeter dorthin) oder bleibt es Anzeige-
+Huelle und der Service Space ist kanonisch? Ich habe nichts verschoben, weil
+beides vertretbar ist und ein Umzug ohne diese Entscheidung nur Arbeit erzeugt.
+
+**2. Die Simulation ist als Simulation erkennbar.** `MmioRegion` ist kein MMIO:
+es haelt `Vec<AtomicU64>` im Speicher, `HpetTimer::new(0xFED00000)` beruehrt
+keine Hardware. Genau so steht es im Dateikopf ("simulated backends für cargo
+test") — technisch korrekt als Testrahmen, aber die Datei darf nirgends als
+echter Gerätetreiber gelten. Nachgezaehlt: **0 `unsafe`** im Modul, nach dem
+Umbau der beiden UB-Casts.
+
+**3. Zwei Register waren falsch, nicht der Code.** Beim Nachsehen, ob die
+Dokumentation die neue Lage abbildet, fiel auf:
+
+- `modules/atc-shivacore/FILE_REGISTER.md` war vom 2026-10-08 und nannte **15
+  Dateien, die es nicht gibt** (`kernel/src/devfs.rs`, `kernel/src/fs_journal.rs`,
+  `kernel/src/hw_drivers.rs`, `kernel/src/block.rs`, `kernel/src/cow.rs` u. a. —
+  sie liegen in `legacy/kernel-src-uncompiled/`) und **11 falsche Zeilenzahlen**,
+  darunter `kernel/src/interrupts.rs` mit 314 statt 919 und `capability.rs` mit
+  360 statt 537. Das Register ist jetzt aus `git ls-files` erzeugt: 106 Zeilen,
+  106 getrackte Dateien, 0 Abweichungen (der Selbstbezug auf die eigene
+  Zeilenzahl wird iterativ stabilisiert).
+- `FILE_REGISTER.md` (Repo-Wurzel) hatte 209 Eintraege, davon **genau einer
+  fehlend**: der geloeschte `modules/atc-drivers/kernel/src/hw_drivers.rs`. Er
+  zeigt jetzt auf `modules/atc-shivacore/service_space/src/hw_drivers.rs`;
+  209 Eintraege, 0 fehlend.
+- `COMPONENT_PLAN.md` im Treiber-Modul fuehrte "1,4xx" Zeilen; echt sind 1.653.
+
