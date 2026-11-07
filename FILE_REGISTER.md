@@ -38,7 +38,7 @@
 | `CONTRIBUTING.md` | 9 |
 | `Cargo.lock` | 5.336 |
 | `Cargo.toml` | 23 |
-| `FILE_REGISTER.md` | 530 |
+| `FILE_REGISTER.md` | 531 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
@@ -250,14 +250,14 @@
 | `modules/atc-shivacore/ARCHITECTURE.md` | 112 |
 | `modules/atc-shivacore/CHANGELOG.md` | 21 |
 | `modules/atc-shivacore/COMPONENT_PLAN.md` | 732 |
-| `modules/atc-shivacore/FILE_REGISTER.md` | 130 |
+| `modules/atc-shivacore/FILE_REGISTER.md` | 131 |
 | `modules/atc-shivacore/LICENSE` | 17 |
 | `modules/atc-shivacore/README.md` | 1.101 |
 | `modules/atc-shivacore/ROADMAP.md` | 21 |
 | `modules/atc-shivacore/STATUS.md` | 114 |
 | `modules/atc-shivacore/boot/Cargo.toml` | 15 |
 | `modules/atc-shivacore/boot/src/main.rs` | 72 |
-| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.180 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.232 |
 | `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
 | `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
@@ -270,8 +270,9 @@
 | `modules/atc-shivacore/init_program/src/bin/crash.rs` | 37 |
 | `modules/atc-shivacore/init_program/src/bin/crash_gp.rs` | 34 |
 | `modules/atc-shivacore/init_program/src/bin/crash_ud.rs` | 33 |
+| `modules/atc-shivacore/init_program/src/bin/peek.rs` | 73 |
 | `modules/atc-shivacore/init_program/src/bin/probe.rs` | 53 |
-| `modules/atc-shivacore/init_program/src/main.rs` | 84 |
+| `modules/atc-shivacore/init_program/src/main.rs` | 104 |
 | `modules/atc-shivacore/kernel/.cargo/config.toml` | 2 |
 | `modules/atc-shivacore/kernel/.gitignore` | 1 |
 | `modules/atc-shivacore/kernel/Cargo.toml` | 40 |
@@ -291,7 +292,7 @@
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 209 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 254 |
-| `modules/atc-shivacore/kernel/src/interrupts.rs` | 1.265 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 1.328 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 382 |
 | `modules/atc-shivacore/kernel/src/ipc.rs` | 717 |
 | `modules/atc-shivacore/kernel/src/irq.rs` | 322 |
