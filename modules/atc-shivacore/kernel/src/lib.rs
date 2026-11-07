@@ -18,6 +18,7 @@ pub mod ats1000;
 pub mod capability;
 pub mod cross_subsystem;
 pub mod diagnostics;
+pub mod dma_auth;
 pub mod elf_loader;
 pub mod hal;
 pub mod input_queue;
