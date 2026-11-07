@@ -38,7 +38,7 @@
 | `CONTRIBUTING.md` | 9 |
 | `Cargo.lock` | 5.336 |
 | `Cargo.toml` | 23 |
-| `FILE_REGISTER.md` | 529 |
+| `FILE_REGISTER.md` | 530 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
@@ -257,7 +257,7 @@
 | `modules/atc-shivacore/STATUS.md` | 114 |
 | `modules/atc-shivacore/boot/Cargo.toml` | 15 |
 | `modules/atc-shivacore/boot/src/main.rs` | 72 |
-| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.139 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.180 |
 | `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
 | `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
@@ -378,6 +378,7 @@
 | `modules/atc-windows-edition/src/node.rs` | 36 |
 | `modules/atc-windows-edition/src/settings.rs` | 31 |
 | `modules/atc-windows-edition/src/wallet.rs` | 36 |
+| `scripts/boot_monitor.py` | 270 |
 | `scripts/check_evidence_binding.py` | 156 |
 | `scripts/qemu_boot.sh` | 79 |
 | `sdk/Cargo.toml` | 7 |
