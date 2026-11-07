@@ -58,6 +58,15 @@ pub struct PciDevice {
 }
 
 impl PciDevice {
+    /// Ist das eine Bruecke zu einem weiteren Bus?
+    ///
+    /// 0x06/0x04 ist die gewoehnliche PCI-zu-PCI-Bruecke, 0x06/0x09 die
+    /// halbtransparente Variante und 0x06/0x07 die CardBus-Bruecke. Alle drei
+    /// tragen im Kopf einen sekundaeren Bus, dem der Scan folgen muss.
+    pub fn is_pci_bridge(&self) -> bool {
+        self.class == 0x06 && matches!(self.subclass, 0x04 | 0x07 | 0x09)
+    }
+
     pub fn is_multifunction(&self) -> bool {
         self.header_type & 0x80 != 0
     }
@@ -191,6 +200,61 @@ pub fn scan_bus(cfg: &mut impl ConfigSpace, bus: u8) -> Vec<PciDevice> {
     found
 }
 
+/// Den sekundaeren Bus einer Bruecke lesen.
+///
+/// Register 0x18 traegt drei Bussnummern: primaer (7:0), sekundaer (15:8),
+/// untergeordnet (23:16). Nur der sekundaere Bus ist der Einstieg fuer den
+/// naechsten Schritt; die untergeordnete Nummer sagt nur, wie weit der Baum
+/// reicht.
+pub fn secondary_bus(cfg: &mut impl ConfigSpace, address: PciAddress) -> Option<u8> {
+    let word = cfg.read_u32(address, 0x18);
+    let secondary = ((word >> 8) & 0xFF) as u8;
+    // Bus 0 als Sekundaerbus waere ein Zyklus zur Wurzel; manche Firmware
+    // traegt so etwas ein, wenn die Bruecke nicht konfiguriert ist.
+    if secondary == 0 {
+        None
+    } else {
+        Some(secondary)
+    }
+}
+
+/// Wie tief der Scan Bruecken folgt. Acht Etagen sind fuer echte Maschinen
+/// reichlich; die Grenze ist da, damit eine kaputte Firmware-Tabelle den Boot
+/// nicht in eine Endlosschleife zieht.
+pub const MAX_BRIDGE_DEPTH: u8 = 8;
+
+/// Alle Geraete, auch hinter Bruecken.
+///
+/// Der flache `scan` ueber Bus 0..n findet nur, was direkt am Root-Bus haengt.
+/// Auf jeder Maschine mit Steckplaetzen oder Root-Ports liegt der Rest dahinter.
+/// Dieser Scan folgt jeder Bruecke einmal: `visited` haelt fest, welche Busse
+/// schon dran waren, damit zwei Bruecken auf denselben Bus keine Doppelzaehlung
+/// ergeben und eine Ringverbindung nicht ewig laeuft.
+pub fn scan_tree(cfg: &mut impl ConfigSpace, root_bus: u8) -> Vec<PciDevice> {
+    let mut found = Vec::new();
+    let mut visited = Vec::new();
+    let mut queue = alloc::vec![(root_bus, 0u8)];
+    while let Some((bus, depth)) = queue.pop() {
+        if visited.contains(&bus) || depth > MAX_BRIDGE_DEPTH {
+            continue;
+        }
+        visited.push(bus);
+        for device in scan_bus(cfg, bus) {
+            if device.is_pci_bridge() && depth < MAX_BRIDGE_DEPTH {
+                if let Some(secondary) = secondary_bus(cfg, device.address) {
+                    if !visited.contains(&secondary) {
+                        queue.push((secondary, depth + 1));
+                    }
+                }
+            }
+            found.push(device);
+        }
+    }
+    // Reihenfolge stabil machen: Bus, Geraet, Funktion.
+    found.sort_by_key(|d| d.address);
+    found
+}
+
 /// Busse 0..`max_bus` absuchen. `max_bus` ist exklusiv.
 pub fn scan(cfg: &mut impl ConfigSpace, max_bus: u8) -> Vec<PciDevice> {
     let mut all = Vec::new();
@@ -220,6 +284,8 @@ mod tests {
     struct FakeConfig {
         entries: Vec<(PciAddress, u32, u32, u32)>,
         reads: usize,
+        /// Register 0x18 je Bruecke: (Adresse, sekundaerer Bus).
+        secondary: Vec<(PciAddress, u8)>,
     }
 
     impl FakeConfig {
@@ -227,6 +293,7 @@ mod tests {
             Self {
                 entries: Vec::new(),
                 reads: 0,
+                secondary: Vec::new(),
             }
         }
 
@@ -243,6 +310,7 @@ mod tests {
             let (vendor, dev) = id_pair;
             let (class, subclass) = class_pair;
             let id = ((dev as u32) << 16) | vendor as u32;
+            // Register 0x18 traegt die Busnummern; ohne Eintrag bleibt es 0.
             let class_word = ((class as u32) << 24) | ((subclass as u32) << 16);
             let header_word = (header as u32) << 16;
             self.entries.push((
@@ -267,6 +335,15 @@ mod tests {
                 0x00 => *id,
                 0x08 => *class_word,
                 0x0C => *header,
+                0x18 => {
+                    let secondary = self
+                        .secondary
+                        .iter()
+                        .find(|(a, _)| *a == address)
+                        .map(|(_, bus)| *bus)
+                        .unwrap_or(0);
+                    (secondary as u32) << 8
+                }
                 _ => 0,
             }
         }
@@ -379,5 +456,103 @@ mod tests {
             header_type: 0x00,
         };
         assert_eq!(describe(&device), (0, 2, 0, 0x1234, 0x1111, "display"));
+    }
+
+    /// Eine Bruecke mit sekundaerem Bus.
+    fn bridge(bus: u8, device: u8) -> PciDevice {
+        PciDevice {
+            address: PciAddress::new(bus, device, 0),
+            vendor: 0x8086,
+            device: 0x244E,
+            class: 0x06,
+            subclass: 0x04,
+            header_type: 0x01,
+        }
+    }
+
+    #[test]
+    fn a_plain_isa_bridge_is_not_a_pci_bridge() {
+        // 0x06/0x01 ist die ISA-Bruecke — die fuehrt zu keinem PCI-Bus.
+        let isa = PciDevice {
+            address: PciAddress::new(0, 1, 0),
+            vendor: 0x8086,
+            device: 0x7000,
+            class: 0x06,
+            subclass: 0x01,
+            header_type: 0x00,
+        };
+        assert!(!isa.is_pci_bridge());
+        assert!(bridge(0, 4).is_pci_bridge());
+    }
+
+    #[test]
+    fn the_scan_follows_a_bridge_to_the_bus_behind_it() {
+        // Bus 0: Bruecke auf 0x04, sekundaerer Bus 1. Hinter der Bruecke eine
+        // Netzwerkkarte, die ein flacher Scan ueber Bus 0 nie sieht.
+        let mut cfg = FakeConfig::new()
+            .with((0, 4, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01)
+            .with((1, 0, 0), (0x8086, 0x100E), (0x02, 0x00), 0x00);
+        cfg.secondary = alloc::vec![(PciAddress::new(0, 4, 0), 1)];
+
+        // Der flache Scan findet nur die Bruecke ...
+        let flat = scan_bus(&mut cfg, 0);
+        assert_eq!(flat.len(), 1);
+
+        // ... der Baum-Scan findet beide, nach Adresse sortiert.
+        let tree = scan_tree(&mut cfg, 0);
+        assert_eq!(tree.len(), 2);
+        assert_eq!(tree[0].address.bus, 0);
+        assert_eq!(tree[1].address.bus, 1);
+        assert_eq!(tree[1].kind(), DeviceKind::Network);
+    }
+
+    #[test]
+    fn a_bridge_pointing_at_the_root_bus_is_ignored() {
+        let mut cfg = FakeConfig::new().with((0, 4, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01);
+        cfg.secondary = alloc::vec![(PciAddress::new(0, 4, 0), 0)];
+        // Kein Zyklus, kein zweiter Durchlauf: nur die Bruecke selbst.
+        assert_eq!(scan_tree(&mut cfg, 0).len(), 1);
+    }
+
+    #[test]
+    fn two_bridges_on_the_same_bus_do_not_double_count() {
+        let mut cfg = FakeConfig::new()
+            .with((0, 4, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01)
+            .with((0, 5, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01)
+            .with((1, 0, 0), (0x8086, 0x100E), (0x02, 0x00), 0x00);
+        cfg.secondary = alloc::vec![(PciAddress::new(0, 4, 0), 1), (PciAddress::new(0, 5, 0), 1),];
+        let tree = scan_tree(&mut cfg, 0);
+        assert_eq!(tree.len(), 3, "zwei Bruecken plus ein Geraet");
+        assert_eq!(tree.iter().filter(|d| d.address.bus == 1).count(), 1);
+    }
+
+    #[test]
+    fn a_bridge_ring_terminates() {
+        // Bus 1 zeigt zurueck auf Bus 2, Bus 2 wieder auf Bus 1.
+        let mut cfg = FakeConfig::new()
+            .with((0, 4, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01)
+            .with((1, 2, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01)
+            .with((2, 3, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01);
+        cfg.secondary = alloc::vec![
+            (PciAddress::new(0, 4, 0), 1),
+            (PciAddress::new(1, 2, 0), 2),
+            (PciAddress::new(2, 3, 0), 1),
+        ];
+        let tree = scan_tree(&mut cfg, 0);
+        assert_eq!(tree.len(), 3, "jeder Bus genau einmal");
+    }
+
+    #[test]
+    fn a_deep_chain_stops_at_the_depth_limit() {
+        let mut cfg = FakeConfig::new();
+        // Bus n hat je eine Bruecke auf Bus n+1.
+        for bus in 0..12u8 {
+            cfg = cfg.with((bus, 1, 0), (0x8086, 0x244E), (0x06, 0x04), 0x01);
+            cfg.secondary.push((PciAddress::new(bus, 1, 0), bus + 1));
+        }
+        let tree = scan_tree(&mut cfg, 0);
+        // Wurzel plus hoechstens MAX_BRIDGE_DEPTH weitere Busse.
+        assert!(tree.len() <= MAX_BRIDGE_DEPTH as usize + 1);
+        assert!(tree.len() >= 2);
     }
 }
