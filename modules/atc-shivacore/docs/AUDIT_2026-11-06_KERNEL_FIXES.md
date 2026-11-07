@@ -1880,3 +1880,41 @@ an; echte Seiten und der Wechsel nach Ring 3 laufen im Kernel bisher nur ueber
 den eingebauten USER-001-Pfad. Der naechste Schritt ist, die Bytes aus der
 Ramdisk durch genau diesen Pfad zu schicken.
 
+## Nachtrag 07.11. 17:45 — das Programm aus der Ramdisk laeuft in Ring 3
+
+Der letzte fehlende Teil ist geschlossen: die Bytes aus der Ramdisk werden nicht
+mehr nur geprueft, sie laufen.
+
+**Der Platzhalter ist ersetzt.** PID 1000 war bisher ein eingebautes Register-
+Smoke-Binary ohne Syscall. Jetzt nimmt der Bootpfad das ELF aus der Ramdisk, legt
+seinen Codesegment als Prozess an (gleiche Adresse 0x400000, gleicher Weg ueber
+`map_user_binary` nach CPL3) und laesst es laufen. Ohne Ramdisk bleibt der alte
+Platzhalter, damit ein nacktes Image weiter bootet; das Log sagt, welche Quelle
+gilt (`Quelle: Ramdisk` bzw. `Quelle: eingebaut`).
+
+**Belegt in QEMU, BIOS und UEFI, 0 Panics:**
+```
+ShivaCore: Ramdisk 6568 Bytes, ELF-Einstieg 0x400000, Code 89 Bytes
+ShivaCore: USER-001 mapped PID=1000 RIP=0x400000 RSP=0x7ffff000 (Quelle: Ramdisk)
+ShivaCore: Syscall aus Ring 3: Nr=1 PID=1000 Opcode=0x0001
+```
+Der erste Syscall im System kommt jetzt von einem Programm, das nicht im Kernel
+steckt. `Nr=1` zeigt zugleich: vorher hatte PID 1000 nie einen Syscall abgesetzt.
+
+**Ein Fehler auf dem Weg, der eine Luecke im ABI-Verstaendnis offenlegte:** Der
+erste Lauf zeigte den Prozess an `RIP=0x400012` mitten in seiner Schleife, aber
+keinen einzigen Syscall. Ursache: der Gate verlangt seit ABI 2.0 keinen Opcode im
+Register, sondern einen Argumentblock im Userspace-Speicher (Groesse, Opcode,
+Cap, Argumente) und antwortet sonst frueh mit `AbiVersionMismatch`, ohne den
+Aufruf zu zaehlen. Das Init-Programm baut den Block jetzt auf seinem Stack
+zusammen und uebergibt Zeiger, Laenge und Version in RDI/RSI/RDX. Der Block liegt
+bewusst auf dem Stack: `map_user_binary` bildet nur Code- und Datenseite ab, ein
+`.bss`-Vorrat waere nicht erreichbar. `RBX` darf im `asm!` nicht als Operand
+stehen, das ist LLVM-intern belegt; die Statusauswertung braucht spaeter einen
+anderen Weg.
+
+**Was jetzt noch fehlt, um von einem Betriebssystem zu sprechen:** ein
+Dateisystem, aus dem das Programm kommt (heute liest der Kernel die Ramdisk als
+einzelnes ELF), ein Init, das weitere Programme startet, und getrennte
+Adressraeume per CR3-Wechsel. Das Programm selbst ist da.
+
