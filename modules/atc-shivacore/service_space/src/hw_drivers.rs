@@ -9,6 +9,7 @@ use alloc::string::{String, ToString};
 #[allow(unused_imports)]
 use alloc::vec;
 use alloc::vec::Vec;
+use atc_drivers::driver_framework::{DriverRecord, DriverState, DriverSupervisor};
 use core::sync::atomic::{AtomicU64, Ordering};
 use shivacore::ats1000::Pid;
 
@@ -300,6 +301,11 @@ pub struct HpetTimer {
 }
 
 impl HpetTimer {
+    /// MMIO-Basis — dient zugleich als stabile Geraete-Id der Ueberwachung.
+    pub fn base(&self) -> u64 {
+        self.mmio.base_address()
+    }
+
     pub fn new(base_addr: u64) -> Self {
         let mmio = MmioRegion::new(base_addr, 0x400);
 
@@ -525,6 +531,11 @@ pub struct VirtioBlkDevice {
 }
 
 impl VirtioBlkDevice {
+    /// MMIO-Basis — stabile Geraete-Id der Ueberwachung.
+    pub fn base(&self) -> u64 {
+        self.mmio.base_address()
+    }
+
     pub fn new(base_addr: u64, config: VirtioBlkConfig) -> Self {
         let block_size = config.block_size as usize;
         let storage = (0..config.capacity as usize)
@@ -747,6 +758,11 @@ pub struct VirtioNetDevice {
 }
 
 impl VirtioNetDevice {
+    /// MMIO-Basis — stabile Geraete-Id der Ueberwachung.
+    pub fn base(&self) -> u64 {
+        self.mmio.base_address()
+    }
+
     pub fn new(base_addr: u64, config: VirtioNetConfig) -> Self {
         Self {
             config,
@@ -889,6 +905,11 @@ pub struct DriverManager {
     pub hpet: Option<HpetTimer>,
     pub virtio_blk: Option<VirtioBlkDevice>,
     pub virtio_net: Option<VirtioNetDevice>,
+    /// Der Lebenszyklus der Treiber liegt NICHT hier, sondern in
+    /// `atc_drivers::driver_framework` (Registered -> Active -> Faulted/Isolated).
+    /// Zwei Zustandsmodelle nebeneinander waeren zwei Wahrheiten: hier ist nur
+    /// der Zeiger darauf.
+    supervisor: DriverSupervisor,
     initialized: bool,
 }
 
@@ -905,6 +926,7 @@ impl DriverManager {
             hpet: None,
             virtio_blk: None,
             virtio_net: None,
+            supervisor: DriverSupervisor::new(),
             initialized: false,
         }
     }
@@ -938,22 +960,53 @@ impl DriverManager {
             hpet,
             virtio_blk,
             virtio_net,
+            supervisor: DriverSupervisor::new(),
             initialized: false,
         }
     }
 
     /// Initialize all discovered drivers
     pub fn init_all(&mut self) {
+        // Erst starten, dann anmelden: ein Treiber, der beim Start scheitert,
+        // steht nicht als "Active" in der Ueberwachung.
         if let Some(ref hpet) = self.hpet {
             hpet.init();
+            self.supervise("hpet", hpet.base());
         }
         if let Some(ref blk) = self.virtio_blk {
             blk.init();
+            self.supervise("virtio-blk", blk.base());
         }
         if let Some(ref net) = self.virtio_net {
             net.init();
+            self.supervise("virtio-net", net.base());
         }
         self.initialized = true;
+    }
+
+    /// Anmelden ist idempotent: ein zweiter `init_all` erzeugt keine zweite Zeile.
+    fn supervise(&mut self, name: &str, device_id: u64) {
+        if self.supervisor.get(device_id).is_some() {
+            return;
+        }
+        if self.supervisor.register(name, device_id) {
+            self.supervisor.mark_active(device_id);
+        }
+    }
+
+    /// Zustand eines Treibers, gefragt ueber seine Geraete-Id (MMIO-Basis).
+    pub fn driver_state(&self, device_id: u64) -> Option<DriverState> {
+        self.supervisor.get(device_id).map(|r| r.state)
+    }
+
+    /// Alle ueberwachten Treiber, nach Geraete-Id sortiert.
+    pub fn driver_records(&self) -> &[DriverRecord] {
+        self.supervisor.records()
+    }
+
+    /// Ein Laufzeitfehler isoliert den Treiber und landet im Ereignisprotokoll.
+    pub fn report_driver_fault(&mut self, device_id: u64, timestamp_ns: u64) -> bool {
+        self.supervisor.report_fault(device_id, timestamp_ns)
     }
 
     pub fn is_initialized(&self) -> bool {
@@ -1281,6 +1334,67 @@ mod tests {
         assert_eq!(TimerSource::resolution_ns(&timer), 100);
         timer.advance_ticks(1000);
         assert_eq!(TimerSource::now_ns(&timer), 100_000);
+    }
+
+    // ── Ein Lebenszyklus: der laufende Code benutzt den Supervisor ──
+
+    #[test]
+    fn manager_supervises_every_present_driver() {
+        let mut manager = DriverManager::simulated();
+        manager.init_all();
+        let records = manager.driver_records();
+        assert_eq!(records.len(), 3, "hpet, virtio-blk, virtio-net");
+        assert!(records.iter().all(|r| r.state == DriverState::Active));
+        // Geraete-Ids sind die MMIO-Basen, also stabil und eindeutig.
+        let ids: Vec<u64> = records.iter().map(|r| r.device_id).collect();
+        let mut sorted = ids.clone();
+        sorted.sort_unstable();
+        sorted.dedup();
+        assert_eq!(ids.len(), sorted.len(), "Ids muessen eindeutig sein");
+        assert_eq!(
+            manager.driver_state(manager.virtio_blk.as_ref().unwrap().base()),
+            Some(DriverState::Active)
+        );
+    }
+
+    #[test]
+    fn manager_reports_a_state_only_for_supervised_ids() {
+        let mut manager = DriverManager::simulated();
+        manager.init_all();
+        assert_eq!(manager.driver_state(0xDEAD_0000), None);
+    }
+
+    #[test]
+    fn manager_init_is_idempotent() {
+        let mut manager = DriverManager::simulated();
+        manager.init_all();
+        manager.init_all();
+        assert_eq!(
+            manager.driver_records().len(),
+            3,
+            "zweiter Start keine zweite Zeile"
+        );
+    }
+
+    #[test]
+    fn manager_fault_isolates_the_driver_and_writes_an_event() {
+        let mut manager = DriverManager::simulated();
+        manager.init_all();
+        let id = manager.virtio_net.as_ref().unwrap().base();
+        assert!(manager.report_driver_fault(id, 42));
+        assert_eq!(manager.driver_state(id), Some(DriverState::Isolated));
+        // Der Fehler ist nicht spurlos: das Ereignisprotokoll kennt ihn.
+        let event = manager
+            .supervisor
+            .events
+            .latest()
+            .expect("Ereignis geschrieben");
+        assert_eq!(event.code.as_str(), "SC-DRV-0008");
+        // Und er trifft nur diesen Treiber.
+        assert_eq!(
+            manager.driver_state(manager.hpet.as_ref().unwrap().base()),
+            Some(DriverState::Active)
+        );
     }
 
     #[test]
