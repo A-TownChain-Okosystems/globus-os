@@ -1789,3 +1789,48 @@ Image kein Service Space startet. Die Kette Kernel-Vorrat → Registratur ist
 damit durchgaengig gebaut und einzeln belegt, im laufenden System aber noch
 nicht in Betrieb.
 
+## Nachtrag 07.11. 16:35 — Service Space ins Image: erst der Zyklus, dann die erste Stufe
+
+Der naechste Schritt sollte sein, den Service Space ins Kernel-Image zu nehmen und
+beim Boot zu starten. Beim Nachsehen fiel der Grund auf, warum das so nicht geht:
+
+**`service_space/Cargo.toml` haengt an der Kernel-Crate** (`shivacore = { path =
+"../kernel" }`), gebraucht fuer `boot_devices`, `capability`, `pci_scan`,
+`madt`, `acpi_devices`. Damit kann der Kernel den Service Space nicht
+einbinden: das waere ein Zyklus, und er verstoesst gegen die Hausregel
+"Modulabhaengigkeiten nur abwaerts". Ein Service Space im Image ist ausserdem
+die falsche Vorstellung: er ist ein Userspace-Programm, kein Kernelmodul. Der Weg
+ins Image fuehrt ueber die Ramdisk und den ELF-Loader, nicht ueber eine
+Cargo-Abhaengigkeit. Die Ramdisk ist derzeit leer (`ramdisk: Region { len: 0 }`),
+deshalb startet nichts.
+
+**Erste Stufe der Aufloesung, jetzt umgesetzt:** Die beiden reinen
+Enumerationstypen sind in die gemeinsame API-Crate gewandert.
+
+* `madt.rs` und `acpi_devices.rs` liegen jetzt in `system/shivacore-api/src/`.
+* `libshivacore` ist dafuer `#![cfg_attr(not(test), no_std)]` und fuehrt
+  `extern crate alloc` (fuer die `Vec` der Geraeteliste).
+* Der Kernel re-exportiert sie (`pub use libshivacore::{acpi_devices, madt}`),
+  die Pfade `shivacore::madt::…` und `shivacore::acpi_devices::…` bleiben also
+  gueltig, im Bootpfad hat sich nichts geaendert.
+* Der Service Space importiert `AcpiDevice` jetzt aus `libshivacore`, nicht mehr
+  aus der Kernel-Crate. Die Kernel-Abhaengigkeit des Service Space ist damit um
+  zwei Module kleiner, nicht weg.
+
+**Belegt:** 1712 Tests (unveraendert; 692 Kernel, 754 Service Space,
+**36 API** statt 24, weil die 12 ACPI-Tests mitgezogen sind), 30 Suiten,
+fmt und clippy Exit 0, BIOS und UEFI ohne Panic mit `ACPI-Geraete: 3 (LAPIC,
+IOAPIC, HPET)`, `Geraetevorrat: 6 Geraete` und laufenden Ring-3-Syscalls.
+
+**Zwei Fehler auf dem Weg, beide selbst gemacht:** Der Re-Export landete zwischen
+`#[cfg(test)]` und `pub mod allocator;`, wodurch das Gate auf den Re-Export
+rutschte und der Kernel im Normalbau kein `crate::acpi_devices` mehr hatte
+("found an item that was configured out"). Und clippy meldete im neuen Crate zwei
+verschachtelte `if let`-Bloecke, weil die Kernel-Crate ihre Lints per
+`#![allow(...)]` stilllegt, `libshivacore` aber nicht; geloest ueber
+`Option::filter` statt Verschachtelung.
+
+**Naechster echter Schritt:** Service Space als eigenstaendiges Ziel bauen
+(eigener `_start`, fester Ladebereich), in die Ramdisk legen und vom
+`elf_loader` starten lassen. Erst damit ruft jemand `sync_acpi_from_boot()`.
+
