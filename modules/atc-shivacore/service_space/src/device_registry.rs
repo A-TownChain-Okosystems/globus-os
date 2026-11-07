@@ -369,6 +369,25 @@ impl DeviceRegistry {
         outcome
     }
 
+    /// Den Geraetevorrat des Bootlaufs uebernehmen.
+    ///
+    /// Das ist der Anschluss, der bisher fehlte: der Kernel hat die Geraete
+    /// gefunden, aber niemand konnte sie zur Laufzeit abfragen. `sync_from_store`
+    /// nimmt einen beliebigen Vorrat (testbar), `sync_from_boot` den des
+    /// laufenden Systems.
+    pub fn sync_from_store(
+        &mut self,
+        store: &shivacore::boot_devices::DeviceStore,
+    ) -> DiscoveryOutcome {
+        self.sync_from_hardware(&store.snapshot())
+    }
+
+    /// Den Vorrat des laufenden Systems uebernehmen. Der Weg, den der Service
+    /// Space beim Start geht.
+    pub fn sync_from_boot(&mut self) -> DiscoveryOutcome {
+        self.sync_from_store(&shivacore::boot_devices::BOOT_DEVICES)
+    }
+
     /// Wie viele Eintraege ohne Cap-Prüfung uebernommen wurden. Steht nicht in
     /// `RegistryStats`, weil das eine andere Frage ist: nicht "wer wurde
     /// abgelehnt", sondern "wie viel kam ungeprueft herein".
@@ -723,5 +742,31 @@ mod tests {
             Pid(7)
         );
         assert_eq!(reg.owner_of(entry.id), Some(Pid(7)));
+    }
+
+    #[test]
+    fn the_boot_store_is_the_missing_link() {
+        let store = shivacore::boot_devices::DeviceStore::new();
+        store.publish(alloc::vec![
+            pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00),
+            pci(0, 3, 0, 0x8086, 0x100E, 0x02, 0x00),
+        ]);
+        let mut reg = DeviceRegistry::new();
+        let outcome = reg.sync_from_store(&store);
+        assert_eq!(outcome.adopted, 2);
+        assert_eq!(reg.list().len(), 2);
+        // Und der zweite Start mit demselben Vorrat aendert nichts.
+        let again = reg.sync_from_store(&store);
+        assert_eq!(again.adopted, 0);
+        assert_eq!(again.already_known, 2);
+    }
+
+    #[test]
+    fn an_empty_store_leaves_the_registry_untouched() {
+        let store = shivacore::boot_devices::DeviceStore::new();
+        let mut reg = DeviceRegistry::new();
+        let outcome = reg.sync_from_store(&store);
+        assert_eq!(outcome, DiscoveryOutcome::default());
+        assert!(reg.list().is_empty());
     }
 }
