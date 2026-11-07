@@ -1,7 +1,7 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Erzeugt:** 2026-11-07 aus `git ls-files` · **Dateien:** 504
+> **Erzeugt:** 2026-11-07 aus `git ls-files`, Zeilenzahlen aus dem committeten Stand (`git show HEAD:<datei>`) · **Dateien:** 504
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
 >
 > Der vorige Stand war ueber die GitHub-Trees-API vom 2026-09-10 und nannte 209
@@ -36,7 +36,7 @@
 | `CHANGELOG.md` | 7 |
 | `CODEOWNERS` | 3 |
 | `CONTRIBUTING.md` | 9 |
-| `Cargo.lock` | 5.341 |
+| `Cargo.lock` | 5.336 |
 | `Cargo.toml` | 23 |
 | `FILE_REGISTER.md` | 517 |
 | `LICENSE` | 202 |
@@ -62,7 +62,7 @@
 | `docs/WINDOWS_OS_FEATURE_REFERENCE.json` | 298 |
 | `docs/WINDOWS_OS_FEATURE_REFERENCE.md` | 96 |
 | `docs/architecture/GLOBUSOS_PLATFORM_ARCHITECTURE.md` | 229 |
-| `docs/assets/shivacore-boot-framebuffer.png` | 4 |
+| `docs/assets/shivacore-boot-framebuffer.png` | 0 |
 | `docs/audits/GLOBUSOS_MICROKERNEL_MIGRATION_INVENTORY_2026-10-18.md` | 96 |
 | `docs/audits/IMPLEMENTATION-REVIEW-2026-09-16.md` | 18 |
 | `docs/audits/P1-LKM-DEPENDENCY-API-FIX.md` | 31 |
@@ -250,7 +250,7 @@
 | `modules/atc-shivacore/ARCHITECTURE.md` | 112 |
 | `modules/atc-shivacore/CHANGELOG.md` | 21 |
 | `modules/atc-shivacore/COMPONENT_PLAN.md` | 732 |
-| `modules/atc-shivacore/FILE_REGISTER.md` | 121 |
+| `modules/atc-shivacore/FILE_REGISTER.md` | 120 |
 | `modules/atc-shivacore/LICENSE` | 17 |
 | `modules/atc-shivacore/README.md` | 1.101 |
 | `modules/atc-shivacore/ROADMAP.md` | 21 |
