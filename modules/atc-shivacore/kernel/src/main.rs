@@ -242,6 +242,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 kind
             );
         }
+        // Der Vorrat ist der Ort, an dem der Service Space spaeter nachfragt;
+        // das Log ist nur die Quittung fuer den Boot.
+        let published = shivacore::boot_devices::BOOT_DEVICES.publish(devices.clone());
+        serial_println!(
+            "ShivaCore: Geraetevorrat: {} Geraete fuer den Service Space abrufbar",
+            published
+        );
         let count = |kind: DeviceKind| devices.iter().filter(|d| d.kind() == kind).count();
         serial_println!(
             "ShivaCore: SC-006 PCI-Enumeration: {} Geraete (storage={} network={} display={} bridge={} usb={} other={})",
