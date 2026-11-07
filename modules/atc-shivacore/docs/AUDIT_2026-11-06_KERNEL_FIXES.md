@@ -1196,3 +1196,45 @@ failed**, `cargo clippy --workspace --all-targets -- -D warnings` 0. Auf
 Nightly: Kernel-ELF gebaut, Builder gebaut, beide Images erzeugt,
 `scripts/qemu_boot.sh` Exit 0, QEMU-BIOS-Lauf ohne Panic und ohne Seitenfehler.
 
+## Nachtrag 07.11. 01:55 — Geraete-Enumeration im Service Space (REQ-SC006-11)
+
+Befund: Ein Dienst, der ein Geraet benutzen will, konnte es nicht finden. Die
+Geraeteliste lebte im Kernel, im Service Space gab es nichts, und ein Prozess
+haette raten muessen, welche Kennung er in eine Device-Cap schreiben laesst.
+REQ-SC006-11 war damit unerfuellt.
+
+Umgesetzt: `service_space/src/device_registry.rs`.
+
+Die Registratur trennt zwei Dinge, die leicht verwechselt werden:
+
+- **Finden ist offen.** Kennung, Klasse und Name sind Metadaten
+  (`list`, `list_class`, `get`). Ohne sie koennte kein Dienst je eine Cap
+  anfragen; wer sie sieht, hat noch nichts gewonnen. Die Liste ist nach Kennung
+  sortiert, damit zwei Abfragen desselben Stands dieselbe Antwort geben.
+- **Besitzen ist geprueft.** `register` und `claim` verlangen eine Device-Cap,
+  die **genau dieses** Geraet adressiert und `ACCESS` traegt. Ein Geraet hat
+  genau einen Besitzer: ein zweiter Anspruch wird abgelehnt
+  (`AlreadyClaimed`), nicht ueberschrieben. Freigeben und Entfernen darf nur der
+  Besitzer (`NotTheOwner`).
+
+Dieselbe Regel wie in der DMA-Autorisierung (`dma_auth.rs`): eine Cap oeffnet
+genau ihr Geraet. Eine Registratur, die beim Anspruch nur "ist die Cap gueltig?"
+fragt, waere ein Generalschluessel fuer alle Geraete.
+
+Fehlerbild bewusst getrennt: `NotADeviceCap`, `MissingAccess`, `WrongDevice`,
+`AlreadyRegistered`, `UnknownDevice`, `AlreadyClaimed`, `NotTheOwner`. Zaehler
+`registered`, `claimed`, `denied_no_cap`, `denied_foreign_claim`, damit
+"abgelehnt" nicht wie "nie gefragt" aussieht.
+
+Verifikation: 9 Tests (`service_space::device_registry::tests`), darunter:
+Registrieren braucht Gewalt ueber genau dieses Geraet, Memory-Cap ist keine
+Device-Cap, doppelte Kennung wird abgelehnt statt ueberschrieben, Liste sortiert
+und filterbar, Anspruch braucht die passende Cap, zweiter Besitzer abgelehnt,
+Freigabe oeffnet das Geraet fuer den naechsten Besitzer, Entfernen nur durch den
+Besitzer, Zaehler trennen Ablehnung von Nichtfrage.
+
+**Noch offen:** Die Eintraege kommen aus einer uebergebenen Liste. Es wird keine
+Hardware abgefragt — kein ACPI-Walk, kein MADT-Durchlauf, keine Hotplug-Quelle.
+Das Einsammeln ist die naechste Stufe; die Registratur ist die Stelle, an der
+diese Quelle spaeter einhaengt, ohne dass sich an den Rechten etwas aendert.
+
