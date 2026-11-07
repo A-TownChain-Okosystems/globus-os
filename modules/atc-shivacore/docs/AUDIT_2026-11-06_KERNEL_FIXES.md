@@ -1384,3 +1384,47 @@ Tests in `device_registry`, 1506 im Workspace.
 `sync_from_boot()` gehoert also in seinen Startpfad, nicht in den Kernel. Die
 Daten sind abrufbar, die Verbindung steht bereit; wer sie zieht, fehlt.
 
+## Nachtrag 07.11. 12:10 — Busse hinter Bruecken
+
+Die Enumeration kannte nur Bus 0. Auf einer Maschine mit Steckplaetzen oder
+Root-Ports haengt der groesste Teil der Geraete hinter einer Bruecke und war
+damit unsichtbar. `scan_tree` folgt jetzt jeder Bruecke.
+
+Regeln:
+
+- **Bruecke erkennen.** 0x06/0x04 ist die gewoehnliche PCI-zu-PCI-Bruecke,
+  0x06/0x09 die halbtransparente, 0x06/0x07 die CardBus-Variante. Die
+  ISA-Bruecke (0x06/0x01) fuehrt zu keinem PCI-Bus und wird nicht verfolgt —
+  sonst wuerde der Scan bei jeder Southbridge ins Leere laufen.
+- **Sekundaerbus lesen.** Register 0x18 traegt primaeren (7:0), sekundaeren
+  (15:8) und untergeordneten Bus (23:16). Nur der sekundaere ist der Einstieg;
+  die untergeordnete Nummer sagt bloss, wie weit der Baum reicht. Bus 0 als
+  Sekundaerbus gilt als nicht konfiguriert — manche Firmware traegt das ein.
+- **Jeder Bus einmal.** `visited` haelt fest, was dran war: zwei Bruecken auf
+  denselben Bus zaehlen nicht doppelt, und eine Ringverbindung laeuft nicht ewig.
+- **Tiefenbegrenzung.** Acht Etagen (`MAX_BRIDGE_DEPTH`) sind fuer echte
+  Maschinen reichlich; die Grenze schuetzt vor einer kaputten Firmware-Tabelle.
+- **Stabile Reihenfolge.** Nach dem Sammeln wird nach Bus, Geraet und Funktion
+  sortiert, damit das Ergebnis nicht von der Reihenfolge des Ablaufs abhaengt.
+
+Bootbeleg, QEMU i440fx mit zusaetzlicher Bruecke (`-device pci-bridge` und eine
+zweite e1000 dahinter), BIOS und UEFI identisch:
+
+```
+PCI 00:04.0 1b36:0001 bridge
+PCI 01:00.0 8086:100e network      <- hinter der Bruecke
+SC-006 PCI-Enumeration: 8 Geraete (storage=1 network=2 display=1 bridge=4 usb=0 other=0)
+```
+
+Ohne die Bruecke bleibt es bei den bekannten 6 Geraeten. Der Unterschied ist der
+Beleg: 00:04.0 und 01:00.0 erscheinen nur, weil der Scan der Bruecke folgt.
+
+Testbasis: 6 neue Tests, zusammen 16 in `pci_scan` — ISA-Bruecke ist keine
+PCI-Bruecke, Verfolgen zum Bus dahinter (flacher Scan findet 1, Baum-Scan 2),
+Bruecke auf Bus 0 wird ignoriert, zwei Bruecken auf denselben Bus zaehlen nicht
+doppelt, Ringverbindung endet, tiefe Kette stoppt an der Grenze.
+
+**Noch offen:** ACPI/MADT als zweite Quelle (Geraete ohne PCI-Klasse), und die
+Uebergabe an die Registratur erfolgt weiterhin nur ueber den Vorrat, nicht durch
+einen laufenden Service Space.
+
