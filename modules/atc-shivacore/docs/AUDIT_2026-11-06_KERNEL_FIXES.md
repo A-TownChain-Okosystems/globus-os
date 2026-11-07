@@ -1122,3 +1122,46 @@ eingesetzt), `mov esi, 0x11`, `mov r9d, 0x00010000`, `mov rdx, 1`, `int 0x80`,
 Grenze: Der Prozess POLLT in einer engen Schleife. Ein blockierendes Warten
 (Prozess schlafen bis Ereignis) braucht einen Syscall mit Wartesemantik und
 damit eine ABI-Entscheidung. 659 Tests, BIOS+UEFI 0 Panics.
+
+## Nachtrag 07.11. 01:20 — DMA-Autorisierung ueber Device-Caps (REQ-SC006-09)
+
+Befund: `system/devices/src/iommu.rs` beschreibt den IOMMU-Vertrag
+(`create_domain`, `assign_device`, `map`, `unmap`) und `SoftwareIommu` setzt ihn
+nach. Im Kernel gab es aber keinen Pfad, der ueberhaupt entscheidet, **wer**
+fuer **welches** Geraet eine Domain bekommt. Ein Device-Cap wurde damit nirgends
+befragt; REQ-SC006-09 war unerfuellt.
+
+Umgesetzt: `kernel/src/dma_auth.rs` als Policy-Schicht zwischen Device-Cap und
+IOMMU-Vertrag.
+
+- `assign_device(cap, device)`: verlangt eine Cap vom Typ `Device` mit
+  `ACCESS`, und die Cap muss genau dieses Geraet adressieren. Ein Geraet bekommt
+  genau eine Domain; eine zweite waere ein zweiter Weg in denselben Speicher.
+- `map_window(cap, domain, window)`: dieselbe Rechtepruefung, zusaetzlich muss
+  die Domain dem Eigentuemer der Cap gehoeren. Fremde Prozesse koennen eine
+  Domain weder befuellen noch abraeumen.
+- Bereichspruefung vor der Eintragung: leer, ueberlaufend oder groesser als
+  `MAX_WINDOW_BYTES` (64 MiB) wird abgelehnt, nicht gekuerzt.
+- Zaehler `authorized`, `denied_wrong_device`, `denied_missing_access`,
+  `denied_foreign_domain`, damit "abgelehnt" nicht wie "nie gefragt" aussieht.
+
+Zwei Eigenschaften sind der Kern: eine Device-Cap autorisiert **kein** zweites
+Geraet (sonst waere jede Cap ein Generalschluessel), und die Domain gehoert dem
+Prozess, nicht dem Geraet.
+
+Reihenfolge der Pruefung ist Absicht: erst die Art der Cap, dann das Recht, dann
+die Identitaet. Ein falsches Geraet ist ein anderer Fehler als ein fehlendes
+Recht, und bei der Fehlersuche ist der Unterschied entscheidend.
+
+Verifikation: 7 Tests in `dma_auth::tests` (eigenes Geraet, Memory-Cap ist keine
+Device-Cap, zweite Domain abgelehnt, fremder Prozess abgelehnt, Bereichspruefung
+vor der Eintragung, Rundlauf von Eintragen und Abraeumen, Domains je
+Eigentuemer).
+
+**Noch offen bleibt die Hardware-Haelfte.** Diese Schicht entscheidet und
+zaehlt; sie schreibt keine IOMMU-Seitentabellen und behandelt keine DMA-Faults.
+Ohne diese Anbindung ist REQ-SC006-09 geprueft entschieden, aber nicht
+erzwungen — genau die Luecke, die im Audit vom 06.11. schon fuer
+REQ-SC006-02/03 beschrieben war und dort durch die Bruecke geschlossen wurde.
+Der naechste Schritt waere die Anbindung an `system/devices` samt Fault-Pfad.
+
