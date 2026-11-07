@@ -148,6 +148,41 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         lapic.id(),
         spurious
     );
+
+    // Adressraum-Selbsttest: Kann der Kernel in einer selbstgebauten Tabelle
+    // weiterlaufen — inklusive Timer-IRQ ueber die LAPIC-MMIO-Seite?
+    //
+    // Der Test schaltet wirklich um und wieder zurueck. Eine falsch geerbte
+    // Tabelle beendet den Boot an dieser Stelle sofort und unmissverstaendlich;
+    // ein Kommentar kann das nicht leisten. Gewartet wird auf Timer-Ticks, weil
+    // deren Zustellung den LAPIC-Zugriff im neuen Adressraum erzwingt.
+    if let Some(space) = unsafe {
+        shivacore::addr_space::AddressSpace::create(phys_mem_offset, &mut frame_allocator)
+    } {
+        let (boot_frame, boot_flags) = shivacore::addr_space::active();
+        let before = crate::interrupts::TIMER_TICKS.load(core::sync::atomic::Ordering::Acquire);
+        space.install();
+        let mut spins = 0u64;
+        while crate::interrupts::TIMER_TICKS.load(core::sync::atomic::Ordering::Acquire)
+            < before + 3
+        {
+            spins += 1;
+            if spins > 200_000_000 {
+                break;
+            }
+            core::hint::spin_loop();
+        }
+        let ticks =
+            crate::interrupts::TIMER_TICKS.load(core::sync::atomic::Ordering::Acquire) - before;
+        shivacore::addr_space::restore(boot_frame, boot_flags);
+        serial_println!(
+            "ShivaCore: Adressraum-Selbsttest: Tabelle 0x{:X} aktiv, {} Timer-Ticks im eigenen Raum, Kernel laeuft",
+            space.frame().start_address().as_u64(),
+            ticks
+        );
+    } else {
+        serial_println!("ShivaCore: Adressraum-Selbsttest uebersprungen (kein Frame frei)");
+    }
     let probe_vector = 0x40u32;
     lapic
         .mask(probe_vector)
