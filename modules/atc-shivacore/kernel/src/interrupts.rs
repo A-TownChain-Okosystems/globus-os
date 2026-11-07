@@ -309,6 +309,13 @@ lazy_static! {
         // wiederholen.
         unsafe {
             idt.page_fault.set_handler_addr(fault_trampoline_addr());
+            // Schutzverletzung bringt einen Fehlercode mit, also derselbe
+            // Aufbau wie beim Seitenfehler — nur ein anderer Bericht.
+            idt.general_protection_fault
+                .set_handler_addr(general_protection_trampoline_addr());
+            // Ungueltiger Opcode bringt keinen mit.
+            idt.invalid_opcode
+                .set_handler_addr(fault_trampoline_nocode_addr());
         }
         unsafe {
             idt.double_fault
@@ -594,14 +601,25 @@ shivacore_timer_trampoline:
 
 global_asm!(
     r#"
+    // Drei Einsprünge, ein Rumpf. Der Unterschied zwischen den Ausnahmen ist
+    // nur, ob die CPU einen Fehlercode auf den Stapel legt und welche Art im
+    // Bericht steht — nicht, wie der Rahmen aussieht. Zwei fast gleiche
+    // Rümpfe wären die nächste Stelle, an der eine Korrektur nur an einer
+    // Hälfte ankommt.
+    //
+    // Art-IDs: 0 = Seitenfehler, 1 = Schutzverletzung, 2 = Ungueltiger Opcode.
     .global shivacore_fault_trampoline
 shivacore_fault_trampoline:
-    // Bei Ausnahmen mit Fehlercode legt die CPU den Code VOR den Rahmen:
-    // [err][rip][cs][rflags][rsp][ss]. Er wird in ein Scratch-Register geholt,
-    // damit danach derselbe Aufbau wie beim Timer steht und `UserTrapFrame`
-    // unveraendert gilt. Der Prozess, dessen r11 hier steht, wird beendet; sein
-    // Registerwert ist damit ohne Belang.
     pop r11
+    mov edx, 0
+    jmp shivacore_fault_common
+    .global shivacore_gp_trampoline
+shivacore_gp_trampoline:
+    pop r11
+    mov edx, 1
+    jmp shivacore_fault_common
+
+shivacore_fault_common:
     push r15
     push r14
     push r13
@@ -618,10 +636,8 @@ shivacore_fault_trampoline:
     push rbx
     push rax
     mov rdi, rsp
-    // Fehlercode als zweites Argument. Lage nachrechnen statt raten: 15 Pushes
-    // (120 Byte), r11 war der fuenfte Push von oben, also 15-5 = 10 Felder
-    // ueber dem Stapelzeiger -> rsp + 80. Mit dem falschen Offset (32) landete
-    // r13 im Fehlercode und das Log behauptete "Lesen" statt "Schreiben".
+    // Fehlercode: 15 Pushes (120 Byte), r11 war der fuenfte Push von oben,
+    // also 15-5 = 10 Felder ueber dem Stapelzeiger -> rsp + 80.
     mov rsi, [rsp + 80]
     call {handler}
     pop rax
@@ -640,8 +656,48 @@ shivacore_fault_trampoline:
     pop r14
     pop r15
     iretq
+
+    .global shivacore_fault_trampoline_nocode
+shivacore_fault_trampoline_nocode:
+    // Ungueltiger Opcode legt keinen Fehlercode ab: der Rahmen beginnt direkt
+    // mit RIP, deshalb hier kein pop.
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov rdi, rsp
+    xor esi, esi
+    mov edx, 2
+    call {handler}
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    iretq
 "#,
-    handler = sym fault_trap_rust
+    handler = sym exception_trap_rust
 );
 
 /// Fasst die Ausnahme an, statt sie zu wiederholen.
@@ -650,12 +706,28 @@ shivacore_fault_trampoline:
 /// nicht in den fehlerhaften Prozess, sondern in den naechsten lauffaehigen.
 /// Genau das war vorher die Luecke — der alte Handler gab nur aus und kehrte
 /// zurueck, die Ausnahme loeste sofort wieder aus und die Maschine haengte.
+///
+/// `kind` kommt als Zahl aus dem Assembly (0/1/2). Der Weg ueber eine Zahl ist
+/// kein Schoenheitsfehler: die drei Einsprünge teilen sich einen Rumpf, damit
+/// eine Korrektur nicht nur an einer Haelfte ankommt.
 #[no_mangle]
-extern "C" fn fault_trap_rust(frame: &mut UserTrapFrame, error_code: u64) {
+extern "C" fn exception_trap_rust(frame: &mut UserTrapFrame, error_code: u64, kind: u32) {
+    handle_exception(
+        frame,
+        error_code,
+        shivacore::fault::ExceptionKind::from_id(kind),
+    );
+}
+
+fn handle_exception(
+    frame: &mut UserTrapFrame,
+    error_code: u64,
+    kind: shivacore::fault::ExceptionKind,
+) {
     use x86_64::registers::control::Cr2;
 
     let origin = shivacore::fault::Origin::from_cs(frame.cs);
-    let action = shivacore::fault::decide(origin);
+    let action = shivacore::fault::decide(kind, origin);
     let report = shivacore::fault::FaultReport::from_error_code(error_code);
     // Cr2::read liefert in dieser Fassung ein Result; die Zahl ist das, was im
     // Log steht, nicht die Debug-Form.
@@ -671,15 +743,43 @@ extern "C" fn fault_trap_rust(frame: &mut UserTrapFrame, error_code: u64) {
                 .lock()
                 .as_ref()
                 .and_then(|scheduler| scheduler.current_pid());
-            serial_println!(
-                "ShivaCore: Prozessfehler PID={:?} Adresse={:#x} ({}), Usermodus={} [beendet: {}, Kernel: {}]",
-                pid,
-                address,
-                report.describe(),
-                report.from_user,
-                recorded.terminated,
-                recorded.kernel_faults
-            );
+            // Was im Log steht, muss zur Ausnahme passen. Der Fehlercode
+            // bedeutet je Vektor etwas anderes, und beim ungueltigen Opcode
+            // gibt es keinen — CR2 steht dann auf dem letzten Wert und hat mit
+            // diesem Fehler nichts zu tun.
+            match kind {
+                shivacore::fault::ExceptionKind::PageFault => serial_println!(
+                    "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus={} [beendet: {}, Kernel: {}]",
+                    kind.name(),
+                    pid,
+                    address,
+                    report.describe(),
+                    report.from_user,
+                    recorded.terminated,
+                    recorded.kernel_faults
+                ),
+                shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
+                    // Bei der Schutzverletzung ist der Fehlercode eine
+                    // Segmentauswahl oder 0 — Bit 2 sagt hier NICHT, ob der
+                    // Zugriff aus Ring 3 kam. Der Ring steht im Code-Segment
+                    // des Rahmens, deshalb `origin` und nicht `report`.
+                    "ShivaCore: {} PID={:?} Fehlercode={:#x} Usermodus={} [beendet: {}, Kernel: {}]",
+                    kind.name(),
+                    pid,
+                    error_code,
+                    origin == shivacore::fault::Origin::User,
+                    recorded.terminated,
+                    recorded.kernel_faults
+                ),
+                shivacore::fault::ExceptionKind::InvalidOpcode => serial_println!(
+                    "ShivaCore: {} PID={:?} ohne Fehlercode, Usermodus={} [beendet: {}, Kernel: {}]",
+                    kind.name(),
+                    pid,
+                    origin == shivacore::fault::Origin::User,
+                    recorded.terminated,
+                    recorded.kernel_faults
+                ),
+            };
             let next = {
                 let mut guard = USER_SCHEDULER.lock();
                 let scheduler = guard.as_mut();
@@ -710,7 +810,8 @@ extern "C" fn fault_trap_rust(frame: &mut UserTrapFrame, error_code: u64) {
         }
         shivacore::fault::FaultAction::PanicKernel => {
             panic!(
-                "Kernelausnahme: Adresse={:#x} ({}), Ring 0",
+                "Kernelausnahme {}: Adresse={:#x} ({}), Ring 0",
+                kind.name(),
                 address,
                 report.describe()
             );
@@ -916,13 +1017,25 @@ fn timer_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_timer_trampoline as usize as u64)
 }
 
-/// Adresse des Ausnahme-Trampolins fuer die IDT.
+/// Adresse des Ausnahme-Trampolins fuer die IDT (mit Fehlercode).
 fn fault_trampoline_addr() -> VirtAddr {
     VirtAddr::new(shivacore_fault_trampoline as usize as u64)
 }
 
+/// Adresse des Einsprungs fuer die Schutzverletzung.
+fn general_protection_trampoline_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_gp_trampoline as usize as u64)
+}
+
+/// Adresse des Ausnahme-Trampolins ohne Fehlercode.
+fn fault_trampoline_nocode_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_fault_trampoline_nocode as usize as u64)
+}
+
 extern "C" {
     fn shivacore_fault_trampoline();
+    fn shivacore_gp_trampoline();
+    fn shivacore_fault_trampoline_nocode();
 }
 
 /// Register-Konvention nach SC-004 §3 (Cap-Slot, Opcode, 4 Argument-Woerter,
