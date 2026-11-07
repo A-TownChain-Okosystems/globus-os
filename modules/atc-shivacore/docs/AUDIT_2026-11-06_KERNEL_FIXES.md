@@ -2087,3 +2087,53 @@ Prozesses wird nicht freigegeben (die Seiten bleiben belegt), und die Zombies
 werden nicht eingesammelt. Und die Trennung bleibt halb: ohne eigenen CR3 je
 Prozess kann ein laufendes Programm den Speicher eines anderen lesen.
 
+## Nachtrag 07.11. 20:25 — alle drei Ausnahmen haben ein Tor
+
+**Der Rest des Befunds.** Nach FAULT-001 hatte nur der Seitenfehler einen
+Trampolin. General Protection und ungueltiger Opcode hatten gar keinen Handler:
+ein Programm, das eine privilegierte Anweisung versucht, haette die Maschine
+weiterhin angehalten.
+
+**Ein Rumpf, drei Einsprünge** (`interrupts.rs`). Die drei Ausnahmen
+unterscheiden sich nur darin, ob die CPU einen Fehlercode auf den Stapel legt
+und wie der Bericht heisst — nicht im Aufbau des Rahmens. Zwei fast gleiche
+Rümpfe waeren die naechste Stelle, an der eine Korrektur nur an einer Haelfte
+ankommt. Also: Seitenfehler und Schutzverletzung springen nach `pop r11` in
+einen gemeinsamen Rumpf und uebergeben die Art als Zahl (0/1/2), der ungueltige
+Opcode hat wegen des fehlenden Fehlercodes einen eigenen, kurzen Rumpf.
+`ExceptionKind` sagt in `fault.rs`, ob ein Fehlercode zu erwarten ist —
+`has_error_code` ist die Angabe, an der ein falscher Trampolin den Rahmen
+verschiebt und Muell als RIP liest.
+
+**Belegt in QEMU, BIOS und UEFI, 0 Panics**, mit zwei weiteren Programmen:
+`crash_gp.rs` (`hlt` aus Ring 3), `crash_ud.rs` (`ud2`):
+```
+ShivaCore: Schutzverletzung PID=Some(Pid(1003)) Fehlercode=0x0 Usermodus=true [beendet: 1, Kernel: 0]
+ShivaCore: Ungueltiger Opcode PID=Some(Pid(1003)) ohne Fehlercode, Usermodus=true [beendet: 1, Kernel: 0]
+ShivaCore: Seitenfehler PID=Some(Pid(1003)) Adresse=0xdead000 (Seite nicht vorhanden, Schreiben) Usermodus=true [beendet: 1, Kernel: 0]
+```
+In allen drei Faellen `weiter mit PID=1000`, danach null Wechsel auf 1003. Image
+mit `init` und `probe`: kein Prozessfehler. Die Entscheidung haengt am Ring, die
+Art aendert nur den Bericht — sonst entstuende ein Schlupfloch, das davon
+abhaengt, welche Anweisung ein Programm benutzt.
+
+**Zwei eigene Fehler, beide in der Ausgabe statt im Absturz.**
+1. Das Log schrieb bei der Schutzverletzung "Seite nicht vorhanden, Lesen".
+   Der Fehlercode bedeutet je Vektor etwas anderes, und beim ungueltigen Opcode
+   gibt es keinen; CR2 steht dann auf dem letzten Wert. Jetzt hat jede Art ihre
+   eigene Zeile: Adresse beim Seitenfehler, roher Fehlercode bei der
+   Schutzverletzung, "ohne Fehlercode" beim Opcode.
+2. Bei der Schutzverletzung stand `Usermodus=false`, obwohl der Prozess aus
+   Ring 3 kam: Bit 2 des Fehlercodes ist dort eine Segmentauswahl, nicht das
+   User-Bit. Der Ring kommt jetzt aus dem Code-Segment des Rahmens.
+
+**Und die Makro-Falle ein fuenftes Mal.** `serial_println!` in Match-Armen
+scheitert an "trailing semicolon in macro used in expression position". Diesmal
+an der Definition behoben statt an der Aufrufstelle: `serial_print!` expandiert
+jetzt zu einem Block (`{{ ...; }}`), und ein Block ist ein Ausdruck. Damit ist
+die Falle zum fuenften Mal aufgetreten und zum ersten Mal zugemacht.
+
+**Ehrliche Grenzen.** Der Adressraum eines beendeten Prozesses wird weiterhin
+nicht freigegeben, die Zombies werden nicht eingesammelt, und ohne eigenen CR3
+je Prozess bleibt die Speichertrennung halb.
+
