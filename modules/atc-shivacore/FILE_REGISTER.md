@@ -23,7 +23,7 @@
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 12 | toml |
 | `./boot/src/main.rs` | 31 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.671 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.715 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -91,7 +91,7 @@
 | `./legacy/kernel-src-uncompiled/threads.rs` | 1.468 | rs |
 | `./legacy/kernel-src-uncompiled/tracing.rs` | 2.255 | rs |
 | `./legacy/kernel-src-uncompiled/user_io.rs` | 1.324 | rs |
-| `./service_space/Cargo.toml` | 21 | toml |
+| `./service_space/Cargo.toml` | 32 | toml |
 | `./service_space/src/ai.rs` | 891 | rs |
 | `./service_space/src/atcnet.rs` | 1.255 | rs |
 | `./service_space/src/blockchain.rs` | 505 | rs |
@@ -107,7 +107,7 @@
 | `./service_space/src/identity_key_hal.rs` | 109 | rs |
 | `./service_space/src/identity_key_service.rs` | 101 | rs |
 | `./service_space/src/knowledge_graph.rs` | 1.075 | rs |
-| `./service_space/src/lib.rs` | 39 | rs |
+| `./service_space/src/lib.rs` | 44 | rs |
 | `./service_space/src/mempool.rs` | 860 | rs |
 | `./service_space/src/net.rs` | 859 | rs |
 | `./service_space/src/p2p.rs` | 1.032 | rs |
