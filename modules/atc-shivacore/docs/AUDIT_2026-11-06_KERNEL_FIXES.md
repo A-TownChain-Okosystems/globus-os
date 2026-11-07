@@ -1713,3 +1713,48 @@ SHA-512-Problem loesen — entweder eine eigene Implementierung (das Projekt
 verlangt ohnehin from-scratch) oder ein Toolchain-/Upstream-Fix. Das ist ein
 eigener Auftrag und steht jetzt als solcher da, statt als "irgendwas mit sha2".
 
+## Nachtrag 07.11. 15:35 — ACPI als zweite Geraetequelle (REQ-SC006-11)
+
+Der PCI-Scan findet nur, was hinter einem Konfigurationsraum liegt. Drei Geraete,
+die der Kernel wirklich benutzt, sieht er nie: Local APIC, IOAPIC und den High
+Precision Event Timer. Sie stehen in den ACPI-Tabellen.
+
+**Neu: `kernel/src/acpi_devices.rs`** (12 Tests). `hpet_address()` liest die
+Basisadresse aus der HPET-Tabelle und prueft dabei Signatur, Laenge und
+Adressraum (nur Systemspeicher, keine E/A-Ports, keine Nulladresse).
+`from_summary()` baut daraus zusammen mit der MADT eine Liste in fester
+Reihenfolge LAPIC, IOAPIC, HPET; fehlt eine Quelle, fehlt der Eintrag, statt
+eine Adresse zu erfinden. Eine LAPIC-Basis von 0 in der MADT faellt auf
+0xFEE00000 zurueck, wie es die Architektur vorgibt.
+
+**Neu: `BOOT_ACPI_DEVICES`** in `boot_devices.rs` (4 Tests). Eigener Vorrat,
+nicht derselbe wie `BOOT_DEVICES`: ein ACPI-Geraet hat keine
+Bus/Geraet/Funktion-Kennung, und der PCI-Vorrat darf nicht so tun, als haette es
+eine. Ersetzen statt anhaengen, Lesen als Kopie, wie beim PCI-Vorrat.
+
+**Zwei echte Fehler auf dem Weg, beide nur durch den Bootlauf sichtbar:**
+
+1. **Falsches Tabellenlayout.** Meine erste Fassung las die Adressstruktur bei
+   Offset 44 und die Adresse bei 48. Der Bootlauf brach mit
+   "HPET address structure is malformed" ab. Ein Ausdruck der echten Bytes
+   (36..56) zeigte: `00 00 00 00 | 00 00 d0 fe 00 00 00 00` ab Offset 40, also
+   Adressstruktur bei 40 und Adresse bei 44. Die Tabelle ist 56 Byte lang, ein
+   zusaetzliches Vier-Byte-Reserved vor der Struktur gibt es nicht. Parser und
+   Tests sind auf das belegte Layout umgestellt, die Herleitung steht als
+   Kommentar an der Konstante.
+2. **Allokation vor dem Heap.** Die Veroeffentlichung lag zuerst direkt nach
+   der ACPI-Pruefung, also vor der Heap-Initialisierung. Ergebnis:
+   "Allokation fehlgeschlagen: Layout { size: 96, align: 8 }". Eine `Vec` vor
+   dem Heap ist eine Allokation ins Nichts. Die Veroeffentlichung sitzt jetzt
+   neben der PCI-Veroeffentlichung, MADT-Zusammenfassung und HPET-Basis reisen
+   als Kopien dorthin (beide `Copy`).
+
+**Belegt in QEMU, BIOS und UEFI, 0 Panics:**
+`ShivaCore: ACPI-Geraete: 3 (LAPIC, IOAPIC, HPET) fuer den Service Space abrufbar`,
+daneben unveraendert `Geraetevorrat: 6 Geraete` und der Ring-3-Syscallpfad.
+**1703 Tests** (30 Suiten), fmt und clippy Exit 0.
+
+**Was noch fehlt:** Der Service Space liest den ACPI-Vorrat noch nicht
+(`sync_from_boot()` deckt nur PCI ab), und im Image startet weiterhin kein
+Service Space. Die Quelle ist damit vollstaendig, der Zieher fuer ACPI fehlt.
+
