@@ -179,6 +179,38 @@ pub static SYSCALL_ENTRIES: AtomicU64 = AtomicU64::new(0);
 
 static PATTERN_ESTABLISHED: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(false)];
 
+/// Ob fuer einen Platz ueberhaupt ein Register-Muster erwartet wird.
+///
+/// Das Muster gehoert zur eingebauten Nutzlast, nicht zum Prozessplatz: PID 1000
+/// fuehrt den Register-Smoke-Test nur, wenn keine Ramdisk mitgegeben wurde. Mit
+/// einem echten Programm setzt niemand RAX/RBX/R12, und eine Pruefung, die nie
+/// greifen kann, ist schlimmer als keine: sie schreibt bei jedem Tick eine
+/// Aufwaermzeile und beweist nichts.
+/// Vorgabe ist AN: eine Pruefung, die still ausfaellt, weil jemand den Aufruf
+/// vergisst, waere schlimmer als eine, die zu viel prueft. Abgeschaltet wird
+/// ausdruecklich und mit Logzeile, wenn eine Nutzlast keine Musterregister
+/// setzt.
+static PATTERN_EXPECTED: [AtomicBool; 2] = [AtomicBool::new(true), AtomicBool::new(true)];
+
+/// Legt fest, ob fuer diesen Prozess ein Register-Muster erwartet wird.
+///
+/// Der Bootpfad entscheidet das, weil nur er weiss, welche Nutzlast in dem
+/// Prozess laeuft. Aufruf vor dem ersten Ring-3-Eintritt.
+pub fn expect_register_pattern(pid: u32, expected: bool) {
+    let slot = match pid {
+        1000 => 0usize,
+        1001 => 1usize,
+        _ => return,
+    };
+    PATTERN_EXPECTED[slot].store(expected, Ordering::Release);
+    if !expected {
+        serial_println!(
+            "ShivaCore: SCHED-001 Musterpruefung fuer PID {} abgeschaltet (Nutzlast setzt keine Musterregister)",
+            pid
+        );
+    }
+}
+
 static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 
 /// Der einzige Userspace->Kernel-Pfad: Dispatcher + Capability-Tabelle.
@@ -552,6 +584,7 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
             1001 => (Some(1usize), (0x2000, 0x2001, 0x2012)),
             _ => (None, (0, 0, 0)),
         };
+        let slot = slot.filter(|slot| PATTERN_EXPECTED[*slot].load(Ordering::Acquire));
         if let Some(slot) = slot {
             let observed = (current.regs.rax, current.regs.rbx, current.regs.r12);
             // Der erste Tick kann eintreffen, bevor der Ring-3-Payload seine
