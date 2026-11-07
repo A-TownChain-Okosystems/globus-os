@@ -82,7 +82,7 @@
 - `modules/atc-drivers/drivers/input_driver.atc`
 - `modules/atc-drivers/drivers/network_driver.atc`
 - `modules/atc-drivers/drivers/storage_driver.atc`
-- `modules/atc-drivers/kernel/src/hw_drivers.rs`
+- `modules/atc-shivacore/service_space/src/hw_drivers.rs`
 - `modules/atc-drivers/package-lock.json`
 - `modules/atc-drivers/package.json`
 - `modules/atc-drivers/src/audio.rs`
