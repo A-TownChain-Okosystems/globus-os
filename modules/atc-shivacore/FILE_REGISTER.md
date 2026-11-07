@@ -16,14 +16,14 @@
 | `./ARCHITECTURE.md` | 112 | md |
 | `./CHANGELOG.md` | 21 | md |
 | `./COMPONENT_PLAN.md` | 732 | md |
-| `./FILE_REGISTER.md` | 131 | md |
+| `./FILE_REGISTER.md` | 132 | md |
 | `./LICENSE` | 17 | – |
 | `./README.md` | 1.101 | md |
 | `./ROADMAP.md` | 21 | md |
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 15 | toml |
 | `./boot/src/main.rs` | 72 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.232 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.275 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -42,6 +42,7 @@
 | `./kernel/.cargo/config.toml` | 2 | toml |
 | `./kernel/.gitignore` | 1 | – |
 | `./kernel/Cargo.toml` | 40 | toml |
+| `./kernel/src/addr_space.rs` | 207 | rs |
 | `./kernel/src/allocator.rs` | 49 | rs |
 | `./kernel/src/apic.rs` | 410 | rs |
 | `./kernel/src/atcfs.rs` | 709 | rs |
@@ -68,9 +69,9 @@
 | `./kernel/src/kernel_init.rs` | 346 | rs |
 | `./kernel/src/key_events.rs` | 157 | rs |
 | `./kernel/src/keymap.rs` | 401 | rs |
-| `./kernel/src/lib.rs` | 58 | rs |
+| `./kernel/src/lib.rs` | 59 | rs |
 | `./kernel/src/lkm.rs` | 3.398 | rs |
-| `./kernel/src/main.rs` | 1.235 | rs |
+| `./kernel/src/main.rs` | 1.270 | rs |
 | `./kernel/src/memory.rs` | 64 | rs |
 | `./kernel/src/memory_manager.rs` | 912 | rs |
 | `./kernel/src/pci_scan.rs` | 558 | rs |
