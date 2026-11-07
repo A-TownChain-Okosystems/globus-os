@@ -23,6 +23,7 @@ pub mod did;
 pub mod genesis;
 pub mod genesis_bridge;
 pub mod gossip_bridge;
+pub mod hw_drivers;
 pub mod identity_key_hal;
 pub mod identity_key_service;
 pub mod knowledge_graph;
