@@ -54,9 +54,26 @@ pub const FIRST_INHERITED_PML4: usize = 1;
 /// Nutzerseiten. Ihn zu erben hiesse, die Trennung wieder aufzugeben.
 pub const FIRST_INHERITED_PDPT: usize = 1;
 
-/// Darf dieser PDPT-Eintrag des unteren Bereichs uebernommen werden?
-pub fn inherits_pdpt_entry(index: usize) -> bool {
-    index >= FIRST_INHERITED_PDPT
+/// Groesse eines PDPT-Fensters: 1 GiB.
+pub const PDPT_WINDOW: u64 = 1 << 30;
+
+/// Darf dieser PDPT-Eintrag uebernommen werden?
+///
+/// Die Antwort haengt an den Regionen des Prozesses, nicht an einer festen
+/// Grenze. Der erste Versuch vererbte pauschal alles ab Eintrag 1 und begruendete
+/// das mit "Nutzerseiten liegen unter 1 GiB" — falsch: der Standard-Stack liegt
+/// bei 0x7FFFF000, also knapp unter 2 GiB und damit in Eintrag 1. Init bekam
+/// seinen eigenen Stack damit in JEDE fremde Tabelle geerbt, `peek` las die
+/// Marke weiter und die Trennung war nur eine Absicht auf dem Papier.
+pub fn inherits_pdpt_entry(index: usize, user_regions: &[(u64, u64)]) -> bool {
+    if index < FIRST_INHERITED_PDPT {
+        return false;
+    }
+    !user_regions.iter().any(|(start, end_exclusive)| {
+        let first = (start / PDPT_WINDOW) as usize;
+        let last = (end_exclusive.saturating_sub(1) / PDPT_WINDOW) as usize;
+        index >= first && index <= last
+    })
 }
 
 /// Ein Adressraum: die Wurzel seiner Seitentabelle.
@@ -73,18 +90,27 @@ impl AddressSpace {
     /// `physical_memory_offset` muss das physische Fenster sein, ueber das die
     /// Seitentabellen erreichbar sind; `allocator` muss exklusiv verwendet
     /// werden.
+    /// `source` ist die Tabelle, aus der geerbt wird — die Boot-Tabelle, NICHT
+    /// die gerade aktive.
+    ///
+    /// Der Unterschied ist der ganze Fehler: beim Bau von Prozess 2 ist die
+    /// aktive Tabelle schon die von Prozess 1. Wird daraus geerbt, wandert
+    /// dessen Stack in jede folgende Tabelle, und die Trennung ist wieder weg.
+    /// Die Quelle muss ein fester Bezugspunkt sein, der selbst keine
+    /// Nutzerseiten enthaelt.
     pub unsafe fn create(
         physical_memory_offset: VirtAddr,
         allocator: &mut impl FrameAllocator<Size4KiB>,
+        user_regions: &[(u64, u64)],
+        source: PhysFrame<Size4KiB>,
     ) -> Option<Self> {
         let table = allocator.allocate_frame()?;
         let table_ptr =
             (physical_memory_offset + table.start_address().as_u64()).as_mut_ptr::<PageTable>();
         table_ptr.write(PageTable::new());
 
-        let (active, _) = Cr3::read();
         let active_ptr =
-            (physical_memory_offset + active.start_address().as_u64()).as_ptr::<PageTable>();
+            (physical_memory_offset + source.start_address().as_u64()).as_ptr::<PageTable>();
         // Edition 2024 verbietet implizite Autoref auf rohe Zeiger: die
         // Referenzen werden einmal ausgesprochen, danach ist der Zugriff klar.
         let dst: &mut PageTable = &mut *table_ptr;
@@ -107,7 +133,9 @@ impl AddressSpace {
             let pdpt_dst: &mut PageTable = &mut *pdpt_ptr;
             let pdpt_src: &PageTable = &*active_pdpt;
             for index in FIRST_INHERITED_PDPT..512 {
-                pdpt_dst[index] = pdpt_src[index].clone();
+                if inherits_pdpt_entry(index, user_regions) {
+                    pdpt_dst[index] = pdpt_src[index].clone();
+                }
             }
             let mut entry = x86_64::structures::paging::page_table::PageTableEntry::new();
             entry.set_addr(
@@ -146,6 +174,19 @@ pub fn active() -> (PhysFrame<Size4KiB>, Cr3Flags) {
     Cr3::read()
 }
 
+/// Schaltet auf eine Tabelle um, die nur als physische Adresse bekannt ist.
+///
+/// So kommt der Wert aus dem Scheduler: dort steht eine Zahl, keine Struktur.
+/// 0 bedeutet "noch keine eigene Tabelle" und laesst das CR3 unberuehrt.
+#[cfg(feature = "x86-boot")]
+pub fn install_raw(cr3: u64) {
+    if cr3 == 0 {
+        return;
+    }
+    let frame = PhysFrame::<Size4KiB>::containing_address(PhysAddr::new(cr3));
+    unsafe { Cr3::write(frame, Cr3Flags::empty()) }
+}
+
 /// Stellt einen frueher gelesenen Adressraum wieder her.
 #[cfg(feature = "x86-boot")]
 pub fn restore(frame: PhysFrame<Size4KiB>, flags: Cr3Flags) {
@@ -159,14 +200,41 @@ mod tests {
     #[test]
     fn the_user_gigabyte_is_not_inherited() {
         // Genau dieser Eintrag enthaelt Code, Daten und Stack aller Prozesse.
-        assert!(!inherits_pdpt_entry(0));
+        assert!(!inherits_pdpt_entry(0, &[]));
     }
 
     #[test]
     fn device_mappings_above_one_gib_are_inherited() {
         // 0xFEE00000 (LAPIC) und das Framebuffer-Fenster liegen hier.
-        assert!(inherits_pdpt_entry(3));
-        assert!(inherits_pdpt_entry(511));
+        assert!(inherits_pdpt_entry(3, &[]));
+        assert!(inherits_pdpt_entry(511, &[]));
+    }
+
+    #[test]
+    fn a_stack_near_two_gib_removes_its_window() {
+        // Der Standard-Stack liegt bei 0x7FFFF000: knapp unter 2 GiB, also in
+        // Eintrag 1. Ohne diesen Test waere die Luecke wieder offen, denn
+        // optisch sieht "unter 2 GiB" nach Nutzerbereich aus — und genau
+        // deshalb wurde sie beim ersten Versuch uebersehen.
+        let stack = (0x7FFF_0000u64, 0x8000_0000u64);
+        assert_eq!((stack.0 >> 30) as usize, 1);
+        assert!(!inherits_pdpt_entry(1, &[stack]));
+        // Eintrag 0 wird IMMER neu gebaut, unabhaengig von den Regionen.
+        assert!(!inherits_pdpt_entry(0, &[stack]));
+        // LAPIC bleibt unberuehrt, obwohl die Region existiert.
+        assert!(inherits_pdpt_entry(3, &[stack]));
+    }
+
+    #[test]
+    fn a_region_spanning_a_window_boundary_removes_both_windows() {
+        // Schutz gegen die naechste Annahme: eine Region, die eine 1-GiB-Grenze
+        // ueberschreitet, muss beide Fenster entfernen, nicht nur das erste.
+        let spanning = (0x3FFF_0000u64, 0x4001_0000u64);
+        assert_eq!((spanning.0 >> 30) as usize, 0);
+        assert_eq!(((spanning.1 - 1) >> 30) as usize, 1);
+        assert!(!inherits_pdpt_entry(0, &[spanning]));
+        assert!(!inherits_pdpt_entry(1, &[spanning]));
+        assert!(inherits_pdpt_entry(2, &[spanning]));
     }
 
     #[test]
@@ -188,8 +256,8 @@ mod tests {
         assert_eq!(code_index, 0);
         assert_eq!(mmio_index, 0);
         // Beide im selben PML4-Eintrag: deshalb entscheidet der PDPT-Eintrag.
-        assert!(!inherits_pdpt_entry(0));
-        assert!(inherits_pdpt_entry(3));
+        assert!(!inherits_pdpt_entry(0, &[]));
+        assert!(inherits_pdpt_entry(3, &[]));
     }
 
     #[test]
