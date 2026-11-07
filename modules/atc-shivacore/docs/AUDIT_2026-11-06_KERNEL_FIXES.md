@@ -1758,3 +1758,34 @@ daneben unveraendert `Geraetevorrat: 6 Geraete` und der Ring-3-Syscallpfad.
 (`sync_from_boot()` deckt nur PCI ab), und im Image startet weiterhin kein
 Service Space. Die Quelle ist damit vollstaendig, der Zieher fuer ACPI fehlt.
 
+## Nachtrag 07.11. 16:00 — der Service Space holt die ACPI-Geraete ab
+
+Die Quelle war fertig, der Zieher fehlte. `device_registry.rs` hat jetzt den
+Anschluss, den PCI schon hatte:
+
+* `acpi_device_id()` gibt eine stabile Kennung aus Art und Basisadresse.
+  Wichtig war der Kennungsraum: PCI kommt ueber `bus<<16 | geraet<<8 | funktion`
+  nie ueber 2^24 hinaus, ACPI beginnt deshalb bei `0xAC00_0000_0000_0000`.
+  Schneiden sich die Raeume, trifft eine Device-Cap irgendwann das falsche
+  Geraet.
+* `entry_from_acpi()` fuehrt LAPIC, IOAPIC und HPET als Klasse `Other`. Sie als
+  `Storage` oder `Input` zu fuehren waere bequem und falsch.
+* `adopt_discovered_acpi()`, `sync_from_acpi()`, `sync_acpi_from_store()` und
+  `sync_acpi_from_boot()`, dieselbe Staffelung wie bei PCI. Uebernommene Geraete
+  haben **keinen Besitzer**: finden ist offen, besitzen bleibt geprueft.
+
+**9 neue Tests** (device_registry: 29 gesamt). Sie decken die vier Stellen ab,
+an denen so etwas still kaputtgeht: Kennungsraeume schneiden sich nicht,
+Kennung ist zwischen Laeufen stabil, verschiedene Arten haben auch bei gleicher
+Adresse verschiedene Kennungen, und ein zweiter Abgleich zaehlt
+`already_known` statt zu verdoppeln.
+
+**Stand: 1712 Tests** (30 Suiten), fmt und clippy Exit 0, auch
+`clippy -p shivacore-service-space --no-default-features` still, der Service
+Space bleibt fuer Bare Metal baubar.
+
+**Was weiter fehlt:** `sync_acpi_from_boot()` ist gerufen von niemandem, weil im
+Image kein Service Space startet. Die Kette Kernel-Vorrat → Registratur ist
+damit durchgaengig gebaut und einzeln belegt, im laufenden System aber noch
+nicht in Betrieb.
+
