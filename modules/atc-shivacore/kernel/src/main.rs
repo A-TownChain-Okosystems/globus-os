@@ -152,6 +152,75 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         released
     );
 
+    // SC-006 REQ-09: Selbsttest der DMA-Autorisierung. Der Test laeuft durch
+    // den echten Code der Policy-Schicht, damit nicht nur die Unit-Tests
+    // belegen, dass die Logik im Kernel-Binary vorhanden ist. Er belegt
+    // ausdruecklich nicht, dass eine IOMMU programmiert wird — das ist offen.
+    {
+        use shivacore::capability::{CapabilityTable, ResourceType, Rights};
+        let mut caps = CapabilityTable::new();
+        let mut dma = shivacore::dma_auth::DmaAuthorizer::new();
+        let own = caps
+            .create_typed(
+                shivacore::ats1000::Pid(1000),
+                ResourceType::Device,
+                3,
+                Rights::ACCESS,
+            )
+            .expect("DMA-Selbsttest: Device-Cap");
+        let foreign = caps
+            .create_typed(
+                shivacore::ats1000::Pid(1001),
+                ResourceType::Device,
+                3,
+                Rights::ACCESS,
+            )
+            .expect("DMA-Selbsttest: fremde Device-Cap");
+        let mut ok = true;
+        let domain = match dma.assign_device(caps.get(own).expect("Cap"), 3) {
+            Ok(domain) => Some(domain),
+            Err(_) => {
+                ok = false;
+                None
+            }
+        };
+        if let Some(domain) = domain {
+            // Fremder Prozess darf die Domain nicht befuellen.
+            ok &= dma
+                .map_window(
+                    caps.get(foreign).expect("Cap"),
+                    domain,
+                    shivacore::dma_auth::DmaWindow {
+                        iova: 0,
+                        physical: 0x2000_0000,
+                        length: 4096,
+                        writable: true,
+                    },
+                )
+                .is_err();
+            // Dieselbe Cap oeffnet kein zweites Geraet.
+            ok &= dma.assign_device(caps.get(own).expect("Cap"), 5).is_err();
+        } else {
+            ok = false;
+        }
+        let stats = dma.stats();
+        if ok {
+            serial_println!(
+                "ShivaCore: SC-006 DMA-Selbsttest bestanden (Geraet=3 Domain={:?}, Ablehnungen: fremd={} falsch={})",
+                domain,
+                stats.denied_foreign_domain,
+                stats.denied_wrong_device
+            );
+        } else {
+            serial_println!(
+                "ShivaCore: SC-006 DMA-Selbsttest FEHLGESCHLAGEN (erlaubt={} fremd={} falsch={})",
+                stats.authorized,
+                stats.denied_foreign_domain,
+                stats.denied_wrong_device
+            );
+        }
+    }
+
     // SC-006 REQ-03: IOAPIC programmieren. Der Treiber liest die Eintragszahl
     // aus dem Versionsregister und beschreibt die Redirection-Tabelle.
     match ioapic_info {
