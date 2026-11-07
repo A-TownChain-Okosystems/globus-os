@@ -17,15 +17,40 @@ fn main() {
 
     std::fs::create_dir_all(&out_dir).unwrap();
 
-    // Optionales drittes Argument: ein Programm, das als Ramdisk in das Image
-    // gelegt wird. Ohne es entsteht ein Image ohne Nutzlast, wie bisher.
-    let ramdisk = std::env::args().nth(3).map(PathBuf::from);
-    if let Some(path) = &ramdisk {
-        let size = std::fs::metadata(path)
-            .unwrap_or_else(|e| panic!("Ramdisk {} nicht lesbar: {}", path.display(), e))
-            .len();
-        println!("Ramdisk: {} ({} Bytes)", path.display(), size);
-    }
+    // Ab dem dritten Argument: Programme fuer die Ramdisk, je als `name=pfad`.
+    // Sie werden zu einem Verzeichnis gebuendelt (Format SRAM), damit der Kernel
+    // nach Namen auswaehlen kann statt nur ein einzelnes ELF zu kennen.
+    let programs: Vec<(String, Vec<u8>)> = std::env::args()
+        .skip(3)
+        .map(|argument| {
+            let (name, path) = argument
+                .split_once('=')
+                .unwrap_or_else(|| panic!("Ramdisk-Eintrag ohne '=': {}", argument));
+            let bytes = std::fs::read(path)
+                .unwrap_or_else(|e| panic!("Ramdisk-Eintrag {} nicht lesbar: {}", path, e));
+            (name.to_string(), bytes)
+        })
+        .collect();
+
+    let ramdisk = if programs.is_empty() {
+        None
+    } else {
+        let entries: Vec<(&str, &[u8])> = programs
+            .iter()
+            .map(|(name, bytes)| (name.as_str(), bytes.as_slice()))
+            .collect();
+        let image = shivacore::ramdisk::build(&entries)
+            .unwrap_or_else(|error| panic!("Ramdisk-Verzeichnis nicht baubar: {:?}", error));
+        let path = out_dir.join("ramdisk.bin");
+        std::fs::write(&path, &image).expect("Ramdisk nicht schreibbar");
+        println!(
+            "Ramdisk: {} Programme ({} Bytes) -> {}",
+            programs.len(),
+            image.len(),
+            path.display()
+        );
+        Some(path)
+    };
 
     let bios_path = out_dir.join("shivacore-bios.img");
     let mut bios = bootloader::BiosBoot::new(&PathBuf::from(&kernel_path));
