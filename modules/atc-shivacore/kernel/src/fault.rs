@@ -38,6 +38,54 @@ impl Origin {
     }
 }
 
+/// Welche Ausnahme den Weg hierher gefunden hat.
+///
+/// Die drei unterscheiden sich nicht in der Behandlung, aber im Bericht: "der
+/// Prozess hat auf eine fehlende Seite gegriffen" ist eine andere Aussage als
+/// "der Prozess hat eine privilegierte Anweisung versucht". Ohne diese
+/// Unterscheidung steht im Log nur, dass etwas passiert ist.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExceptionKind {
+    /// Seitenfehler (Vektor 14), die CPU legt einen Fehlercode dazu.
+    PageFault,
+    /// Schutzverletzung (Vektor 13), ebenfalls mit Fehlercode.
+    GeneralProtection,
+    /// Ungueltiger Opcode (Vektor 6), ohne Fehlercode.
+    InvalidOpcode,
+}
+
+impl ExceptionKind {
+    /// Name fuer das Log.
+    pub fn name(&self) -> &'static str {
+        match self {
+            ExceptionKind::PageFault => "Seitenfehler",
+            ExceptionKind::GeneralProtection => "Schutzverletzung",
+            ExceptionKind::InvalidOpcode => "Ungueltiger Opcode",
+        }
+    }
+
+    /// Liest die Art aus der Zahl, die das Assembly uebergibt.
+    ///
+    /// Unbekannte Zahlen werden als Seitenfehler behandelt: eine falsche
+    /// Beschriftung im Log ist harmlos, ein falscher Rahmen nicht — und der
+    /// Rahmen haengt bei allen drei gleich.
+    pub fn from_id(id: u32) -> Self {
+        match id {
+            1 => ExceptionKind::GeneralProtection,
+            2 => ExceptionKind::InvalidOpcode,
+            _ => ExceptionKind::PageFault,
+        }
+    }
+
+    /// Legt die CPU zu dieser Ausnahme einen Fehlercode auf den Stapel?
+    ///
+    /// Das entscheidet, welcher Trampolin zustaendig ist: wer hier falsch
+    /// liegt, verschiebt den ganzen Rahmen und liest Unsinn als RIP.
+    pub fn has_error_code(&self) -> bool {
+        !matches!(self, ExceptionKind::InvalidOpcode)
+    }
+}
+
 /// Was mit dem Fehler geschieht.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FaultAction {
@@ -48,7 +96,7 @@ pub enum FaultAction {
 }
 
 /// Die Entscheidung. Bewusst eine reine Funktion ohne Seiteneffekt.
-pub fn decide(origin: Origin) -> FaultAction {
+pub fn decide(_kind: ExceptionKind, origin: Origin) -> FaultAction {
     match origin {
         Origin::User => FaultAction::TerminateProcess,
         Origin::Kernel => FaultAction::PanicKernel,
@@ -174,12 +222,58 @@ mod tests {
 
     #[test]
     fn a_user_fault_costs_the_process_not_the_system() {
-        assert_eq!(decide(Origin::User), FaultAction::TerminateProcess);
+        assert_eq!(
+            decide(ExceptionKind::PageFault, Origin::User),
+            FaultAction::TerminateProcess
+        );
     }
 
     #[test]
     fn a_kernel_fault_still_stops_the_kernel() {
-        assert_eq!(decide(Origin::Kernel), FaultAction::PanicKernel);
+        assert_eq!(
+            decide(ExceptionKind::InvalidOpcode, Origin::Kernel),
+            FaultAction::PanicKernel
+        );
+    }
+
+    #[test]
+    fn the_ring_decides_for_every_kind_the_same_way() {
+        // Die Art der Ausnahme aendert die Behandlung nicht: Ring 3 zahlt der
+        // Prozess, Ring 0 der Kernel. Sonst entstuende ein Schlupfloch, das
+        // nur davon abhaengt, welche Anweisung ein Programm benutzt.
+        for kind in [
+            ExceptionKind::PageFault,
+            ExceptionKind::GeneralProtection,
+            ExceptionKind::InvalidOpcode,
+        ] {
+            assert_eq!(decide(kind, Origin::User), FaultAction::TerminateProcess);
+            assert_eq!(decide(kind, Origin::Kernel), FaultAction::PanicKernel);
+        }
+    }
+
+    #[test]
+    fn only_the_invalid_opcode_lacks_an_error_code() {
+        // Bestimmt, welcher Trampolin zustaendig ist. Wer hier irrt, verschiebt
+        // den Rahmen und liest Muell als RIP.
+        assert!(ExceptionKind::PageFault.has_error_code());
+        assert!(ExceptionKind::GeneralProtection.has_error_code());
+        assert!(!ExceptionKind::InvalidOpcode.has_error_code());
+    }
+
+    #[test]
+    fn the_kind_survives_the_trip_through_assembly() {
+        assert_eq!(ExceptionKind::from_id(0), ExceptionKind::PageFault);
+        assert_eq!(ExceptionKind::from_id(1), ExceptionKind::GeneralProtection);
+        assert_eq!(ExceptionKind::from_id(2), ExceptionKind::InvalidOpcode);
+        // Unbekannt faellt auf den Rahmen zu, der keinen Fehlercode verliert.
+        assert_eq!(ExceptionKind::from_id(99), ExceptionKind::PageFault);
+    }
+
+    #[test]
+    fn each_kind_has_its_own_name() {
+        assert_eq!(ExceptionKind::PageFault.name(), "Seitenfehler");
+        assert_eq!(ExceptionKind::GeneralProtection.name(), "Schutzverletzung");
+        assert_eq!(ExceptionKind::InvalidOpcode.name(), "Ungueltiger Opcode");
     }
 
     #[test]
