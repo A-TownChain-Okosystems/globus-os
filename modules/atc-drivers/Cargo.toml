@@ -11,3 +11,4 @@ path = "src/lib.rs"
 
 [dependencies]
 globus-diagnostics = { path = "../../system/diagnostics" }
+globus-devices = { path = "../../system/devices" }
