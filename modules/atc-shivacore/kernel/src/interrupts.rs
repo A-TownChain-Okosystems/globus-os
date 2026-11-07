@@ -1044,6 +1044,62 @@ extern "C" {
 ///   RDI = Cap-Slot (0 = kein Cap) · RSI = Opcode
 ///   RDX, RCX, R8, R9 = die vier Argument-Woerter
 ///   RAX = Resultat 1 (Wert) · RBX = Resultat 2 (Status: 0 = Erfolg, sonst AbiError)
+/// Merkt sich, von welchen Prozessen schon ein Syscall protokolliert wurde.
+///
+/// Acht Plaetze genuegen: mehr Prozesse laufen nicht gleichzeitig, und ein
+/// voller Vorrat schaltet nur die Zusatzzeile ab, nicht die Zaehlung.
+struct FirstSyscalls {
+    seen: [u64; 8],
+}
+
+impl FirstSyscalls {
+    const fn new() -> Self {
+        Self { seen: [0; 8] }
+    }
+
+    /// Wahr beim ersten Aufruf dieses Prozesses.
+    fn note(&mut self, pid: u64) -> bool {
+        for slot in self.seen.iter_mut() {
+            if *slot == pid {
+                return false;
+            }
+            if *slot == 0 {
+                *slot = pid;
+                return true;
+            }
+        }
+        false
+    }
+}
+
+static FIRST_SYSCALLS: spin::Mutex<FirstSyscalls> = spin::Mutex::new(FirstSyscalls::new());
+
+#[cfg(test)]
+mod first_syscall_tests {
+    use super::FirstSyscalls;
+
+    #[test]
+    fn each_process_reports_its_first_call_exactly_once() {
+        let mut first = FirstSyscalls::new();
+        assert!(first.note(1000));
+        assert!(!first.note(1000));
+        assert!(first.note(1003));
+        assert!(!first.note(1003));
+    }
+
+    #[test]
+    fn a_full_table_stops_the_extra_line_instead_of_forgetting_slots() {
+        let mut first = FirstSyscalls::new();
+        for pid in 1000..1008 {
+            assert!(first.note(pid));
+        }
+        // Neunter Prozess: keine Zusatzzeile mehr, aber keine Verwechslung
+        // mit einem schon bekannten Prozess.
+        assert!(!first.note(1008));
+        assert!(!first.note(1000));
+    }
+}
+
 #[no_mangle]
 extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
     // ABI 2.0.0: RDI = Zeiger auf den Argumentblock, RSI = Blocklaenge,
@@ -1115,7 +1171,14 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         }
     };
 
-    if entries == 1 || entries % 1_000_000 == 0 {
+    // Der erste Syscall eines Prozesses ist die aussagekraeftigste Zeile: dort
+    // steht der Opcode, den das Programm tatsaechlich gewaehlt hat. Mit dem
+    // globalen Zaehler (Nr=1 oder Vielfache von 1_000_000) faellt er unter den
+    // Tisch, sobald ein anderer Prozess vorher rechnet — bei einer Messung, die
+    // genau einen Aufruf braucht, ist das der Unterschied zwischen Befund und
+    // Blindstelle.
+    let first_of_process = FIRST_SYSCALLS.lock().note(u64::from(pid.0));
+    if entries == 1 || first_of_process || entries % 1_000_000 == 0 {
         serial_println!(
             "ShivaCore: Syscall aus Ring 3: Nr={} PID={} Opcode={:#06X} Ergebnis={:?}",
             entries,
