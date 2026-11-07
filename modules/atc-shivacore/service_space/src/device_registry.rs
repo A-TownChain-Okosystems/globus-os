@@ -258,7 +258,7 @@ impl DeviceRegistry {
 // sie. Die Crate-Grenze laeuft in genau eine Richtung — der Service Space baut
 // auf dem Kernel auf —, also liegt die Uebersetzung hier und nicht dort.
 
-use shivacore::acpi_devices::{AcpiDevice, AcpiDeviceKind};
+use libshivacore::acpi_devices::{AcpiDevice, AcpiDeviceKind};
 use shivacore::pci_scan::{DeviceKind, PciDevice};
 
 impl DeviceClass {
