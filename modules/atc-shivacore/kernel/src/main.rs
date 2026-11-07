@@ -221,6 +221,40 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
     }
 
+    // SC-006 REQ-11: Enum-Quelle. Die Geraete-Registratur im Service Space
+    // braucht eine Liste, die nicht geraten ist; hier wird sie gelesen.
+    // Die Entdeckung vergibt keine Rechte — wer ein Geraet benutzen darf,
+    // entscheidet weiterhin die Device-Cap.
+    #[cfg(feature = "x86-boot")]
+    {
+        use shivacore::pci_scan::{describe, scan, DeviceKind, IoConfigSpace};
+        let mut cfg = IoConfigSpace;
+        let devices = scan(&mut cfg, 1);
+        for found in &devices {
+            let (bus, device, function, vendor, id, kind) = describe(found);
+            serial_println!(
+                "ShivaCore: PCI {:02x}:{:02x}.{} {:04x}:{:04x} {}",
+                bus,
+                device,
+                function,
+                vendor,
+                id,
+                kind
+            );
+        }
+        let count = |kind: DeviceKind| devices.iter().filter(|d| d.kind() == kind).count();
+        serial_println!(
+            "ShivaCore: SC-006 PCI-Enumeration: {} Geraete (storage={} network={} display={} bridge={} usb={} other={})",
+            devices.len(),
+            count(DeviceKind::Storage),
+            count(DeviceKind::Network),
+            count(DeviceKind::Display),
+            count(DeviceKind::Bridge),
+            count(DeviceKind::Usb),
+            count(DeviceKind::Other)
+        );
+    }
+
     // SC-006 REQ-03: IOAPIC programmieren. Der Treiber liest die Eintragszahl
     // aus dem Versionsregister und beschreibt die Redirection-Tabelle.
     match ioapic_info {
