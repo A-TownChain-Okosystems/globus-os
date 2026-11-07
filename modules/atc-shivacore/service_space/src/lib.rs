@@ -16,8 +16,7 @@ pub mod ai;
 pub mod atcnet;
 pub mod blockchain;
 pub mod consensus;
-// container_net.rs: dormant (std-basiert, im Kernel ebenfalls nicht registriert).
-// Aktivierung erfordert Portierung auf alloc/core + Ord-Derives.
+pub mod container_net;
 pub mod contract;
 pub mod device_registry;
 pub mod did;
