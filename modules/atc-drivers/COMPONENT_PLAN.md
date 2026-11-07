@@ -23,7 +23,7 @@
 | 3 | `drivers/input_driver.atc` | 493 | .atc | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
 | 4 | `drivers/network_driver.atc` | 416 | .atc | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
 | 5 | `drivers/storage_driver.atc` | 378 | .atc | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
-| 6 | `service_space/src/hw_drivers.rs` (vormals `kernel/src/hw_drivers.rs`) | 1,4xx | .rs | ShivaCore — K-Sprint 35: Hardware Driver Framework |
+| 6 | `service_space/src/hw_drivers.rs` (vormals `kernel/src/hw_drivers.rs`) | 1,653 | .rs | ShivaCore — K-Sprint 35: Hardware Driver Framework |
 | 7 | `src/components/HardwareDriversView.tsx` | 376 | .tsx | — |
 
 ---
