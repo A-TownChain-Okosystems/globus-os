@@ -2273,3 +2273,46 @@ Schritt ist, jedem Prozess seine Tabelle mitzugeben und sie im Kontextwechsel zu
 setzen. Die Gegenprobe steht schon: `peek` muss dann mit einem Seitenfehler
 sterben statt `Yield` zu schicken.
 
+## Nachtrag 08.11. 02:40 — die Trennung greift, und der Hänger war ein Zeitfenster
+
+**Die Gegenprobe steht.** Dieselbe Messung, die vorher `Yield` meldete, endet jetzt
+in einem Fehler:
+
+```
+Adressraeume je Prozess: PID=1000 -> 0x21000, PID=1001 -> 0x38000,
+                         PID=1002 -> 0x4e000, PID=1003 -> 0x5d000
+Seitenfehler PID=Some(Pid(1003)) Adresse=0x7ffef100 (Seite nicht vorhanden,
+Lesen) Usermodus=true [beendet: 1, Kernel: 0]
+weiter mit PID=1000
+```
+
+`peek` liest die Marke aus Init's Stack, findet nichts, stirbt, das System laeuft
+weiter. BIOS 2123 Zeilen, UEFI 1999, kein Panic, 1744 Tests gruen.
+
+**Vier echte Ursachen, jede einzeln belegt.**
+
+1. *Die falsche Fenstergrenze.* Init's Stack liegt bei `0x7FFEF000`, also knapp
+   unter 2 GiB und damit in PDPT-Eintrag 1. Meine Annahme "Nutzerseiten liegen
+   unter 1 GiB" war falsch. Die Entscheidung kennt jetzt die Regionen des
+   Prozesses (`mapped_regions()`), nicht eine feste Grenze.
+2. *Geerbt wurde aus der aktiven Tabelle*, beim Bau von Prozess 2 also aus
+   Prozess 1. Der Fehler blieb unsichtbar, weil mein Ersetzen von
+   `Cr3::read()` durch `source` **still nicht gegriffen** hatte (Muster passte
+   nach einem `cargo fmt` nicht mehr). Die Probe zeigte es: gleiche PDPT-Adresse
+   `0x27000` in allen vier Tabellen. Jetzt ist die Boot-Tabelle die Quelle, und
+   der Patch wurde zeilenweise gesetzt statt per Muster.
+3. *Der Fehlerpfad wechselte den Kontext ohne die Tabelle.* Nach dem Beenden von
+   PID 1003 lief PID 1000 mit dessen Tabelle weiter und starb an seiner eigenen
+   Codeadresse (`0x400077`). Genau das stand im Log. Jetzt setzt auch dieser
+   Pfad das CR3 des naechsten Prozesses.
+4. *Ein Zeitfenster im Boot.* Der Aufbau blieb nach `IRQ 1 -> GSI 1` stehen,
+   sobald keine Diagnosezeilen mehr dazwischen lagen — ein Haenger, der von der
+   Laenge eines Logsatzes abhaengt, ist kein Zufall. `subscribe_kernel_line`
+   sperrt Capability-Tabelle und Bruecke jetzt mit abgeschalteten Interrupts.
+
+**Lehre, die Geld gekostet hat.** Zweimal hat ein `str.replace` nicht gegriffen
+und ich habe den Code fuer geaendert gehalten: einmal bei einer Testrechnung,
+einmal bei der Erbquelle. Beide Male war die Diagnose im Boot-Log eindeutig,
+aber erst nachdem ich sie gemessen habe. Bei Textersetzungen in Rust-Dateien
+danach **immer** pruefen, ob das Muster noch da ist, statt es anzunehmen.
+
