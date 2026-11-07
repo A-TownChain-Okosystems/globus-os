@@ -23,7 +23,7 @@
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 12 | toml |
 | `./boot/src/main.rs` | 47 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.920 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.952 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -51,7 +51,7 @@
 | `./kernel/src/hal/cpu.rs` | 209 | rs |
 | `./kernel/src/hal/mod.rs` | 4 | rs |
 | `./kernel/src/input_queue.rs` | 254 | rs |
-| `./kernel/src/interrupts.rs` | 919 | rs |
+| `./kernel/src/interrupts.rs` | 952 | rs |
 | `./kernel/src/ioapic.rs` | 382 | rs |
 | `./kernel/src/ipc.rs` | 717 | rs |
 | `./kernel/src/irq.rs` | 322 | rs |
@@ -63,7 +63,7 @@
 | `./kernel/src/keymap.rs` | 401 | rs |
 | `./kernel/src/lib.rs` | 56 | rs |
 | `./kernel/src/lkm.rs` | 3.398 | rs |
-| `./kernel/src/main.rs` | 1.130 | rs |
+| `./kernel/src/main.rs` | 1.134 | rs |
 | `./kernel/src/memory.rs` | 64 | rs |
 | `./kernel/src/memory_manager.rs` | 912 | rs |
 | `./kernel/src/pci_scan.rs` | 558 | rs |
