@@ -1165,3 +1165,34 @@ erzwungen — genau die Luecke, die im Audit vom 06.11. schon fuer
 REQ-SC006-02/03 beschrieben war und dort durch die Bruecke geschlossen wurde.
 Der naechste Schritt waere die Anbindung an `system/devices` samt Fault-Pfad.
 
+## Nachtrag 07.11. 01:40 — `cargo test --workspace` auf Stable repariert
+
+Befund: `cargo test --workspace` brach auf der stabilen Toolchain ab, bevor ein
+einziger Test lief. Ursache war nicht der Kernel, sondern der Boot-Image-Builder
+(`modules/atc-shivacore/boot`): er haengt am `bootloader`-Crate, dessen
+Build-Skript Nightly verlangt (`error: the -Z flag is only accepted on nightly`).
+Als Workspace-Mitglied zog er den kompletten Workspace in diesen Nightly-Zwang.
+Die CI fiel nicht auf, weil `rust-ci.yml` auf Nightly laeuft — lokal, also im
+Normalfall, war das Gate unbenutzbar. Die README hat den Zustand sogar als
+gegeben dokumentiert ("not a usable gate here").
+
+Umgesetzt:
+
+- `modules/atc-shivacore/boot` ist aus `members` entfernt und in `exclude`
+  eingetragen; die Crate hat ein eigenes `[workspace]`. Sie baut weiter, nur
+  eben in ihrem Verzeichnis.
+- `.github/workflows/shivacore-kernel.yml` baut den Builder jetzt dort
+  (`cd modules/atc-shivacore/boot && cargo +nightly run --release -- …`) und
+  uebergibt absolute Pfade, damit die Ausgabepfade unabhaengig vom
+  Arbeitsverzeichnis bleiben.
+- `scripts/qemu_boot.sh` baut und startet den Builder aus seinem Verzeichnis.
+- README: Testbefehle und Erwartungswerte aktualisiert (1471 Tests ueber 58
+  Suiten), der falsch gewordene Absatz ersetzt, Boot-Schritte getrennt
+  dokumentiert.
+
+Verifikation auf Stable: `cargo fmt --check` 0, `cargo check --workspace
+--all-targets` 0, `cargo test --workspace --all-targets` **1471 passed, 0
+failed**, `cargo clippy --workspace --all-targets -- -D warnings` 0. Auf
+Nightly: Kernel-ELF gebaut, Builder gebaut, beide Images erzeugt,
+`scripts/qemu_boot.sh` Exit 0, QEMU-BIOS-Lauf ohne Panic und ohne Seitenfehler.
+
