@@ -22,67 +22,10 @@
 use core::panic::PanicInfo;
 use core::sync::atomic::{compiler_fence, Ordering};
 
-// ─────────────────────────────────────────────────────────────────────────
-// Speicher
-//
-// `libshivacore` zieht `globus-ipc` mit, und das braucht einen Allocator. Ein
-// Programm, das spaeter Puffer fuer Syscalls stellt, braucht ihn ohnehin.
-// Deshalb ein einfacher Zeiger-Allocator ueber einem statischen Bereich im
-// eigenen `.bss`: kein Freigeben, keine Fragmentierung, keine Ueberraschung.
-//
-// Bewusst keine Seitenanforderung beim Kernel: solange das Programm nur
-// arbeitet und nicht waechst, ist ein fester Vorrat die ehrlichere Loesung.
-// ─────────────────────────────────────────────────────────────────────────
-
-use core::alloc::{GlobalAlloc, Layout};
-use core::cell::UnsafeCell;
-
-const ARENA_BYTES: usize = 64 * 1024;
-
-struct Arena {
-    memory: UnsafeCell<[u8; ARENA_BYTES]>,
-    used: core::sync::atomic::AtomicUsize,
-}
-
-// Der Allocator haelt den Speicher exklusiv; die Zugriffe laufen ueber
-// `allocate`, das den Zeiger atomar hochsetzt.
-unsafe impl Sync for Arena {}
-
-unsafe impl GlobalAlloc for Arena {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let align = layout.align().max(1);
-        let mut offset = self.used.load(Ordering::Relaxed);
-        loop {
-            let aligned = (offset + align - 1) & !(align - 1);
-            let end = match aligned.checked_add(layout.size()) {
-                Some(end) if end <= ARENA_BYTES => end,
-                _ => return core::ptr::null_mut(),
-            };
-            match self
-                .used
-                .compare_exchange_weak(offset, end, Ordering::AcqRel, Ordering::Relaxed)
-            {
-                Ok(_) => {
-                    let base = self.memory.get() as *mut u8;
-                    return unsafe { base.add(aligned) };
-                }
-                Err(current) => offset = current,
-            }
-        }
-    }
-
-    unsafe fn dealloc(&self, _ptr: *mut u8, _layout: Layout) {
-        // Zurueckgeben gibt es nicht. Ein Init-Prozess, der Speicher
-        // freigibt, ist ein spaeterer Schritt mit eigener Rechnung.
-    }
-}
-
-#[global_allocator]
-#[used] // ohne `used` wirft der Linker den Vorrat weg, weil das Programm nichts allokiert
-static ALLOCATOR: Arena = Arena {
-    memory: UnsafeCell::new([0u8; ARENA_BYTES]),
-    used: core::sync::atomic::AtomicUsize::new(0),
-};
+// Der Allocator liegt in `allocator.rs`, weil beide Programme des Crates einen
+// brauchen: `libshivacore` zieht `globus-ipc` mit, das einen globalen Allocator
+// verlangt. Ein zweites `#[global_allocator]` waere ein Linkfehler.
+mod allocator;
 
 /// Ein `Yield` als echter ABI-2.0-Aufruf.
 ///
