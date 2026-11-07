@@ -1618,9 +1618,8 @@ booleschen `initialized`. Der boolesche Flag konnte nicht sagen, ob ein Treiber
 laeuft, gestorben oder isoliert ist — und die Supervisor-Logik lag ungenutzt
 herum, waehrend der laufende Code sie nicht kannte.
 
-**Entscheidung:** Der Lebenszyklus bleibt in `atc_drivers::driver_framework`,
-und `DriverManager` benutzt ihn jetzt (`atc_drivers` als Abhaengigkeit,
-`service_space/Cargo.toml`). `init_all()` meldet jeden vorhandenen Treiber an
+**Entscheidung (in der Folgestunde korrigiert, siehe unten):** Der Lebenszyklus
+sollte eine einzige Implementierung haben und `DriverManager` sie benutzen. `init_all()` meldet jeden vorhandenen Treiber an
 (Register -> Active), Geraete-Id ist die MMIO-Basis (stabil, eindeutig, keine
 erfundene Nummerierung), Anmelden ist idempotent, und `report_driver_fault()`
 isoliert einen Treiber und schreibt `SC-DRV-0008` ins Protokoll. Der Service
@@ -1634,4 +1633,39 @@ eine zweite Implementierung zu versprechen. `audio.rs`, `gpu.rs`, `hid.rs`,
 `usb.rs` bleiben PLANNED — fuer sie gibt es im Baum tatsaechlich nichts, und das
 steht jetzt als nachgepruefter Satz darin. `STATUS.md` des Moduls sprach noch
 von SKELETON/INITIALIZING (Stand 05.08.) und sagt jetzt, was wo liegt.
+
+## Nachtrag 07.11. 13:15 — die Kante zeigte in die falsche Richtung
+
+Der vorige Schritt hat die Doppelung beseitigt, aber dabei eine neue
+Architekturverletzung eingebaut: `service_space/Cargo.toml` bekam
+`atc_drivers` als Abhaengigkeit. Damit zeigte die **Kernschicht auf ein
+Produktmodul** — das Crate mit Cargo-Beschreibung "Hardware-Treiber" und einer
+React-Anzeige (`src/components/HardwareDriversView.tsx`). Ich habe das geprueft,
+statt es zu hoffen: es war die **einzige Modul-zu-Modul-Kante im ganzen Baum**.
+Die vorhandenen Kanten laufen alle abwaerts (`modules/atc-shivacore/kernel` und
+`atc-drivers` auf `system/diagnostics`, `service_space` auf `system/devices`,
+`system/*` untereinander) — und `system/runtime` haengt an
+`shivacore-service-space`, also zeigt die Produktseite auf die Kernschicht, nie
+umgekehrt.
+
+**Korrektur:** `driver_framework.rs` ist nach
+`system/devices/src/driver_lifecycle.rs` umgezogen (Systemvertrag, nicht
+Anzeige-Frage). Der Service Space importiert `globus_devices::driver_lifecycle`
+— diese Abhaengigkeit hatte er ohnehin schon. `atc_drivers` haengt jetzt an
+`globus-devices` und **re-exportiert** nur noch, der Pfad
+`atc_drivers::driver_framework::…` bleibt gueltig, die Modul-zu-Modul-Kante ist
+weg. Der Test des Lebenszyklus ist mit umgezogen (globus-devices: 37 Tests).
+
+**Zweiter Befund, unabhaengig davon:** Der Service Space baut **nicht** fuer
+`x86_64-unknown-none`. Der Abbruch kommt aus `sha2` ueber
+`ed25519-dalek` (vorbestehend, nicht aus diesem Umbau). Solange das so ist, kann
+der Service Space nicht in ein Boot-Image gelinkt werden — das ist der eigentliche
+Grund, warum `sync_from_boot()` keinen Zieher hat, und ein eigener Auftrag.
+
+**Dritter Befund derselben Pruefung:** Das Wurzel-`FILE_REGISTER.md` behauptete
+"vollstaendige maschinell generierte Liste aller Dateien", enthielt aber 209 von
+503 getrackten Dateien — **alle 141 Dateien aus `system/` fehlten** (Erzeugung
+ueber die GitHub-Trees-API am 10.09.). Jetzt aus `git ls-files` erzeugt: 503
+Eintraege, 0 fehlende Pfade, 0 Differenz zur Dateiliste. Damit sind beide
+Register zum ersten Mal deckungsgleich mit dem Baum.
 
