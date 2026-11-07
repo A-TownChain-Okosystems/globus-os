@@ -9,8 +9,8 @@ use alloc::string::{String, ToString};
 #[allow(unused_imports)]
 use alloc::vec;
 use alloc::vec::Vec;
-use atc_drivers::driver_framework::{DriverRecord, DriverState, DriverSupervisor};
 use core::sync::atomic::{AtomicU64, Ordering};
+use globus_devices::driver_lifecycle::{DriverRecord, DriverState, DriverSupervisor};
 use shivacore::ats1000::Pid;
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -906,7 +906,7 @@ pub struct DriverManager {
     pub virtio_blk: Option<VirtioBlkDevice>,
     pub virtio_net: Option<VirtioNetDevice>,
     /// Der Lebenszyklus der Treiber liegt NICHT hier, sondern in
-    /// `atc_drivers::driver_framework` (Registered -> Active -> Faulted/Isolated).
+    /// `globus_devices::driver_lifecycle` (Registered -> Active -> Faulted/Isolated).
     /// Zwei Zustandsmodelle nebeneinander waeren zwei Wahrheiten: hier ist nur
     /// der Zeiger darauf.
     supervisor: DriverSupervisor,
