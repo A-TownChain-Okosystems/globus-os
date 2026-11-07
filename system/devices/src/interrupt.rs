@@ -1,5 +1,6 @@
 //! Architecture-neutral interrupt routing and acknowledgement contract.
 
+use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct InterruptVector(pub u16);
 
