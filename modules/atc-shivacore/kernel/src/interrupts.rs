@@ -216,11 +216,21 @@ static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 /// Der einzige Userspace->Kernel-Pfad: Dispatcher + Capability-Tabelle.
 static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
 
-pub fn init_user_scheduler(first: &UserContext, second: &UserContext, third: &UserContext) {
+pub fn init_user_scheduler(
+    first: &UserContext,
+    second: &UserContext,
+    third: &UserContext,
+    fourth: Option<&UserContext>,
+) {
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
     scheduler.add_process(third.pid, third, 0);
+    // Der vierte Platz ist der zweite Programmplatz aus der Ramdisk. Er ist
+    // optional: ein Image ohne Verzeichnis hat nur drei Prozesse.
+    if let Some(fourth) = fourth {
+        scheduler.add_process(fourth.pid, fourth, 0);
+    }
     let _ = scheduler.schedule(None);
     *USER_SCHEDULER.lock() = Some(scheduler);
     {
@@ -229,12 +239,27 @@ pub fn init_user_scheduler(first: &UserContext, second: &UserContext, third: &Us
             *gate = Some(SyscallGate::new());
         }
     }
-    serial_println!(
-        "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={} + PID={} (Syscall-Schleife)",
-        first.pid.0,
-        second.pid.0,
-        third.pid.0
-    );
+    // Klammern um die Arme: `serial_println!` endet intern mit einem Semikolon
+    // und ist damit kein Ausdruck, den ein Match-Arm direkt zurueckgeben kann.
+    match fourth {
+        Some(fourth) => {
+            serial_println!(
+                "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={} + PID={} + PID={} (Ring 3)",
+                first.pid.0,
+                second.pid.0,
+                third.pid.0,
+                fourth.pid.0
+            );
+        }
+        None => {
+            serial_println!(
+                "ShivaCore: SCHED-001 scheduler armed: PID={} + PID={} + PID={} (Syscall-Schleife)",
+                first.pid.0,
+                second.pid.0,
+                third.pid.0
+            );
+        }
+    }
 }
 
 /// Gibt einem Prozess das Leserecht auf den Kernel-Eingabekanal und liefert die
