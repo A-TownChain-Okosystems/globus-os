@@ -177,6 +177,12 @@ pub static TIMER_TICKS: AtomicU64 = AtomicU64::new(0);
 /// Wie viele Syscalls der Gate insgesamt bedient hat.
 pub static SYSCALL_ENTRIES: AtomicU64 = AtomicU64::new(0);
 
+lazy_static! {
+    /// Zaehler ueber alle Prozessorfehler seit dem Start.
+    static ref FAULT_COUNTERS: Mutex<shivacore::fault::FaultCounters> =
+        Mutex::new(shivacore::fault::FaultCounters::new());
+}
+
 static PATTERN_ESTABLISHED: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(false)];
 
 /// Ob fuer einen Platz ueberhaupt ein Register-Muster erwartet wird.
@@ -297,7 +303,13 @@ lazy_static! {
     static ref IDT: InterruptDescriptorTable = {
         let mut idt = InterruptDescriptorTable::new();
         idt.breakpoint.set_handler_fn(breakpoint_handler);
-        idt.page_fault.set_handler_fn(page_fault_handler);
+        // Seitenfehler laufen ueber den Trampolin, nicht ueber einen
+        // x86-interrupt-Handler: nur dort laesst sich der Rahmen aendern, und
+        // nur so kann ein Fehler in Ring 3 den Prozess beenden statt sich zu
+        // wiederholen.
+        unsafe {
+            idt.page_fault.set_handler_addr(fault_trampoline_addr());
+        }
         unsafe {
             idt.double_fault
                 .set_handler_fn(double_fault_handler)
@@ -403,6 +415,34 @@ pub struct UserTrapFrame {
 }
 
 impl UserTrapFrame {
+    /// Schreibt einen gespeicherten Kontext in diesen Rahmen.
+    ///
+    /// Das Gegenstueck zu `saved_context`: nach der Rueckkehr ins Assembly
+    /// stellt `iretq` den Prozess aus genau diesen Feldern her. Ohne diese
+    /// Richtung koennte ein Handler den Prozess nicht wechseln, und eine
+    /// Ausnahme liesse sich nicht beenden.
+    pub fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        self.rax = ctx.regs.rax;
+        self.rbx = ctx.regs.rbx;
+        self.rcx = ctx.regs.rcx;
+        self.rdx = ctx.regs.rdx;
+        self.rsi = ctx.regs.rsi;
+        self.rdi = ctx.regs.rdi;
+        self.rbp = ctx.regs.rbp;
+        self.rsp = ctx.regs.rsp;
+        self.r8 = ctx.regs.r8;
+        self.r9 = ctx.regs.r9;
+        self.r10 = ctx.regs.r10;
+        self.r11 = ctx.regs.r11;
+        self.r12 = ctx.regs.r12;
+        self.r13 = ctx.regs.r13;
+        self.r14 = ctx.regs.r14;
+        self.r15 = ctx.regs.r15;
+        self.rip = ctx.iret.rip;
+        self.cs = u64::from(ctx.iret.cs);
+        self.rflags = ctx.iret.rflags;
+    }
+
     fn saved_context(&self) -> SavedContext {
         SavedContext {
             regs: shivacore::user_sched::SavedRegisters {
@@ -551,6 +591,132 @@ shivacore_timer_trampoline:
 "#,
     handler = sym timer_trap_rust
 );
+
+global_asm!(
+    r#"
+    .global shivacore_fault_trampoline
+shivacore_fault_trampoline:
+    // Bei Ausnahmen mit Fehlercode legt die CPU den Code VOR den Rahmen:
+    // [err][rip][cs][rflags][rsp][ss]. Er wird in ein Scratch-Register geholt,
+    // damit danach derselbe Aufbau wie beim Timer steht und `UserTrapFrame`
+    // unveraendert gilt. Der Prozess, dessen r11 hier steht, wird beendet; sein
+    // Registerwert ist damit ohne Belang.
+    pop r11
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov rdi, rsp
+    // Fehlercode als zweites Argument. Lage nachrechnen statt raten: 15 Pushes
+    // (120 Byte), r11 war der fuenfte Push von oben, also 15-5 = 10 Felder
+    // ueber dem Stapelzeiger -> rsp + 80. Mit dem falschen Offset (32) landete
+    // r13 im Fehlercode und das Log behauptete "Lesen" statt "Schreiben".
+    mov rsi, [rsp + 80]
+    call {handler}
+    pop rax
+    pop rbx
+    pop rcx
+    pop rdx
+    pop rsi
+    pop rdi
+    pop rbp
+    pop r8
+    pop r9
+    pop r10
+    pop r11
+    pop r12
+    pop r13
+    pop r14
+    pop r15
+    iretq
+"#,
+    handler = sym fault_trap_rust
+);
+
+/// Fasst die Ausnahme an, statt sie zu wiederholen.
+///
+/// Der Rahmen wird hier **veraendert**: nach der Rueckkehr springt `iretq`
+/// nicht in den fehlerhaften Prozess, sondern in den naechsten lauffaehigen.
+/// Genau das war vorher die Luecke — der alte Handler gab nur aus und kehrte
+/// zurueck, die Ausnahme loeste sofort wieder aus und die Maschine haengte.
+#[no_mangle]
+extern "C" fn fault_trap_rust(frame: &mut UserTrapFrame, error_code: u64) {
+    use x86_64::registers::control::Cr2;
+
+    let origin = shivacore::fault::Origin::from_cs(frame.cs);
+    let action = shivacore::fault::decide(origin);
+    let report = shivacore::fault::FaultReport::from_error_code(error_code);
+    // Cr2::read liefert in dieser Fassung ein Result; die Zahl ist das, was im
+    // Log steht, nicht die Debug-Form.
+    let address = match Cr2::read() {
+        Ok(addr) => addr.as_u64(),
+        Err(_) => 0,
+    };
+    let recorded = FAULT_COUNTERS.lock().record(origin, action);
+
+    match action {
+        shivacore::fault::FaultAction::TerminateProcess => {
+            let pid = USER_SCHEDULER
+                .lock()
+                .as_ref()
+                .and_then(|scheduler| scheduler.current_pid());
+            serial_println!(
+                "ShivaCore: Prozessfehler PID={:?} Adresse={:#x} ({}), Usermodus={} [beendet: {}, Kernel: {}]",
+                pid,
+                address,
+                report.describe(),
+                report.from_user,
+                recorded.terminated,
+                recorded.kernel_faults
+            );
+            let next = {
+                let mut guard = USER_SCHEDULER.lock();
+                let scheduler = guard.as_mut();
+                match (scheduler, pid) {
+                    (Some(scheduler), Some(pid)) => {
+                        // Negativer Exit-Code wie ein Signal: -11 steht fuer
+                        // einen Seitenfehler und ist im Zombie-Fach nachlesbar.
+                        scheduler.exit_process(pid, -11, None)
+                    }
+                    _ => None,
+                }
+            };
+            match next {
+                Some((next_pid, next)) => {
+                    frame.apply_saved_context(&next);
+                    serial_println!(
+                        "ShivaCore: weiter mit PID={} statt den Fehler zu wiederholen",
+                        next_pid.0
+                    );
+                }
+                None => {
+                    serial_println!("ShivaCore: kein lauffaehiger Prozess mehr, Kernel haelt an");
+                    loop {
+                        x86_64::instructions::hlt();
+                    }
+                }
+            }
+        }
+        shivacore::fault::FaultAction::PanicKernel => {
+            panic!(
+                "Kernelausnahme: Adresse={:#x} ({}), Ring 0",
+                address,
+                report.describe()
+            );
+        }
+    }
+}
 
 #[no_mangle]
 extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
@@ -748,6 +914,15 @@ fn drain_input_queue() {
 
 fn timer_interrupt_entry_addr() -> VirtAddr {
     VirtAddr::new(shivacore_timer_trampoline as usize as u64)
+}
+
+/// Adresse des Ausnahme-Trampolins fuer die IDT.
+fn fault_trampoline_addr() -> VirtAddr {
+    VirtAddr::new(shivacore_fault_trampoline as usize as u64)
+}
+
+extern "C" {
+    fn shivacore_fault_trampoline();
 }
 
 /// Register-Konvention nach SC-004 §3 (Cap-Slot, Opcode, 4 Argument-Woerter,
