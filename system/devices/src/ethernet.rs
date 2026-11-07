@@ -1,5 +1,7 @@
 //! Ethernet NIC DMA rings with explicit ownership transitions.
 
+use alloc::vec;
+use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RingError {
     Empty,
