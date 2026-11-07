@@ -1467,3 +1467,52 @@ Ergebnis: `pub mod container_net;` in `lib.rs`, no_std-Build sauber,
 **103 Tests** gruen (vorher: nie gelaufen), clippy mit `-D warnings` still.
 Workspace jetzt **1615 Tests**.
 
+## Nachtrag 07.11. 13:10 — Repo-weiter Abgleich: was noch nicht kompiliert wird
+
+Nach `container_net` habe ich denselben Abgleich nicht nur fuer die zwei Crates,
+sondern fuer alle 32 Cargo-Targets gemacht. Ergebnis, ehrlich sortiert:
+
+**Behoben:**
+
+- `system/package/src/dependency.rs` (88 Zeilen, 2 Tests) war nicht deklariert.
+  `pub mod dependency;` ergaenzt — 2 Tests laufen jetzt (Paket-Crate 8 statt 6).
+- `system/media/src/sync.rs` (23 Zeilen) war ein toter Doppelgaenger zu
+  `av_sync.rs`: dort steht die kanonische Policy (`AvSyncPolicy`, `SyncDecision`,
+  per `pub use` re-exportiert), hier eine zweite mit anderem Namen
+  (`SyncPolicy`). Keine Referenz, keine Tests. Entfernt — Redundanz statt
+  zweier Wahrheiten.
+
+**Bewusst nicht aktiviert:**
+
+- `modules/atc-drivers/kernel/src/hw_drivers.rs`, 1267 Zeilen mit **61 Tests**,
+  liegt ohne Cargo.toml und ohne `mod` in der Gegend. Ich habe den Einbau
+  versucht (Kopie in den Service Space, Pfade umgebogen) und nach 45 Fehlern
+  abgebrochen, weil sie nicht mechanisch sind: die Datei erwartet **andere
+  Verträge**, als der Code heute anbietet.
+  1. Netz: sie implementiert `send`/`recv`, `service_space::net::NetworkDevice`
+     verlangt `send_frame`/`recv_frame`.
+  2. Block: sie implementiert `read_block(lba) -> [u8; 512]` und nutzt ein
+     `BlockError::ReadOnly`, das es in `globus_devices::block::BlockError` nicht
+     gibt; dort heisst der Weg `read(BlockRequest, &mut [u8])` mit
+     `validate_request` davor.
+  3. Timer: die Implementierung hat `reset`, `shivacore::timer::TimerSource`
+     kennt die Methode nicht.
+  Dazu bringt die Datei ein eigenes `PciDeviceId` mit, das neben dem neuen
+  `pci_scan::PciDevice` eine zweite PCI-Wahrheit waere.
+
+  Das ist keine Portierung, sondern eine **Vertragsentscheidung**: welche
+  Block-Abstraktion gilt, ob ein Nur-Lese-Geraet im gemeinsamen Fehlertyp
+  ausdrueckbar sein muss, und ob die Treiber-PCI-Sicht durch `pci_scan` ersetzt
+  wird. Diese Entscheidung gehoert dem Owner, nicht in einen Nebenbei-Commit —
+  die 61 Tests sind es aber wert, sobald sie gefallen ist.
+
+- `modules/atc-linux-edition` und `atc-windows-edition`: je fuenf Module mit 31-36
+  Zeilen, ausdruecklich als "STUB: Wird in Sprint implementiert" markiert, 0
+  Tests. Die Crates bauen nur ihre `main.rs` (Sprint-0-Platzhalter). Das sind
+  Platzhalter, kein unkompiliertes Wissen — bleiben liegen.
+
+- `modules/atc-shivacore/legacy/kernel-src-uncompiled/`: der Verzeichnisname sagt
+  schon, was es ist.
+
+Stand nach diesem Durchgang: 1617 Tests im Workspace.
+
