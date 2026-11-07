@@ -2034,3 +2034,56 @@ wie beim Tastenkanal, Loesung sind Klammern um die Arme.
 startet beide, weil er das Verzeichnis liest. Der Unterschied ist der fehlende
 Spawn-Weg in der ABI: ein Prozess kann heute keinen weiteren erzeugen.
 
+## Nachtrag 07.11. 19:40 — ein Programmabsturz reisst das System nicht mehr mit
+
+**Der Befund.** Der Seitenfehler-Handler gab Adresse und Fehlercode aus und
+kehrte dann zurueck. Bei einem Fehler aus Ring 3 heisst das: an dieselbe
+Anweisung zurueck, die eben gefehlt hat. Die Ausnahme loest sofort erneut aus,
+die Maschine haengt. Andere Ausnahmen (General Protection, ungueltiger Opcode)
+hatten gar keinen Handler. Die Anforderung "ein Programmabsturz im User Space
+darf niemals den Kernel reissen" wurde damit nicht erfuellt — gemessen, nicht
+vermutet.
+
+**Die Entscheidung, pruefbar getrennt (`kernel/src/fault.rs`, 9 Tests).** Wer
+den Fehler bezahlt, haengt am Ring, und der Ring steht im Code-Segment des
+Rahmens: CS-Bits 0-1 gleich 0 heisst Kernel, sonst User. Ein Fehler aus Ring 3
+kostet den Prozess, ein Fehler aus Ring 0 stoppt den Kernel. Dazu wird der
+Fehlercode gelesen statt nur geloggt (Bit 0 heisst "vorhanden", nicht "fehlt",
+das ist die klassische Verwechslung) und nach Herkunft getrennt gezaehlt.
+
+**Die Ausfuehrung (`interrupts.rs`).** Eine Ausnahme mit Fehlercode legt diesen
+vor den Rahmen. Der Trampolin holt ihn weg, sichert die Register wie beim Timer,
+ruft den Handler und macht `iretq`. Der Handler **aendert den Rahmen**: der
+fehlerhafte Prozess geht per `exit_process` in den Zombie-Zustand mit
+Exit-Code -11, der naechste lauffaehige Kontext wird in den Rahmen geschrieben,
+und `iretq` landet dort. Gibt es keinen lauffaehigen Prozess mehr, haelt der
+Kernel bewusst an, statt einen toten Prozess fortzusetzen.
+
+**Belegt in QEMU, BIOS und UEFI, 0 Panics**, mit einem dritten Programm
+`init_program/src/bin/crash.rs`, das auf `0x0DEAD000` schreibt (in keinem
+Fenster abgebildet):
+```
+ShivaCore: Prozessfehler PID=Some(Pid(1003)) Adresse=0xdead000 (Seite nicht vorhanden, Schreiben), Usermodus=true [beendet: 1, Kernel: 0]
+ShivaCore: weiter mit PID=1000 statt den Fehler zu wiederholen
+```
+Entscheidend ist nicht die Zeile, sondern die Zaehlung: der letzte Wechsel auf
+PID 1003 steht in Zeile 101, der Fehler in Zeile 102, **danach null Wechsel**
+auf 1003. Der Prozess laeuft nicht wieder. Init (1000) setzt seinen Syscall
+weiter ab, 78 Wechsel auf 1000 nach dem Fehler.
+
+Gegenprobe ohne Absturz (Ramdisk mit `init` und `probe`): kein Prozessfehler,
+PID 1003 laeuft mit 60 Wechseln. Die Ausnahme kostet also nur, wenn es wehtut.
+
+**Eigener Fehler unterwegs.** Der Fehlercode lag nach 15 Pushes bei `rsp + 80`;
+ich las `rsp + 32` und bekam r13 zu sehen. Das Log behauptete daraufhin
+"Lesen" und `Usermodus=false`, obwohl ein Schreibzugriff aus Ring 3 vorlag. Die
+Prozessbeendigung funktionierte trotzdem, was den Fehler fast verdeckt haette —
+aufgefallen ist er an der Beschreibung, nicht am Absturz. Lehre: bei
+Stack-Offsets die Lage nachrechnen und die Ausgabe gegen die Erwartung pruefen.
+
+**Ehrliche Grenzen.** Nur der Seitenfehler hat einen Trampolin; General
+Protection und ungueltiger Opcode haengen weiter. Der Adressraum des beendeten
+Prozesses wird nicht freigegeben (die Seiten bleiben belegt), und die Zombies
+werden nicht eingesammelt. Und die Trennung bleibt halb: ohne eigenen CR3 je
+Prozess kann ein laufendes Programm den Speicher eines anderen lesen.
+
