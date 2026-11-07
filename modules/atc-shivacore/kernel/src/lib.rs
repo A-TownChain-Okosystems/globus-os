@@ -54,3 +54,4 @@ pub mod boot_devices;
 #[cfg(test)]
 pub mod lkm;
 pub mod pci_scan;
+pub mod ramdisk;
