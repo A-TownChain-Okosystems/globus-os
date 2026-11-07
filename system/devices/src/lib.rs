@@ -6,6 +6,7 @@ pub mod block;
 pub mod block_cache;
 pub mod block_manager;
 pub mod boot;
+pub mod driver_lifecycle;
 pub mod ethernet;
 pub mod interrupt;
 pub mod iommu;
