@@ -16,14 +16,14 @@
 | `./ARCHITECTURE.md` | 112 | md |
 | `./CHANGELOG.md` | 21 | md |
 | `./COMPONENT_PLAN.md` | 732 | md |
-| `./FILE_REGISTER.md` | 120 | md |
+| `./FILE_REGISTER.md` | 121 | md |
 | `./LICENSE` | 17 | – |
 | `./README.md` | 1.101 | md |
 | `./ROADMAP.md` | 21 | md |
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 12 | toml |
 | `./boot/src/main.rs` | 31 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.760 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.791 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -99,7 +99,7 @@
 | `./service_space/src/consensus.rs` | 1.135 | rs |
 | `./service_space/src/container_net.rs` | 2.840 | rs |
 | `./service_space/src/contract.rs` | 339 | rs |
-| `./service_space/src/device_registry.rs` | 772 | rs |
+| `./service_space/src/device_registry.rs` | 977 | rs |
 | `./service_space/src/did.rs` | 394 | rs |
 | `./service_space/src/genesis.rs` | 1.183 | rs |
 | `./service_space/src/genesis_bridge.rs` | 1.148 | rs |
