@@ -10,6 +10,7 @@ extern crate alloc;
 #[cfg(test)]
 extern crate std;
 
+pub mod acpi_devices;
 #[cfg(test)]
 pub mod allocator;
 pub mod apic;
