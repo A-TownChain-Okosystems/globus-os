@@ -106,6 +106,9 @@ pub struct RegistryStats {
 pub struct DeviceRegistry {
     devices: Vec<(DeviceEntry, Option<Pid>)>,
     stats: RegistryStats,
+    /// Zaehlt, was ueber die Enum-Quelle kam. Getrennt von der Cap-Pruefung,
+    /// damit im Betrieb sichtbar bleibt, wie viel ohne Cap hereinkam.
+    registered_without_cap: u64,
 }
 
 impl DeviceRegistry {
@@ -113,6 +116,7 @@ impl DeviceRegistry {
         Self {
             devices: Vec::new(),
             stats: RegistryStats::default(),
+            registered_without_cap: 0,
         }
     }
 
@@ -245,6 +249,131 @@ impl DeviceRegistry {
 
     pub fn stats(&self) -> RegistryStats {
         self.stats
+    }
+}
+
+// ── Uebergang von der Enum-Quelle zur Registratur ────────────────────────
+//
+// Der Kernel findet Geraete (`shivacore::pci_scan`), der Service Space verwaltet
+// sie. Die Crate-Grenze laeuft in genau eine Richtung — der Service Space baut
+// auf dem Kernel auf —, also liegt die Uebersetzung hier und nicht dort.
+
+use shivacore::pci_scan::{DeviceKind, PciDevice};
+
+impl DeviceClass {
+    /// Gattung aus der PCI-Entdeckung uebersetzen.
+    ///
+    /// `Gpu` bleibt absichtlich aussen vor: die PCI-Klasse 0x03 heisst "Display"
+    /// und deckt Bildschirm wie Beschleuniger ab. Ob ein Geraet eine GPU ist,
+    /// weiss erst der Treiber, nicht der Klassencode.
+    pub fn from_kind(kind: DeviceKind) -> Self {
+        match kind {
+            DeviceKind::Storage => DeviceClass::Storage,
+            DeviceKind::Network => DeviceClass::Network,
+            DeviceKind::Display => DeviceClass::Display,
+            DeviceKind::Input => DeviceClass::Input,
+            DeviceKind::Audio => DeviceClass::Audio,
+            DeviceKind::Usb => DeviceClass::Usb,
+            DeviceKind::Bridge => DeviceClass::Other,
+            DeviceKind::Other => DeviceClass::Other,
+        }
+    }
+
+    /// Der Weg zurueck, fuer Rundlauf-Pruefungen.
+    pub fn to_kind(self) -> DeviceKind {
+        match self {
+            DeviceClass::Storage => DeviceKind::Storage,
+            DeviceClass::Network => DeviceKind::Network,
+            DeviceClass::Display | DeviceClass::Gpu => DeviceKind::Display,
+            DeviceClass::Input => DeviceKind::Input,
+            DeviceClass::Audio => DeviceKind::Audio,
+            DeviceClass::Usb => DeviceKind::Usb,
+            DeviceClass::Other => DeviceKind::Other,
+        }
+    }
+}
+
+/// Kennung, unter der ein PCI-Geraet in der Registratur steht.
+///
+/// Aus der Hardware abgeleitet, nicht fortlaufend vergeben: Bus, Geraet und
+/// Funktion passen in 24 Bit. Damit ist die Kennung stabil ueber Neustarts und
+/// zwei Laeufe derselben Maschine liefern dieselben Kennungen — sonst waere jede
+/// gespeicherte Device-Cap nach dem naechsten Boot wertlos.
+pub fn pci_device_id(device: &PciDevice) -> u64 {
+    ((device.address.bus as u64) << 16)
+        | ((device.address.device as u64) << 8)
+        | device.address.function as u64
+}
+
+/// Ein gefundenes Geraet als Registratur-Eintrag.
+pub fn entry_from_hardware(device: &PciDevice) -> DeviceEntry {
+    DeviceEntry {
+        id: pci_device_id(device),
+        class: DeviceClass::from_kind(device.kind()),
+        name: alloc::format!(
+            "pci {:02x}:{:02x}.{} {:04x}:{:04x}",
+            device.address.bus,
+            device.address.device,
+            device.address.function,
+            device.vendor,
+            device.device
+        ),
+    }
+}
+
+/// Ergebnis eines Abgleichs mit der Enum-Quelle.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct DiscoveryOutcome {
+    pub adopted: u64,
+    pub already_known: u64,
+}
+
+impl DeviceRegistry {
+    /// Ein gefundenes Geraet uebernehmen.
+    ///
+    /// Der Unterschied zu `register`: hier prueft keine Cap. Das ist Absicht.
+    /// Der Kernel hat Gewalt ueber die Geraete, weil er sie gefunden hat — er
+    /// liest den Konfigurationsraum, ein Prozess kann das nicht. `register`
+    /// bleibt der Weg fuer Prozesse und prueft weiterhin die Device-Cap.
+    ///
+    /// Wer diese Funktion aus dem Userspace erreichbar macht, hebt die
+    /// Rechtepruefung auf. Sie gehoert ausschliesslich in den Aufruf, in dem die
+    /// Enum-Quelle laeuft.
+    ///
+    /// Ein uebernommenes Geraet hat **keinen Besitzer**. Finden ist offen,
+    /// Besitzen bleibt geprueft: der erste `claim` mit passender Cap entscheidet.
+    pub fn adopt_discovered(&mut self, device: &PciDevice) -> Result<DeviceEntry, RegistryError> {
+        let entry = entry_from_hardware(device);
+        if self.devices.iter().any(|(e, _)| e.id == entry.id) {
+            return Err(RegistryError::AlreadyRegistered);
+        }
+        self.registered_without_cap += 1;
+        self.devices.push((entry.clone(), None));
+        self.devices.sort_by_key(|(e, _)| e.id);
+        self.stats.registered += 1;
+        Ok(entry)
+    }
+
+    /// Alle gefundenen Geraete uebernehmen, was schon da ist wird gezaehlt
+    /// statt doppelt eingetragen. Damit ist der Abgleich wiederholbar: ein
+    /// zweiter Boot mit derselben Hardware aendert nichts.
+    pub fn sync_from_hardware(&mut self, devices: &[PciDevice]) -> DiscoveryOutcome {
+        let mut outcome = DiscoveryOutcome::default();
+        for device in devices {
+            match self.adopt_discovered(device) {
+                Ok(_) => outcome.adopted += 1,
+                Err(RegistryError::AlreadyRegistered) => outcome.already_known += 1,
+                Err(_) => {}
+            }
+        }
+        outcome
+    }
+
+    /// Wie viele Eintraege ohne Cap-Prüfung uebernommen wurden. Steht nicht in
+    /// `RegistryStats`, weil das eine andere Frage ist: nicht "wer wurde
+    /// abgelehnt", sondern "wie viel kam ungeprueft herein".
+    pub fn discovered_without_cap(&self) -> u64 {
+        self.registered_without_cap
     }
 }
 
@@ -438,5 +567,161 @@ mod tests {
         assert_eq!(reg.stats().registered, 1);
         assert_eq!(reg.stats().denied_no_cap, 0);
         assert_eq!(reg.stats().claimed, 0);
+    }
+
+    // ── Uebergang von der Enum-Quelle ────────────────────────────────────
+
+    fn pci(
+        bus: u8,
+        device: u8,
+        function: u8,
+        vendor: u16,
+        id: u16,
+        class: u8,
+        subclass: u8,
+    ) -> PciDevice {
+        PciDevice {
+            address: shivacore::pci_scan::PciAddress::new(bus, device, function),
+            vendor,
+            device: id,
+            class,
+            subclass,
+            header_type: 0x00,
+        }
+    }
+
+    #[test]
+    fn the_identifier_comes_from_the_hardware_not_from_a_counter() {
+        let a = pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00);
+        let b = pci(0, 2, 1, 0x1234, 0x1111, 0x03, 0x00);
+        let c = pci(1, 2, 0, 0x1234, 0x1111, 0x03, 0x00);
+        // Zwei Laeufe derselben Maschine liefern dieselbe Kennung ...
+        assert_eq!(pci_device_id(&a), pci_device_id(&a));
+        // ... und verschiedene Stellen verschiedene.
+        assert_ne!(pci_device_id(&a), pci_device_id(&b));
+        assert_ne!(pci_device_id(&a), pci_device_id(&c));
+        assert_eq!(pci_device_id(&a), (2 << 8));
+    }
+
+    #[test]
+    fn every_discovered_kind_lands_in_the_right_class() {
+        for (class, subclass, expected) in [
+            (0x01u8, 0x08u8, DeviceClass::Storage),
+            (0x02, 0x00, DeviceClass::Network),
+            (0x03, 0x00, DeviceClass::Display),
+            (0x09, 0x00, DeviceClass::Input),
+            (0x04, 0x01, DeviceClass::Audio),
+            (0x0C, 0x03, DeviceClass::Usb),
+            (0x06, 0x01, DeviceClass::Other), // Bruecken sind keine Dienstgeraete
+            (0xFF, 0x00, DeviceClass::Other),
+        ] {
+            let entry = entry_from_hardware(&pci(0, 3, 0, 0x8086, 0x1234, class, subclass));
+            assert_eq!(entry.class, expected, "Klasse {class:#04x}/{subclass:#04x}");
+        }
+    }
+
+    #[test]
+    fn the_name_carries_the_address_a_human_needs() {
+        let entry = entry_from_hardware(&pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00));
+        assert_eq!(
+            entry.name,
+            alloc::string::String::from("pci 00:02.0 1234:1111")
+        );
+    }
+
+    #[test]
+    fn adopting_twice_does_not_duplicate() {
+        let device = pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00);
+        let mut reg = DeviceRegistry::new();
+        assert!(reg.adopt_discovered(&device).is_ok());
+        assert_eq!(
+            reg.adopt_discovered(&device),
+            Err(RegistryError::AlreadyRegistered)
+        );
+        assert_eq!(reg.list().len(), 1);
+    }
+
+    #[test]
+    fn a_discovered_device_has_no_owner() {
+        let mut reg = DeviceRegistry::new();
+        let entry = reg
+            .adopt_discovered(&pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00))
+            .unwrap();
+        // Finden ist offen, Besitzen bleibt geprueft.
+        assert_eq!(reg.owner_of(entry.id), None);
+        assert_eq!(reg.stats().claimed, 0);
+    }
+
+    #[test]
+    fn discovery_does_not_open_the_device_for_anyone() {
+        let mut table = CapabilityTable::new();
+        let mem = table
+            .create_typed(Pid(5), ResourceType::Memory, 2 << 8, Rights::ACCESS)
+            .unwrap();
+        let mut reg = DeviceRegistry::new();
+        let entry = reg
+            .adopt_discovered(&pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00))
+            .unwrap();
+        // Der Eintrag ist sichtbar ...
+        assert!(reg.get(entry.id).is_some());
+        // ... aber eine Memory-Cap oeffnet ihn nicht.
+        assert_eq!(
+            reg.claim(table.get(mem).unwrap(), entry.id),
+            Err(RegistryError::NotADeviceCap)
+        );
+        assert_eq!(reg.owner_of(entry.id), None);
+    }
+
+    #[test]
+    fn a_second_sync_with_the_same_hardware_changes_nothing() {
+        let devices = vec![
+            pci(0, 2, 0, 0x1234, 0x1111, 0x03, 0x00),
+            pci(0, 3, 0, 0x8086, 0x100E, 0x02, 0x00),
+        ];
+        let mut reg = DeviceRegistry::new();
+        let first = reg.sync_from_hardware(&devices);
+        assert_eq!(first.adopted, 2);
+        assert_eq!(first.already_known, 0);
+        let second = reg.sync_from_hardware(&devices);
+        assert_eq!(second.adopted, 0);
+        assert_eq!(second.already_known, 2);
+        assert_eq!(reg.list().len(), 2);
+        assert_eq!(reg.discovered_without_cap(), 2);
+    }
+
+    #[test]
+    fn the_class_mapping_round_trips_except_for_gpu() {
+        for class in [
+            DeviceClass::Storage,
+            DeviceClass::Network,
+            DeviceClass::Display,
+            DeviceClass::Input,
+            DeviceClass::Audio,
+            DeviceClass::Usb,
+            DeviceClass::Other,
+        ] {
+            assert_eq!(DeviceClass::from_kind(class.to_kind()), class);
+        }
+        // Eine GPU ist am PCI-Klassencode nicht zu erkennen; sie kommt als
+        // Display zurueck. Das ist die ehrliche Antwort, keine Luecke.
+        assert_eq!(
+            DeviceClass::from_kind(DeviceClass::Gpu.to_kind()),
+            DeviceClass::Display
+        );
+    }
+
+    #[test]
+    fn a_synced_device_can_be_claimed_with_the_matching_cap() {
+        let mut table = CapabilityTable::new();
+        let mut reg = DeviceRegistry::new();
+        let entry = reg
+            .adopt_discovered(&pci(0, 3, 0, 0x8086, 0x100E, 0x02, 0x00))
+            .unwrap();
+        let cap = cap(&mut table, 7, entry.id);
+        assert_eq!(
+            reg.claim(table.get(cap).unwrap(), entry.id).unwrap().owner,
+            Pid(7)
+        );
+        assert_eq!(reg.owner_of(entry.id), Some(Pid(7)));
     }
 }
