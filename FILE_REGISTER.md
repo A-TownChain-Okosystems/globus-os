@@ -1,7 +1,7 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Erzeugt:** 2026-11-07 aus `git ls-files` · **Dateien:** 503
+> **Erzeugt:** 2026-11-07 aus `git ls-files` · **Dateien:** 504
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
 >
 > Der vorige Stand war ueber die GitHub-Trees-API vom 2026-09-10 und nannte 209
@@ -36,9 +36,9 @@
 | `CHANGELOG.md` | 7 |
 | `CODEOWNERS` | 3 |
 | `CONTRIBUTING.md` | 9 |
-| `Cargo.lock` | 5.336 |
+| `Cargo.lock` | 5.341 |
 | `Cargo.toml` | 23 |
-| `FILE_REGISTER.md` | 516 |
+| `FILE_REGISTER.md` | 517 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
@@ -257,7 +257,7 @@
 | `modules/atc-shivacore/STATUS.md` | 114 |
 | `modules/atc-shivacore/boot/Cargo.toml` | 12 |
 | `modules/atc-shivacore/boot/src/main.rs` | 31 |
-| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.664 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.671 |
 | `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
 | `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
@@ -396,6 +396,7 @@
 | `system/devices/src/block_cache.rs` | 92 |
 | `system/devices/src/block_manager.rs` | 121 |
 | `system/devices/src/boot.rs` | 58 |
+| `system/devices/src/driver_lifecycle.rs` | 121 |
 | `system/devices/src/ethernet.rs` | 200 |
 | `system/devices/src/interrupt.rs` | 103 |
 | `system/devices/src/iommu.rs` | 173 |
