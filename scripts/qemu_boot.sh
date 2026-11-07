@@ -35,10 +35,12 @@ echo "== 1/4 Kernel-ELF bauen =="
   --target x86_64-unknown-none --features x86-boot)
 
 echo "== 2/4 Boot-Image-Builder bauen =="
-(cd "$ROOT" && RUSTUP_TOOLCHAIN=nightly cargo +nightly build --release -p boot)
+# Der Boot-Builder ist ein eigenes Crate (Nightly-Zwang des bootloader-Crates)
+# und wird deshalb in seinem Verzeichnis gebaut, nicht im Root-Workspace.
+(cd "$ROOT/modules/atc-shivacore/boot" && RUSTUP_TOOLCHAIN=nightly cargo +nightly build --release)
 
 echo "== 3/4 Disk-Image erzeugen =="
-"$ROOT/target/release/boot" "$KERNEL_ELF" "$ROOT/images"
+"$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images"
 
 echo "== 4/4 QEMU $RUN_SECONDS s (Log: $LOG) =="
 set +e
