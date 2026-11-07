@@ -31,11 +31,17 @@ pub fn _print(args: ::core::fmt::Arguments) {
     });
 }
 
+// Die doppelten Klammern sind Absicht: der Rumpf ist damit ein Block, und ein
+// Block ist ein Ausdruck. Mit nur einer Klammer endet die Expansion auf einem
+// Semikolon, und `serial_println!` laesst sich ueberall dort nicht verwenden,
+// wo ein Wert erwartet wird — in Match-Armen, `map`-Closures, `if`-Zweigen.
+// Diese Falle hat in diesem Projekt schon dreimal einen Build gekostet; sie
+// gehoert an die Definition, nicht an jede Aufrufstelle.
 #[macro_export]
 macro_rules! serial_print {
-    ($($arg:tt)*) => {
+    ($($arg:tt)*) => {{
         $crate::serial::_print(format_args!($($arg)*));
-    };
+    }};
 }
 
 #[macro_export]
