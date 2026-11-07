@@ -241,6 +241,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // unten den eingebauten Platzhalter: dieselben Seiten, derselbe Weg nach
     // Ring 3, nur mit echtem Code von einem Datentraeger.
     let mut ramdisk_program: Option<(alloc::vec::Vec<u8>, u64)> = None;
+    // Zweites Programm aus demselben Verzeichnis: es bekommt einen eigenen
+    // Prozess, damit das Verzeichnis nicht nur Auswahl, sondern auch Vielfalt
+    // bedeutet.
+    let mut ramdisk_second: Option<(alloc::string::String, alloc::vec::Vec<u8>, u64)> = None;
 
     // Die Ramdisk traegt das erste echte Userspace-Programm. Ohne sie ist der
     // Kernel ein geschlossenes Ganzes; mit ihr kommt ein Programm von einem
@@ -273,11 +277,40 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                                 entries.len(),
                                 names.join(", ")
                             );
-                            shivacore::ramdisk::find(&entries, "init")
+                            let chosen = shivacore::ramdisk::find(&entries, "init")
                                 .or_else(|| entries.first())
-                                .and_then(|entry| {
-                                    entry.data(bytes).map(|data| (entry.name.clone(), data))
-                                })
+                                .map(|entry| entry.name.clone());
+                            // Das zweite Programm: der erste Eintrag, der nicht
+                            // das Init ist. Es bekommt unten einen eigenen
+                            // Prozess, damit das Verzeichnis nicht nur Auswahl,
+                            // sondern auch Vielfalt bedeutet.
+                            if let Some(chosen_name) = &chosen {
+                                for entry in entries.iter().filter(|e| &e.name != chosen_name) {
+                                    let Some(data) = entry.data(bytes) else {
+                                        continue;
+                                    };
+                                    let Ok(parser) = shivacore::elf_loader::ElfParser::parse(data)
+                                    else {
+                                        continue;
+                                    };
+                                    let Some(segment) = parser.code_segment() else {
+                                        continue;
+                                    };
+                                    let Ok(code) = parser.segment_data(segment) else {
+                                        continue;
+                                    };
+                                    ramdisk_second = Some((
+                                        entry.name.clone(),
+                                        code.to_vec(),
+                                        parser.entry_point(),
+                                    ));
+                                    break;
+                                }
+                            }
+                            chosen.and_then(|name| {
+                                let entry = shivacore::ramdisk::find(&entries, &name)?;
+                                entry.data(bytes).map(|data| (name, data))
+                            })
                         }
                         Err(error) => {
                             serial_println!("ShivaCore: Ramdisk-Verzeichnis unlesbar: {:?}", error);
@@ -841,6 +874,42 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         )
         .expect("ShivaCore: third USER-001 user page mapping failed");
     }
+    // Vierter Prozess: das zweite Programm aus dem Verzeichnis. Eigener
+    // Adressraum, weil ein gemeinsames Codesegment mit dem Init sonst
+    // ueberschrieben wuerde; der Code ist lagerelativ, deshalb darf er wandern.
+    let user_ctx_4 = ramdisk_second.map(|(name, code, entry)| {
+        let base: u64 = 0x01C0_0000;
+        let space = userspace::UserAddressSpace {
+            code_base: base,
+            code_size: 0x0010_0000,
+            data_base: 0x01D0_0000,
+            data_size: 0x0010_0000,
+            stack_base: 0x07F0_0000,
+            stack_size: 0x0000_8000,
+            heap_base: 0x01E0_0000,
+            heap_size: 0x0010_0000,
+        };
+        let _ = entry;
+        let binary = userspace::UserBinary::from_bytes(&name, code, base);
+        unsafe {
+            userspace::map_user_binary(
+                &mut mapper,
+                &mut frame_allocator,
+                phys_mem_offset,
+                &binary,
+                &space,
+            )
+            .expect("ShivaCore: vierter Prozess nicht abbildbar");
+        }
+        let context = userspace::UserContext::new(ats1000::Pid(1003), &binary, space);
+        serial_println!(
+            "ShivaCore: vierter Prozess PID=1003 aus Ramdisk-Programm '{}' RIP={:#x}",
+            name,
+            context.rip
+        );
+        context
+    });
+
     let user_pid_3 = ats1000::Pid(1002);
     let user_ctx_3 = userspace::UserContext::new(user_pid_3, &user_binary_3, user_addr_space_3);
     serial_println!(
@@ -849,7 +918,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_ctx_3.rip
     );
 
-    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2, &user_ctx_3);
+    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2, &user_ctx_3, user_ctx_4.as_ref());
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
