@@ -73,6 +73,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Fuer die spaetere Veroeffentlichung (nach der Heap-Initialisierung).
     let acpi_summary = madt;
     let acpi_hpet_base = hpet_base;
+    // Die Ramdisk wird weiter unten gelesen, nach der Heap-Initialisierung:
+    // der ELF-Parser legt Puffer an, und eine `Vec` vor dem Heap ist eine
+    // Allokation ins Nichts (QEMU: "Allokation fehlgeschlagen: Layout { size: 224,
+    // align: 8 }").
     let ioapic_info = madt.and_then(|summary| summary.ioapic);
     let lapic_base = match madt {
         Some(summary) => {
@@ -233,6 +237,54 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // braucht eine Liste, die nicht geraten ist; hier wird sie gelesen.
     // Die Entdeckung vergibt keine Rechte — wer ein Geraet benutzen darf,
     // entscheidet weiterhin die Device-Cap.
+    // Die Ramdisk traegt das erste echte Userspace-Programm. Ohne sie ist der
+    // Kernel ein geschlossenes Ganzes; mit ihr kommt ein Programm von einem
+    // Datentraeger.
+    //
+    // Gelesen wird ueber die Adresse aus `BootInfo`, und die ist bereits
+    // virtuell: der Bootloader hat die Ramdisk selbst abgebildet. Ein Versuch,
+    // sie ueber `physical_memory_offset` zu lesen, scheitert zu Recht mit
+    // "bytes are outside a single reported physical-memory region" — das ist
+    // die Bereichspruefung, die hier nicht greift, weil es keine physische
+    // Adresse ist.
+    const MAX_RAMDISK_BYTES: u64 = 64 * 1024 * 1024;
+    if let Some(ramdisk_address) = boot_info.ramdisk_addr.into_option() {
+        let ramdisk_len = boot_info.ramdisk_len;
+        if ramdisk_address != 0 && ramdisk_len > 0 && ramdisk_len <= MAX_RAMDISK_BYTES {
+            let bytes = unsafe {
+                core::slice::from_raw_parts(ramdisk_address as *const u8, ramdisk_len as usize)
+            };
+            match shivacore::elf_loader::ElfParser::parse(bytes) {
+                Ok(parser) => {
+                    let code_len = parser
+                        .code_segment()
+                        .and_then(|segment| parser.segment_data(segment).ok())
+                        .map(|data| data.len())
+                        .unwrap_or(0);
+                    serial_println!(
+                        "ShivaCore: Ramdisk {} Bytes, ELF-Einstieg {:#x}, Code {} Bytes",
+                        ramdisk_len,
+                        parser.entry_point(),
+                        code_len
+                    );
+                }
+                Err(error) => {
+                    serial_println!(
+                        "ShivaCore: Ramdisk {} Bytes, aber kein lesbares ELF: {:?}",
+                        ramdisk_len,
+                        error
+                    );
+                }
+            }
+        } else {
+            serial_println!(
+                "ShivaCore: Ramdisk-Adresse {:#x} / Laenge {} abgelehnt",
+                ramdisk_address,
+                ramdisk_len
+            );
+        }
+    }
+
     #[cfg(feature = "x86-boot")]
     {
         use shivacore::pci_scan::{describe, scan_tree, DeviceKind, IoConfigSpace};
