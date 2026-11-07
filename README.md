@@ -197,12 +197,12 @@ local equivalent.
 
 ## Testing
 ```bash
-cargo test --workspace --all-targets      # 1490 tests, alle Crates
+cargo test --workspace --all-targets      # 1499 tests, alle Crates
 cargo test -p shivacore --lib             # 687 tests
 cargo test -p shivacore-service-space --lib  # 552 tests
 cargo test -p libshivacore                # 14 Tests (Syscall-ABI 2.0.0)
 ```
-Expected result as of 2026-11-07: 1490 passed across 58 suites, zero failures, run on
+Expected result as of 2026-11-07: 1499 passed across 58 suites, zero failures, run on
 the stable toolchain.
 
 Der Boot-Image-Builder (`modules/atc-shivacore/boot`) ist **kein Workspace-Mitglied**.
