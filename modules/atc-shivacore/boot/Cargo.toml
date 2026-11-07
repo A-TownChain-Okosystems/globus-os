@@ -6,3 +6,7 @@ description = "ShivaCore Boot-Image-Builder — erzeugt BIOS/UEFI Disk-Images au
 
 [dependencies]
 bootloader = "0.11"
+
+# Eigenes Crate, nicht Teil des Root-Workspace: der `bootloader`-Crate verlangt
+# Nightly, waehrend der Rest des Workspace auf Stable testbar bleibt.
+[workspace]
