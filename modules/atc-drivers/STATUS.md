@@ -5,11 +5,12 @@
 **Status:** FRAMEWORK + SUPERVISION — Geraetetreiber liegen im Service Space
 
 ## Was hier wirklich liegt
-- `driver_framework.rs`: Lebenszyklus der Treiber (`DriverState`
+- `driver_framework.rs`: **Re-Export** des Treiber-Lebenszyklus. Die Definition
+  liegt in `system/devices/src/driver_lifecycle.rs` (`DriverState`
   Registered/Active/Faulted/Isolated, `DriverSupervisor`, Fehlerprotokoll ueber
-  `globus_diagnostics`). Das ist die EINZIGE Stelle, an der Treiberzustand
-  definiert ist — der Service Space benutzt sie (Abhaengigkeit
-  `atc_drivers` in `service_space/Cargo.toml`).
+  `globus_diagnostics`); der Pfad `atc_drivers::driver_framework::…` bleibt
+  gueltig. Der Service Space benutzt die Systemschicht direkt, nicht dieses
+  Crate — ein Produktmodul darf nicht Voraussetzung der Kernschicht sein.
 - `src/components/HardwareDriversView.tsx`: Anzeige.
 
 ## Was hier NICHT liegt (bewusst)
@@ -21,8 +22,8 @@ Service-Space-Code, nicht Kernel- und nicht Doppelcode). `net.rs` und
 Implementierung.
 
 ## Abhaengigkeiten
-`globus-diagnostics` (Ereignisprotokoll). Umgekehrt haengt
-`shivacore-service-space` an diesem Crate.
+`globus-diagnostics` (Ereignisprotokoll) und `globus-devices` (Re-Export-Ziel).
+Umgekehrt haengt **nichts** an diesem Crate — die Kante zeigt nur nach unten.
 
 ## Letzte Änderungen
 - 2026-11-07: Stand richtiggestellt (vorher SKELETON/INITIALIZING vom 05.08.),
