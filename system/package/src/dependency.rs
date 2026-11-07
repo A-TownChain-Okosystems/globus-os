@@ -26,7 +26,11 @@ pub enum ResolveError {
 fn version_at_least(actual: &str, minimum: &str) -> bool {
     fn parse(v: &str) -> Option<(u64, u64, u64)> {
         let mut p = v.split('.');
-        Some((p.next()?.parse().ok()?, p.next()?.parse().ok()?, p.next()?.parse().ok()?))
+        Some((
+            p.next()?.parse().ok()?,
+            p.next()?.parse().ok()?,
+            p.next()?.parse().ok()?,
+        ))
     }
     match (parse(actual), parse(minimum)) {
         (Some(a), Some(m)) => a >= m,
@@ -37,20 +41,42 @@ fn version_at_least(actual: &str, minimum: &str) -> bool {
 pub fn resolve(packages: &[PackageNode], root: &str) -> Result<Vec<String>, ResolveError> {
     let mut map = BTreeMap::new();
     for package in packages {
-        if package.name.is_empty() { return Err(ResolveError::EmptyName); }
+        if package.name.is_empty() {
+            return Err(ResolveError::EmptyName);
+        }
         map.insert(package.name.clone(), package);
     }
-    if !map.contains_key(root) { return Err(ResolveError::MissingDependency); }
+    if !map.contains_key(root) {
+        return Err(ResolveError::MissingDependency);
+    }
 
-    fn visit<'a>(name: &str, map: &BTreeMap<String, &'a PackageNode>, active: &mut BTreeSet<String>, done: &mut BTreeSet<String>, out: &mut Vec<String>) -> Result<(), ResolveError> {
-        if done.contains(name) { return Ok(()); }
-        if !active.insert(name.to_owned()) { return Err(ResolveError::Cycle); }
+    fn visit(
+        name: &str,
+        map: &BTreeMap<String, &PackageNode>,
+        active: &mut BTreeSet<String>,
+        done: &mut BTreeSet<String>,
+        out: &mut Vec<String>,
+    ) -> Result<(), ResolveError> {
+        if done.contains(name) {
+            return Ok(());
+        }
+        if !active.insert(name.to_owned()) {
+            return Err(ResolveError::Cycle);
+        }
         let node = *map.get(name).ok_or(ResolveError::MissingDependency)?;
         let mut deps = node.dependencies.clone();
-        deps.sort_by(|a, b| a.package.cmp(&b.package).then_with(|| a.minimum_version.cmp(&b.minimum_version)));
+        deps.sort_by(|a, b| {
+            a.package
+                .cmp(&b.package)
+                .then_with(|| a.minimum_version.cmp(&b.minimum_version))
+        });
         for dep in deps {
-            let target = *map.get(&dep.package).ok_or(ResolveError::MissingDependency)?;
-            if !version_at_least(&target.version, &dep.minimum_version) { return Err(ResolveError::VersionMismatch); }
+            let target = *map
+                .get(&dep.package)
+                .ok_or(ResolveError::MissingDependency)?;
+            if !version_at_least(&target.version, &dep.minimum_version) {
+                return Err(ResolveError::VersionMismatch);
+            }
             visit(&dep.package, map, active, done, out)?;
         }
         active.remove(name);
@@ -72,16 +98,41 @@ mod tests {
     #[test]
     fn dependencies_are_post_ordered() {
         let packages = [
-            PackageNode { name: "app".into(), version: "1.0.0".into(), dependencies: vec![Dependency { package: "lib".into(), minimum_version: "1.0.0".into() }] },
-            PackageNode { name: "lib".into(), version: "1.2.0".into(), dependencies: vec![] },
+            PackageNode {
+                name: "app".into(),
+                version: "1.0.0".into(),
+                dependencies: vec![Dependency {
+                    package: "lib".into(),
+                    minimum_version: "1.0.0".into(),
+                }],
+            },
+            PackageNode {
+                name: "lib".into(),
+                version: "1.2.0".into(),
+                dependencies: vec![],
+            },
         ];
         assert_eq!(resolve(&packages, "app").unwrap(), vec!["lib", "app"]);
     }
     #[test]
     fn cycles_fail_closed() {
         let packages = [
-            PackageNode { name: "a".into(), version: "1.0.0".into(), dependencies: vec![Dependency { package: "b".into(), minimum_version: "1.0.0".into() }] },
-            PackageNode { name: "b".into(), version: "1.0.0".into(), dependencies: vec![Dependency { package: "a".into(), minimum_version: "1.0.0".into() }] },
+            PackageNode {
+                name: "a".into(),
+                version: "1.0.0".into(),
+                dependencies: vec![Dependency {
+                    package: "b".into(),
+                    minimum_version: "1.0.0".into(),
+                }],
+            },
+            PackageNode {
+                name: "b".into(),
+                version: "1.0.0".into(),
+                dependencies: vec![Dependency {
+                    package: "a".into(),
+                    minimum_version: "1.0.0".into(),
+                }],
+            },
         ];
         assert_eq!(resolve(&packages, "a"), Err(ResolveError::Cycle));
     }
