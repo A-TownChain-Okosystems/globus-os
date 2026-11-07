@@ -16,6 +16,7 @@ extern crate std;
 // die alten Pfade `shivacore::madt::…` am Leben.
 pub use libshivacore::{acpi_devices, madt};
 
+pub mod addr_space;
 #[cfg(test)]
 pub mod allocator;
 pub mod apic;
