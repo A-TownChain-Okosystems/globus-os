@@ -227,9 +227,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // entscheidet weiterhin die Device-Cap.
     #[cfg(feature = "x86-boot")]
     {
-        use shivacore::pci_scan::{describe, scan, DeviceKind, IoConfigSpace};
+        use shivacore::pci_scan::{describe, scan_tree, DeviceKind, IoConfigSpace};
         let mut cfg = IoConfigSpace;
-        let devices = scan(&mut cfg, 1);
+        // scan_tree folgt Bruecken: auf einer Maschine mit Steckplaetzen haengt
+        // der groesste Teil der Geraete nicht am Root-Bus.
+        let devices = scan_tree(&mut cfg, 0);
         for found in &devices {
             let (bus, device, function, vendor, id, kind) = describe(found);
             serial_println!(
