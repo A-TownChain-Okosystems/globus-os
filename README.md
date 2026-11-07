@@ -197,6 +197,109 @@ local equivalent.
 
 ## Testing
 ```bash
+cargo test --workspace --all-targets      # 1471 tests, alle Crates
+cargo test -p shivacore --lib             # 677 tests
+cargo test -p shivacore-service-space --lib  # 552 tests
+cargo test -p libshivacore                # 14 Tests (Syscall-ABI 2.0.0)
+```
+Expected result as of 2026-11-07: 1471 passed across 58 suites, zero failures, run on
+the stable toolchain.
+
+Der Boot-Image-Builder (`modules/atc-shivacore/boot`) ist **kein Workspace-Mitglied**.
+Er haengt am `bootloader`-Crate, dessen Build-Skript Nightly verlangt; als Mitglied zog
+er frueher den kompletten Workspace in einen Nightly-Build und liess
+`cargo test --workspace` auf Stable abbrechen, bevor ein Test lief. Er wird deshalb in
+seinem Verzeichnis gebaut und erzeugt daraus die BIOS- und UEFI-Images:
+
+```bash
+RUSTFLAGS='-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial" \
+  cargo +nightly build -p shivacore --release --target x86_64-unknown-none --features x86-boot
+
+(cd modules/atc-shivacore/boot && cargo +nightly build --release)
+modules/atc-shivacore/boot/target/release/boot \
+  target/x86_64-unknown-none/release/shivacore images
+```
+Expected result: an `x86_64-unknown-none` kernel ELF plus `images/shivacore-bios.img` and
+`images/shivacore-uefi.img`. `scripts/qemu_boot.sh` fuehrt dieselben Schritte aus und
+bootet beide Images.
+
+## Security
+
+Security-sensitive issues must not be disclosed through public GitHub Issues. Follow `SECURITY.md` and the organization disclosure process.
+
+## License
+
+Apache License 2.0. See [`LICENSE`](LICENSE).
+
+
+
+
+
+
+
+
+
+## Overview
+GlobusOS is the operating-system userspace layer built on ShivaCore.
+
+## Purpose
+Provides the user-facing OS services, identity, wallet, applications and system integration required by the A-TownChain ecosystem.
+
+## Status
+**Status:** `development`  
+**Version:** `0.1.0`
+
+## Architecture
+Components include the system services, ShivaCore integration modules and SDK. Data flow and dependencies are defined by the workspace manifests and canonical architecture documentation.
+
+## Features
+- Identity and wallet integration
+- System services and media
+- ShivaCore integration
+- Application SDK
+
+## Repository Structure
+```text
+├── system
+├── modules
+├── sdk
+├── scripts
+├── docs
+└── tests
+```
+
+## Requirements
+Rust stable and the repository's workspace toolchain are required.
+
+## Installation
+```bash
+git clone https://github.com/A-TownChain-Okosystems/globus-os.git
+cd globus-os
+cargo check -p shivacore -p shivacore-service-space
+```
+`cargo check --workspace` is not usable in this repository for the same reason the
+workspace-wide test command is not: the bare-metal crate's `bootloader` dependency has
+no host build.
+
+## Configuration
+Configuration is defined by the workspace manifests and system-specific configuration files.
+
+## Usage
+Build and test the workspace with Cargo commands documented by the repository workflows.
+
+## Development
+```bash
+cargo fmt --all -- --check
+cargo check --workspace
+cargo clippy -p shivacore -p shivacore-service-space --all-targets -- -D warnings
+```
+
+The push and pull request workflows run the same gates. They currently cannot start
+because the GitHub account's e-mail address is unverified; the commands above are the
+local equivalent.
+
+## Testing
+```bash
 cargo test -p shivacore --lib               # 574 tests
 cargo test -p shivacore-service-space --lib # 552 tests
 ```
