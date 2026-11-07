@@ -4,6 +4,7 @@
 //! receive only explicitly authorized DMA domains.
 
 use super::DeviceId;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct DmaDomainId(pub u64);
