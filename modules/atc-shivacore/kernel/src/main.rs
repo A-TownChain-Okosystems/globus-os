@@ -127,6 +127,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: GDT/IDT/PIC OK (K-Sprint 1).");
 
     let mut mapper = unsafe { memory::init(phys_mem_offset) };
+    // Adressraeume je Prozess: hier gemerkt, spaeter dem Scheduler uebergeben.
+    let (boot_cr3_frame, boot_cr3_flags) = shivacore::addr_space::active();
+    let cr3_total_before_test = boot_cr3_frame;
+    let mut cr3_first: u64 = 0;
+    let mut cr3_second: u64 = 0;
+    let mut cr3_third: u64 = 0;
+    let mut cr3_fourth: u64 = 0;
     let mut frame_allocator =
         unsafe { memory::BootInfoFrameAllocator::init(&boot_info.memory_regions) };
 
@@ -157,7 +164,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // ein Kommentar kann das nicht leisten. Gewartet wird auf Timer-Ticks, weil
     // deren Zustellung den LAPIC-Zugriff im neuen Adressraum erzwingt.
     if let Some(space) = unsafe {
-        shivacore::addr_space::AddressSpace::create(phys_mem_offset, &mut frame_allocator)
+        shivacore::addr_space::AddressSpace::create(
+            phys_mem_offset,
+            &mut frame_allocator,
+            &[],
+            cr3_total_before_test,
+        )
     } {
         let (boot_frame, boot_flags) = shivacore::addr_space::active();
         let before = crate::interrupts::TIMER_TICKS.load(core::sync::atomic::Ordering::Acquire);
@@ -754,14 +766,28 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         ),
     };
     unsafe {
+        // Eigener Adressraum: anlegen, aktivieren, dann laden. Das Laden
+        // schreibt das Abbild ueber die VIRTUELLE Adresse — ohne aktive
+        // Zieltabelle landete es in der Boot-Tabelle und der Prozess saehe
+        // seine eigenen Seiten nie.
+        let process_space = shivacore::addr_space::AddressSpace::create(
+            phys_mem_offset,
+            &mut frame_allocator,
+            &user_addr_space.mapped_regions(),
+            boot_cr3_frame,
+        )
+        .expect("ShivaCore: kein Adressraum fuer PID 1000");
+        process_space.install();
+        let mut process_mapper = process_space.mapper(phys_mem_offset);
         userspace::map_user_binary(
-            &mut mapper,
+            &mut process_mapper,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary,
             &user_addr_space,
         )
         .expect("ShivaCore: USER-001 user page mapping failed");
+        cr3_first = process_space.frame().start_address().as_u64();
     }
     let user_pid = ats1000::Pid(1000);
     // Nur die eingebaute Nutzlast setzt RAX/RBX/R12 auf ein bekanntes Muster.
@@ -809,14 +835,24 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         ..user_binary_2
     };
     unsafe {
+        let process_space = shivacore::addr_space::AddressSpace::create(
+            phys_mem_offset,
+            &mut frame_allocator,
+            &user_addr_space_2.mapped_regions(),
+            boot_cr3_frame,
+        )
+        .expect("ShivaCore: kein Adressraum fuer PID 1001");
+        process_space.install();
+        let mut process_mapper = process_space.mapper(phys_mem_offset);
         userspace::map_user_binary(
-            &mut mapper,
+            &mut process_mapper,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary_2,
             &user_addr_space_2,
         )
         .expect("ShivaCore: second USER-001 user page mapping failed");
+        cr3_second = process_space.frame().start_address().as_u64();
     }
     let user_pid_2 = ats1000::Pid(1001);
     let user_ctx_2 = userspace::UserContext::new(user_pid_2, &user_binary_2, user_addr_space_2);
@@ -900,14 +936,24 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         heap_size: 0x0010_0000,
     };
     unsafe {
+        let process_space = shivacore::addr_space::AddressSpace::create(
+            phys_mem_offset,
+            &mut frame_allocator,
+            &user_addr_space_3.mapped_regions(),
+            boot_cr3_frame,
+        )
+        .expect("ShivaCore: kein Adressraum fuer PID 1002");
+        process_space.install();
+        let mut process_mapper = process_space.mapper(phys_mem_offset);
         userspace::map_user_binary(
-            &mut mapper,
+            &mut process_mapper,
             &mut frame_allocator,
             phys_mem_offset,
             &user_binary_3,
             &user_addr_space_3,
         )
         .expect("ShivaCore: third USER-001 user page mapping failed");
+        cr3_third = process_space.frame().start_address().as_u64();
     }
     // Vierter Prozess: das zweite Programm aus dem Verzeichnis. Eigener
     // Adressraum, weil ein gemeinsames Codesegment mit dem Init sonst
@@ -926,9 +972,20 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         };
         let _ = entry;
         let binary = userspace::UserBinary::from_bytes(&name, code, base);
+        let process_space = unsafe {
+            shivacore::addr_space::AddressSpace::create(
+                phys_mem_offset,
+                &mut frame_allocator,
+                &space.mapped_regions(),
+                boot_cr3_frame,
+            )
+        }
+        .expect("ShivaCore: kein Adressraum fuer PID 1003");
+        process_space.install();
+        let mut process_mapper = unsafe { process_space.mapper(phys_mem_offset) };
         unsafe {
             userspace::map_user_binary(
-                &mut mapper,
+                &mut process_mapper,
                 &mut frame_allocator,
                 phys_mem_offset,
                 &binary,
@@ -936,6 +993,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             )
             .expect("ShivaCore: vierter Prozess nicht abbildbar");
         }
+        cr3_fourth = process_space.frame().start_address().as_u64();
         let context = userspace::UserContext::new(ats1000::Pid(1003), &binary, space);
         serial_println!(
             "ShivaCore: vierter Prozess PID=1003 aus Ramdisk-Programm '{}' RIP={:#x}",
@@ -954,11 +1012,35 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
 
     interrupts::init_user_scheduler(&user_ctx, &user_ctx_2, &user_ctx_3, user_ctx_4.as_ref());
+    // Jede eigene Tabelle in den Scheduler legen. Ab hier entscheidet der
+    // Kontextwechsel, mit welcher Tabelle ein Prozess laeuft.
+    interrupts::set_process_cr3(user_pid, cr3_first);
+    interrupts::set_process_cr3(user_pid_2, cr3_second);
+    interrupts::set_process_cr3(user_pid_3, cr3_third);
+    if user_ctx_4.is_some() {
+        interrupts::set_process_cr3(ats1000::Pid(1003), cr3_fourth);
+    }
+    serial_println!(
+        "ShivaCore: Adressraeume je Prozess: PID={} -> {:#x}, PID={} -> {:#x}, PID={} -> {:#x}, PID=1003 -> {:#x}",
+        user_pid.0,
+        cr3_first,
+        user_pid_2.0,
+        cr3_second,
+        user_pid_3.0,
+        cr3_third,
+        cr3_fourth
+    );
+    // Kernel-Arbeit wieder in der Boot-Tabelle erledigen, damit spaetere
+    // Abbildungen (Geraete) nicht versehentlich in einer Prozesstabelle landen.
+    shivacore::addr_space::restore(boot_cr3_frame, boot_cr3_flags);
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
         user_pid_2.0
     );
+    // Der erste Sprung nach Ring 3 passiert ohne Kontextwechsel davor: die
+    // Tabelle von PID 1000 muss hier ausdruecklich gesetzt werden.
+    shivacore::addr_space::install_raw(cr3_first);
     unsafe { userspace::enter_ring3(&user_ctx) }
 
     serial_println!("{}", kernel_state.boot_log());
