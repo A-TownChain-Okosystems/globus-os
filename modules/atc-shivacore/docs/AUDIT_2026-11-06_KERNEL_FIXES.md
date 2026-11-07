@@ -2178,3 +2178,55 @@ der sich nicht aeussert (stiller Datenverlust, falsches Ergebnis), bleibt ihm
 verborgen. Und die Meilensteinliste ist von Hand gepflegt: ein neuer Bootschritt
 ohne Eintrag wird nicht geprueft.
 
+## Nachtrag 08.11. 00:05 — die fehlende Trennung ist jetzt gemessen
+
+**Nicht behauptet, sondern gezaehlt.** Bis heute stand in dieser Akte der Satz
+"ohne eigenen CR3 je Prozess kann ein Programm den Speicher eines anderen
+lesen" als Folgerung aus dem Code. Folgerungen sind billig. Jetzt gibt es eine
+Messung, die man wiederholen kann.
+
+Zwei Programme: `init` schreibt beim Start die Marke `0x4B4149315F4D4152` nach
+`0x7FFE_F100` — das liegt in seinem **Stackbereich**. `peek` liest dieselbe
+Adresse, obwohl sein eigener Stack bei `0x07F0_0000` liegt, und waehlt danach
+den Syscall-Opcode: `Yield` (0x0001), wenn es die Marke gesehen hat,
+`MonotonicTime` (0x0040), wenn nicht. Der Befund steht damit im Boot-Log und
+nicht in einem Kommentar.
+
+```
+ShivaCore: Programm 'init' aus Ramdisk: 6608 Bytes ELF, Einstieg 0x400000, Code 121 Bytes
+ShivaCore: USER-001 mapped PID=1000 RIP=0x400000 RSP=0x7ffff000 (Quelle: Ramdisk)
+ShivaCore: scheduler armed: PID=1000 + PID=1001 + PID=1002 + PID=1003 (Ring 3)
+ShivaCore: Syscall aus Ring 3: Nr=39849 PID=1003 Opcode=0x0001
+```
+
+`0x0001` ist `Yield`. PID 1003 hat die Marke aus dem Stack von PID 1000
+gelesen. Die Trennung fehlt, und zwar nicht theoretisch, sondern im Log.
+
+**Der Weg dahin war zwei Fehler lang, beide lehrreich.**
+
+1. Die Codeseite ist schreibgeschuetzt. Der erste Versuch, die Marke bei
+   `0x400200` abzulegen, endete korrekt in `Seitenfehler ... (Schutzverletzung,
+   Schreiben) ... [beendet: 1]` — Init wurde beendet, das System lief weiter.
+   Ein Programm darf seinen Code nicht ueberschreiben; die Marke gehoert auf den
+   Stack.
+2. Ein Programm, das nicht laedt, faellt **still** auf den eingebauten
+   Platzhalter zurueck. `Ramdisk-Verzeichnis: 2 Programme (init, peek)` stand im
+   Log, `Quelle: eingebaut` zwei Zeilen spaeter. Ursache war ein veraltetes
+   Init-Binary im Image (4208 statt 6608 Bytes). Genau dafuer gibt es jetzt die
+   Quellenangabe im Log: sie macht den Rueckfall sichtbar, statt ihn zu
+   verstecken.
+
+**Und eine Luecke im Syscall-Log.** Die Zusatzzeile galt bisher global (`Nr=1`
+oder Vielfache von einer Million). Der erste Aufruf eines Prozesses fiel unter
+den Tisch, sobald ein anderer vorher rechnete — bei einer Messung, die aus genau
+einem Aufruf besteht, ist das der Unterschied zwischen Befund und Blindstelle.
+Jetzt merkt sich der Kernel in einer festen Acht-Platz-Tabelle, von welchen
+Prozessen schon ein Aufruf protokolliert wurde (zwei Tests, kein Allokator).
+Ohne diese Aenderung waere die Zeile oben bei `Nr=39849` nie erschienen.
+
+**Was daraus folgt.** Der naechste Schritt ist CR3: eigene Seitentabelle je
+Prozess, Umschaltung im Kontextwechsel. Die Messung oben ist dann die
+Gegenprobe — `peek` muss mit einem Seitenfehler sterben statt `Yield` zu
+schicken. Solange beide Programme dasselbe Ergebnis liefern, ist nichts gebaut,
+was den Namen Isolation verdient.
+
