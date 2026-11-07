@@ -664,6 +664,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("ShivaCore: USER-001 user page mapping failed");
     }
     let user_pid = ats1000::Pid(1000);
+    // Nur die eingebaute Nutzlast setzt RAX/RBX/R12 auf ein bekanntes Muster.
+    // Laeuft hier das Programm aus der Ramdisk, waere die SCHED-001-Pruefung
+    // dauerhaft im Aufwaermzustand und wuerde nichts beweisen.
+    interrupts::expect_register_pattern(1000, source == "eingebaut");
     let user_ctx = userspace::UserContext::new(user_pid, &user_binary, user_addr_space);
     serial_println!(
         "ShivaCore: USER-001 mapped PID={} RIP={:#x} RSP={:#x} (Quelle: {})",
