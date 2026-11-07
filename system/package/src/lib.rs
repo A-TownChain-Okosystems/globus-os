@@ -3,6 +3,8 @@
 //! Installation and update callers must use `verify_for_install` or
 //! `verify_for_update`; metadata presence alone is never a trust decision.
 
+pub mod dependency;
+
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use sha2::{Digest, Sha256};
 
