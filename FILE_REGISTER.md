@@ -1,7 +1,7 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Erzeugt:** 2026-11-07 aus `git ls-files`, Zeilenzahlen aus dem committeten Stand (`git show HEAD:<datei>`) · **Dateien:** 504
+> **Erzeugt:** 2026-11-07 aus `git ls-files`, Zeilenzahlen aus dem committeten Stand (`git show HEAD:<datei>`), Binaerdateien ohne Zahl · **Dateien:** 504
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
 >
 > Der vorige Stand war ueber die GitHub-Trees-API vom 2026-09-10 und nannte 209
@@ -62,7 +62,7 @@
 | `docs/WINDOWS_OS_FEATURE_REFERENCE.json` | 298 |
 | `docs/WINDOWS_OS_FEATURE_REFERENCE.md` | 96 |
 | `docs/architecture/GLOBUSOS_PLATFORM_ARCHITECTURE.md` | 229 |
-| `docs/assets/shivacore-boot-framebuffer.png` | 0 |
+| `docs/assets/shivacore-boot-framebuffer.png` | – |
 | `docs/audits/GLOBUSOS_MICROKERNEL_MIGRATION_INVENTORY_2026-10-18.md` | 96 |
 | `docs/audits/IMPLEMENTATION-REVIEW-2026-09-16.md` | 18 |
 | `docs/audits/P1-LKM-DEPENDENCY-API-FIX.md` | 31 |
