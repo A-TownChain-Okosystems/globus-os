@@ -241,6 +241,10 @@ pub struct SchedEntry {
     /// dem Userspace gegen die richtige Prozessabbildung zu pruefen; ohne diese
     /// Angabe waere jede Pruefung nur eine Behauptung.
     pub addr_space: crate::userspace::UserAddressSpace,
+    /// Physische Adresse der Seitentabelle dieses Prozesses; 0 heisst, dass er
+    /// noch in der Boot-Tabelle laeuft. Der Wert ist eine Zahl, weil er genau
+    /// so in ein Register geschrieben wird.
+    pub cr3: u64,
 }
 
 impl SchedEntry {
@@ -255,6 +259,7 @@ impl SchedEntry {
             context_switches: 0,
             wake_tick: None,
             addr_space: ctx.addr_space.clone(),
+            cr3: 0,
         }
     }
 
@@ -322,6 +327,22 @@ impl UserScheduler {
     }
 
     /// Add a user process to the scheduler
+    /// Hinterlegt die Seitentabelle eines Prozesses.
+    pub fn set_cr3(&mut self, pid: Pid, cr3: u64) {
+        if let Some(entry) = self.entries.iter_mut().find(|e| e.pid == pid) {
+            entry.cr3 = cr3;
+        }
+    }
+
+    /// Seitentabelle eines Prozesses, falls eine hinterlegt ist.
+    pub fn cr3_of(&self, pid: Pid) -> Option<u64> {
+        self.entries
+            .iter()
+            .find(|e| e.pid == pid)
+            .map(|e| e.cr3)
+            .filter(|cr3| *cr3 != 0)
+    }
+
     pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
         self.entries.push(SchedEntry::new(pid, ctx, priority));
     }
