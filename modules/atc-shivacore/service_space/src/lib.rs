@@ -19,6 +19,9 @@ pub mod consensus;
 pub mod container_net;
 pub mod contract;
 pub mod device_registry;
+/// DID und Signaturen. Nur mit Feature `crypto` — `sha2` laesst sich fuer
+/// `x86_64-unknown-none` nicht uebersetzen (LLVM-Absturz, siehe Cargo.toml).
+#[cfg(feature = "crypto")]
 pub mod did;
 pub mod genesis;
 pub mod genesis_bridge;
@@ -31,6 +34,8 @@ pub mod mempool;
 pub mod net;
 pub mod p2p;
 pub mod p2p_secure;
+/// Entfernte Capabilities brauchen `did::SoftwareSigner`, also `crypto`.
+#[cfg(feature = "crypto")]
 pub mod remote_caps;
 pub mod security_audit;
 pub mod service_init;
