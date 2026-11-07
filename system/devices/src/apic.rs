@@ -1,6 +1,7 @@
 //! Architecture-neutral local/IO APIC programming contract.
 
 use crate::interrupt::InterruptVector;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ApicId(pub u8);
