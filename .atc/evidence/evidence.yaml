@@ -35,7 +35,7 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 2654704829abc984194c337ec4d5504b28edeb6a
+  commit: 6ee4bae3581c779a6a3c90b42fb4603f03be657c
   timestamp: 2026-11-07T10:20:00+00:00
   result: PASS
   runner: local-sandbox
