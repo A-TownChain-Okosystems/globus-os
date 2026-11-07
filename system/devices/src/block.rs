@@ -32,6 +32,11 @@ pub enum BlockError {
     Overflow,
     InvalidBuffer,
     NotReady,
+    /// Das Geraet ist nur lesbar. Fehlte, obwohl ein Geraet mit dieser
+    /// Eigenschaft existiert; ohne eigene Variante muesste der Aufrufer
+    /// "nicht bereit" von "darf nicht" unterscheiden, indem er den Fehler
+    /// errät.
+    ReadOnly,
     Io,
 }
 
