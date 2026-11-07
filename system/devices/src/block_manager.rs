@@ -1,6 +1,7 @@
 //! Deterministic block-device registry and I/O boundary.
 
 use super::block::{BlockDevice, BlockError, BlockGeometry, BlockRequest, validate_request};
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub struct BlockDeviceId(pub u64);
