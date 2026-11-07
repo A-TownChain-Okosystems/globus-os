@@ -10,6 +10,17 @@ path = "src/lib.rs"
 test = true
 bench = false
 
+[features]
+# `crypto` bringt DID und entfernte Capabilities mit. Es ist ABSCHALTBAR, weil
+# `sha2` (über ed25519-dalek) sich fuer `x86_64-unknown-none` nicht uebersetzen
+# laesst: rustc bricht mit "rustc-LLVM ERROR: Do not know how to split the result
+# of this operator!" ab — in jeder sha2-Version (0.10.4 bis 0.11.0), auf stable und
+# nightly, unabhaengig von target-cpu/target-feature. Fuer das Bare-Metal-Image
+# wird ohne dieses Feature gebaut; alles andere (Registratur, Treiber, Netze,
+# Container) uebersetzt dann.
+default = ["crypto"]
+crypto = ["dep:ed25519-dalek"]
+
 [dependencies]
 libshivacore = { path = "../../../system/shivacore-api" }
 shivacore = { path = "../kernel" }
@@ -17,5 +28,5 @@ globus-devices = { path = "../../../system/devices" }
 spin = "0.12"
 lazy_static = { version = "1.5", features = ["spin_no_std"] }
 rand = { version = "0.10", default-features = false }
-ed25519-dalek = { version = "3.0", default-features = false, features = ["alloc"] }
+ed25519-dalek = { version = "2.1", default-features = false, features = ["alloc"], optional = true }
 libm = "0.2"
