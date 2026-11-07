@@ -23,7 +23,7 @@
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 12 | toml |
 | `./boot/src/main.rs` | 47 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.882 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.920 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -32,7 +32,7 @@
 | `./init_program/.cargo/config.toml` | 8 | toml |
 | `./init_program/Cargo.toml` | 16 | toml |
 | `./init_program/linker.ld` | 35 | ld |
-| `./init_program/src/main.rs` | 122 | rs |
+| `./init_program/src/main.rs` | 141 | rs |
 | `./kernel/.cargo/config.toml` | 2 | toml |
 | `./kernel/.gitignore` | 1 | – |
 | `./kernel/Cargo.toml` | 40 | toml |
@@ -63,7 +63,7 @@
 | `./kernel/src/keymap.rs` | 401 | rs |
 | `./kernel/src/lib.rs` | 56 | rs |
 | `./kernel/src/lkm.rs` | 3.398 | rs |
-| `./kernel/src/main.rs` | 1.101 | rs |
+| `./kernel/src/main.rs` | 1.130 | rs |
 | `./kernel/src/memory.rs` | 64 | rs |
 | `./kernel/src/memory_manager.rs` | 912 | rs |
 | `./kernel/src/pci_scan.rs` | 558 | rs |
