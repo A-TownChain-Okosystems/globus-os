@@ -1,5 +1,6 @@
 //! NVMe controller contracts and deterministic queue runtime.
 
+use alloc::vec::Vec;
 pub const NVME_ADMIN_QUEUE_DEPTH: u16 = 32;
 pub const NVME_DEFAULT_IO_QUEUE_DEPTH: u16 = 256;
 
