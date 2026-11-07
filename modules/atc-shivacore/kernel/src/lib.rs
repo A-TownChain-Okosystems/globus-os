@@ -26,6 +26,7 @@ pub mod cross_subsystem;
 pub mod diagnostics;
 pub mod dma_auth;
 pub mod elf_loader;
+pub mod fault;
 pub mod hal;
 pub mod input_queue;
 pub mod ioapic;
