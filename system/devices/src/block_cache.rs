@@ -1,6 +1,8 @@
 //! Write-through block cache boundary. The cache never acknowledges data that was not written to the device.
 
 use super::block::{BlockDevice, BlockError, BlockGeometry, BlockRequest};
+use alloc::vec;
+use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CacheError {
