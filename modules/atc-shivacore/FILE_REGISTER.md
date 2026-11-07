@@ -23,7 +23,7 @@
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 12 | toml |
 | `./boot/src/main.rs` | 31 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.566 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.637 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -91,7 +91,7 @@
 | `./legacy/kernel-src-uncompiled/threads.rs` | 1.468 | rs |
 | `./legacy/kernel-src-uncompiled/tracing.rs` | 2.255 | rs |
 | `./legacy/kernel-src-uncompiled/user_io.rs` | 1.324 | rs |
-| `./service_space/Cargo.toml` | 21 | toml |
+| `./service_space/Cargo.toml` | 22 | toml |
 | `./service_space/src/ai.rs` | 891 | rs |
 | `./service_space/src/atcnet.rs` | 1.255 | rs |
 | `./service_space/src/blockchain.rs` | 505 | rs |
@@ -103,7 +103,7 @@
 | `./service_space/src/genesis.rs` | 1.183 | rs |
 | `./service_space/src/genesis_bridge.rs` | 1.148 | rs |
 | `./service_space/src/gossip_bridge.rs` | 1.498 | rs |
-| `./service_space/src/hw_drivers.rs` | 1.653 | rs |
+| `./service_space/src/hw_drivers.rs` | 1.767 | rs |
 | `./service_space/src/identity_key_hal.rs` | 109 | rs |
 | `./service_space/src/identity_key_service.rs` | 101 | rs |
 | `./service_space/src/knowledge_graph.rs` | 1.075 | rs |
