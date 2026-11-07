@@ -13,6 +13,7 @@ bench = false
 [dependencies]
 libshivacore = { path = "../../../system/shivacore-api" }
 shivacore = { path = "../kernel" }
+globus-devices = { path = "../../../system/devices" }
 spin = "0.12"
 lazy_static = { version = "1.5", features = ["spin_no_std"] }
 rand = { version = "0.10", default-features = false }
