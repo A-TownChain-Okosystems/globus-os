@@ -1834,3 +1834,49 @@ verschachtelte `if let`-Bloecke, weil die Kernel-Crate ihre Lints per
 (eigener `_start`, fester Ladebereich), in die Ramdisk legen und vom
 `elf_loader` starten lassen. Erst damit ruft jemand `sync_acpi_from_boot()`.
 
+## Nachtrag 07.11. 17:15 — ein echtes Programm aus der Ramdisk
+
+Bisher waren die Ring-3-Prozesse eingebauter Maschinencode im Kernel. Jetzt
+reist ein eigenstaendiges Programm mit eigenem ELF vom Datentraeger in den
+Kernel.
+
+**Neu: `modules/atc-shivacore/init_program/`** — eigenes Crate, eigenes
+Workspace (wie `boot`, damit der Haupt-Workspace stable bleibt), Ziel
+`x86_64-unknown-none`. `_start` setzt `Yield` ueber `int 0x80` im Kreis ab, die
+Nummer kommt aus `libshivacore::Syscall`, damit Programm und Kernel nicht
+getrennt voneinander raten. Ein Linkerskript legt es auf 0x400000 fest.
+Ergebnis: **6504 Bytes**, Typ EXEC, x86-64, Einstieg 0x400000, zwei
+Ladesegmente (20 Bytes Code, 64 KiB `.bss`).
+
+**Boot-Builder** nimmt jetzt ein optionales drittes Argument und reicht es an
+`set_ramdisk` von `BiosBoot` und `UefiBoot` weiter. Ohne Argument entsteht wie
+bisher ein Image ohne Nutzlast.
+
+**Kernel** liest die Ramdisk und prueft sie mit dem vorhandenen `ElfParser`.
+Boot-Log, BIOS und UEFI, 0 Panics:
+`ShivaCore: Ramdisk 6504 Bytes, ELF-Einstieg 0x400000, Code 20 Bytes`.
+
+**Drei Fehler auf dem Weg:**
+
+1. **Allocator fehlte.** `libshivacore` zieht `globus-ipc`, das einen
+   Allocator verlangt. Das Programm hat jetzt einen Zeiger-Allocator ueber
+   64 KiB im eigenen `.bss` — ohne `#[used]` warf der Linker den Vorrat weg,
+   weil das Programm nichts allokiert, und das ELF hatte nur 20 Bytes.
+2. **Falscher Weg zur Ramdisk.** Ueber `physical_memory_offset` gelesen kam
+   "bytes are outside a single reported physical-memory region". Die Adresse in
+   `BootInfo` ist bereits virtuell, der Bootloader hat sie selbst abgebildet;
+   gelesen wird jetzt als Slice von genau dieser Adresse, mit Laengenpruefung
+   (max. 64 MiB).
+3. **Wieder Allokation vor dem Heap.** Der Ramdisk-Block lag zuerst direkt nach
+   der ACPI-Pruefung: "Allokation fehlgeschlagen: Layout { size: 224, align: 8 }".
+   Er sitzt jetzt hinter der Heap-Initialisierung, neben der PCI-Uebernahme.
+
+**Stand: 1712 Tests** (30 Suiten), fmt und clippy Exit 0 im Haupt-Workspace und
+im neuen Crate.
+
+**Was das noch nicht ist:** Das Programm wird geladen und geprueft, aber nicht
+ausgefuehrt. `ElfLoader::load_elf` legt einen Prozess nur im Verwaltungsapparat
+an; echte Seiten und der Wechsel nach Ring 3 laufen im Kernel bisher nur ueber
+den eingebauten USER-001-Pfad. Der naechste Schritt ist, die Bytes aus der
+Ramdisk durch genau diesen Pfad zu schicken.
+
