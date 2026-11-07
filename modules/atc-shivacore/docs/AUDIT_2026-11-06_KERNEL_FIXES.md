@@ -1918,3 +1918,35 @@ Dateisystem, aus dem das Programm kommt (heute liest der Kernel die Ramdisk als
 einzelnes ELF), ein Init, das weitere Programme startet, und getrennte
 Adressraeume per CR3-Wechsel. Das Programm selbst ist da.
 
+## Nachtrag 07.11. 18:05 — Registerpruefung gehoert zur Nutzlast, nicht zum Prozess
+
+**Der Fehler, den ich selbst eingebaut hatte.** Seit das Ramdisk-Programm PID 1000
+ausfuellt, ist die SCHED-001-Registerpruefung dort tot: sie erwartet
+RAX=0x1000, RBX=0x1001, R12=0x1012, ein echtes Programm setzt das nie. Folge im
+Bootlauf: **jeder** Timer-Tick schrieb eine Aufwaermzeile (300 Zeilen in 20
+Sekunden), und die Invariante war fuer diesen Prozess dauerhaft im Aufwaerm-
+zustand, also wirkungslos. Eine Pruefung, die nie greifen kann, ist schlimmer als
+keine: sie kostet Serienbandbreite und suggeriert Sicherheit.
+
+**Der Fix trennt Nutzlast von Prozessplatz.** `PATTERN_EXPECTED` sagt je Platz,
+ob ueberhaupt ein Muster erwartet wird; der Bootpfad setzt es, weil nur er weiss,
+was laeuft: `interrupts::expect_register_pattern(1000, source == "eingebaut")`.
+Die Vorgabe ist **AN**, damit ein vergessener Aufruf die Pruefung nicht still
+abschaltet; abgeschaltet wird ausdruecklich und mit Logzeile.
+
+**Beide Wege im Bootlauf belegt, BIOS und UEFI, 0 Panics:**
+
+| Fall | Aufwaermzeilen | Musterpruefung |
+|------|----------------|----------------|
+| mit Ramdisk | 0 (vorher 300) | `Musterpruefung fuer PID 1000 abgeschaltet (Nutzlast setzt keine Musterregister)`, 495 Checkpoints fuer PID 1001 |
+| ohne Ramdisk | 0 | `pattern established PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012`, 499 Checkpoints |
+
+Der Syscall aus Ring 3 bleibt in beiden Faellen unberuehrt
+(`Nr=1 PID=1000 Opcode=0x0001` mit Ramdisk).
+
+**Ein eigener Fehler im Fix, sofort gefunden:** Meine erste Fassung setzte die
+Vorgabe auf AUS, womit die Pruefung fuer PID 1001 ebenfalls still ausfiel (die
+Checkpoint-Zeilen verschwanden aus dem Log, 0 statt 495). Erst der Bootvergleich
+beider Varianten hat das gezeigt, nicht die Tests: im Bin-Target gibt es keine
+Testunterstuetzung, also traegt hier allein der Bootlauf die Beweiskraft.
+
