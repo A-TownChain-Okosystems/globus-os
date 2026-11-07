@@ -257,7 +257,7 @@
 | `modules/atc-shivacore/STATUS.md` | 114 |
 | `modules/atc-shivacore/boot/Cargo.toml` | 12 |
 | `modules/atc-shivacore/boot/src/main.rs` | 47 |
-| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.920 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.952 |
 | `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
 | `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
@@ -285,7 +285,7 @@
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 209 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 254 |
-| `modules/atc-shivacore/kernel/src/interrupts.rs` | 919 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 952 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 382 |
 | `modules/atc-shivacore/kernel/src/ipc.rs` | 717 |
 | `modules/atc-shivacore/kernel/src/irq.rs` | 322 |
@@ -297,7 +297,7 @@
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 401 |
 | `modules/atc-shivacore/kernel/src/lib.rs` | 56 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.398 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1.130 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1.134 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 64 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 912 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 558 |
