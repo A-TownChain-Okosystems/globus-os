@@ -1,0 +1,16 @@
+[package]
+name = "shivacore-init"
+version = "0.1.0"
+edition = "2021"
+description = "ShivaCore Init — erstes Userspace-Programm, laedt aus der Ramdisk"
+
+[dependencies]
+libshivacore = { path = "../../../system/shivacore-api" }
+
+[profile.release]
+panic = "abort"
+opt-level = 2
+
+# Eigenes Crate, nicht Teil des Root-Workspace: das Ziel ist `x86_64-unknown-none`
+# und das Programm hat einen eigenen Einstiegspunkt statt `main`.
+[workspace]
