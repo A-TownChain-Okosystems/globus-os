@@ -61,6 +61,23 @@ fn syscall_yield() {
     }
 }
 
+/// Die Marke, die Init in seine eigene Codeseite schreibt.
+///
+/// Sie ist der Beweis fuer eine Messung, nicht fuer eine Funktion: das
+/// Programm `peek` liest dieselbe Adresse aus seinem eigenen Adressraum und
+/// meldet ueber den Syscall-Opcode, ob es sie gesehen hat. Solange alle
+/// Prozesse eine Seitentabelle teilen, sieht es sie. Nach dem CR3-Wechsel je
+/// Prozess darf es sie nicht mehr sehen.
+pub const SPACE_MARK: u64 = 0x4B41_4931_5F4D_4152; // "RAI1_MAK"
+
+/// Adresse der Marke: im eigenen Stackbereich, weit unterhalb des Zeigers.
+///
+/// Die Codeseite waere der naheliegende Ort, ist aber NUR LESBAR abgebildet —
+/// der erste Versuch dort endete in einem Seitenfehler beim Schreiben, und
+/// Init wurde voellig korrekt beendet. Ein Programm darf seinen Code nicht
+/// ueberschreiben; der Stack ist beschreibbar und trotzdem pro Prozess.
+pub const SPACE_MARK_ADDR: u64 = 0x7FFE_F100;
+
 /// Einstiegspunkt. Der Name ist der des Linkerskripts, kein Rust-Komfort.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -68,6 +85,9 @@ pub extern "C" fn _start() -> ! {
     // damit ein Abschneiden der ersten Anweisung im Log auffaellt.
     unsafe {
         core::arch::asm!("nop", options(nomem, nostack, preserves_flags));
+        // Einmal schreiben, dann nur noch Yield: die Marke darf nicht von
+        // jedem Durchlauf abhaengen, sonst waere ihr Fehlen nicht deutbar.
+        core::ptr::write_volatile(SPACE_MARK_ADDR as *mut u64, SPACE_MARK);
     }
     loop {
         syscall_yield();
