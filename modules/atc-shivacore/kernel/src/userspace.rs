@@ -92,6 +92,31 @@ impl UserAddressSpace {
     pub fn in_heap(&self, addr: u64) -> bool {
         addr >= self.heap_base && addr < self.heap_base + self.heap_size
     }
+    /// Die tatsaechlich abgebildeten Regionen als [start, ende)-Paare.
+    ///
+    /// Der Adressraum-Bau braucht sie, um zu entscheiden, welche 1-GiB-Fenster
+    /// er NICHT erben darf. Wichtig ist der Stack: er liegt standardmaessig
+    /// knapp unter 2 GiB und damit nicht dort, wo man Nutzerseiten vermutet.
+    pub fn mapped_regions(&self) -> [(u64, u64); 4] {
+        let stack_pages = self.stack_size.div_ceil(0x1000);
+        let stack_start = self.stack_base - stack_pages * 0x1000;
+        [
+            (
+                self.code_base,
+                self.code_base.saturating_add(self.code_size),
+            ),
+            (
+                self.data_base,
+                self.data_base.saturating_add(self.data_size),
+            ),
+            (stack_start, self.stack_base),
+            (
+                self.heap_base,
+                self.heap_base.saturating_add(self.heap_size),
+            ),
+        ]
+    }
+
     /// Stack pointer initial value (top of stack)
     pub fn initial_rsp(&self) -> u64 {
         self.stack_base
