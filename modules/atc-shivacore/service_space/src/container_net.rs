@@ -5,8 +5,13 @@
 // Port Forwarding, Firewall Rules (nftables-style), DNS per Namespace.
 // ══════════════════════════════════════════════════════════════════════════════
 
-use std::collections::{BTreeMap, BTreeSet, HashMap, VecDeque};
-use std::sync::atomic::{AtomicU64, Ordering};
+use alloc::collections::{BTreeMap, BTreeSet, VecDeque};
+use alloc::format;
+use alloc::string::{String, ToString};
+#[allow(unused_imports)]
+use alloc::vec;
+use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, Ordering};
 
 static VETH_SEQ: AtomicU64 = AtomicU64::new(0);
 static NS_SEQ: AtomicU64 = AtomicU64::new(0);
@@ -56,7 +61,7 @@ impl Ipv4Addr {
     pub fn from_u32(v: u32) -> Self {
         Self([(v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8])
     }
-    pub fn to_string(&self) -> String {
+    pub fn as_dotted(&self) -> String {
         format!("{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3])
     }
     pub fn in_subnet(&self, net: &IpSubnet) -> bool {
@@ -67,7 +72,13 @@ impl Ipv4Addr {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+impl core::fmt::Display for Ipv4Addr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.as_dotted())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct MacAddr(pub [u8; 6]);
 
 impl MacAddr {
@@ -86,7 +97,7 @@ impl MacAddr {
     pub fn is_zero(&self) -> bool {
         self.0 == [0; 6]
     }
-    pub fn to_string(&self) -> String {
+    pub fn as_colon(&self) -> String {
         format!(
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
             self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
@@ -105,7 +116,13 @@ impl MacAddr {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+impl core::fmt::Display for MacAddr {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.write_str(&self.as_colon())
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct IpSubnet {
     pub network_addr: Ipv4Addr,
     pub prefix_len: u8,
@@ -147,8 +164,11 @@ impl IpSubnet {
     pub fn contains(&self, addr: Ipv4Addr) -> bool {
         addr.in_subnet(self)
     }
-    pub fn to_string(&self) -> String {
-        format!("{}/{}", self.network_addr.to_string(), self.prefix_len)
+}
+
+impl core::fmt::Display for IpSubnet {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        write!(f, "{}/{}", self.network_addr, self.prefix_len)
     }
 }
 
@@ -156,7 +176,7 @@ impl IpSubnet {
 // NETWORK NAMESPACE
 // ══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct NetNsId(pub u64);
 
 #[derive(Clone, Debug)]
@@ -276,8 +296,8 @@ impl NetworkNamespace {
             false
         }
     }
-    pub fn set_mtu(&mut self, id: u64, mtu: u16) -> bool {
-        if mtu < 68 || mtu > 65536 {
+    pub fn set_mtu(&mut self, id: u64, mtu: u32) -> bool {
+        if !(68..=65536).contains(&mtu) {
             return false;
         }
         if let Some(i) = self.interfaces.get_mut(&id) {
@@ -351,7 +371,9 @@ pub struct NetInterface {
     pub mac: MacAddr,
     pub ip: Ipv4Addr,
     pub prefix_len: u8,
-    pub mtu: u16,
+    /// Maximale Nutzlast in Byte. u32, weil Loopback 65536 traegt und
+    /// unzulaessige 70000 noch darstellbar sein muessen, um sie abzulehnen.
+    pub mtu: u32,
     pub up: bool,
     pub rx_bytes: u64,
     pub tx_bytes: u64,
@@ -657,7 +679,7 @@ impl Bridge {
         self.dhcp_pool.as_mut()?.allocate(cid)
     }
     pub fn release_ip(&mut self, ip: Ipv4Addr) -> bool {
-        self.dhcp_pool.as_mut().map_or(false, |p| p.release(ip))
+        self.dhcp_pool.as_mut().is_some_and(|p| p.release(ip))
     }
     pub fn leased_ips(&self) -> Vec<(Ipv4Addr, u32, u64)> {
         self.dhcp_pool.as_ref().map_or(vec![], |p| {
@@ -727,7 +749,7 @@ impl DhcpPool {
         self.allocated.remove(&ip).is_some()
     }
     pub fn is_expired(&self, ip: Ipv4Addr, now: u64) -> bool {
-        self.allocated.get(&ip).map_or(true, |l| now > l.expires_at)
+        self.allocated.get(&ip).is_none_or(|l| now > l.expires_at)
     }
     pub fn cleanup_expired(&mut self, now: u64) -> u32 {
         let b = self.allocated.len();
@@ -747,7 +769,7 @@ pub enum ForwardDecision {
 // FIREWALL (nftables-style)
 // ══════════════════════════════════════════════════════════════════════════════
 
-#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub enum FirewallChain {
     Input,
     Output,
@@ -893,6 +915,10 @@ impl FirewallRule {
         self
     }
 
+    // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
+    // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
+    // gehoert nicht in die Portierung dieses Moduls.
+    #[allow(clippy::too_many_arguments)]
     pub fn matches(
         &self,
         ns: NetNsId,
@@ -996,6 +1022,10 @@ impl FirewallChainData {
     pub fn set_policy(&mut self, v: FirewallVerdict) {
         self.default_policy = v;
     }
+    // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
+    // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
+    // gehoert nicht in die Portierung dieses Moduls.
+    #[allow(clippy::too_many_arguments)]
     pub fn evaluate(
         &mut self,
         proto: Protocol,
@@ -1378,6 +1408,10 @@ impl ContainerNetManager {
             false
         }
     }
+    // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
+    // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
+    // gehoert nicht in die Portierung dieses Moduls.
+    #[allow(clippy::too_many_arguments)]
     pub fn check_firewall(
         &mut self,
         ns: NetNsId,
@@ -1427,6 +1461,10 @@ impl ContainerNetManager {
         }
     }
 
+    // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
+    // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
+    // gehoert nicht in die Portierung dieses Moduls.
+    #[allow(clippy::too_many_arguments)]
     pub fn simulate_packet(
         &mut self,
         src_ns: NetNsId,
@@ -1535,18 +1573,9 @@ impl ContainerNetManager {
             "Firewall Rules:  {}\n",
             self.total_firewall_rules()
         ));
-        r.push_str(&format!(
-            "Default Subnet:  {}\n",
-            self.default_subnet.to_string()
-        ));
-        r.push_str(&format!(
-            "Gateway:         {}\n",
-            self.default_gateway.to_string()
-        ));
-        r.push_str(&format!(
-            "External IP:     {}\n",
-            self.external_ip.to_string()
-        ));
+        r.push_str(&format!("Default Subnet:  {}\n", self.default_subnet));
+        r.push_str(&format!("Gateway:         {}\n", self.default_gateway));
+        r.push_str(&format!("External IP:     {}\n", self.external_ip));
         r.push_str("\n─── Namespaces ──\n");
         for ns in self.namespaces.values() {
             r.push_str(&format!(
@@ -1574,15 +1603,21 @@ impl ContainerNetManager {
             r.push_str(&format!(
                 "  {} {}:{} → {}:{} ({} conns, {}B)\n",
                 pf.nat_type.as_str(),
-                pf.host_ip.to_string(),
+                pf.host_ip,
                 pf.host_port,
-                pf.container_ip.to_string(),
+                pf.container_ip,
                 pf.container_port,
                 pf.connections,
                 pf.bytes_forwarded
             ));
         }
         r
+    }
+}
+
+impl Default for ContainerNetManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -2609,12 +2644,14 @@ mod tests {
     }
     #[test]
     fn t_ns_stats_methods() {
-        let mut s = NetNsStats::default();
-        s.total_rx_bytes = 1000;
-        s.total_tx_bytes = 500;
-        s.total_rx_packets = 10;
-        s.total_tx_packets = 5;
-        s.total_rx_errors = 1;
+        let s = NetNsStats {
+            total_rx_bytes: 1000,
+            total_tx_bytes: 500,
+            total_rx_packets: 10,
+            total_tx_packets: 5,
+            total_rx_errors: 1,
+            ..Default::default()
+        };
         assert_eq!(s.total_bytes(), 1500);
         assert_eq!(s.total_packets(), 15);
         assert!((s.error_rate() - 1.0 / 15.0).abs() < 0.001);
