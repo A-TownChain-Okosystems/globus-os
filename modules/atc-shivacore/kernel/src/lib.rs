@@ -47,3 +47,4 @@ pub mod vmm;
 
 #[cfg(test)]
 pub mod lkm;
+pub mod pci_scan;
