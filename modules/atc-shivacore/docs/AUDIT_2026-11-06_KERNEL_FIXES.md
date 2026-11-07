@@ -1516,3 +1516,51 @@ sondern fuer alle 32 Cargo-Targets gemacht. Ergebnis, ehrlich sortiert:
 
 Stand nach diesem Durchgang: 1617 Tests im Workspace.
 
+## Nachtrag 07.11. 12:30 — `hw_drivers` doch integriert (61 Tests zurueckgeholt)
+
+Im vorigen Durchgang hatte ich diese Datei als "Vertragsentscheidung" liegen
+gelassen. Der Owner hat weiter auf "Fix" bestanden, also habe ich die Entscheidung
+mit begruendeten Defaults selbst getroffen — reversibel, und jede Abweichung ist
+im Code kommentiert:
+
+- **Ort:** `modules/atc-shivacore/service_space/src/hw_drivers.rs` (vorher
+  `modules/atc-drivers/kernel/src/hw_drivers.rs`, ohne Cargo.toml, ohne `mod`,
+  also nie uebersetzt). Laut AD-012 gehoeren Treiber in den Service Space. Die
+  alte Kopie ist entfernt, es gibt keine zweite Wahrheit.
+- **Netz:** Der Treiber dachte in `send`/`receive`, der Vertrag in
+  `send_frame`/`recv_frame`. Die Treibermethoden sind jetzt inhärent (die Tests
+  rufen sie unveraendert), darueber liegt eine duenne `NetworkDevice`-Impl.
+  Fehlerabbildung: `DeviceError` -> `DeviceDown`, `NoPacket` -> `NoFrameAvailable`.
+- **Block:** `read_block(lba) -> [u8; 512]` bleibt als Treibermethode, die
+  `BlockDevice`-Impl uebersetzt in `BlockRequest` und validiert mit
+  `validate_request`. Der gemeinsame `BlockError` hat dafuer eine Variante
+  `ReadOnly` bekommen: ein Nur-Lese-Geraet muss ausdrueckbar sein, sonst muesste
+  der Aufrufer "darf nicht" von "nicht bereit" erraten.
+- **Timer:** `now_ns`/`frequency`/`resolution_ns` kommen aus den vorhandenen
+  Femtosekunden-Werten; `reset` bleibt als Treibermethode.
+- **PCI:** Das eigene `PciDeviceId` der Datei bleibt vorerst — es beschreibt
+  Hersteller/Geraet/Klasse, waehrend `pci_scan::PciDevice` den Ort im Baum
+  beschreibt. Sie schliessen sich nicht aus; eine Zusammenlegung waere ein
+  eigener Schritt und ist hier nicht noetig.
+
+**Drei echte Fehler kamen beim ersten Lauf heraus** (der Code war nie uebersetzt):
+
+1. `let tx_ref = unsafe { &mut *(self as *const Self as *mut Self) }` — ein
+   `&`-zu-`&mut`-Cast, also undefiniertes Verhalten; der Compiler lehnt das mit
+   `invalid_reference_casting` ab. Sende- und Empfangswarteschlange liegen jetzt
+   hinter `spin::Mutex`, alle Zugriffe sind echt.
+2. Derselbe Unsinn beim Blockgeraet (`storage`), zusaetzlich mit
+   `block_ref[..512].copy_from_slice(data)` — bei `block_size < 512` ein Panic.
+   Jetzt `spin::Mutex<Vec<Vec<u8>>>` und `n = block.len().min(512)`.
+3. Drei Test-Erwartungen waren falsch, nicht der Code:
+   - `bdf()` bildet das x86-Layout ab (Bus 23:16, Geraet 15:11, Funktion 10:8);
+     der Test prueft byteweise Felder und damit ein Layout, das die Hardware
+     nicht kennt.
+   - Bei 10 MHz ist ein HPET-Tick 100 ns: 10 Ticks sind 1000 ns (nicht 100),
+     100 ns ist ein Tick (nicht zehn), 10000 Ticks sind 1 ms = 1 000 000 ns
+     (nicht 100 000). Alle drei Erwartungen waren um Faktor 10 daneben.
+
+Fuenf neue Tests belegen die Klammern selbst (mehrblockiges Lesen, Nur-Lese-
+Ablehnung, zu kurzer Puffer, Frame-Rundlauf, Timer in Hz/ns). Stand: **66 Tests**
+im Treibermodul, **1683 im Workspace**.
+
