@@ -1994,3 +1994,43 @@ Datentraeger; es gibt keine Bloecke, keine Inodes, kein Schreiben. Der naechste
 Schritt ist ein Programm, das ein zweites startet (dafuer fehlt ein Spawn-Weg
 in der ABI), oder ein Treiber, der das Verzeichnis von Platte liest.
 
+## Nachtrag 07.11. 19:05 — zwei verschiedene Programme, zwei Prozesse
+
+Bisher trug das Verzeichnis zwei Eintraege mit demselben Binary. Jetzt sind es
+zwei verschiedene Programme, und beide laufen.
+
+* **`init_program/src/bin/probe.rs`**: zweites Programm des Crates. Es setzt
+  `MonotonicTime` ab statt `Yield`, damit am Opcode unterscheidbar ist, welcher
+  Prozess spricht. Der gemeinsame Zeiger-Allocator liegt jetzt in
+  `init_program/src/allocator.rs`, weil jedes Binary eines Crates einen eigenen
+  `#[global_allocator]` braucht; `probe.rs` bindet ihn ueber
+  `#[path = "../allocator.rs"]` ein.
+* **Scheduler**: `init_user_scheduler` nimmt einen optionalen vierten Prozess.
+  Ein Image ohne Verzeichnis bleibt bei drei Prozessen, das Log sagt, welcher
+  Fall gilt.
+* **Kernel**: aus dem Verzeichnis wird neben dem Init der erste weitere Eintrag
+  geladen und als PID 1003 auf einem eigenen Adressraum (0x01C0_0000) gestartet.
+  Der Code ist lagerelativ, deshalb darf er wandern.
+
+**Belegt in QEMU, BIOS und UEFI, 0 Panics:**
+```
+ShivaCore: Ramdisk-Verzeichnis: 2 Programme (init, probe)
+ShivaCore: Programm 'init' aus Ramdisk: 6576 Bytes ELF, Einstieg 0x400000, Code 89 Bytes
+ShivaCore: vierter Prozess PID=1003 aus Ramdisk-Programm 'probe' RIP=0x1c00000
+ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001 + PID=1002 + PID=1003 (Ring 3)
+```
+`context switch to PID=1003` erscheint 40-mal (UEFI) und 67-mal (BIOS), mit
+RIP-Spruengen zwischen 0x1c00000 und 0x1c00057 — das Programm laeuft, es wird nur
+nicht angezeigt. Der erste Syscall des Systems bleibt `Nr=1 PID=1000
+Opcode=0x0001` aus dem Init.
+
+**Zwei eigene Patzer:** Der BIOS-Lauf braucht mehr als 18 Sekunden; bei zu
+kurzem Zeitlimit endet das Log mitten in der IRQ-Weiterleitung, ohne Panic, was
+wie ein Fehler aussieht. Und `serial_println!` in einem Match-Arm faellt wieder
+auf ("trailing semicolon in macro used in expression position") — dieselbe Falle
+wie beim Tastenkanal, Loesung sind Klammern um die Arme.
+
+**Ehrliche Grenze:** Das ist noch nicht "Init startet Programme". Der Kernel
+startet beide, weil er das Verzeichnis liest. Der Unterschied ist der fehlende
+Spawn-Weg in der ABI: ein Prozess kann heute keinen weiteren erzeugen.
+
