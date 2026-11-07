@@ -257,7 +257,7 @@
 | `modules/atc-shivacore/STATUS.md` | 114 |
 | `modules/atc-shivacore/boot/Cargo.toml` | 12 |
 | `modules/atc-shivacore/boot/src/main.rs` | 31 |
-| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.760 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.791 |
 | `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
 | `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
@@ -333,7 +333,7 @@
 | `modules/atc-shivacore/service_space/src/consensus.rs` | 1.135 |
 | `modules/atc-shivacore/service_space/src/container_net.rs` | 2.840 |
 | `modules/atc-shivacore/service_space/src/contract.rs` | 339 |
-| `modules/atc-shivacore/service_space/src/device_registry.rs` | 772 |
+| `modules/atc-shivacore/service_space/src/device_registry.rs` | 977 |
 | `modules/atc-shivacore/service_space/src/did.rs` | 394 |
 | `modules/atc-shivacore/service_space/src/genesis.rs` | 1.183 |
 | `modules/atc-shivacore/service_space/src/genesis_bridge.rs` | 1.148 |
