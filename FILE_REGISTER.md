@@ -1,237 +1,516 @@
 # 📋 File Register — globus-os
 
-> **Zweck:** Vollständige maschinell generierte Liste aller Dateien (SCR-0082, Matrix-Dim-12).
-> **Auto-generiert:** 2026-09-10 10:50 UTC | via GitHub-Trees-API
+> **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
+> **Erzeugt:** 2026-11-07 aus `git ls-files` · **Dateien:** 503
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
+>
+> Der vorige Stand war ueber die GitHub-Trees-API vom 2026-09-10 und nannte 209
+> Dateien, davon 187 aus `modules/` — **alle 141 Dateien aus `system/` fehlten**,
+> obwohl der Kopf "vollstaendig" behauptete. Diese Liste ist jetzt aus dem
+> Arbeitsbaum erzeugt und deckt sich mit `git ls-files`.
 
----
-
-## Zusammenfassung
-
-| Metrik | Wert |
-|--------|------|
-| **Total Dateien** | 209 |
-| **.md** | 80 |
-| **.atc** | 51 |
-| **.rs** | 32 |
-| **(keine)** | 23 |
-| **.json** | 6 |
-| **.yaml** | 5 |
-| **.toml** | 5 |
-| **.yml** | 4 |
-| **.ts** | 2 |
-| **.tsx** | 1 |
-
----
-
-## Dateiliste
-
-- `.atc/compliance.yaml`
-- `.atc/evidence/evidence.yaml`
-- `.atc/lifecycle.yaml`
-- `.atc/ownership.yaml`
-- `.atc/repository.yaml`
-- `.github/dependabot.yml`
-- `.github/workflows/codeql.yml`
-- `.github/workflows/governance-ci.yml`
-- `.github/workflows/test-suite.yml`
-- `.gitignore`
-- `AGENTS.md`
-- `AGENT_MANIFEST.md`
-- `CHANGELOG.md`
-- `CODEOWNERS`
-- `LICENSE`
-- `README.md`
-- `ROADMAP.md`
-- `SECURITY.md`
-- `STATUS.md`
-- `docs/REPOSITORY_STANDARD.md`
-- `docs/specs/SPEC-OVERVIEW.md`
-- `modules/atc-bootloader/.gitignore`
-- `modules/atc-bootloader/ARCHITECTURE.md`
-- `modules/atc-bootloader/CHANGELOG.md`
-- `modules/atc-bootloader/COMPONENT_PLAN.md`
-- `modules/atc-bootloader/Cargo.toml`
-- `modules/atc-bootloader/FILE_REGISTER.md`
-- `modules/atc-bootloader/LICENSE`
-- `modules/atc-bootloader/README.md`
-- `modules/atc-bootloader/ROADMAP.md`
-- `modules/atc-bootloader/STATUS.md`
-- `modules/atc-bootloader/config.atc`
-- `modules/atc-bootloader/kernel_handshake.atc`
-- `modules/atc-bootloader/recovery.atc`
-- `modules/atc-bootloader/src/boot.rs`
-- `modules/atc-bootloader/src/entry.rs`
-- `modules/atc-bootloader/src/info.rs`
-- `modules/atc-bootloader/src/lib.rs`
-- `modules/atc-bootloader/src/mmap.rs`
-- `modules/atc-bootloader/stage1.atc`
-- `modules/atc-bootloader/stage2.atc`
-- `modules/atc-drivers/.gitignore`
-- `modules/atc-drivers/ARCHITECTURE.md`
-- `modules/atc-drivers/CHANGELOG.md`
-- `modules/atc-drivers/COMPONENT_PLAN.md`
-- `modules/atc-drivers/Cargo.toml`
-- `modules/atc-drivers/FILE_REGISTER.md`
-- `modules/atc-drivers/LICENSE`
-- `modules/atc-drivers/README.md`
-- `modules/atc-drivers/ROADMAP.md`
-- `modules/atc-drivers/STATUS.md`
-- `modules/atc-drivers/drivers/display_driver.atc`
-- `modules/atc-drivers/drivers/driver_framework.atc`
-- `modules/atc-drivers/drivers/input_driver.atc`
-- `modules/atc-drivers/drivers/network_driver.atc`
-- `modules/atc-drivers/drivers/storage_driver.atc`
-- `modules/atc-shivacore/service_space/src/hw_drivers.rs`
-- `modules/atc-drivers/package-lock.json`
-- `modules/atc-drivers/package.json`
-- `modules/atc-drivers/src/audio.rs`
-- `modules/atc-drivers/src/components/HardwareDriversView.tsx`
-- `modules/atc-drivers/src/driver_framework.rs`
-- `modules/atc-drivers/src/gpu.rs`
-- `modules/atc-drivers/src/hid.rs`
-- `modules/atc-drivers/src/lib.rs`
-- `modules/atc-drivers/src/net.rs`
-- `modules/atc-drivers/src/storage.rs`
-- `modules/atc-drivers/src/usb.rs`
-- `modules/atc-drivers/tsconfig.json`
-- `modules/atc-globus-desktop/.gitignore`
-- `modules/atc-globus-desktop/ARCHITECTURE.md`
-- `modules/atc-globus-desktop/CHANGELOG.md`
-- `modules/atc-globus-desktop/COMPONENT_PLAN.md`
-- `modules/atc-globus-desktop/FILE_REGISTER.md`
-- `modules/atc-globus-desktop/LICENSE`
-- `modules/atc-globus-desktop/README.md`
-- `modules/atc-globus-desktop/ROADMAP.md`
-- `modules/atc-globus-desktop/STATUS.md`
-- `modules/atc-globus-desktop/src/app_launcher.atc`
-- `modules/atc-globus-desktop/src/dock.atc`
-- `modules/atc-globus-desktop/src/notifications.atc`
-- `modules/atc-globus-desktop/src/settings_ui.atc`
-- `modules/atc-globus-desktop/src/themes.atc`
-- `modules/atc-globus-desktop/src/window_manager.atc`
-- `modules/atc-globus-fs/.gitignore`
-- `modules/atc-globus-fs/ARCHITECTURE.md`
-- `modules/atc-globus-fs/CHANGELOG.md`
-- `modules/atc-globus-fs/COMPONENT_PLAN.md`
-- `modules/atc-globus-fs/FILE_REGISTER.md`
-- `modules/atc-globus-fs/LICENSE`
-- `modules/atc-globus-fs/README.md`
-- `modules/atc-globus-fs/ROADMAP.md`
-- `modules/atc-globus-fs/STATUS.md`
-- `modules/atc-globus-fs/src/atcfs_driver.atc`
-- `modules/atc-globus-fs/src/disk_stats.atc`
-- `modules/atc-globus-fs/src/file_index.atc`
-- `modules/atc-globus-fs/src/file_manager.atc`
-- `modules/atc-globus-fs/src/permissions.atc`
-- `modules/atc-globus-net/.gitignore`
-- `modules/atc-globus-net/ARCHITECTURE.md`
-- `modules/atc-globus-net/CHANGELOG.md`
-- `modules/atc-globus-net/COMPONENT_PLAN.md`
-- `modules/atc-globus-net/FILE_REGISTER.md`
-- `modules/atc-globus-net/LICENSE`
-- `modules/atc-globus-net/README.md`
-- `modules/atc-globus-net/ROADMAP.md`
-- `modules/atc-globus-net/STATUS.md`
-- `modules/atc-globus-net/src/dns_client.atc`
-- `modules/atc-globus-net/src/firewall.atc`
-- `modules/atc-globus-net/src/network_config.atc`
-- `modules/atc-globus-net/src/network_stack.atc`
-- `modules/atc-globus-net/src/network_status.atc`
-- `modules/atc-globus-os/.gitignore`
-- `modules/atc-globus-os/ARCHITECTURE.md`
-- `modules/atc-globus-os/CHANGELOG.md`
-- `modules/atc-globus-os/COMPONENT_PLAN.md`
-- `modules/atc-globus-os/FILE_REGISTER.md`
-- `modules/atc-globus-os/LICENSE`
-- `modules/atc-globus-os/README.md`
-- `modules/atc-globus-os/ROADMAP.md`
-- `modules/atc-globus-os/STATUS.md`
-- `modules/atc-globus-os/civilization/civilization_engine.atc`
-- `modules/atc-globus-os/civilization/ecosystem_ai.atc`
-- `modules/atc-globus-os/civilization/experience_orchestrator.atc`
-- `modules/atc-globus-os/civilization/identity_layer.atc`
-- `modules/atc-globus-os/core/globus_core.atc`
-- `modules/atc-globus-os/core/world_registry.atc`
-- `modules/atc-globus-os/economy/global_economy.atc`
-- `modules/atc-globus-os/economy/resource_pools.atc`
-- `modules/atc-globus-os/governance/planetary_council.atc`
-- `modules/atc-globus-os/governance/world_governance.atc`
-- `modules/atc-globus-os/network/globus_discovery.atc`
-- `modules/atc-globus-os/network/world_sync.atc`
-- `modules/atc-globus-os/package-lock.json`
-- `modules/atc-globus-os/package.json`
-- `modules/atc-globus-os/src/index.ts`
-- `modules/atc-globus-os/tsconfig.json`
-- `modules/atc-globus-os/vite.config.ts`
-- `modules/atc-globus-os/world/persistent_world.atc`
-- `modules/atc-globus-os/world/proc_universe.atc`
-- `modules/atc-globus-os/world/world_engine.atc`
-- `modules/atc-globus-registry/.gitignore`
-- `modules/atc-globus-registry/ARCHITECTURE.md`
-- `modules/atc-globus-registry/CHANGELOG.md`
-- `modules/atc-globus-registry/COMPONENT_PLAN.md`
-- `modules/atc-globus-registry/FILE_REGISTER.md`
-- `modules/atc-globus-registry/LICENSE`
-- `modules/atc-globus-registry/README.md`
-- `modules/atc-globus-registry/ROADMAP.md`
-- `modules/atc-globus-registry/STATUS.md`
-- `modules/atc-globus-registry/src/asset_tokenizer.atc`
-- `modules/atc-globus-registry/src/ip_registry.atc`
-- `modules/atc-globus-registry/src/license_manager.atc`
-- `modules/atc-globus-registry/src/registry_dashboard.atc`
-- `modules/atc-globus-registry/src/registry_sync.atc`
-- `modules/atc-globus-shell/.gitignore`
-- `modules/atc-globus-shell/ARCHITECTURE.md`
-- `modules/atc-globus-shell/CHANGELOG.md`
-- `modules/atc-globus-shell/COMPONENT_PLAN.md`
-- `modules/atc-globus-shell/Cargo.toml`
-- `modules/atc-globus-shell/FILE_REGISTER.md`
-- `modules/atc-globus-shell/LICENSE`
-- `modules/atc-globus-shell/README.md`
-- `modules/atc-globus-shell/ROADMAP.md`
-- `modules/atc-globus-shell/STATUS.md`
-- `modules/atc-globus-shell/src/cli_commands.atc`
-- `modules/atc-globus-shell/src/cli_commands.rs`
-- `modules/atc-globus-shell/src/lib.rs`
-- `modules/atc-globus-shell/src/pipe_system.atc`
-- `modules/atc-globus-shell/src/pipe_system.rs`
-- `modules/atc-globus-shell/src/shell.atc`
-- `modules/atc-globus-shell/src/shell.rs`
-- `modules/atc-globus-shell/src/shell_completion.atc`
-- `modules/atc-globus-shell/src/shell_completion.rs`
-- `modules/atc-globus-shell/src/shell_history.atc`
-- `modules/atc-globus-shell/src/shell_history.rs`
-- `modules/atc-linux-edition/.gitignore`
-- `modules/atc-linux-edition/ARCHITECTURE.md`
-- `modules/atc-linux-edition/CHANGELOG.md`
-- `modules/atc-linux-edition/COMPONENT_PLAN.md`
-- `modules/atc-linux-edition/Cargo.toml`
-- `modules/atc-linux-edition/FILE_REGISTER.md`
-- `modules/atc-linux-edition/LICENSE`
-- `modules/atc-linux-edition/README.md`
-- `modules/atc-linux-edition/ROADMAP.md`
-- `modules/atc-linux-edition/STATUS.md`
-- `modules/atc-linux-edition/src/app.rs`
-- `modules/atc-linux-edition/src/explorer.rs`
-- `modules/atc-linux-edition/src/main.rs`
-- `modules/atc-linux-edition/src/node.rs`
-- `modules/atc-linux-edition/src/settings.rs`
-- `modules/atc-linux-edition/src/wallet.rs`
-- `modules/atc-windows-edition/.gitignore`
-- `modules/atc-windows-edition/ARCHITECTURE.md`
-- `modules/atc-windows-edition/CHANGELOG.md`
-- `modules/atc-windows-edition/COMPONENT_PLAN.md`
-- `modules/atc-windows-edition/Cargo.toml`
-- `modules/atc-windows-edition/FILE_REGISTER.md`
-- `modules/atc-windows-edition/LICENSE`
-- `modules/atc-windows-edition/README.md`
-- `modules/atc-windows-edition/ROADMAP.md`
-- `modules/atc-windows-edition/STATUS.md`
-- `modules/atc-windows-edition/src/app.rs`
-- `modules/atc-windows-edition/src/explorer.rs`
-- `modules/atc-windows-edition/src/main.rs`
-- `modules/atc-windows-edition/src/node.rs`
-- `modules/atc-windows-edition/src/settings.rs`
-- `modules/atc-windows-edition/src/wallet.rs`
-- `tests/TESTPLAN.md`
+| Datei | Zeilen |
+|------|--------|
+| `.atc/compliance.yaml` | 12 |
+| `.atc/evidence/evidence.yaml` | 174 |
+| `.atc/lifecycle.yaml` | 6 |
+| `.atc/ownership.yaml` | 10 |
+| `.atc/repository.yaml` | 21 |
+| `.atc/standards.yaml` | 21 |
+| `.cargo/config.toml` | 4 |
+| `.github/dependabot.yml` | 38 |
+| `.github/workflows/auto-format-rust.yml` | 41 |
+| `.github/workflows/cargo-audit.yml` | 37 |
+| `.github/workflows/codeql.yml` | 20 |
+| `.github/workflows/dependency-review.yml` | 14 |
+| `.github/workflows/governance-ci.yml` | 21 |
+| `.github/workflows/rust-ci.yml` | 37 |
+| `.github/workflows/sdk.yml` | 14 |
+| `.github/workflows/shivacore-kernel.yml` | 264 |
+| `.github/workflows/system-ci.yml` | 27 |
+| `.github/workflows/test-suite.yml` | 104 |
+| `.gitignore` | 9 |
+| `AGENTS.md` | 15 |
+| `AGENT_MANIFEST.md` | 158 |
+| `ARCHITECTURE.md` | 41 |
+| `CHANGELOG.md` | 7 |
+| `CODEOWNERS` | 3 |
+| `CONTRIBUTING.md` | 9 |
+| `Cargo.lock` | 5.336 |
+| `Cargo.toml` | 23 |
+| `FILE_REGISTER.md` | 516 |
+| `LICENSE` | 202 |
+| `README.md` | 358 |
+| `ROADMAP.md` | 67 |
+| `SECURITY.md` | 27 |
+| `STATUS.md` | 79 |
+| `docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md` | 131 |
+| `docs/AURORA_AI_ARCHITECTURE_1.0.md` | 197 |
+| `docs/COMPONENT_FUNCTION_CATALOG.md` | 60 |
+| `docs/ENGINEERING_AUDIT.md` | 9 |
+| `docs/GLOBUSOS_EVIDENCE_BACKED_GAP_MATRIX.md` | 65 |
+| `docs/HARDWARE_COMPATIBILITY.md` | 138 |
+| `docs/HARDWARE_P0_INVENTORY.md` | 54 |
+| `docs/IDENTITY_WALLET_ARCHITECTURE.md` | 180 |
+| `docs/IDENTITY_WALLET_FLOW.md` | 78 |
+| `docs/IMPLEMENTATION_STATUS.md` | 60 |
+| `docs/MEDIA-LICENSING.md` | 60 |
+| `docs/OS_STANDARD_COMPONENTS.md` | 190 |
+| `docs/REPOSITORY_STANDARD.md` | 37 |
+| `docs/SECURITY_CENTER_SPEC.md` | 250 |
+| `docs/SYSTEM_ARCHITECTURE.md` | 152 |
+| `docs/WINDOWS_OS_FEATURE_REFERENCE.json` | 298 |
+| `docs/WINDOWS_OS_FEATURE_REFERENCE.md` | 96 |
+| `docs/architecture/GLOBUSOS_PLATFORM_ARCHITECTURE.md` | 229 |
+| `docs/assets/shivacore-boot-framebuffer.png` | 4 |
+| `docs/audits/GLOBUSOS_MICROKERNEL_MIGRATION_INVENTORY_2026-10-18.md` | 96 |
+| `docs/audits/IMPLEMENTATION-REVIEW-2026-09-16.md` | 18 |
+| `docs/audits/P1-LKM-DEPENDENCY-API-FIX.md` | 31 |
+| `docs/audits/P1-LKM-FOLLOWUP-FINDINGS.md` | 10 |
+| `docs/audits/P1-LKM-REPAIR-PLAN.md` | 20 |
+| `docs/audits/REPOSITORY-AUDIT-2026-09-16.md` | 100 |
+| `docs/audits/SHIVACORE_ABI_IMPLEMENTATION_2026-10-11.md` | 35 |
+| `docs/audits/SHIVACORE_SERVICE_SPACE_DRIFT_AUDIT_2026-10-11.md` | 128 |
+| `docs/audits/globusos_microkernel_migration_inventory_2026-10-18.json` | 583 |
+| `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
+| `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
+| `docs/specs/SPEC-OVERVIEW.md` | 40 |
+| `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
+| `modules/atc-bootloader/.gitignore` | 8 |
+| `modules/atc-bootloader/ARCHITECTURE.md` | 31 |
+| `modules/atc-bootloader/CHANGELOG.md` | 8 |
+| `modules/atc-bootloader/COMPONENT_PLAN.md` | 102 |
+| `modules/atc-bootloader/Cargo.toml` | 12 |
+| `modules/atc-bootloader/FILE_REGISTER.md` | 32 |
+| `modules/atc-bootloader/LICENSE` | 15 |
+| `modules/atc-bootloader/README.md` | 110 |
+| `modules/atc-bootloader/ROADMAP.md` | 16 |
+| `modules/atc-bootloader/STATUS.md` | 21 |
+| `modules/atc-bootloader/config.atc` | 13 |
+| `modules/atc-bootloader/kernel_handshake.atc` | 13 |
+| `modules/atc-bootloader/recovery.atc` | 13 |
+| `modules/atc-bootloader/src/boot.rs` | 39 |
+| `modules/atc-bootloader/src/entry.rs` | 14 |
+| `modules/atc-bootloader/src/info.rs` | 34 |
+| `modules/atc-bootloader/src/lib.rs` | 6 |
+| `modules/atc-bootloader/src/mmap.rs` | 39 |
+| `modules/atc-bootloader/stage1.atc` | 13 |
+| `modules/atc-bootloader/stage2.atc` | 13 |
+| `modules/atc-drivers/.gitignore` | 8 |
+| `modules/atc-drivers/ARCHITECTURE.md` | 36 |
+| `modules/atc-drivers/CHANGELOG.md` | 8 |
+| `modules/atc-drivers/COMPONENT_PLAN.md` | 138 |
+| `modules/atc-drivers/Cargo.toml` | 14 |
+| `modules/atc-drivers/FILE_REGISTER.md` | 13 |
+| `modules/atc-drivers/LICENSE` | 15 |
+| `modules/atc-drivers/README.md` | 111 |
+| `modules/atc-drivers/ROADMAP.md` | 16 |
+| `modules/atc-drivers/STATUS.md` | 31 |
+| `modules/atc-drivers/drivers/display_driver.atc` | 324 |
+| `modules/atc-drivers/drivers/driver_framework.atc` | 812 |
+| `modules/atc-drivers/drivers/input_driver.atc` | 493 |
+| `modules/atc-drivers/drivers/network_driver.atc` | 416 |
+| `modules/atc-drivers/drivers/storage_driver.atc` | 378 |
+| `modules/atc-drivers/package-lock.json` | 13 |
+| `modules/atc-drivers/package.json` | 10 |
+| `modules/atc-drivers/src/audio.rs` | 4 |
+| `modules/atc-drivers/src/components/HardwareDriversView.tsx` | 377 |
+| `modules/atc-drivers/src/driver_framework.rs` | 12 |
+| `modules/atc-drivers/src/gpu.rs` | 4 |
+| `modules/atc-drivers/src/hid.rs` | 4 |
+| `modules/atc-drivers/src/lib.rs` | 14 |
+| `modules/atc-drivers/src/net.rs` | 5 |
+| `modules/atc-drivers/src/storage.rs` | 5 |
+| `modules/atc-drivers/src/usb.rs` | 4 |
+| `modules/atc-drivers/tsconfig.json` | 13 |
+| `modules/atc-globus-desktop/.gitignore` | 21 |
+| `modules/atc-globus-desktop/ARCHITECTURE.md` | 36 |
+| `modules/atc-globus-desktop/CHANGELOG.md` | 10 |
+| `modules/atc-globus-desktop/COMPONENT_PLAN.md` | 102 |
+| `modules/atc-globus-desktop/FILE_REGISTER.md` | 22 |
+| `modules/atc-globus-desktop/LICENSE` | 14 |
+| `modules/atc-globus-desktop/README.md` | 23 |
+| `modules/atc-globus-desktop/ROADMAP.md` | 18 |
+| `modules/atc-globus-desktop/STATUS.md` | 28 |
+| `modules/atc-globus-desktop/src/app_launcher.atc` | 44 |
+| `modules/atc-globus-desktop/src/dock.atc` | 44 |
+| `modules/atc-globus-desktop/src/notifications.atc` | 44 |
+| `modules/atc-globus-desktop/src/settings_ui.atc` | 44 |
+| `modules/atc-globus-desktop/src/themes.atc` | 44 |
+| `modules/atc-globus-desktop/src/window_manager.atc` | 49 |
+| `modules/atc-globus-fs/.gitignore` | 21 |
+| `modules/atc-globus-fs/ARCHITECTURE.md` | 35 |
+| `modules/atc-globus-fs/CHANGELOG.md` | 10 |
+| `modules/atc-globus-fs/COMPONENT_PLAN.md` | 86 |
+| `modules/atc-globus-fs/FILE_REGISTER.md` | 21 |
+| `modules/atc-globus-fs/LICENSE` | 14 |
+| `modules/atc-globus-fs/README.md` | 23 |
+| `modules/atc-globus-fs/ROADMAP.md` | 18 |
+| `modules/atc-globus-fs/STATUS.md` | 27 |
+| `modules/atc-globus-fs/src/atcfs_driver.atc` | 49 |
+| `modules/atc-globus-fs/src/disk_stats.atc` | 44 |
+| `modules/atc-globus-fs/src/file_index.atc` | 44 |
+| `modules/atc-globus-fs/src/file_manager.atc` | 54 |
+| `modules/atc-globus-fs/src/permissions.atc` | 44 |
+| `modules/atc-globus-net/.gitignore` | 21 |
+| `modules/atc-globus-net/ARCHITECTURE.md` | 35 |
+| `modules/atc-globus-net/CHANGELOG.md` | 10 |
+| `modules/atc-globus-net/COMPONENT_PLAN.md` | 86 |
+| `modules/atc-globus-net/FILE_REGISTER.md` | 21 |
+| `modules/atc-globus-net/LICENSE` | 14 |
+| `modules/atc-globus-net/README.md` | 23 |
+| `modules/atc-globus-net/ROADMAP.md` | 18 |
+| `modules/atc-globus-net/STATUS.md` | 27 |
+| `modules/atc-globus-net/src/dns_client.atc` | 44 |
+| `modules/atc-globus-net/src/firewall.atc` | 44 |
+| `modules/atc-globus-net/src/network_config.atc` | 44 |
+| `modules/atc-globus-net/src/network_stack.atc` | 49 |
+| `modules/atc-globus-net/src/network_status.atc` | 44 |
+| `modules/atc-globus-os/.gitignore` | 5 |
+| `modules/atc-globus-os/ARCHITECTURE.md` | 60 |
+| `modules/atc-globus-os/CHANGELOG.md` | 14 |
+| `modules/atc-globus-os/COMPONENT_PLAN.md` | 262 |
+| `modules/atc-globus-os/FILE_REGISTER.md` | 36 |
+| `modules/atc-globus-os/LICENSE` | 6 |
+| `modules/atc-globus-os/README.md` | 25 |
+| `modules/atc-globus-os/ROADMAP.md` | 34 |
+| `modules/atc-globus-os/STATUS.md` | 24 |
+| `modules/atc-globus-os/civilization/civilization_engine.atc` | 37 |
+| `modules/atc-globus-os/civilization/ecosystem_ai.atc` | 31 |
+| `modules/atc-globus-os/civilization/experience_orchestrator.atc` | 27 |
+| `modules/atc-globus-os/civilization/identity_layer.atc` | 27 |
+| `modules/atc-globus-os/core/globus_core.atc` | 27 |
+| `modules/atc-globus-os/core/world_registry.atc` | 32 |
+| `modules/atc-globus-os/economy/global_economy.atc` | 41 |
+| `modules/atc-globus-os/economy/resource_pools.atc` | 28 |
+| `modules/atc-globus-os/governance/planetary_council.atc` | 26 |
+| `modules/atc-globus-os/governance/world_governance.atc` | 33 |
+| `modules/atc-globus-os/network/globus_discovery.atc` | 18 |
+| `modules/atc-globus-os/network/world_sync.atc` | 18 |
+| `modules/atc-globus-os/package-lock.json` | 4.940 |
+| `modules/atc-globus-os/package.json` | 20 |
+| `modules/atc-globus-os/src/index.ts` | 7 |
+| `modules/atc-globus-os/tsconfig.json` | 14 |
+| `modules/atc-globus-os/vite.config.ts` | 15 |
+| `modules/atc-globus-os/world/persistent_world.atc` | 30 |
+| `modules/atc-globus-os/world/proc_universe.atc` | 39 |
+| `modules/atc-globus-os/world/world_engine.atc` | 34 |
+| `modules/atc-globus-registry/.gitignore` | 21 |
+| `modules/atc-globus-registry/ARCHITECTURE.md` | 35 |
+| `modules/atc-globus-registry/CHANGELOG.md` | 10 |
+| `modules/atc-globus-registry/COMPONENT_PLAN.md` | 86 |
+| `modules/atc-globus-registry/FILE_REGISTER.md` | 21 |
+| `modules/atc-globus-registry/LICENSE` | 14 |
+| `modules/atc-globus-registry/README.md` | 23 |
+| `modules/atc-globus-registry/ROADMAP.md` | 18 |
+| `modules/atc-globus-registry/STATUS.md` | 27 |
+| `modules/atc-globus-registry/src/asset_tokenizer.atc` | 44 |
+| `modules/atc-globus-registry/src/ip_registry.atc` | 44 |
+| `modules/atc-globus-registry/src/license_manager.atc` | 44 |
+| `modules/atc-globus-registry/src/registry_dashboard.atc` | 44 |
+| `modules/atc-globus-registry/src/registry_sync.atc` | 44 |
+| `modules/atc-globus-shell/.gitignore` | 21 |
+| `modules/atc-globus-shell/ARCHITECTURE.md` | 1.573 |
+| `modules/atc-globus-shell/CHANGELOG.md` | 659 |
+| `modules/atc-globus-shell/COMPONENT_PLAN.md` | 1.025 |
+| `modules/atc-globus-shell/Cargo.toml` | 7 |
+| `modules/atc-globus-shell/FILE_REGISTER.md` | 224 |
+| `modules/atc-globus-shell/LICENSE` | 14 |
+| `modules/atc-globus-shell/README.md` | 23 |
+| `modules/atc-globus-shell/ROADMAP.md` | 1.126 |
+| `modules/atc-globus-shell/STATUS.md` | 778 |
+| `modules/atc-globus-shell/src/cli_commands.atc` | 49 |
+| `modules/atc-globus-shell/src/cli_commands.rs` | 70 |
+| `modules/atc-globus-shell/src/lib.rs` | 13 |
+| `modules/atc-globus-shell/src/pipe_system.atc` | 44 |
+| `modules/atc-globus-shell/src/pipe_system.rs` | 31 |
+| `modules/atc-globus-shell/src/shell.atc` | 49 |
+| `modules/atc-globus-shell/src/shell.rs` | 54 |
+| `modules/atc-globus-shell/src/shell_completion.atc` | 44 |
+| `modules/atc-globus-shell/src/shell_completion.rs` | 44 |
+| `modules/atc-globus-shell/src/shell_history.atc` | 751 |
+| `modules/atc-globus-shell/src/shell_history.rs` | 50 |
+| `modules/atc-linux-edition/.gitignore` | 23 |
+| `modules/atc-linux-edition/ARCHITECTURE.md` | 36 |
+| `modules/atc-linux-edition/CHANGELOG.md` | 21 |
+| `modules/atc-linux-edition/COMPONENT_PLAN.md` | 133 |
+| `modules/atc-linux-edition/Cargo.toml` | 13 |
+| `modules/atc-linux-edition/FILE_REGISTER.md` | 34 |
+| `modules/atc-linux-edition/LICENSE` | 17 |
+| `modules/atc-linux-edition/README.md` | 44 |
+| `modules/atc-linux-edition/ROADMAP.md` | 21 |
+| `modules/atc-linux-edition/STATUS.md` | 19 |
+| `modules/atc-linux-edition/src/app.rs` | 31 |
+| `modules/atc-linux-edition/src/explorer.rs` | 31 |
+| `modules/atc-linux-edition/src/main.rs` | 24 |
+| `modules/atc-linux-edition/src/node.rs` | 36 |
+| `modules/atc-linux-edition/src/settings.rs` | 31 |
+| `modules/atc-linux-edition/src/wallet.rs` | 36 |
+| `modules/atc-shivacore/.gitignore` | 23 |
+| `modules/atc-shivacore/ARCHITECTURE.md` | 112 |
+| `modules/atc-shivacore/CHANGELOG.md` | 21 |
+| `modules/atc-shivacore/COMPONENT_PLAN.md` | 732 |
+| `modules/atc-shivacore/FILE_REGISTER.md` | 121 |
+| `modules/atc-shivacore/LICENSE` | 17 |
+| `modules/atc-shivacore/README.md` | 1.101 |
+| `modules/atc-shivacore/ROADMAP.md` | 21 |
+| `modules/atc-shivacore/STATUS.md` | 114 |
+| `modules/atc-shivacore/boot/Cargo.toml` | 12 |
+| `modules/atc-shivacore/boot/src/main.rs` | 31 |
+| `modules/atc-shivacore/docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.664 |
+| `modules/atc-shivacore/docs/M1.2_VMM_IMPLEMENTATION.md` | 138 |
+| `modules/atc-shivacore/docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 |
+| `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
+| `modules/atc-shivacore/docs/SC-006_EVENT_KANAL_ENTWURF.md` | 74 |
+| `modules/atc-shivacore/docs/SC-ABI-002-ARGUMENTBLOCK.md` | 106 |
+| `modules/atc-shivacore/kernel/.cargo/config.toml` | 2 |
+| `modules/atc-shivacore/kernel/.gitignore` | 1 |
+| `modules/atc-shivacore/kernel/Cargo.toml` | 40 |
+| `modules/atc-shivacore/kernel/src/allocator.rs` | 49 |
+| `modules/atc-shivacore/kernel/src/apic.rs` | 410 |
+| `modules/atc-shivacore/kernel/src/atcfs.rs` | 709 |
+| `modules/atc-shivacore/kernel/src/ats1000.rs` | 87 |
+| `modules/atc-shivacore/kernel/src/boot_devices.rs` | 143 |
+| `modules/atc-shivacore/kernel/src/capability.rs` | 537 |
+| `modules/atc-shivacore/kernel/src/cross_subsystem.rs` | 544 |
+| `modules/atc-shivacore/kernel/src/diagnostics.rs` | 84 |
+| `modules/atc-shivacore/kernel/src/dma_auth.rs` | 369 |
+| `modules/atc-shivacore/kernel/src/elf_loader.rs` | 1.243 |
+| `modules/atc-shivacore/kernel/src/framebuffer.rs` | 123 |
+| `modules/atc-shivacore/kernel/src/gdt.rs` | 95 |
+| `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 209 |
+| `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
+| `modules/atc-shivacore/kernel/src/input_queue.rs` | 254 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 919 |
+| `modules/atc-shivacore/kernel/src/ioapic.rs` | 382 |
+| `modules/atc-shivacore/kernel/src/ipc.rs` | 717 |
+| `modules/atc-shivacore/kernel/src/irq.rs` | 322 |
+| `modules/atc-shivacore/kernel/src/irq_bridge.rs` | 537 |
+| `modules/atc-shivacore/kernel/src/irq_routing.rs` | 251 |
+| `modules/atc-shivacore/kernel/src/kernel_caps.rs` | 138 |
+| `modules/atc-shivacore/kernel/src/kernel_init.rs` | 346 |
+| `modules/atc-shivacore/kernel/src/key_events.rs` | 157 |
+| `modules/atc-shivacore/kernel/src/keymap.rs` | 401 |
+| `modules/atc-shivacore/kernel/src/lib.rs` | 51 |
+| `modules/atc-shivacore/kernel/src/lkm.rs` | 3.398 |
+| `modules/atc-shivacore/kernel/src/madt.rs` | 287 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1.021 |
+| `modules/atc-shivacore/kernel/src/memory.rs` | 64 |
+| `modules/atc-shivacore/kernel/src/memory_manager.rs` | 912 |
+| `modules/atc-shivacore/kernel/src/pci_scan.rs` | 558 |
+| `modules/atc-shivacore/kernel/src/process.rs` | 390 |
+| `modules/atc-shivacore/kernel/src/scheduler.rs` | 465 |
+| `modules/atc-shivacore/kernel/src/security.rs` | 1.161 |
+| `modules/atc-shivacore/kernel/src/serial.rs` | 47 |
+| `modules/atc-shivacore/kernel/src/syscall.rs` | 702 |
+| `modules/atc-shivacore/kernel/src/syscall_gate.rs` | 170 |
+| `modules/atc-shivacore/kernel/src/system.rs` | 1.367 |
+| `modules/atc-shivacore/kernel/src/timer.rs` | 549 |
+| `modules/atc-shivacore/kernel/src/user_sched.rs` | 1.469 |
+| `modules/atc-shivacore/kernel/src/userspace.rs` | 1.155 |
+| `modules/atc-shivacore/kernel/src/vfs.rs` | 1.198 |
+| `modules/atc-shivacore/kernel/src/vmm.rs` | 1.472 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/README.md` | 20 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/block.rs` | 548 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/container.rs` | 2.758 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/cow.rs` | 1.485 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/devfs.rs` | 922 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/fs_journal.rs` | 1.162 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/hw_drivers.rs` | 3 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/module_security.rs` | 1.683 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/page_fault.rs` | 1.372 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/power.rs` | 1.154 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/signals.rs` | 2.250 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/smp.rs` | 2.507 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/threads.rs` | 1.468 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/tracing.rs` | 2.255 |
+| `modules/atc-shivacore/legacy/kernel-src-uncompiled/user_io.rs` | 1.324 |
+| `modules/atc-shivacore/service_space/Cargo.toml` | 21 |
+| `modules/atc-shivacore/service_space/src/ai.rs` | 891 |
+| `modules/atc-shivacore/service_space/src/atcnet.rs` | 1.255 |
+| `modules/atc-shivacore/service_space/src/blockchain.rs` | 505 |
+| `modules/atc-shivacore/service_space/src/consensus.rs` | 1.135 |
+| `modules/atc-shivacore/service_space/src/container_net.rs` | 2.840 |
+| `modules/atc-shivacore/service_space/src/contract.rs` | 339 |
+| `modules/atc-shivacore/service_space/src/device_registry.rs` | 772 |
+| `modules/atc-shivacore/service_space/src/did.rs` | 394 |
+| `modules/atc-shivacore/service_space/src/genesis.rs` | 1.183 |
+| `modules/atc-shivacore/service_space/src/genesis_bridge.rs` | 1.148 |
+| `modules/atc-shivacore/service_space/src/gossip_bridge.rs` | 1.498 |
+| `modules/atc-shivacore/service_space/src/hw_drivers.rs` | 1.767 |
+| `modules/atc-shivacore/service_space/src/identity_key_hal.rs` | 109 |
+| `modules/atc-shivacore/service_space/src/identity_key_service.rs` | 101 |
+| `modules/atc-shivacore/service_space/src/knowledge_graph.rs` | 1.075 |
+| `modules/atc-shivacore/service_space/src/lib.rs` | 39 |
+| `modules/atc-shivacore/service_space/src/mempool.rs` | 860 |
+| `modules/atc-shivacore/service_space/src/net.rs` | 859 |
+| `modules/atc-shivacore/service_space/src/p2p.rs` | 1.032 |
+| `modules/atc-shivacore/service_space/src/p2p_secure.rs` | 1.530 |
+| `modules/atc-shivacore/service_space/src/remote_caps.rs` | 878 |
+| `modules/atc-shivacore/service_space/src/security_audit.rs` | 1.670 |
+| `modules/atc-shivacore/service_space/src/service_init.rs` | 212 |
+| `modules/atc-shivacore/service_space/src/sockets.rs` | 2.065 |
+| `modules/atc-shivacore/service_space/src/tcpip.rs` | 1.137 |
+| `modules/atc-shivacore/service_space/src/vm.rs` | 792 |
+| `modules/atc-windows-edition/.gitignore` | 23 |
+| `modules/atc-windows-edition/ARCHITECTURE.md` | 36 |
+| `modules/atc-windows-edition/CHANGELOG.md` | 21 |
+| `modules/atc-windows-edition/COMPONENT_PLAN.md` | 133 |
+| `modules/atc-windows-edition/Cargo.toml` | 13 |
+| `modules/atc-windows-edition/FILE_REGISTER.md` | 34 |
+| `modules/atc-windows-edition/LICENSE` | 17 |
+| `modules/atc-windows-edition/README.md` | 37 |
+| `modules/atc-windows-edition/ROADMAP.md` | 21 |
+| `modules/atc-windows-edition/STATUS.md` | 19 |
+| `modules/atc-windows-edition/src/app.rs` | 31 |
+| `modules/atc-windows-edition/src/explorer.rs` | 31 |
+| `modules/atc-windows-edition/src/main.rs` | 24 |
+| `modules/atc-windows-edition/src/node.rs` | 36 |
+| `modules/atc-windows-edition/src/settings.rs` | 31 |
+| `modules/atc-windows-edition/src/wallet.rs` | 36 |
+| `scripts/check_evidence_binding.py` | 156 |
+| `scripts/qemu_boot.sh` | 79 |
+| `sdk/Cargo.toml` | 7 |
+| `sdk/src/lib.rs` | 23 |
+| `system/audio/Cargo.toml` | 7 |
+| `system/audio/src/codec.rs` | 95 |
+| `system/audio/src/device_policy.rs` | 97 |
+| `system/audio/src/lib.rs` | 25 |
+| `system/audio/src/media_pipeline.rs` | 90 |
+| `system/audio/src/media_player.rs` | 273 |
+| `system/audio/src/mixer.rs` | 106 |
+| `system/audio/src/output.rs` | 122 |
+| `system/aurora-core/Cargo.toml` | 11 |
+| `system/aurora-core/src/contracts.rs` | 94 |
+| `system/aurora-core/src/errors.rs` | 34 |
+| `system/aurora-core/src/lib.rs` | 76 |
+| `system/aurora-core/src/state.rs` | 73 |
+| `system/aurora-core/src/types.rs` | 61 |
+| `system/core/Cargo.toml` | 13 |
+| `system/core/src/boot.rs` | 174 |
+| `system/core/src/lib.rs` | 35 |
+| `system/devices/Cargo.toml` | 10 |
+| `system/devices/src/acpi.rs` | 385 |
+| `system/devices/src/apic.rs` | 87 |
+| `system/devices/src/block.rs` | 198 |
+| `system/devices/src/block_cache.rs` | 92 |
+| `system/devices/src/block_manager.rs` | 121 |
+| `system/devices/src/boot.rs` | 58 |
+| `system/devices/src/ethernet.rs` | 200 |
+| `system/devices/src/interrupt.rs` | 103 |
+| `system/devices/src/iommu.rs` | 173 |
+| `system/devices/src/lib.rs` | 43 |
+| `system/devices/src/msi.rs` | 143 |
+| `system/devices/src/nvme.rs` | 185 |
+| `system/devices/src/nvme_controller.rs` | 211 |
+| `system/devices/src/pci.rs` | 111 |
+| `system/devices/src/registry.rs` | 62 |
+| `system/devices/src/smp.rs` | 95 |
+| `system/devices/src/timer.rs` | 81 |
+| `system/diagnostics/Cargo.toml` | 13 |
+| `system/diagnostics/src/lib.rs` | 178 |
+| `system/graphics/Cargo.toml` | 12 |
+| `system/graphics/src/compositor.rs` | 166 |
+| `system/graphics/src/desktop.rs` | 416 |
+| `system/graphics/src/display.rs` | 232 |
+| `system/graphics/src/gpu.rs` | 238 |
+| `system/graphics/src/input.rs` | 126 |
+| `system/graphics/src/lib.rs` | 52 |
+| `system/graphics/src/media_surface.rs` | 150 |
+| `system/graphics/src/shell.rs` | 168 |
+| `system/graphics/src/wm.rs` | 343 |
+| `system/identity/Cargo.toml` | 17 |
+| `system/identity/README.md` | 78 |
+| `system/identity/src/account_lifecycle.rs` | 177 |
+| `system/identity/src/account_registry.rs` | 392 |
+| `system/identity/src/file_store.rs` | 203 |
+| `system/identity/src/ipc_key_provider.rs` | 60 |
+| `system/identity/src/key_provider.rs` | 102 |
+| `system/identity/src/keystore.rs` | 93 |
+| `system/identity/src/lib.rs` | 320 |
+| `system/identity/src/multi_account.rs` | 216 |
+| `system/identity/src/persistence.rs` | 187 |
+| `system/identity/src/secure_store.rs` | 282 |
+| `system/identity/src/service.rs` | 329 |
+| `system/identity/src/transaction_journal.rs` | 365 |
+| `system/ipc/Cargo.toml` | 7 |
+| `system/ipc/src/channel.rs` | 96 |
+| `system/ipc/src/lib.rs` | 290 |
+| `system/media/Cargo.toml` | 7 |
+| `system/media/src/av_sync.rs` | 63 |
+| `system/media/src/codec.rs` | 93 |
+| `system/media/src/demux.rs` | 121 |
+| `system/media/src/desktop.rs` | 165 |
+| `system/media/src/gpu.rs` | 137 |
+| `system/media/src/lib.rs` | 238 |
+| `system/media/src/library.rs` | 129 |
+| `system/media/src/photo.rs` | 182 |
+| `system/media/src/playback.rs` | 100 |
+| `system/media/src/queue.rs` | 52 |
+| `system/media/src/scanner.rs` | 80 |
+| `system/media/src/surface.rs` | 82 |
+| `system/media/src/thumbnail.rs` | 76 |
+| `system/media/src/thumbnail_cache.rs` | 111 |
+| `system/media/src/thumbnail_store.rs` | 67 |
+| `system/media/src/video.rs` | 161 |
+| `system/memory/Cargo.toml` | 7 |
+| `system/memory/src/allocator.rs` | 51 |
+| `system/memory/src/fault.rs` | 98 |
+| `system/memory/src/frames.rs` | 87 |
+| `system/memory/src/lib.rs` | 33 |
+| `system/memory/src/paging.rs` | 107 |
+| `system/net/Cargo.toml` | 7 |
+| `system/net/src/address.rs` | 64 |
+| `system/net/src/lib.rs` | 28 |
+| `system/net/src/socket.rs` | 85 |
+| `system/package/Cargo.toml` | 13 |
+| `system/package/src/dependency.rs` | 139 |
+| `system/package/src/lib.rs` | 358 |
+| `system/process/Cargo.toml` | 7 |
+| `system/process/src/lib.rs` | 25 |
+| `system/process/src/scheduler.rs` | 78 |
+| `system/runtime/Cargo.toml` | 25 |
+| `system/runtime/src/core_api.rs` | 108 |
+| `system/runtime/src/error_reporting.rs` | 54 |
+| `system/runtime/src/lib.rs` | 221 |
+| `system/security/Cargo.toml` | 11 |
+| `system/security/src/capability_registry.rs` | 94 |
+| `system/security/src/identity.rs` | 67 |
+| `system/security/src/lib.rs` | 73 |
+| `system/services/Cargo.toml` | 7 |
+| `system/services/src/lib.rs` | 23 |
+| `system/settings/Cargo.toml` | 10 |
+| `system/settings/README.md` | 37 |
+| `system/settings/settings.schema.json` | 30 |
+| `system/settings/src/lib.rs` | 155 |
+| `system/shivacore-api/Cargo.toml` | 12 |
+| `system/shivacore-api/src/lib.rs` | 452 |
+| `system/update/Cargo.toml` | 15 |
+| `system/update/src/boot_state.rs` | 163 |
+| `system/update/src/health.rs` | 65 |
+| `system/update/src/lib.rs` | 114 |
+| `system/update/src/transition.rs` | 47 |
+| `system/vfs/Cargo.toml` | 11 |
+| `system/vfs/src/allocator.rs` | 155 |
+| `system/vfs/src/bitmap.rs` | 186 |
+| `system/vfs/src/dir_store.rs` | 174 |
+| `system/vfs/src/directory.rs` | 123 |
+| `system/vfs/src/extent.rs` | 103 |
+| `system/vfs/src/file.rs` | 103 |
+| `system/vfs/src/file_store.rs` | 156 |
+| `system/vfs/src/gpt.rs` | 80 |
+| `system/vfs/src/inode.rs` | 180 |
+| `system/vfs/src/journal.rs` | 190 |
+| `system/vfs/src/layout.rs` | 110 |
+| `system/vfs/src/lib.rs` | 78 |
+| `system/vfs/src/mounts.rs` | 65 |
+| `system/vfs/src/path.rs` | 49 |
+| `system/vfs/src/persistent.rs` | 308 |
+| `system/vfs/src/recovery.rs` | 58 |
+| `system/vfs/src/transaction.rs` | 89 |
+| `system/vfs/src/tree.rs` | 220 |
+| `system/virtualization/Cargo.toml` | 8 |
+| `system/virtualization/src/lib.rs` | 532 |
+| `system/wallet-service/Cargo.toml` | 15 |
+| `system/wallet-service/src/lib.rs` | 218 |
+| `tests/TESTPLAN.md` | 12 |
