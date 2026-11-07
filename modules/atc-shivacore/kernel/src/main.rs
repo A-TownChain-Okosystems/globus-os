@@ -59,12 +59,20 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .physical_memory_offset
         .into_option()
         .expect("Bootloader hat physical_memory_offset nicht gesetzt (Config fehlt?)");
-    let (validated_tables, madt) = validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
-        .unwrap_or_else(|error| panic!("ShivaCore: ACPI validation failed: {}", error));
+    let (validated_tables, madt, hpet_base) =
+        validate_acpi_boot_tables(boot_info, phys_mem_offset_raw)
+            .unwrap_or_else(|error| panic!("ShivaCore: ACPI validation failed: {}", error));
     serial_println!(
         "ShivaCore: ACPI RSDP/root/table checksums validated; tables={}",
         validated_tables
     );
+    // Die ACPI-Geraeteliste wird erst nach der Heap-Initialisierung
+    // veroeffentlicht: eine `Vec` vor dem Heap ist eine Allokation ins Nichts
+    // (QEMU-Lauf: "Allokation fehlgeschlagen: Layout { size: 96, align: 8 }").
+    // MADT-Zusammenfassung und HPET-Basis sind Kopien, sie reisen mit.
+    // Fuer die spaetere Veroeffentlichung (nach der Heap-Initialisierung).
+    let acpi_summary = madt;
+    let acpi_hpet_base = hpet_base;
     let ioapic_info = madt.and_then(|summary| summary.ioapic);
     let lapic_base = match madt {
         Some(summary) => {
@@ -251,6 +259,19 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             "ShivaCore: Geraetevorrat: {} Geraete fuer den Service Space abrufbar",
             published
         );
+        // Zweite Quelle: Geraete, die hinter keinem PCI-Konfigurationsraum
+        // liegen (Local APIC, IOAPIC, HPET). Der Vorrat ist getrennt, weil ein
+        // ACPI-Geraet keine Bus/Geraet/Funktion-Kennung hat.
+        if let Some(summary) = acpi_summary {
+            let acpi_devices = shivacore::acpi_devices::from_summary(&summary, acpi_hpet_base);
+            let names: Vec<&str> = acpi_devices.iter().map(|d| d.name()).collect();
+            let count = shivacore::boot_devices::BOOT_ACPI_DEVICES.publish(acpi_devices);
+            serial_println!(
+                "ShivaCore: ACPI-Geraete: {} ({}) fuer den Service Space abrufbar",
+                count,
+                names.join(", ")
+            );
+        }
         let count = |kind: DeviceKind| devices.iter().filter(|d| d.kind() == kind).count();
         serial_println!(
             "ShivaCore: SC-006 PCI-Enumeration: {} Geraete (storage={} network={} display={} bridge={} usb={} other={})",
@@ -735,7 +756,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 fn validate_acpi_boot_tables(
     boot_info: &BootInfo,
     physical_memory_offset: u64,
-) -> Result<(usize, Option<shivacore::madt::MadtSummary>), &'static str> {
+) -> Result<(usize, Option<shivacore::madt::MadtSummary>, Option<u64>), &'static str> {
     const RSDP_V1_LEN: usize = 20;
     const RSDP_V2_MIN_LEN: usize = 36;
     const MAX_RSDP_LEN: usize = 4096;
@@ -822,6 +843,7 @@ fn validate_acpi_boot_tables(
     }
     let mut validated = 1usize; // RSDT/XSDT
     let mut madt = None;
+    let mut hpet = None;
     for entry in root_table[SDT_HEADER_LEN..root_length].chunks_exact(entry_size) {
         let address = if entry_size == 8 {
             u64::from_le_bytes([
@@ -844,11 +866,17 @@ fn validate_acpi_boot_tables(
                 shivacore::madt::summarize(table).map_err(|_| "MADT entries are malformed")?;
             madt = Some(summary);
         }
+        if table.len() >= 4 && table[0..4] == shivacore::acpi_devices::HPET_SIGNATURE {
+            hpet = Some(
+                shivacore::acpi_devices::hpet_address(table)
+                    .map_err(|_| "HPET address structure is malformed")?,
+            );
+        }
         validated = validated
             .checked_add(1)
             .ok_or("ACPI table count overflow")?;
     }
-    Ok((validated, madt))
+    Ok((validated, madt, hpet))
 }
 
 fn sdt_length(header: &[u8], maximum: usize) -> Result<usize, &'static str> {
