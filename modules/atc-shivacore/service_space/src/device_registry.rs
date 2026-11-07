@@ -258,6 +258,7 @@ impl DeviceRegistry {
 // sie. Die Crate-Grenze laeuft in genau eine Richtung — der Service Space baut
 // auf dem Kernel auf —, also liegt die Uebersetzung hier und nicht dort.
 
+use shivacore::acpi_devices::{AcpiDevice, AcpiDeviceKind};
 use shivacore::pci_scan::{DeviceKind, PciDevice};
 
 impl DeviceClass {
@@ -318,6 +319,46 @@ pub fn entry_from_hardware(device: &PciDevice) -> DeviceEntry {
             device.vendor,
             device.device
         ),
+    }
+}
+
+/// Kennungsraum fuer ACPI-Geraete.
+///
+/// Muss sich von den PCI-Kennungen fernhalten: die liegen bei
+/// `bus<<16 | geraet<<8 | funktion`, also unter 2^24. ACPI beginnt deshalb
+/// weit darueber, damit eine Device-Cap nie versehentlich das falsche Geraet
+/// trifft.
+pub const ACPI_ID_BASE: u64 = 0xAC00_0000_0000_0000;
+
+/// Art-Kennung eines ACPI-Geraets innerhalb der Kennung.
+fn acpi_kind_code(kind: AcpiDeviceKind) -> u64 {
+    match kind {
+        AcpiDeviceKind::LocalApic => 1,
+        AcpiDeviceKind::IoApic => 2,
+        AcpiDeviceKind::Hpet => 3,
+    }
+}
+
+/// Stabile Kennung eines ACPI-Geraets.
+///
+/// Anders als beim PCI-Geraet gibt es keine Bus/Geraet/Funktion-Kennung. Die
+/// Kennung traegt deshalb Art und Basisadresse: dieselbe Maschine liefert beim
+/// naechsten Boot dieselbe Zahl, sonst waere eine gespeicherte Device-Cap
+/// wertlos.
+pub fn acpi_device_id(device: &AcpiDevice) -> u64 {
+    ACPI_ID_BASE | (acpi_kind_code(device.kind) << 32) | (device.address & 0xFFFF_FFFF)
+}
+
+/// Ein ACPI-Geraet als Registratur-Eintrag.
+///
+/// Klasse `Other`: Local APIC, IOAPIC und HPET sind keiner der
+/// Geraeteklassen zuzuordnen, die ein Dienst zum Filtern braucht. Sie als
+/// `Storage` oder `Input` zu fuehren waere bequem und falsch.
+pub fn entry_from_acpi(device: &AcpiDevice) -> DeviceEntry {
+    DeviceEntry {
+        id: acpi_device_id(device),
+        class: DeviceClass::Other,
+        name: alloc::format!("acpi {} @{:#x}", device.name(), device.address),
     }
 }
 
@@ -386,6 +427,53 @@ impl DeviceRegistry {
     /// Space beim Start geht.
     pub fn sync_from_boot(&mut self) -> DiscoveryOutcome {
         self.sync_from_store(&shivacore::boot_devices::BOOT_DEVICES)
+    }
+
+    /// Ein ACPI-Geraet uebernehmen. Gleiche Regel wie bei `adopt_discovered`:
+    /// finden vergibt keine Rechte, ein uebernommenes Geraet hat keinen
+    /// Besitzer, und die Cap-Pruefung bleibt bei `claim`.
+    pub fn adopt_discovered_acpi(
+        &mut self,
+        device: &AcpiDevice,
+    ) -> Result<DeviceEntry, RegistryError> {
+        let entry = entry_from_acpi(device);
+        if self.devices.iter().any(|(e, _)| e.id == entry.id) {
+            return Err(RegistryError::AlreadyRegistered);
+        }
+        self.registered_without_cap += 1;
+        self.devices.push((entry.clone(), None));
+        self.devices.sort_by_key(|(e, _)| e.id);
+        self.stats.registered += 1;
+        Ok(entry)
+    }
+
+    /// Alle ACPI-Geraete uebernehmen, Bekanntes wird gezaehlt statt doppelt
+    /// eingetragen. Damit ist der Abgleich wiederholbar.
+    pub fn sync_from_acpi(&mut self, devices: &[AcpiDevice]) -> DiscoveryOutcome {
+        let mut outcome = DiscoveryOutcome::default();
+        for device in devices {
+            match self.adopt_discovered_acpi(device) {
+                Ok(_) => outcome.adopted += 1,
+                Err(RegistryError::AlreadyRegistered) => outcome.already_known += 1,
+                Err(_) => {}
+            }
+        }
+        outcome
+    }
+
+    /// Den ACPI-Vorrat uebernehmen (`sync_from_store` fuer die zweite Quelle).
+    pub fn sync_acpi_from_store(
+        &mut self,
+        store: &shivacore::boot_devices::AcpiDeviceStore,
+    ) -> DiscoveryOutcome {
+        self.sync_from_acpi(&store.snapshot())
+    }
+
+    /// Den ACPI-Vorrat des laufenden Systems uebernehmen. Das ist der
+    /// Anschluss an den Boot: der Kernel legt LAPIC, IOAPIC und HPET in
+    /// `BOOT_ACPI_DEVICES` ab, hier werden sie abholbar.
+    pub fn sync_acpi_from_boot(&mut self) -> DiscoveryOutcome {
+        self.sync_acpi_from_store(&shivacore::boot_devices::BOOT_ACPI_DEVICES)
     }
 
     /// Wie viele Eintraege ohne Cap-Prüfung uebernommen wurden. Steht nicht in
@@ -768,5 +856,122 @@ mod tests {
         let outcome = reg.sync_from_store(&store);
         assert_eq!(outcome, DiscoveryOutcome::default());
         assert!(reg.list().is_empty());
+    }
+
+    fn acpi(kind: AcpiDeviceKind, address: u64) -> AcpiDevice {
+        AcpiDevice {
+            kind,
+            address,
+            gsi_base: None,
+        }
+    }
+
+    #[test]
+    fn an_acpi_id_stays_clear_of_the_pci_range() {
+        // PCI kommt ueber bus<<16|geraet<<8|funktion nie ueber 2^24 hinaus.
+        let highest_pci = 0x00FF_FFFFu64;
+        let lowest_acpi = acpi_device_id(&acpi(AcpiDeviceKind::LocalApic, 0));
+        assert!(
+            lowest_acpi > highest_pci,
+            "Kennungsraeume duerfen sich nicht schneiden"
+        );
+    }
+
+    #[test]
+    fn an_acpi_id_is_stable_across_boots() {
+        let first = acpi_device_id(&acpi(AcpiDeviceKind::Hpet, 0xFED0_0000));
+        let second = acpi_device_id(&acpi(AcpiDeviceKind::Hpet, 0xFED0_0000));
+        assert_eq!(first, second, "gleiche Maschine, gleiche Kennung");
+    }
+
+    #[test]
+    fn different_acpi_kinds_get_different_ids_even_at_one_address() {
+        let a = acpi_device_id(&acpi(AcpiDeviceKind::LocalApic, 0xFEE0_0000));
+        let b = acpi_device_id(&acpi(AcpiDeviceKind::IoApic, 0xFEE0_0000));
+        assert_ne!(a, b);
+    }
+
+    #[test]
+    fn acpi_entries_are_named_and_classified_honestly() {
+        let entry = entry_from_acpi(&acpi(AcpiDeviceKind::Hpet, 0xFED0_0000));
+        assert_eq!(entry.class, DeviceClass::Other);
+        assert_eq!(entry.name, "acpi HPET @0xfed00000");
+    }
+
+    #[test]
+    fn syncing_acpi_adopts_and_counts_repeats() {
+        let devices = alloc::vec![
+            acpi(AcpiDeviceKind::LocalApic, 0xFEE0_0000),
+            acpi(AcpiDeviceKind::IoApic, 0xFEC0_0000),
+            acpi(AcpiDeviceKind::Hpet, 0xFED0_0000),
+        ];
+        let mut reg = DeviceRegistry::new();
+        assert_eq!(
+            reg.sync_from_acpi(&devices),
+            DiscoveryOutcome {
+                adopted: 3,
+                already_known: 0
+            }
+        );
+        assert_eq!(reg.list().len(), 3);
+        // Zweiter Lauf mit derselben Hardware darf nichts verdoppeln.
+        assert_eq!(
+            reg.sync_from_acpi(&devices),
+            DiscoveryOutcome {
+                adopted: 0,
+                already_known: 3
+            }
+        );
+        assert_eq!(reg.list().len(), 3);
+    }
+
+    #[test]
+    fn an_adopted_acpi_device_still_has_no_owner() {
+        let mut reg = DeviceRegistry::new();
+        reg.sync_from_acpi(&alloc::vec![acpi(AcpiDeviceKind::Hpet, 0xFED0_0000)]);
+        let entry = reg.list()[0];
+        assert_eq!(
+            reg.owner_of(entry.id),
+            None,
+            "finden ist offen, besitzen bleibt geprueft"
+        );
+    }
+
+    #[test]
+    fn syncing_from_an_acpi_store_works_like_the_pci_store() {
+        let store = shivacore::boot_devices::AcpiDeviceStore::new();
+        store.publish(alloc::vec![acpi(AcpiDeviceKind::LocalApic, 0xFEE0_0000)]);
+        let mut reg = DeviceRegistry::new();
+        let outcome = reg.sync_acpi_from_store(&store);
+        assert_eq!(outcome.adopted, 1);
+        assert_eq!(reg.list().len(), 1);
+    }
+
+    #[test]
+    fn an_empty_acpi_store_changes_nothing() {
+        let store = shivacore::boot_devices::AcpiDeviceStore::new();
+        let mut reg = DeviceRegistry::new();
+        assert_eq!(
+            reg.sync_acpi_from_store(&store),
+            DiscoveryOutcome::default()
+        );
+        assert!(reg.list().is_empty());
+    }
+
+    #[test]
+    fn pci_and_acpi_live_in_one_registry_without_colliding() {
+        let mut reg = DeviceRegistry::new();
+        reg.sync_from_hardware(&alloc::vec![PciDevice {
+            address: shivacore::pci_scan::PciAddress::new(0, 2, 0),
+            vendor: 0x8086,
+            device: 0x1234,
+            class: 0x03,
+            subclass: 0x00,
+            header_type: 0x00,
+        }]);
+        reg.sync_from_acpi(&alloc::vec![acpi(AcpiDeviceKind::Hpet, 0xFED0_0000)]);
+        assert_eq!(reg.list().len(), 2);
+        let ids: Vec<u64> = reg.list().iter().map(|entry| entry.id).collect();
+        assert_ne!(ids[0], ids[1]);
     }
 }
