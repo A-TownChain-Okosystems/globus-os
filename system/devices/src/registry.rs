@@ -1,6 +1,8 @@
 //! Deterministic device enumeration and driver binding registry.
 
 use crate::{Device, DeviceClass, DeviceId};
+use alloc::string::String;
+use alloc::vec::Vec;
 
 #[derive(Debug, Default)]
 pub struct DeviceRegistry {
