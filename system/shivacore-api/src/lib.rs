@@ -3,7 +3,12 @@
 //! This crate contains only wire-safe identifiers and request/response types.
 //! Kernel implementations remain private to ShivaCore.
 
-#![no_std]
+#![cfg_attr(not(test), no_std)]
+
+extern crate alloc;
+
+pub mod acpi_devices;
+pub mod madt;
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
 
