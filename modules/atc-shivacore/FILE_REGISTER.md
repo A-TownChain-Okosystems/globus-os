@@ -1,7 +1,7 @@
 # 📋 File Register — atc-shivacore
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Erzeugt:** 2026-11-07 aus `git ls-files modules/atc-shivacore` · **Dateien:** 107
+> **Erzeugt:** 2026-11-07 aus `git ls-files modules/atc-shivacore` · **Dateien:** 106
 >
 > Diese Tabelle wird aus dem Baum erzeugt, nicht gepflegt. Der vorige Stand war vom
 > 2026-10-08 und nannte 15 Dateien, die es nicht mehr gibt (u. a. `kernel/src/devfs.rs`,
@@ -16,14 +16,14 @@
 | `./ARCHITECTURE.md` | 112 | md |
 | `./CHANGELOG.md` | 21 | md |
 | `./COMPONENT_PLAN.md` | 732 | md |
-| `./FILE_REGISTER.md` | 121 | md |
+| `./FILE_REGISTER.md` | 120 | md |
 | `./LICENSE` | 17 | – |
 | `./README.md` | 1.101 | md |
 | `./ROADMAP.md` | 21 | md |
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 12 | toml |
 | `./boot/src/main.rs` | 31 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.664 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 1.671 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
@@ -118,4 +118,3 @@
 | `./service_space/src/sockets.rs` | 2.065 | rs |
 | `./service_space/src/tcpip.rs` | 1.137 | rs |
 | `./service_space/src/vm.rs` | 792 | rs |
-| `../../system/devices/src/driver_lifecycle.rs` | 121 | rs |
