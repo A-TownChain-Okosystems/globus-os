@@ -23,7 +23,7 @@
 | `./STATUS.md` | 114 | md |
 | `./boot/Cargo.toml` | 15 | toml |
 | `./boot/src/main.rs` | 72 | rs |
-| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.139 | md |
+| `./docs/AUDIT_2026-11-06_KERNEL_FIXES.md` | 2.180 | md |
 | `./docs/M1.2_VMM_IMPLEMENTATION.md` | 138 | md |
 | `./docs/M1.2_VMM_SECURITY_REVIEW.md` | 75 | md |
 | `./docs/SC-006-ACK-ABONNENTEN.md` | 89 | md |
