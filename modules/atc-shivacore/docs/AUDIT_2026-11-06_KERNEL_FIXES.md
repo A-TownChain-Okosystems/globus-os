@@ -1428,3 +1428,42 @@ doppelt, Ringverbindung endet, tiefe Kette stoppt an der Grenze.
 Uebergabe an die Registratur erfolgt weiterhin nur ueber den Vorrat, nicht durch
 einen laufenden Service Space.
 
+## Nachtrag 07.11. 12:40 — Das schlafende Modul `container_net` geweckt
+
+Anlass war die offene Aufgabe "Korrektur der unkompilierten Module". Ein
+Abgleich der Dateien gegen die `mod`-Deklarationen fand genau eine Leiche:
+`service_space/src/container_net.rs`, 2803 Zeilen, 247 Funktionen, **103 Tests** —
+nirgends deklariert, also nie uebersetzt und nie ausgefuehrt. In `lib.rs` stand
+sogar "dormant, Aktivierung erfordert Portierung auf alloc/core".
+
+Die Portierung war kleiner als befuerchtet, weil das Modul nur an drei Stellen
+std benutzte. Aenderungen:
+
+- **Importe.** `std::collections` -> `alloc::collections` (BTreeMap, BTreeSet,
+  VecDeque), `std::sync::atomic` -> `core::sync::atomic`, dazu
+  `alloc::string::String`, `alloc::vec::Vec`, `alloc::format` und das `vec!`-Makro.
+  `HashMap` stand nur in der Import-Zeile, nicht in Benutzung — der Verdacht
+  "dafuer gibt es kein alloc-Aequivalent" loeste sich von selbst.
+- **Ord fuer die Schluessel.** BTreeMap und BTreeSet verlangen `Ord`; `MacAddr`,
+  `IpSubnet`, `NetNsId` und `FirewallChain` hatten nur `Hash`/`Eq`.
+- **Drucken ueber Display.** Drei eigene `to_string`-Methoden verstiessen gegen
+  die Konvention und standen `format!` im Weg. Jetzt gibt es `as_dotted` /
+  `as_colon` und je ein `Display`; die 20 Aufrufstellen bleiben unveraendert,
+  weil `ToString` gratis mitkommt.
+
+**Ein echter Fehler kam beim ersten Uebersetzen heraus.** Das Loopback-Interface
+trug `mtu: 65536`, das Feld war aber `u16` — als Literal nicht darstellbar. Der
+eigene Test des Moduls verlangte ausserdem, dass 70000 abgelehnt wird, was in
+`u16` gar nicht ankommen kann. Beides zusammen zeigt: die Groesse war falsch
+gewaehlt, nicht der Wert. `mtu` ist jetzt `u32`; damit darf Loopback 65536
+tragen, und 70000 wird tatsaechlich abgelehnt (`!(68..=65536).contains(&mtu)`).
+
+Vier Funktionen (`matches`, `evaluate`, `check_firewall`, `simulate_packet`)
+ueberschreiten die Argumentgrenze. Sie spiegeln Paketfelder eins zu eins; sie in
+eine Struktur zu buendeln waere eine eigene API-Entscheidung und nicht Teil einer
+Portierung. Die Ausnahme ist im Code begruendet, nicht stillgelegt.
+
+Ergebnis: `pub mod container_net;` in `lib.rs`, no_std-Build sauber,
+**103 Tests** gruen (vorher: nie gelaufen), clippy mit `-D warnings` still.
+Workspace jetzt **1615 Tests**.
+
