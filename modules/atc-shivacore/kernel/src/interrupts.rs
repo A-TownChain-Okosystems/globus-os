@@ -126,17 +126,36 @@ lazy_static! {
 /// Muss vor dem Freigeben des IOAPIC-Eintrags laufen, sonst kommt der erste
 /// Interrupt ohne Eintrag in der Tabelle.
 pub fn subscribe_kernel_line(line: u32) -> Result<u32, &'static str> {
-    // Anlegen in der Tabelle, damit die Capability widerrufbar bleibt.
-    let cap = KERNEL_CAPS
-        .lock()
-        .grant(line)
-        .map_err(|_| "Kernel-Capability fuer die Line abgelehnt")?;
-    let mut bridge = IRQ_BRIDGE.lock();
-    let line = bridge
-        .subscribe(&cap)
-        .map_err(|_| "Line bereits abonniert oder Rechte fehlen")?;
-    drop(bridge);
-    Ok(line)
+    // Kurze kritische Sektion mit Interrupts aus.
+    //
+    // Ohne diese Sperre blieb der Boot hier reproduzierbar stehen: genau
+    // nach "IRQ 1 -> GSI 1 -> Vektor 0x30" und vor "Line 1 abonniert", ohne
+    // Panic, ohne weitere Zeile. Ein Timer-IRQ im Fenster zwischen den beiden
+    // Sperren trifft auf einen halb fertigen Zustand — und ein Haenger, der
+    // von der Laenge eines Logsatzes abhaengt, ist kein Zufall, sondern ein
+    // Zeitfenster. Zwei Sperren, keine Ausgabe, kein Warten: das Fenster
+    // schliessen ist billiger als es zu erklaeren.
+    let were_enabled = x86_64::instructions::interrupts::are_enabled();
+    x86_64::instructions::interrupts::disable();
+
+    let result = (|| {
+        // Anlegen in der Tabelle, damit die Capability widerrufbar bleibt.
+        let cap = KERNEL_CAPS
+            .lock()
+            .grant(line)
+            .map_err(|_| "Kernel-Capability fuer die Line abgelehnt")?;
+        let mut bridge = IRQ_BRIDGE.lock();
+        let line = bridge
+            .subscribe(&cap)
+            .map_err(|_| "Line bereits abonniert oder Rechte fehlen")?;
+        drop(bridge);
+        Ok(line)
+    })();
+
+    if were_enabled {
+        x86_64::instructions::interrupts::enable();
+    }
+    result
 }
 
 /// Zaehlt Zustellungen, die ueber die Bruecke liefen und solche, die im
@@ -221,6 +240,13 @@ static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 
 /// Der einzige Userspace->Kernel-Pfad: Dispatcher + Capability-Tabelle.
 static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
+
+/// Hinterlegt die Seitentabelle eines Prozesses im laufenden Scheduler.
+pub fn set_process_cr3(pid: crate::ats1000::Pid, cr3: u64) {
+    if let Some(scheduler) = USER_SCHEDULER.lock().as_mut() {
+        scheduler.set_cr3(pid, cr3);
+    }
+}
 
 pub fn init_user_scheduler(
     first: &UserContext,
@@ -794,6 +820,18 @@ fn handle_exception(
             };
             match next {
                 Some((next_pid, next)) => {
+                    // Auch hier gehoert die Seitentabelle zum Prozess: ohne
+                    // diesen Wechsel laeuft der naechste Prozess mit der
+                    // Tabelle des beendeten weiter und stirbt an seiner
+                    // eigenen Codeadresse — genau das war im Log zu sehen
+                    // (PID 1000, 0x400077, nachdem 1003 beendet wurde).
+                    let cr3 = {
+                        let mut guard = USER_SCHEDULER.lock();
+                        guard.as_ref().and_then(|s| s.cr3_of(next_pid))
+                    };
+                    if let Some(cr3) = cr3 {
+                        shivacore::addr_space::install_raw(cr3);
+                    }
                     frame.apply_saved_context(&next);
                     serial_println!(
                         "ShivaCore: weiter mit PID={} statt den Fehler zu wiederholen",
@@ -918,13 +956,23 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
         }
     }
 
-    if let Some((next_pid, next)) = scheduler.timer_tick_saved(current) {
+    let switched = scheduler.timer_tick_saved(current);
+    if let Some((next_pid, next)) = switched {
+        // Erst die Seitentabelle, dann der Rahmen: der Prozess, dessen
+        // Register gleich geladen werden, muss seine eigene Tabelle vorfinden,
+        // sonst laeuft er weiter im gemeinsamen Abbild und die Trennung waere
+        // nur eine Absicht.
+        let cr3 = scheduler.cr3_of(next_pid);
         serial_println!(
-            "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x} RAX={:#x}",
+            "ShivaCore: scheduler preemption -> context switch to PID={} RIP={:#x} RAX={:#x} CR3={:#x}",
             next_pid.0,
             next.iret.rip,
-            next.regs.rax
+            next.regs.rax,
+            cr3.unwrap_or(0)
         );
+        if let Some(cr3) = cr3 {
+            shivacore::addr_space::install_raw(cr3);
+        }
         frame.restore(next);
     }
 
