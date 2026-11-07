@@ -1238,3 +1238,58 @@ Hardware abgefragt — kein ACPI-Walk, kein MADT-Durchlauf, keine Hotplug-Quelle
 Das Einsammeln ist die naechste Stufe; die Registratur ist die Stelle, an der
 diese Quelle spaeter einhaengt, ohne dass sich an den Rechten etwas aendert.
 
+## Nachtrag 07.11. 02:10 — Enum-Quelle: PCI-Scan im Kernel (REQ-SC006-11)
+
+Die Registratur konnte Geraete verwalten, aber sie erfand keine. Diese Stufe
+liest, was tatsaechlich steckt: `kernel/src/pci_scan.rs`.
+
+Zugriffsweg: klassischer Konfigurationsraum ueber IO-Ports 0xCF8/0xCFC. Das ist
+der kleinste Weg, der ohne ACPI- und ohne MMIO-Kenntnisse auskommt, und deshalb
+der richtige erste Schritt — er liefert eine belastbare Liste, bevor irgendetwas
+gemappt wird.
+
+Regeln, die der Code einhaelt:
+
+- Leere Slots werden nicht gemeldet: Herstellerkennung 0xFFFF (und 0x0000, wie
+  es defekte Bruecken liefern) bedeutet "nichts da".
+- Mehrfunktionsgeraete werden anhand von Header-Typ Bit 7 erkannt und
+  vollstaendig (Funktionen 0..8) abgefragt; Einzelfunktionsgeraete nur in
+  Funktion 0. Sonst wuerde eine IDE-Bruecke ihre drei Funktionen unterschlagen.
+- Die Reihenfolge ist fest (Bus, Geraet, Funktion), damit zwei Abfragen
+  desselben Stands dieselbe Antwort geben.
+- Klassifizierung nach Klassencode; 0x04 wird nur mit Subklasse 0x01 zu Audio,
+  sonst waere jede Video-Capture-Karte ein Lautsprecher.
+
+Was ausdruecklich nicht passiert: keine BAR-Aufloesung, kein MMIO-Mapping, keine
+Treiberbindung, keine Rechtevergabe. Die Entdeckung vergibt nichts — wer ein
+Geraet benutzen darf, entscheidet weiterhin die Device-Cap.
+
+Bootlauf, QEMU i440fx, BIOS und UEFI identisch:
+
+```
+PCI 00:00.0 8086:1237 bridge
+PCI 00:01.0 8086:7000 bridge
+PCI 00:01.1 8086:7010 storage
+PCI 00:01.3 8086:7113 bridge
+PCI 00:02.0 1234:1111 display
+PCI 00:03.0 8086:100e network
+SC-006 PCI-Enumeration: 6 Geraete (storage=1 network=1 display=1 bridge=3 usb=0 other=0)
+```
+
+Das belegt genau die zwei Stellen, an denen ein Scan typischerweise falsch
+liegt: die drei Funktionen von 00:01 sind einzeln aufgefuehrt, und der ACPI-PM
+(7113) haengt an einer Funktion, die nur ueber die Mehrfunktions-Erkennung
+auffindbar ist.
+
+Testbasis: 10 Unit-Tests mit einem eingeschleusten Konfigurationsraum
+(`ConfigSpace`-Trait), darunter leere Busse, 0xFFFF/0x0000-Slots, nicht
+abgefragte Funktionen bei Einzelfunktionsgeraeten, vollstaendige Funktionen bei
+Mehrfunktionsgeraeten, Determinismus, Klassentabelle und Bus-Verkettung. Der
+IO-Pfad ist an das Feature `x86-boot` gebunden, weil die Lib-Tests ohne
+`x86_64` laufen.
+
+**Noch offen:** Die gefundenen Geraete werden protokolliert, aber noch nicht in
+die Registratur uebergeben — dazwischen liegt die Crate-Grenze (der Service
+Space baut auf dem Kernel auf, nicht umgekehrt). ACPI/MADT als zweite Quelle
+fehlt ebenfalls, ebenso Busse oberhalb von Bus 0 hinter Bridges.
+
