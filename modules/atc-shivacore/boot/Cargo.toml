@@ -6,6 +6,9 @@ description = "ShivaCore Boot-Image-Builder — erzeugt BIOS/UEFI Disk-Images au
 
 [dependencies]
 bootloader = "0.11"
+# Nur fuer das Ramdisk-Verzeichnis (Format SRAM): der Bau liegt im Kernel-Crate,
+# damit Werkzeug und Kernel nicht zwei Fassungen des Formats pflegen.
+shivacore = { path = "../kernel" }
 
 # Eigenes Crate, nicht Teil des Root-Workspace: der `bootloader`-Crate verlangt
 # Nightly, waehrend der Rest des Workspace auf Stable testbar bleibt.
