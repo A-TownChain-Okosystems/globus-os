@@ -22,6 +22,7 @@
 
 use alloc::vec::Vec;
 
+use crate::acpi_devices::AcpiDevice;
 use crate::pci_scan::PciDevice;
 
 /// Der Vorrat an Geraeten, die der Boot gefunden hat.
@@ -73,6 +74,63 @@ impl Default for DeviceStore {
 
 /// Der Vorrat des laufenden Systems. Der Boot schreibt, der Service Space liest.
 pub static BOOT_DEVICES: DeviceStore = DeviceStore::new();
+
+/// Der Vorrat an Geraeten, die aus ACPI statt aus dem PCI-Konfigurationsraum
+/// stammen (Local APIC, IOAPIC, HPET).
+///
+/// Eigener Typ und eigener Speicher, nicht derselbe wie `DeviceStore`: ein
+/// ACPI-Geraet hat keine Bus/Geraet/Funktion-Kennung, und der PCI-Vorrat darf
+/// nicht so tun, als haette es eine. Wer beide Quellen braucht, liest beide.
+pub struct AcpiDeviceStore {
+    devices: spin::Mutex<Vec<AcpiDevice>>,
+}
+
+impl AcpiDeviceStore {
+    /// Ein leerer Vorrat. `const`, damit er als Statik dienen kann.
+    pub const fn new() -> Self {
+        Self {
+            devices: spin::Mutex::new(Vec::new()),
+        }
+    }
+
+    /// Den Vorrat setzen und die Anzahl zurueckgeben. Ersetzt statt anzuhaengen.
+    pub fn publish(&self, devices: Vec<AcpiDevice>) -> usize {
+        let count = devices.len();
+        *self.devices.lock() = devices;
+        count
+    }
+
+    /// Eine Kopie des Vorrats.
+    pub fn snapshot(&self) -> Vec<AcpiDevice> {
+        self.devices.lock().clone()
+    }
+
+    pub fn len(&self) -> usize {
+        self.devices.lock().len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
+    /// Die Geraetearten in fester Reihenfolge, fuer eine Logzeile.
+    pub fn names(&self) -> Vec<&'static str> {
+        self.devices
+            .lock()
+            .iter()
+            .map(|device| device.name())
+            .collect()
+    }
+}
+
+impl Default for AcpiDeviceStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+/// Der ACPI-Vorrat des laufenden Systems.
+pub static BOOT_ACPI_DEVICES: AcpiDeviceStore = AcpiDeviceStore::new();
 
 #[cfg(test)]
 mod tests {
@@ -139,5 +197,45 @@ mod tests {
         store.publish(alloc::vec![device(0, 2, 0x03, 0x00)]);
         assert_eq!(store.publish(Vec::new()), 0);
         assert!(store.is_empty());
+    }
+
+    fn lapic() -> AcpiDevice {
+        crate::acpi_devices::AcpiDevice {
+            kind: crate::acpi_devices::AcpiDeviceKind::LocalApic,
+            address: 0xFEE0_0000,
+            gsi_base: None,
+        }
+    }
+
+    #[test]
+    fn a_fresh_acpi_store_is_empty() {
+        let store = AcpiDeviceStore::new();
+        assert!(store.is_empty());
+        assert!(store.names().is_empty());
+    }
+
+    #[test]
+    fn the_acpi_store_names_what_it_holds() {
+        let store = AcpiDeviceStore::new();
+        let count = store.publish(alloc::vec![lapic()]);
+        assert_eq!(count, 1);
+        assert_eq!(store.names(), alloc::vec!["LAPIC"]);
+    }
+
+    #[test]
+    fn the_acpi_store_replaces_instead_of_appending() {
+        let store = AcpiDeviceStore::new();
+        store.publish(alloc::vec![lapic()]);
+        store.publish(alloc::vec![lapic()]);
+        assert_eq!(store.len(), 1, "zweiter Lauf darf nicht verdoppeln");
+    }
+
+    #[test]
+    fn the_acpi_snapshot_is_a_copy() {
+        let store = AcpiDeviceStore::new();
+        store.publish(alloc::vec![lapic()]);
+        let mut snapshot = store.snapshot();
+        snapshot.clear();
+        assert_eq!(store.len(), 1);
     }
 }
