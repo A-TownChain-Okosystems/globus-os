@@ -1,5 +1,7 @@
 //! PCI MSI/MSI-X capability and interrupt-vector runtime.
 
+use alloc::vec;
+use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MsiMessage {
     pub address: u64,
