@@ -2137,3 +2137,44 @@ die Falle zum fuenften Mal aufgetreten und zum ersten Mal zugemacht.
 nicht freigegeben, die Zombies werden nicht eingesammelt, und ohne eigenen CR3
 je Prozess bleibt die Speichertrennung halb.
 
+## Nachtrag 07.11. 20:55 — Boot-Monitor misst Wachstum statt Ende
+
+**Warum.** Zwei Messfehler haben mehr Zeit gekostet als jeder Kernel-Fehler.
+Erstens sah ein Log, das mitten im Lauf endet, wie ein Absturz aus — der
+BIOS-Lauf braucht aber mehr als 18 Sekunden. Zweitens sieht ein echter Haenger
+wie "laeuft noch" aus, weil ein Boot nie von selbst endet; ein Zeitlimit
+unterscheidet die beiden nicht. Und beim Fehlercode-Fiasko war die Lehre
+dieselbe: ich hatte auf "kein Panic" geschaut statt auf das, was im Log stehen
+sollte.
+
+**Das Werkzeug.** `scripts/boot_monitor.py`, ohne Abhaengigkeiten. Es liest das
+Log zweimal mit Abstand und vergleicht die Groesse: kommt nichts dazu, steht
+die Maschine — unabhaengig davon, wie lange man wartet. Zusaetzlich prueft es
+die Meilensteine in fester Reihenfolge (Ramdisk-Verzeichnis, ELF, Ring 3,
+Scheduler, Syscall), nicht bloss "irgendwas steht da". Urteile: `OK`,
+`PANIC`, `HANG` (Log wuchs nicht), `UNVOLLSTAENDIG` (Meilenstein fehlt).
+Rueckgabewert 0 nur, wenn jeder Lauf OK ist, plus optionaler JSON-Bericht.
+
+**Der Selbsttest ist der eigentliche Punkt.** `--selftest` prueft das Urteil
+gegen vier erfundene Logs, darunter genau der 18-Sekunden-Fehler und ein
+laufender Boot mit fehlendem Syscall. Ohne diesen Teil waere der Monitor ein
+Werkzeug, das immer "OK" sagt — und schlimmer als keins, weil man ihm glaubt.
+4 von 4 korrekt.
+
+**Erster echter Lauf**, BIOS und UEFI, je ein Bild mit unbeschaedigtem und eins
+mit abstuerzendem Programm (30 s Fenster):
+```
+OK  img-ok  bios  265 Kontextwechsel, 0 Prozessfehler
+OK  img-ok  uefi  235 Kontextwechsel, 0 Prozessfehler
+OK  img-gp  bios  266 Kontextwechsel, 1 Prozessfehler (beendet, System laeuft)
+OK  img-gp  uefi  237 Kontextwechsel, 1 Prozessfehler (beendet, System laeuft)
+```
+Der Fehler im gp-Bild ist kein Defekt, sondern das Ziel: der Prozess wird
+beendet, der Rest laeuft weiter. Genau diese Unterscheidung stellt der Monitor
+her, indem er Prozessfehler zaehlt statt sie mit einem Absturz zu verwechseln.
+
+**Grenze.** Der Monitor beobachtet nur, was im seriellen Log steht. Ein Fehler,
+der sich nicht aeussert (stiller Datenverlust, falsches Ergebnis), bleibt ihm
+verborgen. Und die Meilensteinliste ist von Hand gepflegt: ein neuer Bootschritt
+ohne Eintrag wird nicht geprueft.
+
