@@ -2230,3 +2230,46 @@ Gegenprobe — `peek` muss mit einem Seitenfehler sterben statt `Yield` zu
 schicken. Solange beide Programme dasselbe Ergebnis liefern, ist nichts gebaut,
 was den Namen Isolation verdient.
 
+## Nachtrag 08.11. 01:20 — die eigene Seitentabelle haelt
+
+**Was jetzt da ist.** `kernel/src/addr_space.rs` baut eine Seitentabelle, die
+Kernel und Geraete erbt und den Nutzerbereich leer laesst. Der Selbsttest im
+Bootpfad schaltet wirklich um, wartet drei Timer-Ticks ab und schaltet zurueck:
+
+```
+ShivaCore: Adressraum-Selbsttest: Tabelle 0x1E000 aktiv, 3 Timer-Ticks im
+eigenen Raum, Kernel laeuft
+```
+
+BIOS und UEFI, 0 Panics. Die drei Ticks sind der eigentliche Punkt: waehrend
+dieser Zeit stellt der Kernel den Timer ueber die LAPIC zu, deren Register eine
+MMIO-Seite bei `0xFEE00000` sind. Ohne geerbte Geraeteabbildung stirbt der Boot
+genau dort.
+
+**Die Entscheidung, die dahinter steht.** Nutzerseiten und MMIO liegen im
+**selben** PML4-Eintrag; eine neue Tabelle "kopiere die obere Haelfte" wuerde
+also entweder die Trennung aufgeben oder den APIC verlieren. Getrennt sind sie
+erst eine Ebene tiefer, im PDPT (1 GiB je Eintrag): Nutzerseiten in Eintrag 0,
+LAPIC in Eintrag 3. Deshalb wird Eintrag 0 neu gebaut — mit leerem PDPT-Eintrag
+0 und geerbten Eintraegen 1..512 — und alles darueber unveraendert uebernommen.
+Keine handgepflegte MMIO-Liste, die veraltet, sobald ein Geraet dazukommt.
+
+**Der Fehler, den das gekostet hat.** Die erste Fassung kopierte erst ab
+PML4-Eintrag 256 ("Kernel-Haelfte") und baute nur Eintrag 0 selbst. Der Heap
+liegt bei `0x4444_4444_0000`, also in Eintrag 136 — zwischen Nutzerbereich und
+Kernel-Haelfte. Ergebnis: keine Logzeile nach `LAPIC aktiv`, nur ein Reset. Ein
+Dreifachfehler schreibt nichts, er verschwindet. Die Lehre steht jetzt als Test
+im Code (`everything_but_the_low_entry_is_inherited`), nicht nur als Kommentar.
+
+**Zwei eigene Rechenfehler in den Tests**, beide korrigiert statt weggelassen:
+`256 * 512 GiB` ergibt `0x0000_8000_0000_0000`, nicht die Kernel-Grenze — die
+entsteht erst durch die Vorzeichenerweiterung des 48-Bit-Raums. Und
+`0x4444_4444_0000 >> 39` ist 136, nicht 8. Beide Zahlen standen falsch da und
+die Tests liefen rot, was der einzige Grund ist, warum sie jetzt stimmen.
+
+**Was noch fehlt, damit daraus Isolation wird.** Der Selbsttest schaltet um und
+zurueck; die Prozesse laufen weiterhin alle in der Boot-Tabelle. Der naechste
+Schritt ist, jedem Prozess seine Tabelle mitzugeben und sie im Kontextwechsel zu
+setzen. Die Gegenprobe steht schon: `peek` muss dann mit einem Seitenfehler
+sterben statt `Yield` zu schicken.
+
