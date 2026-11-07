@@ -1341,3 +1341,46 @@ Service Space, und der laeuft im Kernel-Image noch nicht. Die Uebersetzung steht
 und ist geprueft; angeschlossen wird sie, wenn der Service Space beim Boot
 startet.
 
+## Nachtrag 07.11. 11:55 — Der Vorrat: Geraete zur Laufzeit abrufbar
+
+Der letzte Meter war offen: die Enumeration schrieb ins Log, und der Service
+Space konnte nichts abfragen. Ein Log ist kein Ort, an dem jemand nachfragt.
+
+Neu: `kernel/src/boot_devices.rs` mit `DeviceStore` und dem Statik
+`BOOT_DEVICES`. Der Boot schreibt hinein, wer die Liste braucht liest heraus.
+
+Zwei Regeln, die den Vorrat brauchbar machen:
+
+- **Schreiben ist einmalig.** `publish` ersetzt, statt anzuhaengen. Ein zweiter
+  Scan derselben Hardware ergibt dieselbe Liste, nicht das Doppelte.
+- **Lesen gibt eine Kopie.** Der Vorrat ist kernel-eigen; ein Leser bekommt
+  seine eigene Liste und kann den Vorrat nicht veraendern.
+
+`DeviceStore` ist eine eigene Struktur und kein globaler Speicher, damit Tests
+mehrere unabhaengige Vorraete bauen koennen — ein einziger globaler Speicher
+waere zwischen parallel laufenden Tests nicht zu trennen. Das Statik
+`BOOT_DEVICES` ist nur fuer den laufenden Betrieb da.
+
+Auf der anderen Seite: `DeviceRegistry::sync_from_store(&DeviceStore)` und
+`sync_from_boot()` als der Weg, den der Service Space beim Start geht. Damit ist
+die Kette vollstaendig: PCI-Scan -> Vorrat -> Registratur, und jedes Glied hat
+eigene Tests.
+
+Bootbeleg (BIOS und UEFI):
+
+```
+PCI 00:02.0 1234:1111 display
+Geraetevorrat: 6 Geraete fuer den Service Space abrufbar
+SC-006 PCI-Enumeration: 6 Geraete (storage=1 network=1 display=1 bridge=3 usb=0 other=0)
+```
+
+Testbasis: 5 Tests fuer den Vorrat (leer, veroeffentlichen und zuruecklesen,
+Ersetzen statt Anhaengen, Schnappschuss ist eine Kopie, Leeren), 2 Tests fuer den
+Anschluss in der Registratur (Bootvorrat uebernehmen und beim zweiten Start
+nichts doppeln, leerer Vorrat laesst die Registratur unberuehrt). Zusammen 20
+Tests in `device_registry`, 1506 im Workspace.
+
+**Noch offen:** Der Service Space laeuft im Kernel-Image nicht, der Aufruf von
+`sync_from_boot()` gehoert also in seinen Startpfad, nicht in den Kernel. Die
+Daten sind abrufbar, die Verbindung steht bereit; wer sie zieht, fehlt.
+
