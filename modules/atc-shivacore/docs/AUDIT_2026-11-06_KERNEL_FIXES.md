@@ -1605,3 +1605,33 @@ Dokumentation die neue Lage abbildet, fiel auf:
   209 Eintraege, 0 fehlend.
 - `COMPONENT_PLAN.md` im Treiber-Modul fuehrte "1,4xx" Zeilen; echt sind 1.653.
 
+## Nachtrag 07.11. 13:00 — die Doppelung aufgeloest, statt sie liegen zu lassen
+
+Der offene Punkt aus der Ortspruefung war eine Owner-Entscheidung. Statt zu
+warten habe ich die Variante gewaehlt, die beide Crates behaelt und keine
+zweite Wahrheit zulaesst (reversibel, klein):
+
+**Es gab zwei Treiber-Zustandsmodelle.** `atc_drivers::driver_framework`
+(`DriverState` Registered/Active/Faulted/Isolated, `DriverSupervisor`,
+Ereignisprotokoll, 1 Test) und daneben `hw_drivers::DriverManager` mit einem
+booleschen `initialized`. Der boolesche Flag konnte nicht sagen, ob ein Treiber
+laeuft, gestorben oder isoliert ist — und die Supervisor-Logik lag ungenutzt
+herum, waehrend der laufende Code sie nicht kannte.
+
+**Entscheidung:** Der Lebenszyklus bleibt in `atc_drivers::driver_framework`,
+und `DriverManager` benutzt ihn jetzt (`atc_drivers` als Abhaengigkeit,
+`service_space/Cargo.toml`). `init_all()` meldet jeden vorhandenen Treiber an
+(Register -> Active), Geraete-Id ist die MMIO-Basis (stabil, eindeutig, keine
+erfundene Nummerierung), Anmelden ist idempotent, und `report_driver_fault()`
+isoliert einen Treiber und schreibt `SC-DRV-0008` ins Protokoll. Der Service
+Space ist damit kanonischer Ort fuer Treibercode (AD-012), `atc-drivers` ist
+Framework + Anzeige — vier neue Tests belegen es (70 im Treibermodul).
+
+**Und die Stubs, die logen.** `atc-drivers/src/net.rs` und `storage.rs` sagten
+"PLANNED, noch nicht implementiert", obwohl `VirtioNetDevice` und
+`VirtioBlkDevice` im Service Space laufen. Sie verweisen jetzt dorthin, statt
+eine zweite Implementierung zu versprechen. `audio.rs`, `gpu.rs`, `hid.rs`,
+`usb.rs` bleiben PLANNED — fuer sie gibt es im Baum tatsaechlich nichts, und das
+steht jetzt als nachgepruefter Satz darin. `STATUS.md` des Moduls sprach noch
+von SKELETON/INITIALIZING (Stand 05.08.) und sagt jetzt, was wo liegt.
+
