@@ -118,7 +118,7 @@ impl KernelMemoryManager {
     }
 
     /// Allokiert eine Speicherregion fuer einen Prozess.
-    /// Vergibt automatisch READ + WRITE + EXEC Capability.
+    /// Vergibt eine nicht-ausfuehrbare READ + WRITE Capability; EXEC muss separat autorisiert werden.
     ///
     /// Routing:
     ///   size <= heap_threshold -> Kernel-Heap (echte alloc::alloc)
@@ -176,7 +176,7 @@ impl KernelMemoryManager {
             pid,
             ResourceType::Memory,
             region_id,
-            Rights::READ | Rights::WRITE | Rights::EXEC | Rights::DELEGATE,
+            Rights::READ | Rights::WRITE | Rights::DELEGATE,
         );
 
         self.total_allocated += size;
@@ -572,7 +572,7 @@ mod tests {
         let r = mm.allocate(&mut caps, pid(1), 4096).unwrap();
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::READ));
         assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::WRITE));
-        assert!(caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::EXEC));
+        assert!(!caps.check(pid(1), ResourceType::Memory, r.region_id, Rights::EXEC));
     }
 
     #[test]
