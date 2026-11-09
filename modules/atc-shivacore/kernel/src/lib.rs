@@ -41,6 +41,7 @@ pub mod key_events;
 pub mod keymap;
 pub mod memory_manager;
 pub mod process;
+pub mod rights;
 pub mod scheduler;
 pub mod security;
 pub mod syscall;
