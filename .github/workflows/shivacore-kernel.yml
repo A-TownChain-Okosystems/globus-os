@@ -50,6 +50,14 @@ jobs:
             --target x86_64-unknown-none \
             --features x86-boot
 
+      - name: Build init program (ramdisk payload)
+        id: build_init
+        run: |
+          # Ohne RUSTFLAGS: die Crate-Konfiguration setzt -Tlinker.ld (feste
+          # Ladeadresse 0x400000) und relocation-model=static. Eine
+          # RUSTFLAGS-Variable wuerde diese Einstellungen ersetzen.
+          ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo build --release )
+
       - name: Build BIOS and UEFI images
         id: build_images
         run: |
@@ -58,7 +66,8 @@ jobs:
           # des bootloader-Crates). Er wird in seinem Verzeichnis gebaut.
           ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
             "$GITHUB_WORKSPACE/target/x86_64-unknown-none/release/shivacore" \
-            "$GITHUB_WORKSPACE/target/boot-images" )
+            "$GITHUB_WORKSPACE/target/boot-images" \
+            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" )
 
       - name: Install QEMU
         run: |
@@ -98,6 +107,15 @@ jobs:
           if ! grep -q "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "ACPI RSDP/root/child-table validation did not pass in BIOS guest."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
+          if ! grep -q "Programm 'init' aus Ramdisk" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Das Ramdisk-Programm init wurde nicht aus dem Image geladen."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -q "(Quelle: Ramdisk)" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "PID 1000 startet nicht aus der Ramdisk, sondern aus dem eingebauten Abbild."
+            exit 1
+          fi
             exit 1
           fi
           if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
