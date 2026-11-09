@@ -30,19 +30,28 @@ rustup +nightly component list --installed 2>/dev/null | grep -q llvm-tools \
 # curve25519-Backend; sonst bricht die Krypto-Schicht beim Bare-Metal-Build ab.
 export RUSTFLAGS='-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
 
-echo "== 1/4 Kernel-ELF bauen =="
+echo "== 1/5 Kernel-ELF bauen =="
 (cd "$ROOT" && cargo +nightly build -p shivacore --release \
   --target x86_64-unknown-none --features x86-boot)
 
-echo "== 2/4 Boot-Image-Builder bauen =="
+echo "== 2/5 Boot-Image-Builder bauen =="
 # Der Boot-Builder ist ein eigenes Crate (Nightly-Zwang des bootloader-Crates)
 # und wird deshalb in seinem Verzeichnis gebaut, nicht im Root-Workspace.
 (cd "$ROOT/modules/atc-shivacore/boot" && RUSTUP_TOOLCHAIN=nightly cargo +nightly build --release)
 
-echo "== 3/4 Disk-Image erzeugen =="
-"$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images"
+echo "== 3/5 Init-Programm bauen (Ramdisk-Nutzlast) =="
+# WICHTIG: ohne RUSTFLAGS. Die Crate-Konfiguration setzt -Tlinker.ld (feste
+# Ladeadresse 0x400000) und relocation-model=static; eine RUSTFLAGS-Variable
+# wuerde genau diese Einstellungen ersetzen und das ELF nach 0x2011c0 legen,
+# wo der Kernel es nicht abbilden kann.
+( cd "$ROOT/modules/atc-shivacore/init_program" && env -u RUSTFLAGS cargo +nightly build --release )
+INIT_ELF="$ROOT/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init"
+[ -f "$INIT_ELF" ] || die "Init-ELF fehlt: $INIT_ELF"
 
-echo "== 4/4 QEMU $RUN_SECONDS s (Log: $LOG) =="
+echo "== 4/5 Disk-Image erzeugen =="
+"$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images" "init=$INIT_ELF"
+
+echo "== 5/5 QEMU $RUN_SECONDS s (Log: $LOG) =="
 set +e
 case "$MODE" in
   bios)
