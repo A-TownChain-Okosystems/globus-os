@@ -60,11 +60,51 @@ impl FbWriter {
         }
     }
 
+    fn zeilen_hoehe(&self) -> usize {
+        CHAR_HEIGHT.val() + LINE_SPACING
+    }
+
+    fn letzte_zeile(&self) -> usize {
+        self.info
+            .height
+            .saturating_sub(self.zeilen_hoehe())
+    }
+
+    /// Schiebt den Inhalt um eine Textzeile nach oben und leert die letzte Zeile.
+    fn scroll_up(&mut self) {
+        let stride = self.info.stride * self.info.bytes_per_pixel;
+        let zeile_bytes = self.info.width * self.info.bytes_per_pixel;
+        let versatz = self.zeilen_hoehe();
+        let mut y = 0;
+        while y + versatz < self.info.height {
+            let quelle = (y + versatz) * stride;
+            let ziel = y * stride;
+            if quelle + zeile_bytes <= self.framebuffer.len() && ziel + zeile_bytes <= self.framebuffer.len() {
+                self.framebuffer.copy_within(quelle..quelle + zeile_bytes, ziel);
+            }
+            y += 1;
+        }
+        let mut y = self.info.height.saturating_sub(versatz);
+        while y < self.info.height {
+            let start = y * stride;
+            if start + zeile_bytes <= self.framebuffer.len() {
+                for b in self.framebuffer[start..start + zeile_bytes].iter_mut() {
+                    *b = 0;
+                }
+            }
+            y += 1;
+        }
+    }
+
     fn newline(&mut self) {
         self.x = 0;
-        self.y += CHAR_HEIGHT.val() + LINE_SPACING;
-        if self.y + CHAR_HEIGHT.val() >= self.info.height {
-            self.y = 0;
+        let (neu_y, scroll) =
+            shivacore::screen::zeilen_vorschub(self.y, CHAR_HEIGHT.val(), LINE_SPACING, self.info.height);
+        if scroll {
+            self.scroll_up();
+            self.y = self.letzte_zeile();
+        } else {
+            self.y = neu_y;
         }
     }
 
@@ -73,9 +113,6 @@ impl FbWriter {
             self.newline();
             return;
         }
-        if self.x + CHAR_WIDTH >= self.info.width {
-            self.newline();
-        }
         if let Some(raster) = get_raster(c, FontWeight::Regular, CHAR_HEIGHT) {
             for (row, line) in raster.raster().iter().enumerate() {
                 for (col, intensity) in line.iter().enumerate() {
@@ -83,7 +120,23 @@ impl FbWriter {
                     self.set_pixel(self.x + col, self.y + row, v, v, v);
                 }
             }
-            self.x += CHAR_WIDTH;
+        }
+        let (nx, ny, scroll) = shivacore::screen::naechste_position(
+            self.x,
+            self.y,
+            CHAR_WIDTH,
+            CHAR_HEIGHT.val(),
+            LINE_SPACING,
+            self.info.width,
+            self.info.height,
+        );
+        if scroll {
+            self.scroll_up();
+            self.x = 0;
+            self.y = self.letzte_zeile();
+        } else {
+            self.x = nx;
+            self.y = ny;
         }
     }
 }

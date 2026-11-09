@@ -28,6 +28,9 @@ pub fn _print(args: ::core::fmt::Arguments) {
             .lock()
             .write_fmt(args)
             .expect("Serieller Ausgabe-Fehler");
+        // Zweite Senke: derselbe Text auf den Bildschirm, damit ein
+        // Hardware-Fehlschlag nicht nur "schwarzer Bildschirm" ist.
+        crate::framebuffer::_print(args);
     });
 }
 

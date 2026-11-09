@@ -58,3 +58,4 @@ pub mod lkm;
 pub mod pci_scan;
 pub mod ramdisk;
 pub mod spawn;
+pub mod screen;
