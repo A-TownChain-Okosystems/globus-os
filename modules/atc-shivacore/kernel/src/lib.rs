@@ -57,3 +57,4 @@ pub mod boot_devices;
 pub mod lkm;
 pub mod pci_scan;
 pub mod ramdisk;
+pub mod spawn;
