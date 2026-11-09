@@ -15,6 +15,12 @@ use x86_64::{
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB fuer K-Sprint 2
 
+#[cfg(feature = "x86-boot")]
+fn heap_page_flags() -> PageTableFlags {
+    // Kernel heap pages are writable for allocation but must never be executable (W^X).
+    PageTableFlags::PRESENT | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE
+}
+
 #[cfg_attr(all(not(test), feature = "x86-boot"), global_allocator)] // [AD-028] Nur im echten Boot-Binary aktiv — als Abhaengigkeit stellt das Ziel-Binary (std) den Allokator
 static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
 
@@ -35,7 +41,7 @@ pub fn init_heap(
         let frame = frame_allocator
             .allocate_frame()
             .ok_or(MapToError::FrameAllocationFailed)?;
-        let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+        let flags = heap_page_flags();
         unsafe {
             mapper.map_to(page, frame, flags, frame_allocator)?.flush();
         }
@@ -46,4 +52,19 @@ pub fn init_heap(
     }
 
     Ok(())
+}
+
+#[cfg(all(test, feature = "x86-boot"))]
+mod tests {
+    use super::heap_page_flags;
+    use x86_64::structures::paging::PageTableFlags;
+
+    #[test]
+    fn kernel_heap_pages_are_writable_but_non_executable() {
+        let flags = heap_page_flags();
+        assert!(flags.contains(PageTableFlags::PRESENT));
+        assert!(flags.contains(PageTableFlags::WRITABLE));
+        assert!(flags.contains(PageTableFlags::NO_EXECUTE));
+        assert!(!flags.contains(PageTableFlags::USER_ACCESSIBLE));
+    }
 }
