@@ -1,7 +1,9 @@
 # 📋 File Register — atc-shivacore
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Erzeugt:** 2026-11-07 aus `git ls-files modules/atc-shivacore` · **Dateien:** 106
+> **Stand:** 11.11.2026 gegen `git ls-files modules/atc-shivacore` geprueft: 121 Dateien, vorher waren hier 106 genannt (122 vor der Entfernung von `service_space/src/ai.rs`).
+> Die Dateiliste ist an dieser Stelle nicht vollstaendig nachgezogen.
+> **Erzeugt:** 2026-11-07 aus `git ls-files modules/atc-shivacore` · **Dateien:** 121
 >
 > Diese Tabelle wird aus dem Baum erzeugt, nicht gepflegt. Der vorige Stand war vom
 > 2026-10-08 und nannte 15 Dateien, die es nicht mehr gibt (u. a. `kernel/src/devfs.rs`,
@@ -104,7 +106,6 @@
 | `./legacy/kernel-src-uncompiled/tracing.rs` | 2.255 | rs |
 | `./legacy/kernel-src-uncompiled/user_io.rs` | 1.324 | rs |
 | `./service_space/Cargo.toml` | 32 | toml |
-| `./service_space/src/ai.rs` | 891 | rs |
 | `./service_space/src/atcnet.rs` | 1.255 | rs |
 | `./service_space/src/blockchain.rs` | 505 | rs |
 | `./service_space/src/consensus.rs` | 1.135 | rs |
