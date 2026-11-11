@@ -19,7 +19,7 @@
 | # | Datei | Zeilen | Typ | Beschreibung |
 |---|-------|--------|-----|-------------|
 | 1 | `boot/src/main.rs` | 30 | .rs | ShivaCore Boot-Image-Builder. |
-| 2 | `kernel/src/ai.rs` | 75 | .rs | Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownCh... |
+| 2 | `kernel/src/ai.rs` — **STALE_REFERENCE** | – | .rs | Pfad existiert nicht mehr, siehe Abschnitt „Stale Reference“ unten. |
 | 3 | `kernel/src/allocator.rs` | 46 | .rs | ShivaCore — Heap-Allokator. |
 | 4 | `kernel/src/atcfs.rs` | 627 | .rs | ! ShivaCore Kernel — ATCFS (Content-Addressed File System) i... |
 | 5 | `kernel/src/atcnet.rs` | 1,139 | .rs | ! ShivaCore Kernel — ATCNet Protocol Handler (K-Sprint 24) |
@@ -88,15 +88,30 @@
 
 ---
 
-### 2. `kernel/src/ai.rs`
+### 2. `kernel/src/ai.rs` — STALE_REFERENCE
 
-**Datei:** `kernel/src/ai.rs`
-**Zeilen:** 75
+**Status:** ⚫ STALE_REFERENCE, keine Implementierung an diesem Pfad
+**Datei:** `kernel/src/ai.rs` (Pfad existiert im Baum nicht mehr)
+**Zeilen:** die frühere Angabe „75“ ist durch keinen Stand der Datei gedeckt
 **Typ:** .rs
-**Beschreibung:** Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. Apache-2.0 lizenziert — siehe LICENSE
-**Funktionen/Structs:** exp_f64, tanh_f64, sqrt_f64, add, mul, scale, matmul, relu (+12 weitere)
+**Grund:** KI-Code gehört nach AD-012 und AD-028 nicht in den Kernel. Der
+Tensor-Kern liegt seit 11.11.2026 in `aurora-ai/modules/atc-aurora-tensor`.
 
-**Status:** 🟢 IMPLEMENTIERT
+Befund vom 11.11.2026, gegen die Historie geprüft:
+
+| Frage | Antwort |
+|---|---|
+| Existiert der Pfad heute? | Nein, `git ls-files` kennt ihn nicht |
+| Gab es die Datei je? | Ja, im Kernel und in `modules/atc-shivacore` |
+| Wann verschwand sie? | Commit `e545495a` (P0 #45 Architecture Cleanup, „Nicht-TCB-Module aus Kernel“) hat sie als `renamed` nach `service_space/src/ai.rs` verschoben |
+| Wie groß war sie wirklich? | 18.020 Bytes im Ausgangsstand (`218d01b4`, `d2bcb6cd`), 25.936 Bytes und 867 Zeilen unmittelbar vor dem Verschieben (`d597c780`) |
+| Deckt „75 Zeilen“ einen Stand? | Nein. Kein Commit zeigt 75 Zeilen, die Zahl ist ein Artefakt |
+| Weitere Verweise? | `README.md`, Abschnitt „K-Sprint 21“ — das ist ein Sprint-Protokoll und bleibt als Historie stehen |
+
+Nicht wiederhergestellt: der Code existiert weiter, aber an seinem neuen Ort
+(`service_space/src/ai.rs` bis zum 11.11., danach in `atc-aurora-tensor`). Eine
+Datei am alten Pfad wäre eine zweite Tensor-Wahrheit im Kernel und damit ein
+Verstoß gegen die Kernel-Reinheit.
 
 ---
 
