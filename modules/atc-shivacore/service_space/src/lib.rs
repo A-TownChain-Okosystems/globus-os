@@ -12,7 +12,6 @@ extern crate std;
 
 extern crate alloc;
 
-pub mod ai;
 pub mod atcnet;
 pub mod blockchain;
 pub mod consensus;
