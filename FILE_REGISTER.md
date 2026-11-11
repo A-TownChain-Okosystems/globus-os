@@ -1,7 +1,8 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Erzeugt:** 2026-11-07 aus `git ls-files`, Zeilenzahlen aus dem committeten Stand (`git show HEAD:<datei>`), Binaerdateien ohne Zahl · **Dateien:** 504
+> **Stand:** 11.11.2026 gegen `git ls-files` geprueft: 522 Dateien, vorher waren hier 504 genannt. Die Dateiliste ist nicht vollstaendig nachgezogen.
+> **Erzeugt:** 2026-11-07 aus `git ls-files`, Zeilenzahlen aus dem committeten Stand (`git show HEAD:<datei>`), Binaerdateien ohne Zahl · **Dateien:** 522
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
 >
 > Der vorige Stand war ueber die GitHub-Trees-API vom 2026-09-10 und nannte 209
@@ -338,7 +339,6 @@
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/tracing.rs` | 2.255 |
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/user_io.rs` | 1.324 |
 | `modules/atc-shivacore/service_space/Cargo.toml` | 32 |
-| `modules/atc-shivacore/service_space/src/ai.rs` | 891 |
 | `modules/atc-shivacore/service_space/src/atcnet.rs` | 1.255 |
 | `modules/atc-shivacore/service_space/src/blockchain.rs` | 505 |
 | `modules/atc-shivacore/service_space/src/consensus.rs` | 1.135 |
