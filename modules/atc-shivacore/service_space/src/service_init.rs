@@ -16,7 +16,6 @@ use alloc::string::{String, ToString};
 use alloc::sync::Arc;
 use alloc::vec::Vec;
 
-use crate::ai::AiEngine;
 use crate::contract::ContractExecutor;
 use crate::mempool::{MemoryPool, NonceTracker, StateDb, TxValidator};
 use crate::p2p::P2pNode;
@@ -37,7 +36,7 @@ pub enum ServicePhase {
     Network,   // P2P-Netz
     Mempool,   // Transaction Mempool + State-DB
     Contracts, // Contract-VM + Executor
-    Ai,        // AI-Subsystem
+    Ai,        // reserviert: KI laeuft als eigener Dienst (Aurora, L2), nicht im Service Space
     Done,
 }
 
@@ -47,7 +46,7 @@ impl ServicePhase {
             ServicePhase::Network => "P2P Network (ATCNet)",
             ServicePhase::Mempool => "Transaction Mempool",
             ServicePhase::Contracts => "Contract VM + Executor",
-            ServicePhase::Ai => "AI Subsystem (Aurora AI)",
+            ServicePhase::Ai => "AI (extern: Aurora L2, kein Service-Space-Modul)",
             ServicePhase::Done => "Service Boot Complete",
         }
     }
@@ -63,7 +62,6 @@ pub struct ServiceSpaceState {
     pub nonces: Arc<NonceTracker>,
     pub vm: Arc<VmEngine>,
     pub contracts: ContractExecutor,
-    pub ai: AiEngine,
     pub init_log: Vec<(ServicePhase, ServiceInitStatus)>,
 }
 
@@ -95,11 +93,6 @@ impl ServiceSpaceState {
         let contracts = ContractExecutor::new(vm.clone(), state_db.clone());
         log.push((ServicePhase::Contracts, ServiceInitStatus::Ready));
 
-        // ── AI Subsystem ──
-        log.push((ServicePhase::Ai, ServiceInitStatus::Initializing));
-        let ai = AiEngine::new();
-        log.push((ServicePhase::Ai, ServiceInitStatus::Ready));
-
         // ── Done ──
         log.push((ServicePhase::Done, ServiceInitStatus::Ready));
 
@@ -111,7 +104,6 @@ impl ServiceSpaceState {
             nonces,
             vm,
             contracts,
-            ai,
             init_log: log,
         })
     }
@@ -139,7 +131,6 @@ impl ServiceSpaceState {
             10000
         ));
         out.push_str(&format!("  VM: {} contracts\n", self.vm.contract_count()));
-        out.push_str(&format!("  AI: {} models\n", self.ai.model_count()));
         out.push_str("=== Service Boot Complete ===\n");
         out
     }
@@ -174,7 +165,9 @@ mod tests {
         assert!(log.contains("P2P"));
         assert!(log.contains("Mempool"));
         assert!(log.contains("VM"));
-        assert!(log.contains("AI"));
+        // KI ist kein Service-Space-Modul mehr: Aurora ist ein eigener Dienst in
+        // L2. Der Boot-Log darf deshalb kein AI-Subsystem als bereit melden.
+        assert!(!log.contains("[OK] AI"));
         assert!(log.contains("Service Boot Complete"));
     }
 
@@ -190,12 +183,6 @@ mod tests {
         let state = ServiceSpaceState::init().unwrap();
         assert_eq!(state.mempool.count(), 0);
         assert_eq!(state.vm.contract_count(), 0);
-    }
-
-    #[test]
-    fn test_ai_initialized() {
-        let state = ServiceSpaceState::init().unwrap();
-        assert_eq!(state.ai.model_count(), 0);
     }
 
     #[test]
