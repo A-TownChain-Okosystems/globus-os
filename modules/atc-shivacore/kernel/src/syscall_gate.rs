@@ -13,6 +13,7 @@
 use crate::ats1000::Pid;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use crate::input_queue::InputQueue;
+use crate::security::{record, set_audit_clock, AuditResult};
 use crate::syscall::{SyscallDispatcher, SyscallRequest, SyscallResponse};
 
 /// Dispatcher + Capability-Tabelle als eine Einheit.
@@ -42,21 +43,51 @@ impl SyscallGate {
         request: SyscallRequest,
         input: &mut InputQueue,
     ) -> SyscallResponse {
-        self.dispatcher
-            .dispatch(pid, request, &mut self.capabilities, input)
+        // Der Takt, mit dem Audit-Eintraege versehen werden, kommt aus der
+        // einzigen Zeitquelle des Kernels (Timer-Ticks).
+        set_audit_clock(self.dispatcher.ticks());
+        let response = self
+            .dispatcher
+            .dispatch(pid, request, &mut self.capabilities, input);
+        // Autorisierungsfehler sind sicherheitsrelevant: ein Prozess hat ein
+        // Recht beansprucht, das ihm nicht gehoert.
+        if matches!(response.error, Some(libshivacore::AbiError::PermissionDenied)) {
+            record(
+                "syscall-gate",
+                "authorization.denied",
+                &alloc::format!("pid={:?} syscall_id={}", pid, request.syscall_id),
+                AuditResult::Denied,
+            );
+        }
+        response
     }
 
     /// Gibt einem Prozess das Leserecht auf einen Kanal. Fuer den
     /// Kernel-Eingabekanal ist das der einzige Weg, an Tastenereignisse zu
     /// kommen; ohne Cap beantwortet der Syscall nur "kein Transport".
     pub fn grant_channel_read(&mut self, pid: Pid, channel: u64) -> CapId {
-        self.capabilities
-            .create(pid, ResourceType::IpcChannel, channel, Rights::READ)
+        let cap = self
+            .capabilities
+            .create(pid, ResourceType::IpcChannel, channel, Rights::READ);
+        record(
+            "syscall-gate",
+            "capability.create",
+            &alloc::format!("pid={:?} cap={:?} channel={}", pid, cap, channel),
+            AuditResult::Allowed,
+        );
+        cap
     }
 
     /// Widerruft alle Capabilities eines Prozesses am Gate.
     pub fn revoke_all_for(&mut self, pid: Pid) -> usize {
-        self.capabilities.revoke_all_for(pid)
+        let revoked = self.capabilities.revoke_all_for(pid);
+        record(
+            "syscall-gate",
+            "capability.revoke_all",
+            &alloc::format!("pid={:?} revoked={}", pid, revoked),
+            AuditResult::Allowed,
+        );
+        revoked
     }
 
     /// Anzahl der Capabilities eines Prozesses am Gate.
@@ -176,5 +207,46 @@ mod tests {
             gate.handle(pid(1), req, &mut InputQueue::new()).error,
             Some(AbiError::InvalidSyscall)
         );
+    }
+
+    #[test]
+    fn gate_records_capability_events_in_audit_log() {
+        let mut gate = SyscallGate::new();
+        let before = crate::security::recorded_events();
+        let cap = gate.grant_channel_read(pid(11), 0x1234);
+        assert_eq!(crate::security::recorded_events(), before + 1);
+        let revoked = gate.revoke_all_for(pid(11));
+        assert_eq!(revoked, 1);
+        assert_eq!(crate::security::recorded_events(), before + 2);
+        let entries = crate::security::KERNEL_AUDIT.entries();
+        let actions: alloc::vec::Vec<&str> =
+            entries.iter().map(|e| e.action.as_str()).collect();
+        assert!(actions.contains(&"capability.create"));
+        assert!(actions.contains(&"capability.revoke_all"));
+        assert!(crate::security::audit_chain_intact());
+        assert!(entries.iter().any(|e| e.resource.contains(&alloc::format!("{:?}", cap))));
+    }
+
+    #[test]
+    fn gate_records_authorization_denials() {
+        let mut gate = SyscallGate::new();
+        let cap = gate
+            .capabilities_mut()
+            .create(pid(12), ResourceType::IpcChannel, 3, Rights::READ);
+        let req = SyscallRequest {
+            capability: Some(CapabilityHandle(cap.0)),
+            arg0: 3,
+            ..request(Syscall::IpcSend)
+        };
+        let before = crate::security::recorded_events();
+        assert_eq!(
+            gate.handle(pid(13), req, &mut InputQueue::new()).error,
+            Some(AbiError::PermissionDenied)
+        );
+        assert_eq!(crate::security::recorded_events(), before + 1);
+        assert!(crate::security::KERNEL_AUDIT
+            .entries()
+            .iter()
+            .any(|e| e.action == "authorization.denied" && e.result == crate::security::AuditResult::Denied));
     }
 }
