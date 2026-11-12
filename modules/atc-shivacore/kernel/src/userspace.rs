@@ -187,12 +187,42 @@ impl UserBinary {
 // Real user-page installation / CPL3 entry
 // ═══════════════════════════════════════════════════════════════════════════════
 
+#[cfg(feature = "x86-boot")]
+/// Nutzer-Code: waehrend des Ladens schreibbar, danach per update_flags auf
+/// PRESENT|USER_ACCESSIBLE reduziert (lesbar, ausfuehrbar, nicht schreibbar).
+pub fn code_flags() -> PageTableFlags {
+    PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE
+}
+
+#[cfg(feature = "x86-boot")]
+/// Nutzer-Daten: lesbar und schreibbar, ausdruecklich **nicht** ausfuehrbar.
+/// Ohne NO_EXECUTE waere jedes Datensegment ein ausfuehrbarer Bereich und W^X
+/// auf Hardware nicht erzwungen.
+pub fn data_flags() -> PageTableFlags {
+    PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE
+}
+
+#[cfg(feature = "x86-boot")]
+/// Nutzer-Stack: wie Daten, zusaetzlich nie ausfuehrbar. Ein ausfuehrbarer
+/// Stack ist das klassische Ziel fuer eingeschleusten Code.
+pub fn stack_flags() -> PageTableFlags {
+    PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE
+}
+
+#[cfg(feature = "x86-boot")]
+/// W^X-Praedikat: schreibbar und ausfuehrbar zugleich ist verboten.
+pub fn is_write_execute(flags: PageTableFlags) -> bool {
+    flags.contains(PageTableFlags::WRITABLE) && !flags.contains(PageTableFlags::NO_EXECUTE)
+}
+
 /// Map a user binary into the active x86-64 page table.
 ///
 /// This is the first real bridge from the modelled UserAddressSpace to CPU-visible
-/// user memory. Code/data/stack receive USER_ACCESSIBLE PTEs; code is executable
-/// and read-only, data/stack are writable. The helper uses the existing boot
-/// frame allocator and mapper instead of introducing another VM.
+/// user memory. Code/data/stack receive USER_ACCESSIBLE PTEs; code is
+/// executable and finally read-only, data and stack are writable **and**
+/// non-executable (NO_EXECUTE), so W^X holds for every user region. The helper
+/// uses the existing boot frame allocator and mapper instead of introducing
+/// another VM.
 #[cfg(feature = "x86-boot")]
 pub unsafe fn map_user_binary(
     mapper: &mut OffsetPageTable<'static>,
@@ -250,7 +280,12 @@ pub unsafe fn map_user_binary(
         .entry_point
         .checked_add(binary.code.len() as u64)
         .ok_or(UserspaceError::InvalidAddress)?;
-    if code_base < addr_space.code_base || code_end > addr_space.code_base + addr_space.code_size {
+    // Vergleich auf Seitenbasis: `code_base` ist absichtlich seitenbuendig
+    // abgerundet, `addr_space.code_base` kann durch ein ELF mit nicht
+    // seitenbuendigem Einstiegspunkt (typisch: 0x400010) unbuendig sein. Ein
+    // Byte-Vergleich wies in diesem Fall jedes gueltige Ramdisk-Programm ab.
+    let space_code_page = addr_space.code_base & !0xFFF;
+    if code_base < space_code_page || code_end > addr_space.code_base + addr_space.code_size {
         return Err(UserspaceError::InvalidAddress);
     }
     let code_pages = ((code_end - code_base + 0xFFF) / 0x1000).max(1);
@@ -260,20 +295,21 @@ pub unsafe fn map_user_binary(
         physical_memory_offset,
         code_base,
         code_pages * 0x1000,
-        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
+        code_flags(),
     )?;
 
-    if !binary.data.is_empty() {
-        let data_pages = ((binary.data.len() as u64 + 0xFFF) / 0x1000).max(1);
-        map_region(
-            mapper,
-            frame_allocator,
-            physical_memory_offset,
-            addr_space.data_base,
-            data_pages * 0x1000,
-            PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
-        )?;
-    }
+    // Die Datenregion wird immer abgebildet, auch bei leerem Datensegment:
+    // sonst waere "Daten ohne NX" im Betrieb nicht messbar, weil die Seite
+    // schlicht fehlt. Der Inhalt wird weiterhin nur bei Bedarf kopiert.
+    let data_pages = ((binary.data.len() as u64 + 0xFFF) / 0x1000).max(1);
+    map_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        addr_space.data_base,
+        data_pages * 0x1000,
+        data_flags(),
+    )?;
 
     let stack_pages = (addr_space.stack_size + 0xFFF) / 0x1000;
     let stack_base = addr_space.stack_base - stack_pages * 0x1000;
@@ -283,7 +319,7 @@ pub unsafe fn map_user_binary(
         physical_memory_offset,
         stack_base,
         stack_pages * 0x1000,
-        PageTableFlags::USER_ACCESSIBLE | PageTableFlags::WRITABLE,
+        stack_flags(),
     )?;
 
     // Install the user image through the already active address space.
@@ -680,6 +716,95 @@ impl UserspaceManager {
 // ═══════════════════════════════════════════════════════════════════════════════
 // Tests
 // ═══════════════════════════════════════════════════════════════════════════════
+
+/// Liest die tatsaechlich programmierten PTE-Flags einer virtuellen Adresse aus
+/// einer vorgegebenen Seitentabelle.
+///
+/// Warum das im Kernel steht: die Absicht des Mappers ist kein Beweis, der
+/// Seitentabelleneintrag ist einer. Der W^X-Nachweis beim Boot liest genau
+/// diese Flags zurueck, statt den gesetzten Argumenten zu glauben.
+///
+/// # Safety
+/// `table_root` muss eine gueltige, aktive oder inaktive PML4 sein und
+/// `physical_memory_offset` den physikalischen Speicher abbilden.
+#[cfg(feature = "x86-boot")]
+pub unsafe fn page_flags(
+    physical_memory_offset: x86_64::VirtAddr,
+    table_root: x86_64::PhysAddr,
+    virt: x86_64::VirtAddr,
+) -> Option<PageTableFlags> {
+    use x86_64::structures::paging::page_table::PageTable;
+
+    let mut table_phys = table_root;
+    for level in (1u8..=4).rev() {
+        let table_virt = physical_memory_offset + table_phys.as_u64();
+        let table = unsafe { &*(table_virt.as_ptr::<PageTable>()) };
+        let index = match level {
+            4 => virt.p4_index(),
+            3 => virt.p3_index(),
+            2 => virt.p2_index(),
+            _ => virt.p1_index(),
+        };
+        let entry = &table[index];
+        let flags = entry.flags();
+        if !flags.contains(PageTableFlags::PRESENT) {
+            return None;
+        }
+        if level == 1 || flags.contains(PageTableFlags::HUGE_PAGE) {
+            return Some(flags);
+        }
+        table_phys = entry.addr();
+    }
+    None
+}
+
+#[cfg(all(test, feature = "x86-boot"))]
+mod wx_policy_tests {
+    use super::{code_flags, data_flags, is_write_execute, stack_flags};
+    use x86_64::structures::paging::PageTableFlags;
+
+    #[test]
+    fn data_pages_are_not_executable() {
+        let flags = data_flags();
+        assert!(flags.contains(PageTableFlags::NO_EXECUTE));
+        assert!(flags.contains(PageTableFlags::USER_ACCESSIBLE));
+        assert!(!is_write_execute(flags));
+    }
+
+    #[test]
+    fn stack_pages_are_not_executable() {
+        let flags = stack_flags();
+        assert!(flags.contains(PageTableFlags::NO_EXECUTE));
+        assert!(flags.contains(PageTableFlags::USER_ACCESSIBLE));
+        assert!(!is_write_execute(flags));
+    }
+
+    #[test]
+    fn code_is_writable_only_during_install() {
+        // Waehrend des Ladens schreibbar (sonst kein Kopieren), danach setzt
+        // update_flags PRESENT|USER_ACCESSIBLE und nimmt W heraus.
+        let flags = code_flags();
+        assert!(flags.contains(PageTableFlags::USER_ACCESSIBLE));
+        assert!(flags.contains(PageTableFlags::WRITABLE));
+        // Schreibbar und ausfuehrbar zugleich ist nur der Ladezustand: hier
+        // bleibt NX aus, weil der Code ausgefuehrt werden soll.
+        assert!(!flags.contains(PageTableFlags::NO_EXECUTE));
+    }
+
+    #[test]
+    fn write_execute_predicate_flags_violation() {
+        let rwx = PageTableFlags::WRITABLE | PageTableFlags::USER_ACCESSIBLE;
+        assert!(is_write_execute(rwx));
+        let rw = rwx | PageTableFlags::NO_EXECUTE;
+        assert!(!is_write_execute(rw));
+    }
+}
+
+#[cfg(test)]
+mod tests_namespace_guard {
+    // Platzhalter, damit dieses Modul nicht mit `mod tests` weiter unten
+    // kollidiert, falls eines der beiden entfernt wird.
+}
 
 #[cfg(test)]
 mod tests {
