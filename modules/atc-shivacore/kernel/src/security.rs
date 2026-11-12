@@ -196,7 +196,7 @@ impl Default for AuditLog {
 }
 
 impl AuditLog {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         AuditLog {
             entries: Mutex::new(Vec::new()),
             last_hash: Mutex::new([0u8; 32]),
@@ -638,23 +638,45 @@ impl SecurityManager {
 // Hilfsfunktionen
 // ═══════════════════════════════════════════════════════════════════════════
 
-/// Vereinfachter Hash (FNV-1a 32-bit, auf 32 Bytes aufgefüllt).
-/// Produktion würde SHA-256 verwenden.
+/// Hash fuer die Audit-Kette.
+///
+/// Vorher lief hier FNV-1a ueber 32 Bit, auf 32 Bytes aufgefuellt: eine
+/// Pruefsumme, kein Sicherheitsmerkmal. Zwei verschiedene Eintraege mit
+/// gleichem Hash liessen sich in 2^32 Versuchen erzeugen, womit die
+/// Manipulationsfestigkeit der Kette nur dokumentiert, nicht vorhanden war.
+/// Jetzt Keccak-256 (siehe `keccak::keccak256`, gegen bekannte Vektoren
+/// getestet). Der Funktionsname bleibt, damit bestehende Aufrufer und Tests
+/// unveraendert bleiben.
 pub fn simple_hash(data: &[u8]) -> [u8; 32] {
-    let mut hash: u32 = 0x811c9dc5;
-    for &byte in data {
-        hash ^= byte as u32;
-        hash = hash.wrapping_mul(0x01000193);
-    }
-    let mut result = [0u8; 32];
-    result[..4].copy_from_slice(&hash.to_be_bytes());
-    // Rest mit FNV über vorangegangene Bytes füllen
-    for i in (4..32).step_by(4) {
-        hash ^= result[i - 4] as u32;
-        hash = hash.wrapping_mul(0x01000193);
-        result[i..i + 4].copy_from_slice(&hash.to_be_bytes());
-    }
-    result
+    crate::keccak::keccak256(data)
+}
+
+/// Audit-Uhr: der Zeittakt, den die Ereignisse im Audit-Log tragen.
+static AUDIT_CLOCK: core::sync::atomic::AtomicU64 = core::sync::atomic::AtomicU64::new(0);
+
+/// Setzt den Zeittakt der Audit-Uhr (Timer-Ticks des Kernels).
+pub fn set_audit_clock(ticks: u64) {
+    AUDIT_CLOCK.store(ticks, core::sync::atomic::Ordering::Relaxed);
+}
+
+/// Der kernelweite Audit-Log. Eine Instanz, damit die Kette nicht in
+/// Teilstuecken entsteht: jede Aufzeichnung haengt an der vorherigen.
+pub static KERNEL_AUDIT: AuditLog = AuditLog::new();
+
+/// Zeichnet ein Kernel-Ereignis mit dem aktuellen Takt auf.
+pub fn record(actor: &str, action: &str, resource: &str, result: AuditResult) {
+    let ticks = AUDIT_CLOCK.load(core::sync::atomic::Ordering::Relaxed);
+    KERNEL_AUDIT.log(ticks, actor.to_string(), action.to_string(), resource.to_string(), result);
+}
+
+/// Anzahl der Audit-Eintraege im kernelweiten Log.
+pub fn recorded_events() -> usize {
+    KERNEL_AUDIT.count()
+}
+
+/// Prueft die Hash-Kette des kernelweiten Logs.
+pub fn audit_chain_intact() -> bool {
+    KERNEL_AUDIT.verify_chain()
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
