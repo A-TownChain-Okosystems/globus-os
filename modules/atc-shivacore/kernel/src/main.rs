@@ -743,7 +743,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let (user_binary, user_addr_space, source) = match ramdisk_program.take() {
         Some((code, entry)) => {
             let mut space = userspace::UserAddressSpace::default();
-            space.code_base = entry;
+            // Seitenbuendig: der ELF-Einstiegspunkt liegt typischerweise bei
+            // 0x400010. Unbuendig uebernommen wies map_user_binary jedes
+            // gueltige Ramdisk-Programm als InvalidAddress ab (Boot-Panic).
+            space.code_base = entry & !0xFFF;
             (
                 userspace::UserBinary::from_bytes("ramdisk-init", code, entry),
                 space,
@@ -788,6 +791,51 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         )
         .expect("ShivaCore: USER-001 user page mapping failed");
         cr3_first = process_space.frame().start_address().as_u64();
+    }
+    // W^X-Nachweis zur Laufzeit: die tatsaechlich programmierten PTE-Flags der
+    // drei Nutzerregionen werden aus der Prozess-Seitentabelle zurueckgelesen.
+    // Die Argumente des Mappers sind eine Absicht, der Eintrag ist ein Beleg.
+    {
+        use x86_64::structures::paging::PageTableFlags;
+        let stack_pages = (user_addr_space.stack_size + 0xFFF) / 0x1000;
+        let stack_base = user_addr_space.stack_base - stack_pages * 0x1000;
+        let root = x86_64::PhysAddr::new(cr3_first);
+        let mut violations = 0u32;
+        for (name, base) in [
+            ("Code", user_addr_space.code_base),
+            ("Daten", user_addr_space.data_base),
+            ("Stack", stack_base),
+        ] {
+            let read = unsafe {
+                userspace::page_flags(phys_mem_offset, root, x86_64::VirtAddr::new(base))
+            };
+            match read {
+                Some(flags) => {
+                    let write = flags.contains(PageTableFlags::WRITABLE);
+                    let execute = !flags.contains(PageTableFlags::NO_EXECUTE);
+                    if write && execute {
+                        violations += 1;
+                    }
+                    serial_println!(
+                        "ShivaCore: W^X-Nachweis PID=1000 {} @ {:#x}: W={} X={} NX={}",
+                        name,
+                        base,
+                        write,
+                        execute,
+                        flags.contains(PageTableFlags::NO_EXECUTE)
+                    );
+                }
+                None => serial_println!(
+                    "ShivaCore: W^X-Nachweis PID=1000 {} @ {:#x}: nicht abgebildet",
+                    name,
+                    base
+                ),
+            }
+        }
+        serial_println!(
+            "ShivaCore: W^X-Nachweis PID=1000: {} Verstoesse (schreibbar und ausfuehrbar)",
+            violations
+        );
     }
     let user_pid = ats1000::Pid(1000);
     // Nur die eingebaute Nutzlast setzt RAX/RBX/R12 auf ein bekanntes Muster.
