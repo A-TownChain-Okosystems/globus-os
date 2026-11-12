@@ -54,6 +54,16 @@ impl SyscallGate {
             .create(pid, ResourceType::IpcChannel, channel, Rights::READ)
     }
 
+    /// Widerruft alle Capabilities eines Prozesses am Gate.
+    pub fn revoke_all_for(&mut self, pid: Pid) -> usize {
+        self.capabilities.revoke_all_for(pid)
+    }
+
+    /// Anzahl der Capabilities eines Prozesses am Gate.
+    pub fn cap_count_for(&self, pid: Pid) -> usize {
+        self.capabilities.count_for(pid)
+    }
+
     /// Ein Hardware-Tick (Timer-IRQ) — die einzige Quelle fuer MonotonicTime.
     pub fn on_tick(&mut self) {
         self.dispatcher.on_tick();
