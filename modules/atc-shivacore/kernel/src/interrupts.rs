@@ -320,6 +320,12 @@ pub fn cleanup_process(pid: Pid) -> usize {
     // TLB leeren: die Rechte sind weg, die uebersetzten Eintraege duerfen nicht
     // als Rest im Adressuebersetzer stehen bleiben.
     x86_64::instructions::tlb::flush_all();
+    shivacore::security::record(
+        "kernel",
+        "process.exit",
+        &alloc::format!("pid={:?} revoked_caps={}", pid, revoked),
+        shivacore::security::AuditResult::Allowed,
+    );
     revoked
 }
 
