@@ -837,6 +837,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             violations
         );
     }
+    // Exit-Cleanup-Selbsttest: prueft den Widerrufspfad im Live-Kernel an einer
+    // nie geplanten PID, damit die laufenden Prozesse unberuehrt bleiben.
+    {
+        let (before, revoked, after) = interrupts::self_test_cleanup();
+        serial_println!(
+            "ShivaCore: Exit-Cleanup-Selbsttest: {} Caps vorher, {} widerrufen, {} danach",
+            before,
+            revoked,
+            after
+        );
+    }
+
     let user_pid = ats1000::Pid(1000);
     // Nur die eingebaute Nutzlast setzt RAX/RBX/R12 auf ein bekanntes Muster.
     // Laeuft hier das Programm aus der Ramdisk, waere die SCHED-001-Pruefung
