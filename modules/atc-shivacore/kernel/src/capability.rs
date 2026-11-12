@@ -301,6 +301,43 @@ impl CapabilityTable {
         }
     }
 
+    /// Widerruft **alle** Capabilities eines Prozesses, einschliesslich der
+    /// delegierten Nachfahren (die einem anderen Prozess gehoeren koennen).
+    ///
+    /// Das ist der Baustein fuer das Exit-Cleanup: ein beendeter Prozess darf
+    /// keine gueltigen Rechte hinterlassen. Rueckgabe ist die Anzahl der
+    /// tatsaechlich entfernten Capabilities, damit der Aufrufer das nicht aus
+    /// einer Differenz raten muss.
+    pub fn revoke_all_for(&mut self, pid: Pid) -> usize {
+        let owned: Vec<CapId> = self.by_pid.remove(&pid).unwrap_or_default();
+        let mut to_remove: Vec<CapId> = Vec::new();
+        for cap_id in owned {
+            if !self.caps.contains_key(&cap_id) {
+                continue;
+            }
+            let mut descendants = Vec::new();
+            self.collect_descendants(cap_id, &mut descendants);
+            for id in descendants {
+                if !to_remove.contains(&id) {
+                    to_remove.push(id);
+                }
+            }
+        }
+        let removed = to_remove.len();
+        for id in &to_remove {
+            self.caps.remove(id);
+        }
+        for pid_caps in self.by_pid.values_mut() {
+            pid_caps.retain(|c| !to_remove.contains(c));
+        }
+        removed
+    }
+
+    /// Anzahl der Capabilities eines Prozesses.
+    pub fn count_for(&self, pid: Pid) -> usize {
+        self.by_pid.get(&pid).map(|c| c.len()).unwrap_or(0)
+    }
+
     pub fn list_for(&self, pid: Pid) -> Vec<&Capability> {
         self.by_pid
             .get(&pid)
@@ -533,5 +570,44 @@ mod sc006_types {
         let all = Rights::ALL;
         assert_eq!(Rights::from_bits_truncate(u16::MAX), all);
         assert!(all.has(Rights::SUBSCRIBE | Rights::ACK | Rights::SET_DEADLINE | Rights::ACCESS));
+    }
+
+    #[test]
+    fn revoke_all_for_removes_owner_and_descendants() {
+        let mut t = CapabilityTable::new();
+        let a = t.create(Pid(1), ResourceType::IpcChannel, 7, Rights::READ | Rights::DELEGATE);
+        let b = t.create(Pid(1), ResourceType::IpcChannel, 8, Rights::READ);
+        let child = t
+            .delegate(Pid(1), a, Pid(2), Rights::READ)
+            .expect("delegate an PID 2");
+        assert_eq!(t.count_for(Pid(1)), 2);
+        assert_eq!(t.count_for(Pid(2)), 1);
+
+        let removed = t.revoke_all_for(Pid(1));
+        assert_eq!(removed, 3, "eigene Caps plus delegierter Nachfahre");
+        assert_eq!(t.count_for(Pid(1)), 0);
+        assert_eq!(t.count_for(Pid(2)), 0);
+        assert!(t.get(a).is_none());
+        assert!(t.get(b).is_none());
+        assert!(t.get(child).is_none());
+    }
+
+    #[test]
+    fn revoke_all_for_leaves_other_pids_untouched() {
+        let mut t = CapabilityTable::new();
+        let own = t.create(Pid(3), ResourceType::IpcChannel, 9, Rights::READ);
+        let foreign = t.create(Pid(4), ResourceType::IpcChannel, 9, Rights::READ);
+        assert_eq!(t.revoke_all_for(Pid(3)), 1);
+        assert!(t.get(own).is_none());
+        assert!(t.get(foreign).is_some());
+        assert_eq!(t.count_for(Pid(4)), 1);
+    }
+
+    #[test]
+    fn revoke_all_for_unknown_pid_is_noop() {
+        let mut t = CapabilityTable::new();
+        let _ = t.create(Pid(5), ResourceType::IpcChannel, 1, Rights::READ);
+        assert_eq!(t.revoke_all_for(Pid(6)), 0);
+        assert_eq!(t.count_for(Pid(5)), 1);
     }
 }
