@@ -849,6 +849,23 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         );
     }
 
+    // Audit-Zusammenfassung: Anzahl der Ereignisse und Zustand der Hash-Kette.
+    // Ohne diese Zeile waere "Audit aktiv" eine Behauptung.
+    serial_println!(
+        "ShivaCore: Audit-Log: {} Ereignisse, Kette {}, letzter Eintrag {}",
+        shivacore::security::recorded_events(),
+        if shivacore::security::audit_chain_intact() {
+            "intakt"
+        } else {
+            "GEBROCHEN"
+        },
+        shivacore::security::KERNEL_AUDIT
+            .entries()
+            .last()
+            .map(|e| e.action.clone())
+            .unwrap_or_else(|| alloc::string::String::from("keiner"))
+    );
+
     let user_pid = ats1000::Pid(1000);
     // Nur die eingebaute Nutzlast setzt RAX/RBX/R12 auf ein bekanntes Muster.
     // Laeuft hier das Programm aus der Ramdisk, waere die SCHED-001-Pruefung
