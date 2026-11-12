@@ -299,6 +299,45 @@ pub fn init_user_scheduler(
 ///
 /// Muss laufen, bevor ein Payload gebaut wird, in dem die Nummer als Immediate
 /// steckt: die Nummer vergibt die Tabelle, nicht der Payload.
+/// Exit-Cleanup: widerruft alle Capabilities eines beendeten Prozesses am
+/// Syscall-Gate und leert die TLB.
+///
+/// Vorher rief der Fehlerpfad nur `exit_process` auf: der Prozess war Zombie,
+/// seine Capabilities blieben aber gueltig. Der Test-Harness hatte
+/// `close_all_for` fuer Kanaele, im Live-Pfad lief nichts davon.
+///
+/// Bewusst am Gate und nicht in `user_sched`: die Tabelle, die ueber Syscalls
+/// entscheidet, ist die Tabelle, die aufgeraeumt werden muss. Rueckgabe ist die
+/// Anzahl der widerrufenen Capabilities.
+pub fn cleanup_process(pid: Pid) -> usize {
+    let revoked = {
+        let mut guard = SYSCALL_GATE.lock();
+        match guard.as_mut() {
+            Some(gate) => gate.revoke_all_for(pid),
+            None => 0,
+        }
+    };
+    // TLB leeren: die Rechte sind weg, die uebersetzten Eintraege duerfen nicht
+    // als Rest im Adressuebersetzer stehen bleiben.
+    x86_64::instructions::tlb::flush_all();
+    revoked
+}
+
+/// Selbsttest fuer das Exit-Cleanup, ohne laufende Prozesse zu stoeren:
+/// legt fuer eine nie geplante PID zwei Capabilities an, raeumt auf und
+/// zaehlt vorher/nachher.
+pub fn self_test_cleanup() -> (usize, usize, usize) {
+    let probe = Pid(9999);
+    let mut guard = SYSCALL_GATE.lock();
+    let gate = guard.get_or_insert_with(SyscallGate::new);
+    let _ = gate.grant_channel_read(probe, 0xDEAD);
+    let _ = gate.grant_channel_read(probe, 0xBEEF);
+    let before = gate.cap_count_for(probe);
+    let revoked = gate.revoke_all_for(probe);
+    let after = gate.cap_count_for(probe);
+    (before, revoked, after)
+}
+
 pub fn grant_input_read(pid: Pid) -> Option<u64> {
     let mut gate = SYSCALL_GATE.lock();
     // Das Gate frueh anlegen: der Payload braucht die Cap-Nummer, bevor der
@@ -806,6 +845,16 @@ fn handle_exception(
                     recorded.kernel_faults
                 ),
             };
+            // Exit-Cleanup vor dem Kontextwechsel: ein beendeter Prozess darf
+            // keine gueltigen Capabilities hinterlassen.
+            if let Some(pid) = pid {
+                let revoked = cleanup_process(pid);
+                serial_println!(
+                    "ShivaCore: Exit-Cleanup PID={:?}: {} Capabilities widerrufen, TLB geleert",
+                    pid,
+                    revoked
+                );
+            }
             let next = {
                 let mut guard = USER_SCHEDULER.lock();
                 let scheduler = guard.as_mut();
