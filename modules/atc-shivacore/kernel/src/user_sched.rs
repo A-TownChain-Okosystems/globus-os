@@ -487,6 +487,27 @@ impl UserScheduler {
     }
 
     /// Timer tick driven by the real CPU-saved interrupt frame.
+    /// Tick ohne Wechselmoeglichkeit: Zeit fortschreiben, Schlafende wecken,
+    /// den laufenden Kontext sichern. Wird benutzt, wenn der Tick den Kernel
+    /// selbst unterbrochen hat — dort darf nicht umgeschaltet werden, weil der
+    /// Kernel mitten in einer Arbeit stecken kann (Boot, Syscall, Sperre).
+    pub fn kernel_tick_saved(&mut self, current_ctx: SavedContext) {
+        self.timer_ticks += 1;
+        for entry in &mut self.entries {
+            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
+                if self.timer_ticks >= wake {
+                    entry.state = SchedState::Ready;
+                    entry.wake_tick = None;
+                }
+            }
+        }
+        if let Some(pid) = self.current {
+            if let Some(entry) = self.get_entry_mut(pid) {
+                entry.save_saved_context(current_ctx);
+            }
+        }
+    }
+
     pub fn timer_tick_saved(&mut self, current_ctx: SavedContext) -> Option<(Pid, SavedContext)> {
         self.timer_ticks += 1;
 
