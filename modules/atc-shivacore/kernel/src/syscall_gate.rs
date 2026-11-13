@@ -61,7 +61,6 @@ impl SyscallGate {
         &mut self,
         pid: Pid,
         request: SyscallRequest,
-        input: &mut InputQueue,
     ) -> SyscallResponse {
         // Der Takt, mit dem Audit-Eintraege versehen werden, kommt aus der
         // einzigen Zeitquelle des Kernels (Timer-Ticks).
@@ -69,7 +68,7 @@ impl SyscallGate {
         let syscall_id = request.syscall_id;
         let response = self
             .dispatcher
-            .dispatch(pid, request, &mut self.authority.lock(), input);
+            .dispatch(pid, request, &mut self.authority.lock());
         // Autorisierungsfehler sind sicherheitsrelevant: ein Prozess hat ein
         // Recht beansprucht, das ihm nicht gehoert.
         if matches!(response.error, Some(libshivacore::AbiError::PermissionDenied)) {
@@ -87,6 +86,11 @@ impl SyscallGate {
     /// Kernel-Eingabekanal ist das der einzige Weg, an Tastenereignisse zu
     /// kommen; ohne Cap beantwortet der Syscall nur "kein Transport".
     pub fn grant_channel_read(&mut self, pid: Pid, channel: u64) -> CapId {
+        // P1-3D: Wer ein Kanalrecht bekommt, wird Teilnehmer des Kanals. Ohne
+        // diesen Schritt wuerde die Registry beim Exit eines Rechteinhabers
+        // nichts von ihm wissen und der Kanal nie durch den letzten Teilnehmer
+        // sterben.
+        crate::ipc_lifecycle::CHANNELS.lock().attach(channel, pid);
         // Audit kommt aus der Authority, damit es genau eine Aufzeichnung gibt.
         self.authority
             .create(pid, ResourceType::IpcChannel, channel, Rights::READ)
@@ -145,7 +149,7 @@ mod tests {
     #[test]
     fn gate_dispatches_yield_for_any_pid() {
         let mut gate = SyscallGate::new();
-        let r = gate.handle(pid(7), request(Syscall::Yield), &mut InputQueue::new());
+        let r = gate.handle(pid(7), request(Syscall::Yield));
         assert_eq!(r.error, None);
     }
 
@@ -155,14 +159,16 @@ mod tests {
         let cap =
             gate.capabilities_mut()
                 .create(pid(1), ResourceType::IpcChannel, 5, Rights::WRITE);
+        // Der Kanal muss in der Registry existieren: das Recht oeffnet ihn nicht.
+        crate::ipc_lifecycle::CHANNELS.lock().open(5, pid(1));
         let req = SyscallRequest {
             capability: Some(CapabilityHandle(cap.0)),
             arg0: 5,
             ..request(Syscall::IpcSend)
         };
-        assert_eq!(gate.handle(pid(1), req, &mut InputQueue::new()).error, None);
+        assert_eq!(gate.handle(pid(1), req).error, None);
         assert_eq!(
-            gate.handle(pid(2), req, &mut InputQueue::new()).error,
+            gate.handle(pid(2), req).error,
             Some(AbiError::PermissionDenied)
         );
     }
@@ -177,7 +183,7 @@ mod tests {
             capability: Some(CapabilityHandle(cap.0)),
             ..request(Syscall::HandleClose)
         };
-        assert_eq!(gate.handle(pid(1), req, &mut InputQueue::new()).value, 1);
+        assert_eq!(gate.handle(pid(1), req).value, 1);
         assert_eq!(gate.capabilities().count(), 0);
     }
 
@@ -188,7 +194,6 @@ mod tests {
             .handle(
                 pid(1),
                 request(Syscall::MonotonicTime),
-                &mut InputQueue::new(),
             )
             .value;
         gate.on_tick();
@@ -197,7 +202,6 @@ mod tests {
             .handle(
                 pid(1),
                 request(Syscall::MonotonicTime),
-                &mut InputQueue::new(),
             )
             .value;
         assert_eq!(b, a + 2, "zwei Ticks, zwei Schritte");
@@ -211,7 +215,7 @@ mod tests {
             ..request(Syscall::Yield)
         };
         assert_eq!(
-            gate.handle(pid(1), req, &mut InputQueue::new()).error,
+            gate.handle(pid(1), req).error,
             Some(AbiError::InvalidSyscall)
         );
     }
@@ -247,7 +251,7 @@ mod tests {
         };
         let before = crate::security::recorded_events();
         assert_eq!(
-            gate.handle(pid(13), req, &mut InputQueue::new()).error,
+            gate.handle(pid(13), req).error,
             Some(AbiError::PermissionDenied)
         );
         assert!(crate::security::recorded_events() > before);
