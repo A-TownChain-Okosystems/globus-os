@@ -29,6 +29,21 @@ use spin::Mutex;
 
 use crate::capability::Pid;
 
+/// Wie viele Nachrichten ein Kanal ohne eigene Angabe aufnimmt.
+pub const DEFAULT_CAPACITY: usize = 64;
+
+/// Fehler des Live-Pfads (Syscall und Geraetezustellung).
+///
+/// Alle Varianten sind Ablehnungen: der Aufruf liefert nie "vielleicht".
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LiveIpcError {
+    UnknownChannel,
+    NotParticipant,
+    Closed,
+    Full,
+    Empty,
+}
+
 /// Was fuer ein Objekt ein Handle bezeichnet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandleKind {
@@ -63,6 +78,8 @@ pub struct ChannelState {
     pub pending: Vec<u64>,
     /// Prozesse, die in `recv` auf diesem Kanal warten.
     pub waiters: Vec<Pid>,
+    /// Wie viele Nachrichten der Kanal aufnimmt, bevor er `Full` meldet.
+    pub capacity: usize,
     pub closed: bool,
 }
 
@@ -73,6 +90,7 @@ impl ChannelState {
             participants: alloc::vec![owner],
             pending: Vec::new(),
             waiters: Vec::new(),
+            capacity: DEFAULT_CAPACITY,
             closed: false,
         }
     }
@@ -107,6 +125,7 @@ pub struct ChannelRegistry {
     destroyed_total: usize,
     released_total: usize,
     double_close_blocked: usize,
+    device_drops: usize,
 }
 
 impl ChannelRegistry {
@@ -116,6 +135,7 @@ impl ChannelRegistry {
             destroyed_total: 0,
             released_total: 0,
             double_close_blocked: 0,
+            device_drops: 0,
         }
     }
 
@@ -126,6 +146,76 @@ impl ChannelRegistry {
         }
         self.channels.insert(id, ChannelState::new(id, owner));
         true
+    }
+
+    /// Legt einen Kanal mit eigener Kapazitaet an.
+    pub fn open_with(&mut self, id: u64, owner: Pid, capacity: usize) -> bool {
+        if self.channels.contains_key(&id) {
+            return false;
+        }
+        let mut state = ChannelState::new(id, owner);
+        state.capacity = capacity.max(1);
+        self.channels.insert(id, state);
+        true
+    }
+
+    /// Senden im Live-Pfad: Kanal offen, Absender Teilnehmer, Platz im Puffer.
+    pub fn send(&mut self, pid: Pid, id: u64, payload: u64) -> Result<(), LiveIpcError> {
+        let state = self.channels.get_mut(&id).ok_or(LiveIpcError::UnknownChannel)?;
+        if state.closed {
+            return Err(LiveIpcError::Closed);
+        }
+        if !state.participants.contains(&pid) {
+            return Err(LiveIpcError::NotParticipant);
+        }
+        if state.pending.len() >= state.capacity {
+            return Err(LiveIpcError::Full);
+        }
+        state.pending.push(payload);
+        Ok(())
+    }
+
+    /// Empfangen im Live-Pfad: Kanal offen, Empfaenger Teilnehmer, Nachricht da.
+    pub fn recv(&mut self, pid: Pid, id: u64) -> Result<u64, LiveIpcError> {
+        let state = self.channels.get_mut(&id).ok_or(LiveIpcError::UnknownChannel)?;
+        if state.closed {
+            return Err(LiveIpcError::Closed);
+        }
+        if !state.participants.contains(&pid) {
+            return Err(LiveIpcError::NotParticipant);
+        }
+        if state.pending.is_empty() {
+            return Err(LiveIpcError::Empty);
+        }
+        Ok(state.pending.remove(0))
+    }
+
+    /// Zustellung aus dem Geraetetreiber: kein Absenderprozess, deshalb ohne
+    /// Teilnehmerpruefung. Ein voller Kanal verwirft und zaehlt, statt den
+    /// Interruptpfad warten zu lassen.
+    pub fn deliver(&mut self, id: u64, payload: u64) -> bool {
+        match self.channels.get_mut(&id) {
+            Some(state) if !state.closed && state.pending.len() < state.capacity => {
+                state.pending.push(payload);
+                true
+            }
+            Some(_) => {
+                self.device_drops += 1;
+                false
+            }
+            None => {
+                self.device_drops += 1;
+                false
+            }
+        }
+    }
+
+    pub fn device_drops(&self) -> usize {
+        self.device_drops
+    }
+
+    pub fn open_channels(&self) -> usize {
+        self.channels.len()
     }
 
     /// Nimmt einen weiteren Prozessteil hinzu (Capability-Delegation).
@@ -505,6 +595,88 @@ mod tests {
         // Der ueberlebende Kanal hat nur noch einen Teilnehmer, gilt also
         // nicht mehr als geteilt — die Nachricht bleibt trotzdem liegen.
         assert_eq!((open, shared, messages), (1, 0, 1));
+    }
+
+    #[test]
+    fn live_send_and_recv_go_through_the_registry() {
+        let mut reg = ChannelRegistry::new();
+        reg.open_with(0x40, pid(1), 4);
+        assert_eq!(reg.send(pid(1), 0x40, 0x1234), Ok(()));
+        assert_eq!(reg.recv(pid(1), 0x40), Ok(0x1234));
+        assert_eq!(reg.recv(pid(1), 0x40), Err(LiveIpcError::Empty));
+    }
+
+    #[test]
+    fn non_participant_is_denied_fail_closed() {
+        let mut reg = ChannelRegistry::new();
+        reg.open(0x41, pid(1));
+        assert_eq!(reg.send(pid(2), 0x41, 1), Err(LiveIpcError::NotParticipant));
+        assert_eq!(reg.recv(pid(2), 0x41), Err(LiveIpcError::NotParticipant));
+        assert_eq!(reg.send(pid(1), 0x99, 1), Err(LiveIpcError::UnknownChannel));
+        // Der abgewiesene Sender hat nichts hinterlassen.
+        assert_eq!(reg.recv(pid(1), 0x41), Err(LiveIpcError::Empty));
+    }
+
+    #[test]
+    fn full_channel_refuses_instead_of_dropping_silently() {
+        let mut reg = ChannelRegistry::new();
+        reg.open_with(0x42, pid(1), 2);
+        assert_eq!(reg.send(pid(1), 0x42, 1), Ok(()));
+        assert_eq!(reg.send(pid(1), 0x42, 2), Ok(()));
+        assert_eq!(reg.send(pid(1), 0x42, 3), Err(LiveIpcError::Full));
+        assert_eq!(reg.pending_of(0x42), Some(2));
+    }
+
+    /// Nebenlaeufigkeit ist im Kernel eine Frage der Reihenfolge, nicht der
+    /// Threads: Trap und Tick laufen unter einer Sperre. Diese Tests fahren die
+    /// Verzahnungen durch, die sonst nur zufaellig auffallen.
+    #[test]
+    fn attach_during_release_is_denied_after_the_channel_died() {
+        let mut reg = ChannelRegistry::new();
+        reg.open(0x43, pid(1));
+        reg.release(pid(1));
+        assert!(!reg.attach(0x43, pid(2)), "toter Kanal nimmt niemanden mehr auf");
+        assert!(!reg.deliver(0x43, 7));
+        assert_eq!(reg.device_drops(), 1);
+    }
+
+    #[test]
+    fn send_during_close_is_lost_with_the_channel() {
+        let mut reg = ChannelRegistry::new();
+        reg.open(0x44, pid(1));
+        reg.send(pid(1), 0x44, 11).unwrap();
+        let report = reg.release(pid(1));
+        assert_eq!(report.messages_discarded, 1);
+        assert_eq!(reg.send(pid(1), 0x44, 12), Err(LiveIpcError::UnknownChannel));
+    }
+
+    #[test]
+    fn two_participants_exit_in_either_order() {
+        for first in [pid(1), pid(2)] {
+            let mut reg = ChannelRegistry::new();
+            reg.open(0x45, pid(1));
+            reg.attach(0x45, pid(2));
+            let other = if first == pid(1) { pid(2) } else { pid(1) };
+            let a = reg.release(first);
+            assert_eq!((a.destroyed, a.released), (0, 1));
+            assert!(reg.contains(0x45));
+            let b = reg.release(other);
+            assert_eq!((b.destroyed, b.released), (1, 0));
+            assert!(!reg.contains(0x45));
+        }
+    }
+
+    #[test]
+    fn access_after_last_participant_is_denied() {
+        let mut reg = ChannelRegistry::new();
+        reg.open(0x46, pid(1));
+        reg.attach(0x46, pid(2));
+        reg.release(pid(1));
+        // Noch gueltig: 2 ist Teilnehmer.
+        assert!(reg.recv(pid(2), 0x46).is_err()); // leer, aber nicht abgewiesen
+        reg.release(pid(2));
+        assert_eq!(reg.recv(pid(2), 0x46), Err(LiveIpcError::UnknownChannel));
+        assert_eq!(reg.send(pid(2), 0x46, 1), Err(LiveIpcError::UnknownChannel));
     }
 
     #[test]
