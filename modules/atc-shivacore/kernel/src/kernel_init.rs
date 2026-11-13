@@ -30,6 +30,7 @@ use alloc::vec::Vec;
 
 use crate::atcfs::AtcFileSystem;
 use crate::ats1000::{FileSystem, MemoryManager};
+use crate::cap_authority::CapabilityAuthority;
 use crate::capability::CapabilityTable;
 use crate::ipc::IpcSubsystem;
 use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
@@ -95,6 +96,9 @@ pub struct KernelState {
     pub vfs: Vfs,
     // L7: Security
     pub security: SecurityManager,
+    /// Die eine Capability Authority des Kernels. `processes` und `vfs` teilen
+    /// sich diese Instanz; die Live-Pfade bekommen denselben Arc.
+    pub authority: Arc<CapabilityAuthority>,
     // Boot log
     pub init_log: Vec<(BootPhase, InitStatus)>,
 }
@@ -126,7 +130,9 @@ impl KernelState {
 
         // ── L2+L3: ProcessManager (enthält CapabilityTable) ──
         log.push((BootPhase::Capabilities, InitStatus::Initializing));
-        let processes = ProcessManager::new();
+        // Genau eine Authority fuer den gesamten Kernel.
+        let authority = CapabilityAuthority::new_shared();
+        let processes = ProcessManager::with_authority(authority.clone());
         log.push((BootPhase::Capabilities, InitStatus::Ready));
         log.push((BootPhase::Processes, InitStatus::Ready));
 
@@ -147,8 +153,7 @@ impl KernelState {
             log.push((BootPhase::FileSystem, InitStatus::Failed));
             return Err(BootError::FsInitFailed);
         }
-        let caps = Arc::new(spin::Mutex::new(CapabilityTable::new()));
-        let vfs = Vfs::new(caps);
+        let vfs = Vfs::new(authority.clone());
         log.push((BootPhase::FileSystem, InitStatus::Ready));
 
         // ── L7: Security (MultiSig + AuditLog + Reputation + RateLimiter) ──
@@ -167,6 +172,7 @@ impl KernelState {
             fs,
             vfs,
             security,
+            authority,
             init_log: log,
         })
     }
