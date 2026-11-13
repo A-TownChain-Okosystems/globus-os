@@ -329,6 +329,38 @@ pub fn cap_count_for(pid: Pid) -> usize {
         .unwrap_or(0)
 }
 
+/// Selbsttest des Zombie-Reapings: beendet einen synthetischen Prozess und
+/// sammelt ihn ein. Belegt, dass der Pfad im Kernel-Binary existiert und wirkt.
+pub fn self_test_reap() -> (usize, usize, usize) {
+    use shivacore::userspace::{PrivilegeLevel, UserAddressSpace, UserContext};
+
+    let mut scheduler = UserScheduler::new();
+    let pid = Pid(0x0C1E);
+    let context = UserContext {
+        pid,
+        privilege: PrivilegeLevel::User,
+        rip: 0x40_0000,
+        rsp: 0x7FFF_F000,
+        rbp: 0x7FFF_F000,
+        rax: 0,
+        cs: 0x1B,
+        ss: 0x23,
+        rflags: 0x202,
+        addr_space: UserAddressSpace::default(),
+        exit_code: None,
+    };
+    scheduler.add_process(pid, &context, 0);
+    let before = scheduler.entries().len();
+    scheduler.exit_process(pid, 0, None);
+    let zombies = scheduler
+        .entries()
+        .iter()
+        .filter(|entry| entry.state.is_zombie())
+        .count();
+    scheduler.reap_zombies();
+    (before, zombies, scheduler.entries().len())
+}
+
 /// Exit-Cleanup: widerruft alle Capabilities eines beendeten Prozesses am
 /// Syscall-Gate und leert die TLB.
 ///
@@ -1003,6 +1035,28 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
         acknowledge_timer_irq();
         return;
     };
+
+    // P1-3: Zombies einsammeln. Vorher rief im Live-Pfad niemand
+    // `reap_zombies`; beendete Prozesse blieben als Eintraege stehen. Die
+    // Seitentabellen-Frames gibt das noch nicht frei (der Frame-Allocator ist
+    // im Interrupt-Kontext nicht erreichbar) — der Eintrag und seine
+    // Scheduler-Referenz verschwinden aber, statt sich zu stapeln.
+    let reaped = scheduler.reap_zombies();
+    if !reaped.is_empty() {
+        for (pid, exit_code) in &reaped {
+            shivacore::security::record(
+                "kernel",
+                "process.reap",
+                &alloc::format!("pid={:?} exit={}", pid, exit_code),
+                shivacore::security::AuditResult::Allowed,
+            );
+        }
+        serial_println!(
+            "ShivaCore: Zombie-Reaping: {} eingesammelt, {} Eintraege verbleiben",
+            reaped.len(),
+            scheduler.entries().len()
+        );
+    }
 
     let current_pid = scheduler.current_pid();
     let current = frame.saved_context();
