@@ -44,6 +44,7 @@ pub mod keymap;
 pub mod memory_manager;
 pub mod process;
 pub mod scheduler;
+pub mod reclaim;
 pub mod security;
 pub mod syscall;
 pub mod syscall_gate;
