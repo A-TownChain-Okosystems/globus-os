@@ -18,7 +18,9 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use crate::capability::{CapId, CapabilityTable, Pid, ResourceType, Rights};
+use alloc::sync::Arc;
+use crate::cap_authority::CapabilityAuthority;
+use crate::capability::{CapId, Pid, ResourceType, Rights};
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -57,7 +59,9 @@ pub struct ProcessManager {
     processes: BTreeMap<Pid, ProcessControlBlock>,
     next_pid: AtomicU32,
     /// Referenz zur Capability-Tabelle (Kernel-intern)
-    pub caps: CapabilityTable,
+    /// Die zentrale Authority (SSOT). Der Prozessmanager haelt keine eigene
+    /// Tabelle mehr und entscheidet keine Rechte selbst.
+    pub authority: Arc<CapabilityAuthority>,
 }
 
 impl Default for ProcessManager {
@@ -68,10 +72,15 @@ impl Default for ProcessManager {
 
 impl ProcessManager {
     pub fn new() -> Self {
+        Self::with_authority(CapabilityAuthority::new_shared())
+    }
+
+    /// Prozessmanager auf einer vorhandenen Authority.
+    pub fn with_authority(authority: Arc<CapabilityAuthority>) -> Self {
         Self {
             processes: BTreeMap::new(),
             next_pid: AtomicU32::new(1),
-            caps: CapabilityTable::new(),
+            authority,
         }
     }
 
@@ -91,7 +100,7 @@ impl ProcessManager {
 
         // Automatische Memory-Cap fuer den eigenen Adressraum
         let addr_space = pid.0 as u64; // Eindeutige Resource-ID pro Prozess
-        self.caps.create(
+        self.authority.create(
             pid,
             ResourceType::Memory,
             addr_space,
@@ -121,28 +130,23 @@ impl ProcessManager {
     /// Beendet einen Prozess und widerruft ALLE seine Capabilities.
     /// Atomar: Cap-Widerruf + Zustandsaenderung in einem Schritt.
     pub fn kill(&mut self, pid: Pid, exit_code: ExitCode) -> bool {
-        let pcb = match self.processes.get_mut(&pid) {
-            Some(p) => p,
+        match self.processes.get(&pid) {
             None => return false,
-        };
+            Some(pcb) if matches!(pcb.state, ProcessState::Terminated(_)) => return false,
+            Some(_) => {}
+        }
+        let parent = self.processes.get(&pid).and_then(|pcb| pcb.parent);
 
-        if pcb.state == ProcessState::Terminated(0)
-            || matches!(pcb.state, ProcessState::Terminated(_))
-        {
-            return false; // Bereits terminiert
+        // Alle Capabilities dieses Prozesses widerrufen — ueber die Authority.
+        for cap_id in self.authority.cap_ids_for(pid) {
+            self.authority.revoke(cap_id);
         }
 
-        // Alle Capabilities dieses Prozesses widerrufen
-        let cap_ids: Vec<CapId> = self.caps.list_for(pid).iter().map(|c| c.id).collect();
-        for cap_id in cap_ids {
-            self.caps.revoke(cap_id);
+        if let Some(pcb) = self.processes.get_mut(&pid) {
+            pcb.state = ProcessState::Terminated(exit_code);
         }
 
-        // Zustand auf Terminiert setzen
-        pcb.state = ProcessState::Terminated(exit_code);
-
-        // Aus Eltern-Kind-Liste entfernen
-        if let Some(parent_pid) = pcb.parent {
+        if let Some(parent_pid) = parent {
             if let Some(parent) = self.processes.get_mut(&parent_pid) {
                 parent.children.retain(|&c| c != pid);
             }
@@ -224,6 +228,11 @@ impl ProcessManager {
     }
 
     /// Capability-Check: Hat der Prozess die geforderten Rechte?
+    /// Die Capability-IDs eines Prozesses — ueber die zentrale Authority.
+    pub fn cap_ids_for(&self, pid: Pid) -> Vec<CapId> {
+        self.authority.cap_ids_for(pid)
+    }
+
     pub fn check_capability(
         &self,
         pid: Pid,
@@ -231,7 +240,7 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.caps.check(pid, resource_type, resource_id, required)
+        self.authority.check(pid, resource_type, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
@@ -242,7 +251,7 @@ impl ProcessManager {
         target: Pid,
         rights: Rights,
     ) -> Result<CapId, crate::capability::CapabilityError> {
-        self.caps.delegate(source, cap_id, target, rights)
+        self.authority.delegate(source, cap_id, target, rights)
     }
 }
 
@@ -284,7 +293,7 @@ mod tests {
         let p2 = pm.spawn(ProcessType::Service, 100);
 
         // p1 delegiert READ an p2
-        let p1_mem_cap = pm.caps.list_for(p1)[0].id;
+        let p1_mem_cap = pm.cap_ids_for(p1)[0];
         pm.delegate_capability(p1, p1_mem_cap, p2, Rights::READ | Rights::DELEGATE)
             .unwrap();
         assert!(pm.check_capability(p2, ResourceType::Memory, p1.0 as u64, Rights::READ));
