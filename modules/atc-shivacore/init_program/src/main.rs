@@ -78,6 +78,35 @@ pub const SPACE_MARK: u64 = 0x4B41_4931_5F4D_4152; // "RAI1_MAK"
 /// ueberschreiben; der Stack ist beschreibbar und trotzdem pro Prozess.
 pub const SPACE_MARK_ADDR: u64 = 0x7FFE_F100;
 
+/// Freiwilliges Prozessende ueber denselben ABI-Block wie `Yield`.
+///
+/// Der Exit-Code steht in `arg0`. Der Kernel widerruft die Capabilities, setzt
+/// den Prozess auf Zombie und gibt seinen Adressraum im Timer-Tick verzoegert
+/// frei — der Beweis, dass der Lebenszyklus bis zum Ende traegt.
+#[inline(always)]
+fn syscall_exit(code: u64) {
+    let mut block = [0u64; 7];
+    block[0] = libshivacore::SYSCALL_BLOCK_MIN_SIZE as u64;
+    block[1] = u64::from(libshivacore::Syscall::Exit.id());
+    block[2] = 0; // Capability
+    block[3] = code; // arg0 = Exit-Code
+    unsafe {
+        core::arch::asm!(
+            "int 0x80",
+            in("rdi") block.as_ptr(),
+            in("rsi") libshivacore::SYSCALL_BLOCK_MIN_SIZE,
+            in("rdx") u64::from(libshivacore::ABI_VERSION),
+            lateout("rax") _,
+            clobber_abi("sysv64"),
+            options(nostack)
+        );
+    }
+}
+
+/// Wie viele Yields vor dem Ende: genug, dass der Scheduler den Prozess
+/// mehrfach an die Reihe nimmt und die Messungen davor abgeschlossen sind.
+const YIELDS_BEFORE_EXIT: u64 = 40;
+
 /// Einstiegspunkt. Der Name ist der des Linkerskripts, kein Rust-Komfort.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
@@ -89,9 +118,21 @@ pub extern "C" fn _start() -> ! {
         // jedem Durchlauf abhaengen, sonst waere ihr Fehlen nicht deutbar.
         core::ptr::write_volatile(SPACE_MARK_ADDR as *mut u64, SPACE_MARK);
     }
+    let mut yields = 0u64;
     loop {
         syscall_yield();
         compiler_fence(Ordering::SeqCst);
+        yields += 1;
+        if yields >= YIELDS_BEFORE_EXIT {
+            // Echter Prozess-Exit aus Ring 3: ab hier ist der Adressraum
+            // freigebbar.
+            syscall_exit(0);
+            // Kein Rueckweg vorgesehen; falls doch einer kommt, anhalten statt
+            // weiterzulaufen.
+            loop {
+                core::hint::spin_loop();
+            }
+        }
     }
 }
 
