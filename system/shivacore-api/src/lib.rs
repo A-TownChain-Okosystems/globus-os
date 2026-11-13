@@ -28,6 +28,10 @@ pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 #[repr(u16)]
 pub enum Syscall {
     Yield = 0x0001,
+    /// Beendet den aufrufenden Prozess. Das Exit-Code-Argument steht in
+    /// `arg0`; der Kernel widerruft die Capabilities, setzt den Prozess auf
+    /// Zombie und gibt seinen Adressraum verzoegert frei.
+    Exit = 0x0002,
     IpcSend = 0x0010,
     IpcReceive = 0x0011,
     CapabilityQuery = 0x0020,
@@ -166,6 +170,7 @@ impl SyscallBlock {
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
+            x if x == Syscall::Exit.id() => Syscall::Exit,
             _ => return Err(AbiError::InvalidSyscall),
         };
         if flags != SYSCALL_FLAG_NONE {
