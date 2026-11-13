@@ -51,6 +51,17 @@ pub struct FrameReclaimer {
     freed_frames: AtomicUsize,
     busy_retries: AtomicUsize,
     skipped_active: AtomicUsize,
+    /// Freigaben, die wegen weiterer aktiver CPUs aufgeschoben wurden.
+    held_multi_cpu: AtomicUsize,
+}
+
+/// Wie viele CPUs beim Boot aktiv sind. Bei mehr als einer gibt es keinen
+/// IPI-Shootdown und damit keinen Nachweis, dass niemand mehr auf die Seite
+/// zugreift — dann wird nicht freigegeben (fail-closed).
+static ONLINE_CPUS: AtomicUsize = AtomicUsize::new(1);
+
+pub fn set_online_cpus(count: usize) {
+    ONLINE_CPUS.store(count.max(1), Ordering::Release);
 }
 
 impl FrameReclaimer {
@@ -61,6 +72,7 @@ impl FrameReclaimer {
             freed_frames: AtomicUsize::new(0),
             busy_retries: AtomicUsize::new(0),
             skipped_active: AtomicUsize::new(0),
+            held_multi_cpu: AtomicUsize::new(0),
         }
     }
 
@@ -129,6 +141,15 @@ impl FrameReclaimer {
         self.skipped_active.load(Ordering::Relaxed)
     }
 
+    pub fn held_multi_cpu(&self) -> usize {
+        self.held_multi_cpu.load(Ordering::Relaxed)
+    }
+
+    /// Darf auf dieser Maschine ueberhaupt freigegeben werden?
+    fn single_cpu(&self) -> bool {
+        ONLINE_CPUS.load(Ordering::Acquire) <= 1
+    }
+
     /// Fuehrt liegengebliebene Auftraege aus. Der Aufrufer reicht die
     /// Freigabe herein (`free_frame`), damit nur EIN Allocator physischen
     /// Speicher zuruecknimmt und diese Instanz keinen zweiten erzeugt.
@@ -170,6 +191,18 @@ impl FrameReclaimer {
                 requeue.push(job);
                 continue;
             }
+            if !self.single_cpu() {
+                // Mehr als eine CPU: ohne Shootdown laesst sich nicht
+                // ausschliessen, dass ein anderer Prozessor den Adressraum
+                // noch benutzt. Auftrag bleibt liegen, Zaehler steigt.
+                self.held_multi_cpu.fetch_add(1, Ordering::Relaxed);
+                requeue.push(job);
+                continue;
+            }
+            // Barriere: alle vorherigen Schreibvorgaenge (Widerruf, TLB-Flush,
+            // Zombie-Status) muessen sichtbar sein, bevor Speicher wieder
+            // vergeben wird.
+            core::sync::atomic::fence(Ordering::SeqCst);
             // Reihenfolge: zuerst die unteren Tabellen, die Wurzel zuletzt.
             // So zeigt kein Pfad auf eine bereits freigegebene Tabelle.
             let mut released = 0usize;
