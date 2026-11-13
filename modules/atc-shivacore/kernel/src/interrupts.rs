@@ -1170,7 +1170,7 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     // Tastatur-Handler: der Handler soll nur ablegen. Acht Ereignisse pro Tick
     // reichen fuer jede Tippgeschwindigkeit und begrenzen die Arbeit im IRQ.
     pump_input_into_channel();
-        drain_input_queue();
+    drain_input_queue();
     // ACK-Fristen: haengt ein Subskribent, gibt der Kernel die Line frei und
     // zaehlt die verpasste Quittung. Ohne diesen Schritt waere "maskiert bis
     // ACK" fuer einen haengenden Prozess eine dauerhafte Sperre.
@@ -1342,7 +1342,25 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
         }
     }
 
-    let switched = scheduler.timer_tick_saved(current);
+    // P1-3D-H1: Ein Wechsel ist nur aus Ring 3 heraus zulaessig. Unterbricht
+    // der Tick den Kernel selbst (Boot zwischen "scheduler armed" und dem
+    // Ring-3-Sprung, Syscall-Bearbeitung, gehaltene Sperren), wird nur die
+    // Zeit fortgeschrieben: der naechste Nutzertick entscheidet. Frueher
+    // konnte der Tick mitten im Boot umschalten und blieb dann mit einer
+    // halb aufgebauten Welt stehen (Bootstillstand bei 99 Zeilen).
+    let from_user_mode = (frame.cs & 3) == 3;
+    let switched = if from_user_mode {
+        scheduler.timer_tick_saved(current)
+    } else {
+        if KERNEL_TICKS_DEFERRED.fetch_add(1, Ordering::Relaxed) == 0 {
+            serial_println!(
+                "ShivaCore: SCHED-001 Wechsel aufgeschoben: Tick im Kernel (CS={:#x}), naechster Nutzertick entscheidet",
+                frame.cs
+            );
+        }
+        scheduler.kernel_tick_saved(current);
+        None
+    };
     if let Some((next_pid, next)) = switched {
         // Erst die Seitentabelle, dann der Rahmen: der Prozess, dessen
         // Register gleich geladen werden, muss seine eigene Tabelle vorfinden,
@@ -1368,6 +1386,10 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
 /// Vektor des Timer-IRQ, direkt aus dem IDT-Index abgeleitet. Damit kann der
 /// IOAPIC-Eintrag nicht auf einen anderen Vektor zeigen als der Handler.
 pub const TIMER_VECTOR: u8 = InterruptIndex::Timer as u8;
+
+/// Ticks, die den Kernel selbst unterbrochen haben und deshalb keinen
+/// Prozesswechsel ausgeloest haben.
+pub static KERNEL_TICKS_DEFERRED: AtomicU64 = AtomicU64::new(0);
 
 /// Vektor der PS/2-Tastatur. Kommt aus der Routing-Tabelle: der erste
 /// automatisch vergebene Geraetevektor. Der IOAPIC-Eintrag wird beim Boot auf
