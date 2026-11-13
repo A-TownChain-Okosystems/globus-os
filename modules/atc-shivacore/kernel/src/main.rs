@@ -833,6 +833,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             channels.open(0x11, init);
             channels.attach(0x11, ats1000::Pid(1002));
             channels.enqueue(0x11, 0xB1);
+            // P1-3D: der echte Eingabekanal laeuft durch dieselbe Registry.
+            // PID 1002 liest ihn per Syscall, Init ist zusaetzlicher
+            // Teilnehmer — sein Exit darf den Kanal deshalb NICHT toeten.
+            channels.open_with(shivacore::syscall::KERNEL_INPUT_CHANNEL, ats1000::Pid(1002), 32);
+            channels.attach(shivacore::syscall::KERNEL_INPUT_CHANNEL, init);
         }
         {
             let mut handles = HANDLES.lock();
@@ -1104,6 +1109,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     //   EB FC              jmp  zurueck auf int 0x80
     let input_cap = interrupts::grant_input_read(ats1000::Pid(1002))
         .expect("ShivaCore: Leserecht auf den Eingabekanal");
+    // P1-3D-Nachweis: ein Tastenereignis auf demselben Weg wie der echte IRQ —
+    // ablegen im Geraete-FIFO. Die Pumpe im Tick schiebt es in den Kanal der
+    // Registry, PID 1002 holt es per Syscall. Erst hier, nicht frueher: ohne
+    // angemeldeten Nutzerkonsument liest der Kernel das FIFO selbst.
+    interrupts::INPUT_QUEUE.lock().push(
+        shivacore::input_queue::InputEvent::new(0x1E, Some('a')),
+    );
     // ABI 2.0.0: Der Prozess baut einen Argumentblock in seiner Datenseite und
     // uebergibt den Zeiger. Das Abbild der Anweisungen wird hier aufgebaut, und
     // alle Spruenge und der Platz der Capability werden aus der jeweils
