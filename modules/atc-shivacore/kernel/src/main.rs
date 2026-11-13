@@ -1264,15 +1264,23 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_ctx_3.rip
     );
 
-    interrupts::init_user_scheduler(&user_ctx, &user_ctx_2, &user_ctx_3, user_ctx_4.as_ref());
-    // Jede eigene Tabelle in den Scheduler legen. Ab hier entscheidet der
-    // Kontextwechsel, mit welcher Tabelle ein Prozess laeuft.
-    interrupts::set_process_cr3(user_pid, cr3_first);
-    interrupts::set_process_cr3(user_pid_2, cr3_second);
-    interrupts::set_process_cr3(user_pid_3, cr3_third);
-    if user_ctx_4.is_some() {
-        interrupts::set_process_cr3(ats1000::Pid(1003), cr3_fourth);
-    }
+    // P1-3D-H1: Der Scheduler wird zusammen mit den Seitentabellen
+    // veroeffentlicht, nicht vorher. Vorher lag zwischen dem Eintragen in
+    // `USER_SCHEDULER` und dem Setzen der CR3-Werte ein Fenster, in dem ein
+    // Tick einen Prozess ohne Tabelle auswaehlen konnte — genau der
+    // Bootstillstand kurz nach "scheduler armed". Kein Interrupt-Aus, sondern
+    // eine Veroeffentlichung erst am Ende: der Tick sieht entweder nichts
+    // oder einen vollstaendig aufgezogenen Scheduler.
+    interrupts::init_user_scheduler(
+        &user_ctx,
+        &user_ctx_2,
+        &user_ctx_3,
+        user_ctx_4.as_ref(),
+        (user_pid, cr3_first),
+        (user_pid_2, cr3_second),
+        (user_pid_3, cr3_third),
+        (ats1000::Pid(1003), cr3_fourth),
+    );
     serial_println!(
         "ShivaCore: Adressraeume je Prozess: PID={} -> {:#x}, PID={} -> {:#x}, PID={} -> {:#x}, PID=1003 -> {:#x}",
         user_pid.0,
