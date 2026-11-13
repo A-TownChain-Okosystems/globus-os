@@ -80,6 +80,11 @@ pub fn inherits_pdpt_entry(index: usize, user_regions: &[(u64, u64)]) -> bool {
 #[cfg(feature = "x86-boot")]
 pub struct AddressSpace {
     frame: PhysFrame<Size4KiB>,
+    /// Alle Seitentabellen-Frames, die fuer diesen Adressraum alloziert wurden
+    /// (Wurzel zuerst, danach die unteren Ebenen). Damit weiss die verzoegerte
+    /// Freigabe, was zu diesem Prozess gehoert, ohne die Tabellen dafuer
+    /// ablaufen zu muessen.
+    tables: alloc::vec::Vec<PhysFrame<Size4KiB>>,
 }
 
 #[cfg(feature = "x86-boot")]
@@ -105,6 +110,7 @@ impl AddressSpace {
         source: PhysFrame<Size4KiB>,
     ) -> Option<Self> {
         let table = allocator.allocate_frame()?;
+        let mut tables = alloc::vec![table];
         let table_ptr =
             (physical_memory_offset + table.start_address().as_u64()).as_mut_ptr::<PageTable>();
         table_ptr.write(PageTable::new());
@@ -125,6 +131,7 @@ impl AddressSpace {
         let active_low = src[0].clone();
         if active_low.flags().contains(PageTableFlags::PRESENT) {
             let pdpt = allocator.allocate_frame()?;
+            tables.push(pdpt);
             let pdpt_ptr =
                 (physical_memory_offset + pdpt.start_address().as_u64()).as_mut_ptr::<PageTable>();
             pdpt_ptr.write(PageTable::new());
@@ -145,7 +152,10 @@ impl AddressSpace {
             dst[0] = entry;
         }
 
-        Some(Self { frame: table })
+        Some(Self {
+            frame: table,
+            tables,
+        })
     }
 
     /// Mapper fuer genau diese Tabelle.
@@ -156,6 +166,11 @@ impl AddressSpace {
         let ptr = (physical_memory_offset + self.frame.start_address().as_u64())
             .as_mut_ptr::<PageTable>();
         OffsetPageTable::new(&mut *ptr, physical_memory_offset)
+    }
+
+    /// Die Frames dieses Adressraums. Reihenfolge: Wurzel zuerst.
+    pub fn table_frames(&self) -> alloc::vec::Vec<PhysFrame<Size4KiB>> {
+        self.tables.clone()
     }
 
     pub fn frame(&self) -> PhysFrame<Size4KiB> {
