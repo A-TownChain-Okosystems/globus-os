@@ -457,6 +457,24 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             count(DeviceKind::Usb),
             count(DeviceKind::Other)
         );
+
+        // Audit fuer die Treiberinitialisierung: die gefundenen Geraete sind
+        // sicherheitsrelevant, weil IRQ- und DMA-Rechte daran haengen.
+        shivacore::security::record(
+            "kernel",
+            "driver.pci_enumeration",
+            &alloc::format!(
+                "geraete={} storage={} network={} display={} bridge={} usb={} other={}",
+                devices.len(),
+                count(DeviceKind::Storage),
+                count(DeviceKind::Network),
+                count(DeviceKind::Display),
+                count(DeviceKind::Bridge),
+                count(DeviceKind::Usb),
+                count(DeviceKind::Other)
+            ),
+            shivacore::security::AuditResult::Allowed,
+        );
     }
 
     // SC-006 REQ-03: IOAPIC programmieren. Der Treiber liest die Eintragszahl
@@ -893,23 +911,43 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             after
         );
     }
+    // Zombie-Reaping-Selbsttest: beendet einen synthetischen Prozess und
+    // sammelt ihn ein, damit der Pfad eine Laufzeitspur hat.
+    {
+        let (before, zombies, after) = interrupts::self_test_reap();
+        serial_println!(
+            "ShivaCore: Zombie-Reaping-Selbsttest: {} Eintraege vorher, {} Zombies, {} nachher",
+            before,
+            zombies,
+            after
+        );
+    }
 
     // Audit-Zusammenfassung: Anzahl der Ereignisse und Zustand der Hash-Kette.
     // Ohne diese Zeile waere "Audit aktiv" eine Behauptung.
-    serial_println!(
-        "ShivaCore: Audit-Log: {} Ereignisse, Kette {}, letzter Eintrag {}",
-        shivacore::security::recorded_events(),
-        if shivacore::security::audit_chain_intact() {
-            "intakt"
-        } else {
-            "GEBROCHEN"
-        },
-        shivacore::security::KERNEL_AUDIT
-            .entries()
-            .last()
-            .map(|e| e.action.clone())
-            .unwrap_or_else(|| alloc::string::String::from("keiner"))
-    );
+    {
+        let entries = shivacore::security::KERNEL_AUDIT.entries();
+        let mut actions: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+        for entry in &entries {
+            if !actions.contains(&entry.action.as_str()) {
+                actions.push(entry.action.as_str());
+            }
+        }
+        serial_println!(
+            "ShivaCore: Audit-Log: {} Ereignisse, Kette {}, letzter Eintrag {} [{}]",
+            entries.len(),
+            if shivacore::security::audit_chain_intact() {
+                "intakt"
+            } else {
+                "GEBROCHEN"
+            },
+            entries
+                .last()
+                .map(|e| e.action.clone())
+                .unwrap_or_else(|| alloc::string::String::from("keiner")),
+            actions.join(", ")
+        );
+    }
 
     let user_pid = ats1000::Pid(1000);
     // Nur die eingebaute Nutzlast setzt RAX/RBX/R12 auf ein bekanntes Muster.
@@ -1353,7 +1391,35 @@ fn alloc_error_handler(layout: core::alloc::Layout) -> ! {
 
 #[panic_handler]
 fn panic(info: &PanicInfo) -> ! {
-    serial_println!("ShivaCore: KERNEL PANIC -- {}", info);
+    use core::sync::atomic::{AtomicBool, Ordering};
+    // Ein Panic im Panic-Handler wuerde sonst endlos rekursiv laufen.
+    static IN_PANIC: AtomicBool = AtomicBool::new(false);
+    if !IN_PANIC.swap(true, Ordering::SeqCst) {
+        serial_println!("ShivaCore: KERNEL PANIC -- {}", info);
+        // Auch ein Panic gehoert in die Audit-Kette, nicht nur auf die
+        // serielle Konsole. Der Eintrag ist der letzte vor dem Halt.
+        let message = alloc::format!("{}", info);
+        shivacore::security::record(
+            "kernel",
+            "kernel.panic",
+            &message,
+            shivacore::security::AuditResult::Error,
+        );
+        serial_println!(
+            "ShivaCore: Panic-Audit: {} Ereignisse, Kette {}, letzter Eintrag {}",
+            shivacore::security::recorded_events(),
+            if shivacore::security::audit_chain_intact() {
+                "intakt"
+            } else {
+                "GEBROCHEN"
+            },
+            shivacore::security::KERNEL_AUDIT
+                .entries()
+                .last()
+                .map(|e| e.action.clone())
+                .unwrap_or_else(|| alloc::string::String::from("keiner"))
+        );
+    }
     loop {
         x86_64::instructions::hlt();
     }
