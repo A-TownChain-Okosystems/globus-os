@@ -342,10 +342,9 @@ impl SyscallDispatcher {
 mod tests {
     use super::*;
 
-    /// Zwei Tests teilen sich den globalen Kanal 1. Damit ihre Zusicherungen
-    /// nicht von der Reihenfolge parallel laufender Testfaeden abhaengen,
-    /// nehmen sie diese Sperre. (Kein Kernel-Zustand, nur Testordnung.)
-    static KANAL_EINS: spin::Mutex<()> = spin::Mutex::new(());
+    /// Kanal 1 und die freien Kanaele liegen im globalen Bestand; alle Tests,
+    /// die ihn anfassen, nehmen dieselbe Sperre wie die ipc_lifecycle-Tests.
+    use crate::ipc_lifecycle::CHANNELS_TEST_LOCK as KANAL_EINS;
 
     fn pid(n: u32) -> Pid {
         Pid(n)
@@ -620,6 +619,7 @@ mod tests {
 
     #[test]
     fn receive_checks_the_right_before_handing_out_events() {
+        let _serial = KANAL_EINS.lock();
         use crate::input_queue::InputEvent;
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
