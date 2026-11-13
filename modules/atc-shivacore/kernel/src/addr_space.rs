@@ -85,6 +85,12 @@ pub struct AddressSpace {
     /// Freigabe, was zu diesem Prozess gehoert, ohne die Tabellen dafuer
     /// ablaufen zu muessen.
     tables: alloc::vec::Vec<PhysFrame<Size4KiB>>,
+    /// Seiten, die der Mapper fuer diesen Prozess geholt hat: Code, Daten,
+    /// Stack und die unteren Seitentabellen, die er beim Abbilden selbst
+    /// anlegt. Aufgezeichnet wird am Allocator, nicht aus den Tabellen
+    /// erschlossen — geerbte oder geteilte Frames tauchen deshalb gar nicht
+    /// erst auf.
+    owned: alloc::vec::Vec<PhysFrame<Size4KiB>>,
 }
 
 #[cfg(feature = "x86-boot")]
@@ -155,6 +161,7 @@ impl AddressSpace {
         Some(Self {
             frame: table,
             tables,
+            owned: alloc::vec::Vec::new(),
         })
     }
 
@@ -173,6 +180,42 @@ impl AddressSpace {
         self.tables.clone()
     }
 
+    /// Alle Frames, die diesem Adressraum exklusiv gehoeren, in
+    /// Allokationsreihenfolge: Wurzel, untere Tabellen, dann die vom Mapper
+    /// geholten Seiten samt seinen Zwischentabellen. Die Freigabe laeuft
+    /// rueckwaerts, damit Kinder vor ihren Eltern verschwinden.
+    pub fn all_frames(&self) -> alloc::vec::Vec<PhysFrame<Size4KiB>> {
+        let mut frames = self.tables.clone();
+        frames.extend(self.owned.iter().copied());
+        frames
+    }
+
+    /// Bildet ein Nutzerprogramm ab und merkt sich, welche Frames der Mapper
+    /// dafuer geholt hat.
+    ///
+    /// # Safety
+    /// Wie `mapper` und `userspace::map_user_binary`: die Tabelle muss
+    /// installiert sein und darf nicht gleichzeitig anderweitig benutzt werden.
+    pub unsafe fn map_binary(
+        &mut self,
+        allocator: &mut impl FrameAllocator<Size4KiB>,
+        physical_memory_offset: VirtAddr,
+        binary: &crate::userspace::UserBinary,
+        layout: &crate::userspace::UserAddressSpace,
+    ) -> Result<(), crate::userspace::UserspaceError> {
+        let mut recorder = RecordingAllocator::new(allocator);
+        let mut mapper = self.mapper(physical_memory_offset);
+        crate::userspace::map_user_binary(
+            &mut mapper,
+            &mut recorder,
+            physical_memory_offset,
+            binary,
+            layout,
+        )?;
+        self.owned.extend(recorder.into_frames());
+        Ok(())
+    }
+
     pub fn frame(&self) -> PhysFrame<Size4KiB> {
         self.frame
     }
@@ -180,6 +223,44 @@ impl AddressSpace {
     /// Schaltet auf diesen Adressraum um.
     pub fn install(&self) {
         unsafe { Cr3::write(self.frame, Cr3Flags::empty()) }
+    }
+}
+
+/// Allocator, der jede Ausgabe mitschreibt.
+///
+/// Der Mapper legt Zwischentabellen selbst an und fragt dafuer den Allocator,
+/// den er bekommt. Wer nur `map_user_binary` liest, sieht diese Frames nicht —
+/// genau die blieben bisher als Leck zurueck.
+#[cfg(feature = "x86-boot")]
+pub struct RecordingAllocator<'a, A: FrameAllocator<Size4KiB>> {
+    inner: &'a mut A,
+    frames: alloc::vec::Vec<PhysFrame<Size4KiB>>,
+}
+
+#[cfg(feature = "x86-boot")]
+impl<'a, A: FrameAllocator<Size4KiB>> RecordingAllocator<'a, A> {
+    pub fn new(inner: &'a mut A) -> Self {
+        Self {
+            inner,
+            frames: alloc::vec::Vec::new(),
+        }
+    }
+
+    pub fn into_frames(self) -> alloc::vec::Vec<PhysFrame<Size4KiB>> {
+        self.frames
+    }
+}
+
+#[cfg(feature = "x86-boot")]
+// Safety: der Wrapper reicht jede Anfrage unveraendert an den inneren
+// Allocator durch und gibt nur zurueck, was dieser geliefert hat. Er erfindet
+// keine Frames und gibt keine doppelt aus; die Invarianten des Traits bleiben
+// damit die des inneren Allocators.
+unsafe impl<A: FrameAllocator<Size4KiB>> FrameAllocator<Size4KiB> for RecordingAllocator<'_, A> {
+    fn allocate_frame(&mut self) -> Option<PhysFrame<Size4KiB>> {
+        let frame = self.inner.allocate_frame()?;
+        self.frames.push(frame);
+        Some(frame)
     }
 }
 
