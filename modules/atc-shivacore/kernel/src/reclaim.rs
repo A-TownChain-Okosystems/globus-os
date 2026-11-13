@@ -53,6 +53,8 @@ pub struct FrameReclaimer {
     skipped_active: AtomicUsize,
     /// Freigaben, die wegen weiterer aktiver CPUs aufgeschoben wurden.
     held_multi_cpu: AtomicUsize,
+    /// Bilanz des letzten Durchlaufs: (pid, angemeldet, freigegeben, abgewiesen).
+    last_report: Mutex<Vec<(u64, usize, usize, usize)>>,
 }
 
 /// Wie viele CPUs beim Boot aktiv sind. Bei mehr als einer gibt es keinen
@@ -73,6 +75,7 @@ impl FrameReclaimer {
             busy_retries: AtomicUsize::new(0),
             skipped_active: AtomicUsize::new(0),
             held_multi_cpu: AtomicUsize::new(0),
+            last_report: Mutex::new(Vec::new()),
         }
     }
 
@@ -145,6 +148,11 @@ impl FrameReclaimer {
         self.held_multi_cpu.load(Ordering::Relaxed)
     }
 
+    /// Bilanz des letzten Freigabelaufs, je Prozess.
+    pub fn take_last_report(&self) -> Vec<(u64, usize, usize, usize)> {
+        core::mem::take(&mut *self.last_report.lock())
+    }
+
     /// Darf auf dieser Maschine ueberhaupt freigegeben werden?
     fn single_cpu(&self) -> bool {
         ONLINE_CPUS.load(Ordering::Acquire) <= 1
@@ -207,7 +215,9 @@ impl FrameReclaimer {
             // So zeigt kein Pfad auf eine bereits freigegebene Tabelle.
             let mut released = 0usize;
             let mut rejected = 0usize;
-            for frame in job.frames.iter().skip(1).chain(job.frames.first()) {
+            // Rueckwaerts in Allokationsreihenfolge: zuletzt geholt ist am
+            // tiefsten, die Wurzel kommt zuletzt.
+            for frame in job.frames.iter().skip(1).rev().chain(job.frames.first()) {
                 if free_frame(*frame) {
                     released += 1;
                 } else {
@@ -215,13 +225,20 @@ impl FrameReclaimer {
                 }
             }
             freed += released;
+            self.last_report
+                .lock()
+                .push((job.pid.0 as u64, job.frames.len(), released, rejected));
             self.freed_frames.fetch_add(released, Ordering::Relaxed);
             record(
                 "kernel",
                 "memory.reclaim",
                 &alloc::format!(
-                    "pid={:?} root={:#x} freigegeben={} abgewiesen={}",
-                    job.pid, job.root, released, rejected
+                    "pid={:?} root={:#x} angemeldet={} freigegeben={} abgewiesen={}",
+                    job.pid,
+                    job.root,
+                    job.frames.len(),
+                    released,
+                    rejected
                 ),
                 AuditResult::Allowed,
             );
@@ -304,4 +321,48 @@ mod tests {
     }
 
 
+}
+
+#[cfg(test)]
+mod accounting_tests {
+    use super::*;
+
+    fn frame(addr: u64) -> PhysFrame<Size4KiB> {
+        PhysFrame::containing_address(x86_64::PhysAddr::new(addr))
+    }
+
+    /// Code- und Stackseiten verschwinden vor den Tabellen, die Wurzel zuletzt.
+    #[test]
+    fn user_pages_are_freed_before_their_tables() {
+        let reclaimer = FrameReclaimer::new();
+        let pid = Pid(0x0D01);
+        // Allokationsreihenfolge: Wurzel, PDPT, Code, Stack.
+        reclaimer.register_tables(pid, vec![frame(0x1000), frame(0x2000), frame(0x3000), frame(0x4000)]);
+        reclaimer.queue_process(pid);
+        let mut order = Vec::new();
+        reclaimer.drain_with(|f| {
+            order.push(f.start_address().as_u64());
+            true
+        });
+        assert_eq!(order, vec![0x4000, 0x3000, 0x2000, 0x1000]);
+    }
+
+    /// Nur angemeldete Frames werden freigegeben: ein geteilter oder geerbter
+    /// Frame steht nicht im Verzeichnis und bleibt unangetastet.
+    #[test]
+    fn unregistered_frames_stay_allocated() {
+        let reclaimer = FrameReclaimer::new();
+        let pid = Pid(0x0D02);
+        reclaimer.register_tables(pid, vec![frame(0x1000), frame(0x2000)]);
+        reclaimer.queue_process(pid);
+        let mut seen = Vec::new();
+        let freed = reclaimer.drain_with(|f| {
+            seen.push(f.start_address().as_u64());
+            true
+        });
+        assert_eq!(freed, 2);
+        assert!(!seen.contains(&0x5000), "fremder Frame darf nicht freigegeben werden");
+        let report = reclaimer.take_last_report();
+        assert_eq!(report, vec![(pid.0 as u64, 2, 2, 0)]);
+    }
 }
