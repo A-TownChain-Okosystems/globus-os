@@ -191,6 +191,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
         let ticks =
             crate::interrupts::TIMER_TICKS.load(core::sync::atomic::Ordering::Acquire) - before;
+        // Diagnose statt Vermutung: wenn die Warteschranke greift, kommen in
+        // dieser Zeit keine Ticks an. Das ist ein eigener Befund und darf nicht
+        // als "langsamer Boot" durchgehen.
+        if ticks < 3 {
+            serial_println!(
+                "ShivaCore: Adressraum-Selbsttest: Warteschranke erreicht, nur {} von 3 Ticks (Spins={})",
+                ticks,
+                spins
+            );
+        }
         shivacore::addr_space::restore(boot_frame, boot_flags);
         serial_println!(
             "ShivaCore: Adressraum-Selbsttest: Tabelle 0x{:X} aktiv, {} Timer-Ticks im eigenen Raum, Kernel laeuft",
@@ -1697,6 +1707,12 @@ fn measure_ticks(target: u64) -> Option<(u64, u64)> {
     while crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) < seen + target {
         guard += 1;
         if guard > 50_000_000_000 {
+            serial_println!(
+                "ShivaCore: Tick-Messung: Schranke erreicht, nur {} von {} Ticks (Spins={})",
+                crate::interrupts::TIMER_TICKS.load(Ordering::Acquire) - seen,
+                target,
+                guard
+            );
             return None;
         }
         core::hint::spin_loop();
