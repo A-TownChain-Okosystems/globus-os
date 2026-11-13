@@ -843,6 +843,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             boot_cr3_frame,
         )
         .expect("ShivaCore: kein Adressraum fuer PID 1000");
+        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
+        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
+        // Adressraums, freigegeben erst nach dem Prozessende.
+        shivacore::reclaim::RECLAIMER.register_tables(
+            shivacore::ats1000::Pid(1000),
+            process_space.table_frames(),
+        );
         process_space.install();
         let mut process_mapper = process_space.mapper(phys_mem_offset);
         userspace::map_user_binary(
@@ -1002,6 +1009,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             boot_cr3_frame,
         )
         .expect("ShivaCore: kein Adressraum fuer PID 1001");
+        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
+        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
+        // Adressraums, freigegeben erst nach dem Prozessende.
+        shivacore::reclaim::RECLAIMER.register_tables(
+            shivacore::ats1000::Pid(1001),
+            process_space.table_frames(),
+        );
         process_space.install();
         let mut process_mapper = process_space.mapper(phys_mem_offset);
         userspace::map_user_binary(
@@ -1103,6 +1117,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             boot_cr3_frame,
         )
         .expect("ShivaCore: kein Adressraum fuer PID 1002");
+        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
+        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
+        // Adressraums, freigegeben erst nach dem Prozessende.
+        shivacore::reclaim::RECLAIMER.register_tables(
+            shivacore::ats1000::Pid(1002),
+            process_space.table_frames(),
+        );
         process_space.install();
         let mut process_mapper = process_space.mapper(phys_mem_offset);
         userspace::map_user_binary(
@@ -1141,6 +1162,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             )
         }
         .expect("ShivaCore: kein Adressraum fuer PID 1003");
+        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
+        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
+        // Adressraums, freigegeben erst nach dem Prozessende.
+        shivacore::reclaim::RECLAIMER.register_tables(
+            shivacore::ats1000::Pid(1003),
+            process_space.table_frames(),
+        );
         process_space.install();
         let mut process_mapper = unsafe { process_space.mapper(phys_mem_offset) };
         unsafe {
@@ -1193,6 +1221,95 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Kernel-Arbeit wieder in der Boot-Tabelle erledigen, damit spaetere
     // Abbildungen (Geraete) nicht versehentlich in einer Prozesstabelle landen.
     shivacore::addr_space::restore(boot_cr3_frame, boot_cr3_flags);
+
+    // P1-3B: Der Frame-Allocator geht an die Laufzeit. Ab hier gibt es genau
+    // eine Instanz fuer physischen Speicher, die auch die verzoegerte Freigabe
+    // benutzt (try_lock im Tick, kein Blockieren).
+    {
+        let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
+        *slot = Some(frame_allocator);
+    }
+    // Selbsttest der Seitentabellen-Frame-Freigabe: zwei echte Frames holen,
+    // als Adressraum eines synthetischen Prozesses anmelden, einsammeln und die
+    // Freiliste pruefen. Freigegeben wird nur, was vorher aus demselben
+    // Allocator kam.
+    {
+        use shivacore::ats1000::Pid as KernelPid;
+        use x86_64::structures::paging::FrameAllocator;
+        let probe_pid = KernelPid(0x0C20);
+        let (first, second) = {
+            let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
+            let allocator = slot.as_mut().expect("Frame-Allocator muss installiert sein");
+            (allocator.allocate_frame(), allocator.allocate_frame())
+        };
+        match (first, second) {
+            (Some(first), Some(second)) => {
+                shivacore::reclaim::RECLAIMER
+                    .register_tables(probe_pid, alloc::vec![first, second]);
+                let queued = shivacore::reclaim::RECLAIMER.queue_process(probe_pid);
+                let freed = {
+                    let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
+                    match slot.as_mut() {
+                        Some(allocator) => shivacore::reclaim::RECLAIMER
+                            .drain_with(|frame| allocator.deallocate_frame(frame)),
+                        None => 0,
+                    }
+                };
+                let (free_list, double_free, reused, total) = {
+                    let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
+                    let allocator = slot.as_mut().expect("Frame-Allocator");
+                    // Doppelfreigabe muss abgewiesen werden.
+                    let blocked_before = allocator.double_free_blocked();
+                    let _ = allocator.deallocate_frame(first);
+                    let blocked = allocator.double_free_blocked() - blocked_before;
+                    // Und die Freiliste muss wieder vergeben: der zurueckgegebene
+                    // Frame kommt aus dem Vorrat, den wir gerade freigegeben haben.
+                    let reused = allocator
+                        .allocate_frame()
+                        .map(|frame| frame == first || frame == second)
+                        .unwrap_or(false);
+                    (
+                        allocator.free_list_len(),
+                        blocked,
+                        reused,
+                        allocator.freed_total(),
+                    )
+                };
+                serial_println!(
+                    "ShivaCore: Frame-Freigabe-Selbsttest: {} angemeldet, {} freigegeben, Freiliste={}, Wiederbenutzung={}, Doppelfreigabe abgewiesen={}, freigegeben gesamt={}",
+                    queued,
+                    freed,
+                    free_list,
+                    reused,
+                    double_free,
+                    total
+                );
+            }
+            _ => serial_println!(
+                "ShivaCore: Frame-Freigabe-Selbsttest: kein Frame verfuegbar (uebersprungen)"
+            ),
+        }
+    }
+    {
+        let entries = shivacore::security::KERNEL_AUDIT.entries();
+        let mut actions: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+        for entry in &entries {
+            if entry.action.starts_with("memory.") && !actions.contains(&entry.action.as_str()) {
+                actions.push(entry.action.as_str());
+            }
+        }
+        serial_println!(
+            "ShivaCore: Audit-Log nach Frame-Freigabe: {} Ereignisse, Kette {}, memory-Eintraege [{}]",
+            entries.len(),
+            if shivacore::security::audit_chain_intact() {
+                "intakt"
+            } else {
+                "GEBROCHEN"
+            },
+            actions.join(", ")
+        );
+    }
+
     serial_println!(
         "ShivaCore: USER-001 entering PID={} with timer preemption target PID={}",
         user_pid.0,
