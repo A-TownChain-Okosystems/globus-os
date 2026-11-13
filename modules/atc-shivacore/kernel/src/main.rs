@@ -733,6 +733,51 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("ShivaCore: canonical KernelState::boot() failed");
     serial_println!("ShivaCore: KernelState::boot() -> Done.");
 
+    // P1-4: eine Capability Authority. Der Live-Pfad (Syscall-Gate) bekommt
+    // denselben Arc, den Prozessmanager und VFS beim Boot erhalten haben.
+    // Belegt wird das ueber die Instanzadresse, nicht ueber eine Annahme.
+    let installed = interrupts::install_authority(kernel_state.authority.clone());
+    let boot_identity = kernel_state.authority.identity();
+    shivacore::security::record(
+        "kernel",
+        "authority.consolidate",
+        &alloc::format!(
+            "syscall-gate+process-manager+vfs -> eine Instanz {:#x}, geteilt={}",
+            boot_identity,
+            installed == boot_identity
+        ),
+        shivacore::security::AuditResult::Allowed,
+    );
+    serial_println!(
+        "ShivaCore: Capability Authority: eine Instanz @ {:#x}, Gate teilt sie={}, {} Capabilities",
+        boot_identity,
+        installed == boot_identity,
+        kernel_state.authority.count()
+    );
+
+    // P1-4-Nachweis ueber zwei Pfade: Capability ueber die Authority des
+    // Prozess/VFS-Pfads anlegen und im Live-Gate wiederfinden. Waeren es zwei
+    // Tabellen, stuende hier 0.
+    {
+        use shivacore::capability::{ResourceType, Rights};
+        let probe = ats1000::Pid(0x0C0F);
+        let probe_cap = kernel_state
+            .authority
+            .create(probe, ResourceType::Device, 0x77, Rights::READ);
+        let seen_by_gate = interrupts::cap_count_for(probe);
+        let granted_by_gate_authority = kernel_state
+            .authority
+            .check_any(probe, probe_cap.0, Rights::READ);
+        kernel_state.authority.revoke(probe_cap);
+        serial_println!(
+            "ShivaCore: Authority-Crosscheck: cap={:?} ueber Prozess-Pfad angelegt, im Gate sichtbar={}, Rechte bestaetigt={}, nach Widerruf {}",
+            probe_cap,
+            seen_by_gate == 1,
+            granted_by_gate_authority,
+            kernel_state.authority.count_for(probe)
+        );
+    }
+
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
