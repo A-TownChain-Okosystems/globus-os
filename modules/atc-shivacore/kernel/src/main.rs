@@ -99,6 +99,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 summary.x2apic_processors,
                 summary.unknown_entries
             );
+
+            // Wie viele CPUs sind aktiv? Die Frame-Freigabe prueft das, weil
+            // ohne IPI-Shootdown niemand beweisen kann, dass ein anderer
+            // Prozessor den Adressraum nicht mehr benutzt.
+            crate::interrupts::set_online_cpus(summary.processors_enabled as usize);
             if summary.local_apic_address == 0 {
                 shivacore::apic::LAPIC_DEFAULT_BASE
             } else {
