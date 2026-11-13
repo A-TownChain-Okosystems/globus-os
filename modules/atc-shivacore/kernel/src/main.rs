@@ -817,6 +817,39 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         );
     }
 
+    // P1-3C: Kanal- und Handle-Bestand vor dem Ring-3-Sprung. Kanal 0x10
+    // gehoert nur Init (zwei Nachrichten, ein Wartender), Kanal 0x11 ist mit
+    // PID 1002 geteilt. Beim Exit muss der eine sterben und der andere fuer
+    // 1002 offen bleiben.
+    {
+        use shivacore::ipc_lifecycle::{HandleKind, CHANNELS, HANDLES};
+        let init = ats1000::Pid(1000);
+        {
+            let mut channels = CHANNELS.lock();
+            channels.open(0x10, init);
+            channels.enqueue(0x10, 0xA1);
+            channels.enqueue(0x10, 0xA2);
+            channels.wait(0x10, ats1000::Pid(1001));
+            channels.open(0x11, init);
+            channels.attach(0x11, ats1000::Pid(1002));
+            channels.enqueue(0x11, 0xB1);
+        }
+        {
+            let mut handles = HANDLES.lock();
+            handles.open(init, HandleKind::Channel, 0x10);
+            handles.open(init, HandleKind::Channel, 0x11);
+            handles.open(init, HandleKind::Process, 1001);
+        }
+        let (open, shared, messages) = CHANNELS.lock().snapshot();
+        serial_println!(
+            "ShivaCore: IPC-Bestand vor Ring 3: {} Kanaele ({} geteilt, {} Nachrichten), {} Handles fuer PID=1000",
+            open,
+            shared,
+            messages,
+            HANDLES.lock().count_for(init)
+        );
+    }
+
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
