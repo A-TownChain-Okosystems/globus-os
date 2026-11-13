@@ -299,6 +299,36 @@ pub fn init_user_scheduler(
 ///
 /// Muss laufen, bevor ein Payload gebaut wird, in dem die Nummer als Immediate
 /// steckt: die Nummer vergibt die Tabelle, nicht der Payload.
+/// Installiert die eine Capability Authority im Live-Gate.
+///
+/// Vorher baute sich das Gate beim ersten Syscall seine eigene Tabelle; der
+/// Prozessmanager und der VFS hatten je eine weitere. Damit entschied keine
+/// Instanz allein. Der Kernel ruft diese Funktion direkt nach
+/// `KernelState::boot()` auf und uebergibt seine Authority.
+pub fn install_authority(authority: alloc::sync::Arc<shivacore::cap_authority::CapabilityAuthority>) -> usize {
+    let identity = authority.identity();
+    let mut guard = SYSCALL_GATE.lock();
+    *guard = Some(SyscallGate::with_authority(authority));
+    identity
+}
+
+/// Identitaet der im Live-Gate installierten Authority (Adresse der Instanz).
+pub fn authority_identity() -> Option<usize> {
+    SYSCALL_GATE
+        .lock()
+        .as_ref()
+        .map(|gate| gate.authority().identity())
+}
+
+/// Anzahl der Capabilities eines Prozesses, gelesen ueber das Live-Gate.
+pub fn cap_count_for(pid: Pid) -> usize {
+    SYSCALL_GATE
+        .lock()
+        .as_ref()
+        .map(|gate| gate.cap_count_for(pid))
+        .unwrap_or(0)
+}
+
 /// Exit-Cleanup: widerruft alle Capabilities eines beendeten Prozesses am
 /// Syscall-Gate und leert die TLB.
 ///
@@ -807,6 +837,23 @@ fn handle_exception(
         Err(_) => 0,
     };
     let recorded = FAULT_COUNTERS.lock().record(origin, action);
+
+    // Audit fuer Seitenfehler (und die beiden anderen Ausnahmen): Vektor,
+    // Adresse, Herkunft und ob der Prozess beendet wurde. Vorher stand das nur
+    // auf der seriellen Konsole und war damit nicht Teil der Kette.
+    shivacore::security::record(
+        "kernel",
+        "fault.exception",
+        &alloc::format!(
+            "kind={} addr={:#x} user={} terminated={} kernel_faults={}",
+            kind.name(),
+            address,
+            report.from_user,
+            recorded.terminated,
+            recorded.kernel_faults
+        ),
+        shivacore::security::AuditResult::Error,
+    );
 
     match action {
         shivacore::fault::FaultAction::TerminateProcess => {
