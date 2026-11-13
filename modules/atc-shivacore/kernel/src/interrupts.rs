@@ -465,6 +465,57 @@ pub fn cleanup_process(pid: Pid) -> usize {
             None => 0,
         }
     };
+    // P1-3C: Kanaele und Handles gehoeren zum Prozess wie seine Capabilities.
+    // Ein Kanal wird nur zerstoert, wenn dieser Prozess der letzte Teilnehmer
+    // war; sonst faellt nur seine Referenz weg.
+    let ipc = shivacore::ipc_lifecycle::release_process(pid);
+    if ipc.channels_attempted > 0 || ipc.handles_revoked > 0 {
+        shivacore::security::record(
+            "kernel",
+            "ipc.release",
+            &alloc::format!(
+                "pid={:?} kanaele_zerstoert={} kanaele_weitergereicht={} nachrichten_verworfen={} wartende_abgebrochen={}",
+                pid,
+                ipc.channels_destroyed,
+                ipc.channels_released,
+                ipc.messages_discarded,
+                ipc.waiters_aborted
+            ),
+            shivacore::security::AuditResult::Allowed,
+        );
+        shivacore::security::record(
+            "kernel",
+            "handle.revoke",
+            &alloc::format!(
+                "pid={:?} handes_widerrufen={} veraltet_abgewiesen={}",
+                pid, ipc.handles_revoked, ipc.stale_handles_denied
+            ),
+            shivacore::security::AuditResult::Allowed,
+        );
+        serial_println!(
+            "ShivaCore: IPC-Cleanup PID={:?}: {} Kanaele geprueft, {} zerstoert, {} weitergereicht, {} Nachrichten verworfen, {} Wartende abgebrochen",
+            pid,
+            ipc.channels_attempted,
+            ipc.channels_destroyed,
+            ipc.channels_released,
+            ipc.messages_discarded,
+            ipc.waiters_aborted
+        );
+        serial_println!(
+            "ShivaCore: Handle-Cleanup PID={:?}: {} Handles widerrufen, {} veraltete Zugriffe abgewiesen",
+            pid,
+            ipc.handles_revoked,
+            ipc.stale_handles_denied
+        );
+        let (open_ch, shared_ch, messages) = shivacore::ipc_lifecycle::CHANNELS.lock().snapshot();
+        serial_println!(
+            "ShivaCore: IPC nach Exit: {} Kanaele offen, davon {} geteilt, {} Nachrichten erhalten, Doppelschliessen abgewiesen={}",
+            open_ch,
+            shared_ch,
+            messages,
+            ipc.double_close_blocked
+        );
+    }
     // TLB leeren: die Rechte sind weg, die uebersetzten Eintraege duerfen nicht
     // als Rest im Adressuebersetzer stehen bleiben.
     x86_64::instructions::tlb::flush_all();
