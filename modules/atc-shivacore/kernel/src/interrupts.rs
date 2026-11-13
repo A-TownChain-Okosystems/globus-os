@@ -242,6 +242,12 @@ static USER_SCHEDULER: Mutex<Option<UserScheduler>> = Mutex::new(None);
 static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
 
 /// Hinterlegt die Seitentabelle eines Prozesses im laufenden Scheduler.
+/// Setzt die Seitentabelle eines bereits eingetragenen Prozesses nach.
+///
+/// Das Aufziehen benutzt diesen Weg nicht mehr (dort wird alles vor der
+/// Veroeffentlichung gesetzt); er bleibt fuer spaetere Umschaltungen etwa nach
+/// einem Programmwechsel.
+#[allow(dead_code)]
 pub fn set_process_cr3(pid: crate::ats1000::Pid, cr3: u64) {
     if let Some(scheduler) = USER_SCHEDULER.lock().as_mut() {
         scheduler.set_cr3(pid, cr3);
@@ -253,6 +259,10 @@ pub fn init_user_scheduler(
     second: &UserContext,
     third: &UserContext,
     fourth: Option<&UserContext>,
+    cr3_first: (crate::ats1000::Pid, u64),
+    cr3_second: (crate::ats1000::Pid, u64),
+    cr3_third: (crate::ats1000::Pid, u64),
+    cr3_fourth: (crate::ats1000::Pid, u64),
 ) {
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
@@ -262,6 +272,15 @@ pub fn init_user_scheduler(
     // optional: ein Image ohne Verzeichnis hat nur drei Prozesse.
     if let Some(fourth) = fourth {
         scheduler.add_process(fourth.pid, fourth, 0);
+    }
+    // Jede eigene Tabelle eintragen, BEVOR der Scheduler sichtbar wird. Ein
+    // Tick, der zwischen Eintragung und CR3-Wert plant, wuerde einen Prozess
+    // ohne Tabelle auswaehlen; deshalb gibt es dieses Fenster nicht mehr.
+    for (pid, cr3) in [cr3_first, cr3_second, cr3_third] {
+        scheduler.set_cr3(pid, cr3);
+    }
+    if fourth.is_some() {
+        scheduler.set_cr3(cr3_fourth.0, cr3_fourth.1);
     }
     let _ = scheduler.schedule(None);
     *USER_SCHEDULER.lock() = Some(scheduler);
@@ -1384,37 +1403,18 @@ fn pump_input_into_channel() {
     if !INPUT_CONSUMER_USERSPACE.load(Ordering::Relaxed) {
         return;
     }
-    let mut events = [0u64; 8];
-    let mut count = 0usize;
-    {
-        let mut queue = match INPUT_QUEUE.try_lock() {
-            Some(queue) => queue,
-            // Der Trap-Pfad haelt die Sperre: dann bleibt das Ereignis im FIFO
-            // und wird im naechsten Tick gepumpt, statt hier zu warten.
-            None => return,
-        };
-        while count < events.len() {
-            match queue.pop() {
-                Some(event) => {
-                    events[count] = event.packed();
-                    count += 1;
-                }
-                None => break,
-            }
-        }
-    }
-    if count == 0 {
-        return;
-    }
-    let mut channels = shivacore::ipc_lifecycle::CHANNELS.lock();
-    let mut delivered = 0usize;
-    for word in &events[..count] {
-        if channels.deliver(shivacore::syscall::KERNEL_INPUT_CHANNEL, *word) {
-            delivered += 1;
-        }
-    }
-    let _ = delivered;
-    drop(channels);
+    // Das FIFO nur versuchen: haelt der Trap-Pfad die Sperre, bleibt das
+    // Ereignis liegen und wird im naechsten Tick gepumpt. Das Zaehlen
+    // uebernimmt `pump_from_ingress` (belegte Runde vs. zugestellt).
+    let mut queue = match INPUT_QUEUE.try_lock() {
+        Some(queue) => queue,
+        None => return,
+    };
+    shivacore::ipc_lifecycle::pump_from_ingress(
+        &mut queue,
+        shivacore::syscall::KERNEL_INPUT_CHANNEL,
+        8,
+    );
 }
 
 /// Holt abgelegte Tastenereignisse ab und protokolliert sie.
@@ -1707,6 +1707,15 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
                         actions.push(entry.action.as_str());
                     }
                 }
+                let (rounds, busy, delivered, backed_up) =
+                    shivacore::ipc_lifecycle::pump_stats();
+                serial_println!(
+                    "ShivaCore: IPC-Pumpe: {} Versuche, {} wegen belegter Sperre uebersprungen, {} zugestellt, {} Stau",
+                    rounds,
+                    busy,
+                    delivered,
+                    backed_up
+                );
                 serial_println!(
                     "ShivaCore: Audit nach Live-IPC: {} Ereignisse, Kette {}, [{}]",
                     entries.len(),
