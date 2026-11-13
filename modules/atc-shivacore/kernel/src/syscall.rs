@@ -185,9 +185,14 @@ impl SyscallDispatcher {
                 // Pufferkopie nicht; das Wort ist dafuer eindeutig.
                 let channel = request.arg0;
                 let payload = request.arg1;
-                let outcome = crate::ipc_lifecycle::CHANNELS
-                    .lock()
-                    .send(pid, channel, payload);
+                // Sperre nur fuer die Operation selbst: die Audit-Aufzeichnung
+                // kommt danach, sonst koennte ein Tick, der die Kanalsperre
+                // nicht bekommt, im Audit-Lock warten und den Prozessor
+                // blockieren.
+                let outcome = {
+                    let mut channels = crate::ipc_lifecycle::CHANNELS.lock();
+                    channels.send(pid, channel, payload)
+                };
                 match outcome {
                     Ok(()) => {
                         crate::security::record(
@@ -247,7 +252,10 @@ impl SyscallDispatcher {
                 // P1-3D: Auch der Kernel-Eingabekanal laeuft ueber die
                 // Registry — kein Sonderpfad, keine zweite Kanalverwaltung.
                 let channel = request.arg0;
-                let outcome = crate::ipc_lifecycle::CHANNELS.lock().recv(pid, channel);
+                let outcome = {
+                    let mut channels = crate::ipc_lifecycle::CHANNELS.lock();
+                    channels.recv(pid, channel)
+                };
                 match outcome {
                     Ok(word) => {
                         crate::security::record(
@@ -333,6 +341,11 @@ impl SyscallDispatcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Zwei Tests teilen sich den globalen Kanal 1. Damit ihre Zusicherungen
+    /// nicht von der Reihenfolge parallel laufender Testfaeden abhaengen,
+    /// nehmen sie diese Sperre. (Kein Kernel-Zustand, nur Testordnung.)
+    static KANAL_EINS: spin::Mutex<()> = spin::Mutex::new(());
 
     fn pid(n: u32) -> Pid {
         Pid(n)
@@ -535,6 +548,7 @@ mod tests {
 
     #[test]
     fn kernel_input_channel_hands_out_the_next_event() {
+        let _serial = KANAL_EINS.lock();
         use crate::input_queue::InputEvent;
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
@@ -576,6 +590,7 @@ mod tests {
 
     #[test]
     fn empty_kernel_input_channel_reports_nothing() {
+        let _serial = KANAL_EINS.lock();
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
         let cap = table.create(
