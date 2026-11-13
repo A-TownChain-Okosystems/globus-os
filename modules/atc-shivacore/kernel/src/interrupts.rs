@@ -1179,6 +1179,19 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
                             reused,
                             allocator.double_free_blocked()
                         );
+                        for (pid, registered, released, rejected) in
+                            shivacore::reclaim::RECLAIMER.take_last_report()
+                        {
+                            serial_println!(
+                                "ShivaCore: Ressourcenbilanz PID={}: Frames {}/{} freigegeben, {} abgewiesen, Freiliste={}, freigegeben gesamt={}",
+                                pid,
+                                released,
+                                registered,
+                                rejected,
+                                allocator.free_list_len(),
+                                allocator.freed_total()
+                            );
+                        }
                         let entries = shivacore::security::KERNEL_AUDIT.entries();
                         let mut actions: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
                         for entry in &entries {
