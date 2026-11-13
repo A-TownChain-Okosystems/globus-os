@@ -15,7 +15,8 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 // ─── Capability-Integration ───────────────────────────────────────────────
-use crate::capability::{CapabilityTable, Rights};
+use crate::cap_authority::CapabilityAuthority;
+use crate::capability::Rights;
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
@@ -193,11 +194,12 @@ pub struct Vfs {
     root_inode: u64,
     handles: BTreeMap<u64, FileHandle>, // fd -> handle
     next_fd: u64,
-    caps: Arc<Mutex<CapabilityTable>>,
+    /// Die zentrale Authority (SSOT) — der VFS entscheidet keine Rechte selbst.
+    caps: Arc<CapabilityAuthority>,
 }
 
 impl Vfs {
-    pub fn new(caps: Arc<Mutex<CapabilityTable>>) -> Self {
+    pub fn new(caps: Arc<CapabilityAuthority>) -> Self {
         let mut vfs = Vfs {
             inodes: BTreeMap::new(),
             next_inode: 1,
@@ -686,7 +688,7 @@ mod tests {
     use crate::capability::ResourceType;
 
     fn setup_vfs() -> Vfs {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         // Grant full rights to process 1
         {
             let mut table = caps.lock();
@@ -705,7 +707,7 @@ mod tests {
         Vfs::new(caps)
     }
 
-    fn grant_full_caps(caps: &Arc<Mutex<CapabilityTable>>, pid: u64) -> u64 {
+    fn grant_full_caps(caps: &Arc<CapabilityAuthority>, pid: u64) -> u64 {
         let mut table = caps.lock();
         let cap_id = table.create(
             Pid(pid as u32),
@@ -736,7 +738,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_and_list() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -758,7 +760,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_nested_path() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -774,7 +776,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_already_exists() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -785,7 +787,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_parent_not_dir() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -796,7 +798,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_parent_not_found() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -806,7 +808,7 @@ mod tests {
 
     #[test]
     fn test_rmdir_empty() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -817,7 +819,7 @@ mod tests {
 
     #[test]
     fn test_rmdir_not_empty() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -829,7 +831,7 @@ mod tests {
 
     #[test]
     fn test_rmdir_root_fails() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -841,7 +843,7 @@ mod tests {
 
     #[test]
     fn test_create_and_stat() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -854,7 +856,7 @@ mod tests {
 
     #[test]
     fn test_create_file_already_exists() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -865,7 +867,7 @@ mod tests {
 
     #[test]
     fn test_open_write_read() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -885,7 +887,7 @@ mod tests {
 
     #[test]
     fn test_open_create_mode() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -907,7 +909,7 @@ mod tests {
 
     #[test]
     fn test_append_mode() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -927,7 +929,7 @@ mod tests {
 
     #[test]
     fn test_seek_and_partial_read() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -947,7 +949,7 @@ mod tests {
 
     #[test]
     fn test_read_past_end() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -964,7 +966,7 @@ mod tests {
 
     #[test]
     fn test_close_and_reopen() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -979,7 +981,7 @@ mod tests {
 
     #[test]
     fn test_open_directory_fails() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -990,7 +992,7 @@ mod tests {
 
     #[test]
     fn test_remove_file() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1001,7 +1003,7 @@ mod tests {
 
     #[test]
     fn test_remove_file_closes_handles() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1019,7 +1021,7 @@ mod tests {
 
     #[test]
     fn test_create_and_read_symlink() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1036,7 +1038,7 @@ mod tests {
 
     #[test]
     fn test_symlink_already_exists() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1049,7 +1051,7 @@ mod tests {
 
     #[test]
     fn test_path_normalization() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1064,7 +1066,7 @@ mod tests {
 
     #[test]
     fn test_resolve_nonexistent() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let vfs = Vfs::new(caps);
         assert!(vfs.resolve("/does/not/exist").is_none());
     }
@@ -1073,7 +1075,7 @@ mod tests {
 
     #[test]
     fn test_mkdir_without_write_cap() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
 
         // Prozess 2 bekommt nur READ (kein WRITE)
@@ -1090,7 +1092,7 @@ mod tests {
 
     #[test]
     fn test_read_without_read_cap() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
 
         // Prozess 2 bekommt nur WRITE (kein READ)
@@ -1108,7 +1110,7 @@ mod tests {
 
     #[test]
     fn test_open_read_mode_with_only_write_cap() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
 
         let cap_write = {
@@ -1128,7 +1130,7 @@ mod tests {
 
     #[test]
     fn test_tree_display() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1146,7 +1148,7 @@ mod tests {
 
     #[test]
     fn test_stat_after_write() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1160,7 +1162,7 @@ mod tests {
 
     #[test]
     fn test_multiple_files_in_directory() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
@@ -1175,7 +1177,7 @@ mod tests {
 
     #[test]
     fn test_write_expands_file() {
-        let caps = Arc::new(Mutex::new(CapabilityTable::new()));
+        let caps = CapabilityAuthority::new_shared();
         let mut vfs = Vfs::new(caps.clone());
         let cap = grant_full_caps(&caps, 1);
 
