@@ -25,6 +25,7 @@ extern crate alloc;
 
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
+use core::sync::atomic::{AtomicU64, Ordering};
 use spin::Mutex;
 
 use crate::capability::Pid;
@@ -255,6 +256,15 @@ impl ChannelRegistry {
         }
     }
 
+    /// Hat der Kanal Platz fuer mindestens eine Nachricht? Grundlage fuer die
+    /// Pumpe, damit sie nicht in einen vollen Kanal hineinliest.
+    pub fn has_room(&self, id: u64) -> bool {
+        match self.channels.get(&id) {
+            Some(state) => !state.closed && state.pending.len() < state.capacity,
+            None => false,
+        }
+    }
+
     pub fn pending_of(&mut self, id: u64) -> Option<usize> {
         self.channels.get(&id).map(|s| s.pending.len())
     }
@@ -473,6 +483,89 @@ impl HandleTable {
     }
 }
 
+/// Zaehler der Geraete-Pumpe. Sie belegen, dass ein belegter Kanal nicht
+/// blockiert, sondern im naechsten Tick wieder versucht wird.
+pub static PUMP_ROUNDS: AtomicU64 = AtomicU64::new(0);
+pub static PUMP_BUSY_ROUNDS: AtomicU64 = AtomicU64::new(0);
+pub static PUMP_DELIVERED: AtomicU64 = AtomicU64::new(0);
+pub static PUMP_KEPT_BACK: AtomicU64 = AtomicU64::new(0);
+
+/// Ergebnis eines Pumpversuchs.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct PumpReport {
+    /// In den Kanal uebernommene Ereignisse.
+    pub pumped: usize,
+    /// Die Kanalsperre war belegt: nichts angefasst, naechster Tick versucht es
+    /// erneut. Kein Warten, kein Verlust.
+    pub busy: bool,
+    /// Im Geraete-FIFO zurueckgelassen, weil der Kanal voll war.
+    pub kept_back: usize,
+}
+
+/// Schiebt Ereignisse aus dem Geraete-FIFO in den Kanal der Registry.
+///
+/// Zwei Regeln, die den Tick-Pfad sicher machen:
+/// 1. `try_lock` statt `lock` — ein Tick darf nie auf eine Sperre warten.
+/// 2. Vor dem Herausnehmen wird geprueft, ob der Kanal Platz hat. Dadurch
+///    bleibt die Reihenfolge erhalten und nichts geht verloren; volle Kanaele
+///    stauen in das FIFO zurueck.
+pub fn pump_from_ingress(
+    ingress: &mut crate::input_queue::InputQueue,
+    channel: u64,
+    budget: usize,
+) -> PumpReport {
+    PUMP_ROUNDS.fetch_add(1, Ordering::Relaxed);
+    let mut channels = match CHANNELS.try_lock() {
+        Some(channels) => channels,
+        None => {
+            PUMP_BUSY_ROUNDS.fetch_add(1, Ordering::Relaxed);
+            return PumpReport {
+                pumped: 0,
+                busy: true,
+                kept_back: ingress.len(),
+            };
+        }
+    };
+    let mut report = PumpReport::default();
+    let mut used = 0usize;
+    while used < budget && channels.has_room(channel) {
+        match ingress.pop() {
+            Some(event) => {
+                if channels.deliver(channel, event.packed()) {
+                    report.pumped += 1;
+                    used += 1;
+                } else {
+                    // Kann nur passieren, wenn sich zwischen Pruefung und
+                    // Zustellung etwas geaendert hat; dann nicht verwerfen,
+                    // sondern zuruecklegen und im naechsten Tick weiter.
+                    ingress.push(event);
+                    report.kept_back += 1;
+                    break;
+                }
+            }
+            None => break,
+        }
+    }
+    report.kept_back += ingress.len();
+    if report.pumped > 0 {
+        PUMP_DELIVERED.fetch_add(report.pumped as u64, Ordering::Relaxed);
+    }
+    if report.kept_back > 0 {
+        PUMP_KEPT_BACK.fetch_add(1, Ordering::Relaxed);
+    }
+    report
+}
+
+/// Momentaufnahme der Pumpe: (Versuche, belegte Versuche, zugestellt, Stau).
+pub fn pump_stats() -> (u64, u64, u64, u64) {
+    (
+        PUMP_ROUNDS.load(Ordering::Relaxed),
+        PUMP_BUSY_ROUNDS.load(Ordering::Relaxed),
+        PUMP_DELIVERED.load(Ordering::Relaxed),
+        PUMP_KEPT_BACK.load(Ordering::Relaxed),
+    )
+}
+
 /// Die eine Instanz fuer Kanal-Lebensdauer.
 pub static CHANNELS: Mutex<ChannelRegistry> = Mutex::new(ChannelRegistry::new());
 
@@ -677,6 +770,85 @@ mod tests {
         reg.release(pid(2));
         assert_eq!(reg.recv(pid(2), 0x46), Err(LiveIpcError::UnknownChannel));
         assert_eq!(reg.send(pid(2), 0x46, 1), Err(LiveIpcError::UnknownChannel));
+    }
+
+    fn ingress(n: u64) -> crate::input_queue::InputQueue {
+        let mut queue = crate::input_queue::InputQueue::new();
+        for i in 0..n {
+            queue.push(crate::input_queue::InputEvent::new(0x1E + i as u8, Some('a')));
+        }
+        queue
+    }
+
+    #[test]
+    fn pump_delivers_in_order_up_to_the_channel_capacity() {
+        CHANNELS.lock().open_with(0x50, pid(1), 2);
+        let mut queue = ingress(3);
+        let report = pump_from_ingress(&mut queue, 0x50, 8);
+        assert_eq!(report.pumped, 2);
+        assert_eq!(report.kept_back, 1, "das dritte Ereignis staut zurueck");
+        assert!(!report.busy);
+        // Reihenfolge bleibt: FIFO, nicht Stapel.
+        let a = CHANNELS.lock().recv(pid(1), 0x50).unwrap();
+        let b = CHANNELS.lock().recv(pid(1), 0x50).unwrap();
+        assert_ne!(a, b);
+        assert_eq!(queue.len(), 1);
+    }
+
+    #[test]
+    fn pump_skips_a_busy_channel_without_losing_anything() {
+        CHANNELS.lock().open_with(0x51, pid(1), 8);
+        let mut queue = ingress(2);
+        let guard = CHANNELS.lock();
+        let report = pump_from_ingress(&mut queue, 0x51, 8);
+        assert!(report.busy, "belegte Sperre wird gemeldet, nicht abgewartet");
+        assert_eq!(report.pumped, 0);
+        assert_eq!(queue.len(), 2, "nichts entnommen, nichts verloren");
+        drop(guard);
+        // Naechster Tick holt genau diese Ereignisse nach.
+        let again = pump_from_ingress(&mut queue, 0x51, 8);
+        assert_eq!(again.pumped, 2);
+        assert_eq!(queue.len(), 0);
+        assert_eq!(
+            CHANNELS.lock().pending_of(0x51),
+            Some(2),
+            "beide Ereignisse liegen im Kanal"
+        );
+    }
+
+    #[test]
+    fn pump_does_not_feed_an_unknown_or_dead_channel() {
+        let mut queue = ingress(1);
+        let report = pump_from_ingress(&mut queue, 0x5F, 8);
+        assert_eq!(report.pumped, 0);
+        assert_eq!(queue.len(), 1, "unbekannter Kanal bekommt nichts");
+    }
+
+    #[test]
+    fn recv_and_attach_during_close_do_not_resurrect_a_channel() {
+        CHANNELS.lock().open(0x52, pid(1));
+        CHANNELS.lock().attach(0x52, pid(2));
+        CHANNELS.lock().send(pid(1), 0x52, 7).unwrap();
+        assert_eq!(CHANNELS.lock().close(0x52, pid(1)), CloseOutcome::Kept);
+        // Der Kanal lebt fuer 2 weiter, die Nachricht ist noch da.
+        assert_eq!(CHANNELS.lock().recv(pid(2), 0x52), Ok(7));
+        assert_eq!(CHANNELS.lock().close(0x52, pid(2)), CloseOutcome::Destroyed);
+        assert_eq!(
+            CHANNELS.lock().attach(0x52, pid(3)),
+            false,
+            "ein toter Kanal nimmt niemanden mehr auf"
+        );
+    }
+
+    #[test]
+    fn exit_keeps_the_message_for_the_remaining_participant() {
+        CHANNELS.lock().open(0x53, pid(1));
+        CHANNELS.lock().attach(0x53, pid(2));
+        CHANNELS.lock().send(pid(1), 0x53, 0xAA).unwrap();
+        let report = CHANNELS.lock().release(pid(1));
+        assert_eq!((report.destroyed, report.released), (0, 1));
+        assert_eq!(CHANNELS.lock().recv(pid(2), 0x53), Ok(0xAA));
+        assert_eq!(CHANNELS.lock().recv(pid(1), 0x53), Err(LiveIpcError::NotParticipant));
     }
 
     #[test]
