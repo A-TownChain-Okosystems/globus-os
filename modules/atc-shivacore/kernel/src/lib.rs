@@ -33,6 +33,7 @@ pub mod hal;
 pub mod input_queue;
 pub mod ioapic;
 pub mod ipc;
+pub mod ipc_lifecycle;
 pub mod keccak;
 pub mod irq;
 pub mod irq_bridge;
