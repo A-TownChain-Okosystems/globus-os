@@ -1487,4 +1487,36 @@ mod tests {
         }
         assert!(sys.scheduler.timer_ticks() >= 20);
     }
+
+    #[test]
+    fn reap_zombies_removes_zombie_entries() {
+        // Ein beendeter Prozess bleibt als Zombie stehen, bis jemand einsammelt.
+        // Ohne diesen Pfad waechst die Prozessliste monoton.
+        let mut scheduler = UserScheduler::new();
+        let pid = Pid(0x0C1E);
+        let context = UserContext {
+            pid,
+            privilege: PrivilegeLevel::User,
+            rip: 0x40_0000,
+            rsp: 0x7FFF_F000,
+            rbp: 0x7FFF_F000,
+            rax: 0,
+            cs: 0x1B,
+            ss: 0x23,
+            rflags: 0x202,
+            addr_space: UserAddressSpace::default(),
+            exit_code: None,
+        };
+        scheduler.add_process(pid, &context, 0);
+        assert_eq!(scheduler.entries().len(), 1);
+        scheduler.exit_process(pid, 7, None);
+        assert_eq!(scheduler.entries().len(), 1);
+        assert!(scheduler.entries()[0].state.is_zombie());
+
+        let reaped = scheduler.reap_zombies();
+        assert_eq!(reaped, alloc::vec![(pid, 7)]);
+        assert_eq!(scheduler.entries().len(), 0);
+        // Zweiter Aufruf sammelt nichts mehr ein: der Pfad ist idempotent.
+        assert!(scheduler.reap_zombies().is_empty());
+    }
 }
