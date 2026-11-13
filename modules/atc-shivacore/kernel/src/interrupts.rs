@@ -1150,7 +1150,8 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     // Konsument der Eingabewarteschlange. Bewusst hier und nicht im
     // Tastatur-Handler: der Handler soll nur ablegen. Acht Ereignisse pro Tick
     // reichen fuer jede Tippgeschwindigkeit und begrenzen die Arbeit im IRQ.
-    drain_input_queue();
+    pump_input_into_channel();
+        drain_input_queue();
     // ACK-Fristen: haengt ein Subskribent, gibt der Kernel die Line frei und
     // zaehlt die verpasste Quittung. Ohne diesen Schritt waere "maskiert bis
     // ACK" fuer einen haengenden Prozess eine dauerhafte Sperre.
@@ -1370,6 +1371,50 @@ fn acknowledge_timer_irq() {
                 .notify_end_of_interrupt(InterruptIndex::Timer.as_u8());
         }
     }
+}
+
+/// Pumpt das Geraete-FIFO in den Kanal der Registry.
+///
+/// Der Tastatur-IRQ legt weiterhin in `INPUT_QUEUE` ab: das ist die
+/// Hardware-Strecke, kein Kanal. Ab hier gehoeren Nachrichten, Teilnehmer und
+/// Lebensdauer der Registry. Ohne Nutzerkonsument protokolliert der Kernel
+/// selbst (`drain_input_queue`), deshalb wird nur gepumpt, wenn ein
+/// Ring-3-Konsument angemeldet ist.
+fn pump_input_into_channel() {
+    if !INPUT_CONSUMER_USERSPACE.load(Ordering::Relaxed) {
+        return;
+    }
+    let mut events = [0u64; 8];
+    let mut count = 0usize;
+    {
+        let mut queue = match INPUT_QUEUE.try_lock() {
+            Some(queue) => queue,
+            // Der Trap-Pfad haelt die Sperre: dann bleibt das Ereignis im FIFO
+            // und wird im naechsten Tick gepumpt, statt hier zu warten.
+            None => return,
+        };
+        while count < events.len() {
+            match queue.pop() {
+                Some(event) => {
+                    events[count] = event.packed();
+                    count += 1;
+                }
+                None => break,
+            }
+        }
+    }
+    if count == 0 {
+        return;
+    }
+    let mut channels = shivacore::ipc_lifecycle::CHANNELS.lock();
+    let mut delivered = 0usize;
+    for word in &events[..count] {
+        if channels.deliver(shivacore::syscall::KERNEL_INPUT_CHANNEL, *word) {
+            delivered += 1;
+        }
+    }
+    let _ = delivered;
+    drop(channels);
 }
 
 /// Holt abgelegte Tastenereignisse ab und protokolliert sie.
@@ -1604,7 +1649,7 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
 
     let entries = SYSCALL_ENTRIES.fetch_add(1, Ordering::Relaxed) + 1;
     let response = match SYSCALL_GATE.lock().as_mut() {
-        Some(gate) => gate.handle(pid, request, &mut *INPUT_QUEUE.lock()),
+        Some(gate) => gate.handle(pid, request),
         None => {
             reply(frame, 0, Some(libshivacore::AbiError::EndpointUnavailable));
             return;
@@ -1651,6 +1696,28 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
                 fallbacks,
                 dropped
             );
+            // P1-3D: Der Nachweis fuer den Audit-Pfad entsteht hier, nicht im
+            // Selbsttest. Genau einmal, damit der Log nicht bei jedem
+            // Tastendruck eine Zusammenfassung traegt.
+            if delivered == 1 {
+                let entries = shivacore::security::KERNEL_AUDIT.entries();
+                let mut actions: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+                for entry in &entries {
+                    if !actions.contains(&entry.action.as_str()) {
+                        actions.push(entry.action.as_str());
+                    }
+                }
+                serial_println!(
+                    "ShivaCore: Audit nach Live-IPC: {} Ereignisse, Kette {}, [{}]",
+                    entries.len(),
+                    if shivacore::security::audit_chain_intact() {
+                        "intakt"
+                    } else {
+                        "GEBROCHEN"
+                    },
+                    actions.join(", ")
+                );
+            }
         } else {
             serial_println!(
                 "ShivaCore: Tastenereignis an Ring 3: Nr={} PID={} Scancode {:#04X} [Bruecke {}, Rueckfall {}, verworfen {}]",
