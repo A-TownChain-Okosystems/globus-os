@@ -329,6 +329,80 @@ pub fn cap_count_for(pid: Pid) -> usize {
         .unwrap_or(0)
 }
 
+/// Anzahl der beim Boot aktivierten CPUs. Die Freigabe darf nur stattfinden,
+/// wenn kein anderer Prozessor den Adressraum noch benutzt; ohne IPI-Shootdown
+/// ist das nur bei einer CPU sicher.
+static ONLINE_CPUS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(1);
+
+pub fn set_online_cpus(count: usize) {
+    ONLINE_CPUS.store(count.max(1), Ordering::Release);
+    shivacore::reclaim::set_online_cpus(count);
+}
+
+pub fn online_cpus() -> usize {
+    ONLINE_CPUS.load(Ordering::Acquire)
+}
+
+/// Beendet den aufrufenden Prozess aus einem Syscall heraus (P1-3B, echter
+/// Prozess-Exit).
+///
+/// Reihenfolge ist bindend: Capabilities widerrufen, TLB leeren, Prozess auf
+/// Zombie setzen, erst dann auf den naechsten umschalten. Das Reaping und die
+/// Frame-Freigabe passieren im Timer-Tick — der Syscall-Pfad schaltet keinen
+/// Speicher frei.
+fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
+    let revoked = cleanup_process(pid);
+    // Nach dem Wechsel weg von dieser Seitentabelle sind ihre Eintraege im TLB
+    // wertlos; der Wechsel selbst leert die nicht-globalen Eintraege. Das
+    // explizite Flush macht die Annahme sichtbar statt implizit.
+    x86_64::instructions::tlb::flush_all();
+    shivacore::security::record(
+        "kernel",
+        "process.exit",
+        &alloc::format!("pid={:?} code={} caps_widerrufen={}", pid, exit_code, revoked),
+        shivacore::security::AuditResult::Allowed,
+    );
+    serial_println!(
+        "ShivaCore: Exit-Syscall PID={:?} Code={} — {} Capabilities widerrufen, TLB geleert",
+        pid,
+        exit_code,
+        revoked
+    );
+
+    let next = {
+        let mut guard = USER_SCHEDULER.lock();
+        guard
+            .as_mut()
+            .and_then(|scheduler| scheduler.exit_process(pid, exit_code, None))
+    };
+    match next {
+        Some((next_pid, next)) => {
+            let cr3 = {
+                let mut guard = USER_SCHEDULER.lock();
+                guard.as_ref().and_then(|s| s.cr3_of(next_pid))
+            };
+            if let Some(cr3) = cr3 {
+                shivacore::addr_space::install_raw(cr3);
+            }
+            frame.apply_saved_context(&next);
+            serial_println!(
+                "ShivaCore: nach Exit von PID={:?} laeuft PID={} weiter",
+                pid,
+                next_pid.0
+            );
+        }
+        None => {
+            serial_println!(
+                "ShivaCore: Exit von PID={:?} — kein lauffaehiger Prozess mehr, Kernel haelt an",
+                pid
+            );
+            loop {
+                x86_64::instructions::hlt();
+            }
+        }
+    }
+}
+
 /// Reiht die Seitentabellen-Frames eines beendeten Prozesses zur Freigabe ein.
 fn engine_reclaim_queue(pid: Pid) {
     let queued = shivacore::reclaim::RECLAIMER.queue_process(pid);
@@ -1085,11 +1159,42 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
                     let freed = shivacore::reclaim::RECLAIMER
                         .drain_with(|frame| allocator.deallocate_frame(frame));
                     if freed > 0 {
+                        // Wiederbenutzung im Live-Pfad belegen, nicht nur im
+                        // Selbsttest: einen Frame holen und pruefen, ob er aus
+                        // der Freiliste kam (die Freiliste muss dabei kuerzer
+                        // werden; der Bump-Zeiger laesst sie unberuehrt).
+                        use x86_64::structures::paging::FrameAllocator;
+                        let list_before_probe = allocator.free_list_len();
+                        let probe = allocator.allocate_frame();
+                        let reused = probe.is_some() && allocator.free_list_len() < list_before_probe;
+                        if let Some(frame) = probe {
+                            // Zurueck auf die Freiliste: der Probe-Frame war
+                            // geliehen, nicht verbraucht.
+                            allocator.deallocate_frame(frame);
+                        }
                         serial_println!(
-                            "ShivaCore: Frame-Freigabe: {} Frames zurueckgegeben (Freiliste={}, Doppelfreigaben abgewiesen={})",
+                            "ShivaCore: Frame-Freigabe: {} Frames zurueckgegeben (Freiliste={}, Wiederbenutzung={}, Doppelfreigaben abgewiesen={})",
                             freed,
                             allocator.free_list_len(),
+                            reused,
                             allocator.double_free_blocked()
+                        );
+                        let entries = shivacore::security::KERNEL_AUDIT.entries();
+                        let mut actions: alloc::vec::Vec<&str> = alloc::vec::Vec::new();
+                        for entry in &entries {
+                            if !actions.contains(&entry.action.as_str()) {
+                                actions.push(entry.action.as_str());
+                            }
+                        }
+                        serial_println!(
+                            "ShivaCore: Audit nach Exit+Reclamation: {} Ereignisse, Kette {}, [{}]",
+                            entries.len(),
+                            if shivacore::security::audit_chain_intact() {
+                                "intakt"
+                            } else {
+                                "GEBROCHEN"
+                            },
+                            actions.join(", ")
                         );
                     }
                 }
@@ -1398,6 +1503,23 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         core::ptr::copy_nonoverlapping(block_ptr as *const u8, block_bytes.as_mut_ptr(), block_len);
     }
 
+    // Diagnose: den rohen Opcode mitloggen, wenn er weder Yield noch
+    // IpcReceive ist. So faellt ein Aufruf auf (z. B. Exit), der die Parser-
+    // Stufe nicht erreicht, statt still als InvalidSyscall zu enden.
+    {
+        let raw_opcode = u16::from_le_bytes([block_bytes[8], block_bytes[9]]);
+        if raw_opcode != libshivacore::Syscall::Yield.id()
+            && raw_opcode != libshivacore::Syscall::IpcReceive.id()
+        {
+            serial_println!(
+                "ShivaCore: Syscall-Rohopcode aus Ring 3: PID={} Opcode={:#06X} Laenge={}",
+                pid.0,
+                raw_opcode,
+                block_len
+            );
+        }
+    }
+
     let block = match libshivacore::SyscallBlock::parse(&block_bytes[..block_len]) {
         Ok(block) => block,
         Err(error) => {
@@ -1406,6 +1528,15 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         }
     };
     let request = SyscallRequest::from_block(&block);
+
+    // Freiwilliges Prozessende. Vor der Gate-Disposition abgefangen, weil der
+    // Gate diesen Opcode nicht kennt: er beendet den Aufrufer, statt ihm zu
+    // antworten. Danach laeuft der naechste Prozess im Rahmen dieses Traps.
+    if request.syscall_id == libshivacore::Syscall::Exit.id() {
+        reply(frame, 0, None);
+        exit_current_process(frame, pid, request.arg0 as i32);
+        return;
+    }
 
     let entries = SYSCALL_ENTRIES.fetch_add(1, Ordering::Relaxed) + 1;
     let response = match SYSCALL_GATE.lock().as_mut() {
