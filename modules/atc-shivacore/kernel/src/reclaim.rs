@@ -23,6 +23,11 @@
 //! bei `AddressSpace::create` frisch alloziert. Die Kernel-Haelfte wird durch
 //! Kopieren der Eintraege geerbt, nicht durch Teilen der Frames.
 
+// Dieses Modul braucht die x86_64-Paging-Typen. Ohne die Boot-Feature wird
+// die Kiste fuer andere Ziele gebaut (z. B. als Bibliothek des Boot-Crates);
+// dort existiert kein Seitentabellen-Kontext.
+#![cfg(feature = "x86-boot")]
+
 use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicUsize, Ordering};
