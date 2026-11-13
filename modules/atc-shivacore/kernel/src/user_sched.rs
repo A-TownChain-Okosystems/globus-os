@@ -836,6 +836,27 @@ mod tests {
         UserContext::new(Pid(pid), &bin, asp)
     }
 
+    // --- Kernel-Tick ---
+
+    /// Ein Tick, der den Kernel unterbrochen hat, zaehlt die Zeit weiter, weckt
+    /// Schlafende, wechselt aber keinen Prozess. Genau das verhindert, dass der
+    /// Tick mitten im Boot oder in einem Syscall den Kontext wechselt.
+    #[test]
+    fn kernel_tick_advances_time_without_switching() {
+        let mut sched = UserScheduler::new();
+        let first = make_context(1000);
+        let second = make_context(1001);
+        sched.add_process(first.pid, &first, 0);
+        sched.add_process(second.pid, &second, 0);
+        let start_pid = sched.current;
+        for _ in 0..4 {
+            sched.kernel_tick_saved(SavedContext::from_user_context(&first));
+        }
+        assert_eq!(sched.timer_ticks, 4, "Zeit laeuft weiter");
+        assert_eq!(sched.current, start_pid, "kein Wechsel aus dem Kernel");
+        assert_eq!(sched.preemptions, 0, "kein Wechsel, also keine Preemption");
+    }
+
     // --- IretFrame tests ---
 
     #[test]
