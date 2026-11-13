@@ -138,11 +138,16 @@ impl SyscallDispatcher {
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
+            x if x == Syscall::Exit.id() => Syscall::Exit,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
         match syscall {
             Syscall::Yield => SyscallResponse::ok(0),
+            // Der Trampolin faengt `Exit` vor der Disposition ab; hier steht
+            // nur, dass die Nummer bekannt ist. Ein Aufruf, der bis hierher
+            // kommt, wird nicht als stiller Erfolg gemeldet.
+            Syscall::Exit => SyscallResponse::err(AbiError::InvalidPayload),
             Syscall::IpcSend => {
                 if !self.check_capability(
                     pid,
