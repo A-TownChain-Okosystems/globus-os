@@ -329,6 +329,18 @@ pub fn cap_count_for(pid: Pid) -> usize {
         .unwrap_or(0)
 }
 
+/// Reiht die Seitentabellen-Frames eines beendeten Prozesses zur Freigabe ein.
+fn engine_reclaim_queue(pid: Pid) {
+    let queued = shivacore::reclaim::RECLAIMER.queue_process(pid);
+    if queued > 0 {
+        serial_println!(
+            "ShivaCore: Frame-Freigabe vorgemerkt: PID={:?} {} Frames",
+            pid,
+            queued
+        );
+    }
+}
+
 /// Selbsttest des Zombie-Reapings: beendet einen synthetischen Prozess und
 /// sammelt ihn ein. Belegt, dass der Pfad im Kernel-Binary existiert und wirkt.
 pub fn self_test_reap() -> (usize, usize, usize) {
@@ -1056,6 +1068,35 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
             reaped.len(),
             scheduler.entries().len()
         );
+    }
+
+    // P1-3B: Seitentabellen-Frames der eingesammelten Prozesse zur Freigabe
+    // anmelden. Die Freigabe selbst passiert verzoegert und ohne Warten: ist
+    // der Allocator belegt, bleibt der Auftrag fuer den naechsten Tick liegen.
+    if !reaped.is_empty() {
+        for (pid, _) in &reaped {
+            engine_reclaim_queue(*pid);
+        }
+    }
+    if shivacore::reclaim::RECLAIMER.pending_len() > 0 {
+        match crate::memory::FRAME_ALLOCATOR.try_lock() {
+            Some(mut slot) => {
+                if let Some(allocator) = slot.as_mut() {
+                    let freed = shivacore::reclaim::RECLAIMER
+                        .drain_with(|frame| allocator.deallocate_frame(frame));
+                    if freed > 0 {
+                        serial_println!(
+                            "ShivaCore: Frame-Freigabe: {} Frames zurueckgegeben (Freiliste={}, Doppelfreigaben abgewiesen={})",
+                            freed,
+                            allocator.free_list_len(),
+                            allocator.double_free_blocked()
+                        );
+                    }
+                }
+            }
+            // Allocator belegt: nicht blockieren, nur vormerken.
+            None => shivacore::reclaim::RECLAIMER.note_busy(),
+        }
     }
 
     let current_pid = scheduler.current_pid();
