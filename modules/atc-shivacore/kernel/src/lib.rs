@@ -22,6 +22,7 @@ pub mod allocator;
 pub mod apic;
 pub mod atcfs;
 pub mod ats1000;
+pub mod cap_authority;
 pub mod capability;
 pub mod cross_subsystem;
 pub mod diagnostics;
