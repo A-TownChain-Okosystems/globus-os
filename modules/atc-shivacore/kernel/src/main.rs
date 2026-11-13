@@ -801,6 +801,22 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         );
     }
 
+    // Fuer den Ressourcenbilanztest: Init bekommt vor dem Ring-3-Sprung eine
+    // echte Capability. Ohne sie waere "0 widerrufen" nicht von "nichts zu
+    // widerrufen" zu unterscheiden.
+    {
+        use shivacore::capability::{ResourceType, Rights};
+        let init_pid = ats1000::Pid(1000);
+        let cap = kernel_state
+            .authority
+            .create(init_pid, ResourceType::IpcChannel, 0x10, Rights::READ | Rights::WRITE);
+        serial_println!(
+            "ShivaCore: Init-Capability fuer die Bilanz: {:?} fuer PID=1000, im Gate sichtbar={}",
+            cap,
+            interrupts::cap_count_for(init_pid)
+        );
+    }
+
     // Real USER-001 smoke path: install executable user pages and enter CPL3
     // through IRETQ. The payload loops forever so timer IRQs can observe a
     // genuine ring-3 CPU context without executing privileged instructions.
@@ -841,30 +857,30 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         // schreibt das Abbild ueber die VIRTUELLE Adresse — ohne aktive
         // Zieltabelle landete es in der Boot-Tabelle und der Prozess saehe
         // seine eigenen Seiten nie.
-        let process_space = shivacore::addr_space::AddressSpace::create(
+        let mut process_space = shivacore::addr_space::AddressSpace::create(
             phys_mem_offset,
             &mut frame_allocator,
             &user_addr_space.mapped_regions(),
             boot_cr3_frame,
         )
         .expect("ShivaCore: kein Adressraum fuer PID 1000");
-        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
-        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
-        // Adressraums, freigegeben erst nach dem Prozessende.
+        process_space.install();
+        process_space
+            .map_binary(
+                &mut frame_allocator,
+                phys_mem_offset,
+                &user_binary,
+                &user_addr_space,
+            )
+            .expect("ShivaCore: USER-001 user page mapping failed");
+        // P1-3B: alle Frames dieses Adressraums anmelden — Wurzel, untere
+        // Tabellen und die vom Mapper geholten Nutzerseiten. Angemeldet wird
+        // nach dem Abbilden, sonst fehlen die Zwischentabellen, die der Mapper
+        // selbst anlegt.
         shivacore::reclaim::RECLAIMER.register_tables(
             shivacore::ats1000::Pid(1000),
-            process_space.table_frames(),
+            process_space.all_frames(),
         );
-        process_space.install();
-        let mut process_mapper = process_space.mapper(phys_mem_offset);
-        userspace::map_user_binary(
-            &mut process_mapper,
-            &mut frame_allocator,
-            phys_mem_offset,
-            &user_binary,
-            &user_addr_space,
-        )
-        .expect("ShivaCore: USER-001 user page mapping failed");
         cr3_first = process_space.frame().start_address().as_u64();
     }
     // W^X-Nachweis zur Laufzeit: die tatsaechlich programmierten PTE-Flags der
@@ -1007,30 +1023,30 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         ..user_binary_2
     };
     unsafe {
-        let process_space = shivacore::addr_space::AddressSpace::create(
+        let mut process_space = shivacore::addr_space::AddressSpace::create(
             phys_mem_offset,
             &mut frame_allocator,
             &user_addr_space_2.mapped_regions(),
             boot_cr3_frame,
         )
         .expect("ShivaCore: kein Adressraum fuer PID 1001");
-        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
-        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
-        // Adressraums, freigegeben erst nach dem Prozessende.
+        process_space.install();
+        process_space
+            .map_binary(
+                &mut frame_allocator,
+                phys_mem_offset,
+                &user_binary_2,
+                &user_addr_space_2,
+            )
+            .expect("ShivaCore: second USER-001 user page mapping failed");
+        // P1-3B: alle Frames dieses Adressraums anmelden — Wurzel, untere
+        // Tabellen und die vom Mapper geholten Nutzerseiten. Angemeldet wird
+        // nach dem Abbilden, sonst fehlen die Zwischentabellen, die der Mapper
+        // selbst anlegt.
         shivacore::reclaim::RECLAIMER.register_tables(
             shivacore::ats1000::Pid(1001),
-            process_space.table_frames(),
+            process_space.all_frames(),
         );
-        process_space.install();
-        let mut process_mapper = process_space.mapper(phys_mem_offset);
-        userspace::map_user_binary(
-            &mut process_mapper,
-            &mut frame_allocator,
-            phys_mem_offset,
-            &user_binary_2,
-            &user_addr_space_2,
-        )
-        .expect("ShivaCore: second USER-001 user page mapping failed");
         cr3_second = process_space.frame().start_address().as_u64();
     }
     let user_pid_2 = ats1000::Pid(1001);
@@ -1115,30 +1131,30 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         heap_size: 0x0010_0000,
     };
     unsafe {
-        let process_space = shivacore::addr_space::AddressSpace::create(
+        let mut process_space = shivacore::addr_space::AddressSpace::create(
             phys_mem_offset,
             &mut frame_allocator,
             &user_addr_space_3.mapped_regions(),
             boot_cr3_frame,
         )
         .expect("ShivaCore: kein Adressraum fuer PID 1002");
-        // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
-        // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
-        // Adressraums, freigegeben erst nach dem Prozessende.
+        process_space.install();
+        process_space
+            .map_binary(
+                &mut frame_allocator,
+                phys_mem_offset,
+                &user_binary_3,
+                &user_addr_space_3,
+            )
+            .expect("ShivaCore: third USER-001 user page mapping failed");
+        // P1-3B: alle Frames dieses Adressraums anmelden — Wurzel, untere
+        // Tabellen und die vom Mapper geholten Nutzerseiten. Angemeldet wird
+        // nach dem Abbilden, sonst fehlen die Zwischentabellen, die der Mapper
+        // selbst anlegt.
         shivacore::reclaim::RECLAIMER.register_tables(
             shivacore::ats1000::Pid(1002),
-            process_space.table_frames(),
+            process_space.all_frames(),
         );
-        process_space.install();
-        let mut process_mapper = process_space.mapper(phys_mem_offset);
-        userspace::map_user_binary(
-            &mut process_mapper,
-            &mut frame_allocator,
-            phys_mem_offset,
-            &user_binary_3,
-            &user_addr_space_3,
-        )
-        .expect("ShivaCore: third USER-001 user page mapping failed");
         cr3_third = process_space.frame().start_address().as_u64();
     }
     // Vierter Prozess: das zweite Programm aus dem Verzeichnis. Eigener
@@ -1158,7 +1174,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         };
         let _ = entry;
         let binary = userspace::UserBinary::from_bytes(&name, code, base);
-        let process_space = unsafe {
+        let mut process_space = unsafe {
             shivacore::addr_space::AddressSpace::create(
                 phys_mem_offset,
                 &mut frame_allocator,
@@ -1170,22 +1186,21 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         // P1-3B: Die Seitentabellen-Frames dieses Prozesses bei der
         // verzoegerten Freigabe anmelden. Angemeldet wird beim Bau des
         // Adressraums, freigegeben erst nach dem Prozessende.
+        process_space.install();
+        unsafe {
+            process_space
+                .map_binary(
+                    &mut frame_allocator,
+                    phys_mem_offset,
+                    &binary,
+                    &space,
+                )
+                .expect("ShivaCore: vierter Prozess nicht abbildbar");
+        }
         shivacore::reclaim::RECLAIMER.register_tables(
             shivacore::ats1000::Pid(1003),
-            process_space.table_frames(),
+            process_space.all_frames(),
         );
-        process_space.install();
-        let mut process_mapper = unsafe { process_space.mapper(phys_mem_offset) };
-        unsafe {
-            userspace::map_user_binary(
-                &mut process_mapper,
-                &mut frame_allocator,
-                phys_mem_offset,
-                &binary,
-                &space,
-            )
-            .expect("ShivaCore: vierter Prozess nicht abbildbar");
-        }
         cr3_fourth = process_space.frame().start_address().as_u64();
         let context = userspace::UserContext::new(ats1000::Pid(1003), &binary, space);
         serial_println!(
