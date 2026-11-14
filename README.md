@@ -45,7 +45,7 @@ GlobusOS uses a native **Boot → Login/Register → Identity → Wallet → Des
 
 The wallet's 24-word recovery phrase is **recovery material, not the daily login credential**. Private keys and recovery material remain behind protected local boundaries and are never exposed to ordinary applications, Aurora AI, telemetry, logs, GitHub, or remote services.
 
-See [`docs/IDENTITY_WALLET_ARCHITECTURE.md`](docs/IDENTITY_WALLET_ARCHITECTURE.md), [`docs/IDENTITY_WALLET_FLOW.md`](docs/IDENTITY_WALLET_FLOW.md), and the normative [`docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md`](docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md) contract for account ↔ wallet ↔ Aurora node binding, challenge signing, rotation, privacy, and evidence gates.
+See [`docs/IDENTITY_WALLET_ARCHITECTURE.md`](docs/IDENTITY_WALLET_ARCHITECTURE.md), [`docs/IDENTITY_WALLET_FLOW.md`](docs/IDENTITY_WALLET_FLOW.md), and the normative [`docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md`](docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md) contract for account ↔ wallet ↔ Aurora node binding, challenge signing, rotation, privacy, and evidence gates. How a lost device is recovered from the 24 words is specified in [`docs/identity/SPEC-RECOVERY-001.md`](docs/identity/SPEC-RECOVERY-001.md) (state diagram, record layouts, 33 acceptance tests); `scripts/check_recovery_spec.py` recomputes its byte tables.
 
 ## Implemented system foundation
 
