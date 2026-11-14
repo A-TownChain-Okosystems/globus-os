@@ -161,8 +161,11 @@ pub struct FaultCounters {
 /// Was gezaehlt wurde, nachdem ein Fehler verbucht ist.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Recorded {
+    /// Fehler, die im Userspace auftraten.
     pub user_faults: u64,
+    /// Fehler, die im Kernel auftraten.
     pub kernel_faults: u64,
+    /// Prozesse, die nach einem Fehler beendet wurden.
     pub terminated: u64,
 }
 
