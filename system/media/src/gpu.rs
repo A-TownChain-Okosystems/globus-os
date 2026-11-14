@@ -80,7 +80,6 @@ pub struct DmaBufDescriptor {
     pub fd: i32,
     /// Groesse in Byte.
     pub size_bytes: u64,
-    /// Zeilenabstand in Byte.
     pub stride: u32,
     /// Versatz des Bildanfangs im Puffer.
     pub offset: u32,
@@ -91,6 +90,7 @@ pub struct DmaBufDescriptor {
 pub struct HardwareOverlay {
     /// True, wenn das Overlay aktiv ist.
     pub enabled: bool,
+    /// Pufferformat der Overlayquelle.
     pub source: BufferFormat,
     /// Ebene des Overlays.
     pub z_order: i32,
