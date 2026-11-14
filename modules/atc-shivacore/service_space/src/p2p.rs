@@ -94,7 +94,7 @@ impl P2pMessage {
         }
     }
 
-    /// Serialisiert: type[1] + chain_id[4] + did_len[2] + did + timestamp[8] + payload
+    /// Serialisiert: `type[1] + chain_id[4] + did_len[2] + did + timestamp[8] + payload`
     pub fn to_bytes(&self) -> Vec<u8> {
         let did_bytes = self.sender_did.as_bytes();
         let mut buf = Vec::with_capacity(1 + 4 + 2 + did_bytes.len() + 8 + self.payload.len());
