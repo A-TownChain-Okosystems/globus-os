@@ -1,6 +1,7 @@
 //! Graphics-facing media surface contract.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Art einer Medienflaeche.
 pub enum SurfaceKind {
     /// Flaeche fuer Video.
     Video,
