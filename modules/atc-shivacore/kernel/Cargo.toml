@@ -33,6 +33,7 @@ linked_list_allocator = "0.10"
 noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = ["regular", "size_16", "unicode-basic-latin", "unicode-latin-1-supplement"], optional = true }
 globus-diagnostics = { path = "../../../system/diagnostics" }
 libshivacore = { path = "../../../system/shivacore-api" }
+globus-identity-core = { path = "../../../system/identity-core" }
 
 # Cargo ignoriert [profile.*] in Nicht-Wurzel-Paketen, die Panik-Strategie des
 # Kernel-Builds laesst sich hier also nicht setzen. Der Image-Builder
