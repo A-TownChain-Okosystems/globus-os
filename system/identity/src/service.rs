@@ -14,12 +14,19 @@ use argon2::password_hash::rand_core::OsRng;
 use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler des Identitaetsdienstes.
 pub enum IdentityServiceError {
+    /// Die Identitaets- oder Wallet-Grenze hat abgelehnt.
     Identity(IdentityError),
+    /// Die Ablage hat einen Fehler gemeldet.
     Persistence(PersistenceError),
+    /// Fuer diesen Benutzer existiert bereits ein Profil.
     AlreadyRegistered,
+    /// Es ist kein Profil registriert.
     NotRegistered,
+    /// Das vorgelegte Geheimnis passt nicht zum gespeicherten Verifier.
     InvalidCredentials,
+    /// Der Argon2id-Hash konnte nicht berechnet werden.
     CredentialHashFailed,
 }
 
@@ -30,16 +37,22 @@ impl From<IdentityError> for IdentityServiceError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ergebnis einer Registrierung.
 pub struct RegistrationResult {
+    /// Profil des neuen Kontos.
     pub profile: AccountProfile,
+    /// Adresse der neu erzeugten Wallet.
     pub wallet_address: WalletAddress,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ergebnis einer Anmeldung.
 pub struct LoginResult {
+    /// Sitzung nach erfolgreicher Anmeldung.
     pub session: IdentitySession,
 }
 
+/// Haelt genau ein Konto samt Sitzung im Speicher.
 pub struct IdentityService {
     profile: Option<AccountProfile>,
     credential_hash: Option<String>,
@@ -47,6 +60,7 @@ pub struct IdentityService {
 }
 
 impl IdentityService {
+    /// Dienst ohne Profil, Verifier und Sitzung.
     pub const fn new() -> Self {
         Self {
             profile: None,
@@ -55,6 +69,7 @@ impl IdentityService {
         }
     }
 
+    /// Erzeugt Wallet und Profil, hasht das Geheimnis mit Argon2id und speichert den Datensatz.
     pub fn register(
         &mut self,
         user_id: UserId,
@@ -87,6 +102,7 @@ impl IdentityService {
     // Restore inherently carries the full recovery request; grouping the 8 fields
     // into a params struct is tracked design debt.
     #[allow(clippy::too_many_arguments)]
+    /// Registriert ein Konto aus einer vorhandenen Wiederherstellungsphrase.
     pub fn restore(
         &mut self,
         user_id: UserId,
@@ -166,6 +182,7 @@ impl IdentityService {
         Ok(())
     }
 
+    /// Prueft das Geheimnis und oeffnet bei Erfolg eine Sitzung.
     pub fn login(
         &mut self,
         credential: &[u8],
@@ -192,20 +209,25 @@ impl IdentityService {
         Ok(LoginResult { session })
     }
 
+    /// Beendet die Sitzung.
     pub fn logout(&mut self) {
         self.session = None;
     }
+    /// Sperrt die Sitzung, ohne das Profil zu verlieren.
     pub fn lock(&mut self) {
         if let Some(session) = &mut self.session {
             session.lock();
         }
     }
+    /// Gueltige Sitzung zum Zeitpunkt `now_unix`, falls vorhanden.
     pub fn session(&self, now_unix: u64) -> Option<&IdentitySession> {
         self.session.as_ref().filter(|s| s.is_active(now_unix))
     }
+    /// Profil des Kontos, falls registriert.
     pub fn profile(&self) -> Option<&AccountProfile> {
         self.profile.as_ref()
     }
+    /// Bindung des Kontos, falls registriert.
     pub fn binding(&self) -> Option<&IdentityBinding> {
         self.profile.as_ref().map(|p| &p.binding)
     }
