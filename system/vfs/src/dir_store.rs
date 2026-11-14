@@ -3,11 +3,17 @@
 use crate::{DirectoryRecord, Extent, ExtentError, ExtentMap};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler des Verzeichnis-Speichers.
 pub enum DirStoreError {
+    /// Der Eintrag hat Inode 0 oder einen unbrauchbaren Namen.
     InvalidEntry,
+    /// Der Name ist bereits eingetragen.
     Duplicate,
+    /// Der Name ist nicht eingetragen.
     NotFound,
+    /// Der Speicher ist voll oder der Puffer zu klein.
     Full,
+    /// Die Extent-Abbildung ist fehlgeschlagen.
     Extent(ExtentError),
 }
 impl From<ExtentError> for DirStoreError {
@@ -17,12 +23,14 @@ impl From<ExtentError> for DirStoreError {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Verzeichnis-Eintraege mit fester Kapazitaet.
 pub struct DirectoryStore {
     entries: Vec<DirectoryRecord>,
     capacity: usize,
 }
 
 impl DirectoryStore {
+    /// Legt einen Speicher mit nicht verschwindender Kapazitaet an.
     pub fn new(capacity: usize) -> Result<Self, DirStoreError> {
         if capacity == 0 {
             return Err(DirStoreError::Full);
@@ -32,9 +40,11 @@ impl DirectoryStore {
             capacity,
         })
     }
+    /// Alle Eintraege in Einfuegereihenfolge.
     pub fn entries(&self) -> &[DirectoryRecord] {
         &self.entries
     }
+    /// Inode zu einem Namen.
     pub fn lookup(&self, name: &str) -> Result<u64, DirStoreError> {
         self.entries
             .iter()
@@ -42,6 +52,7 @@ impl DirectoryStore {
             .map(|e| e.inode)
             .ok_or(DirStoreError::NotFound)
     }
+    /// Fuegt einen Eintrag ein und lehnt Doppelungen ab.
     pub fn insert(&mut self, record: DirectoryRecord) -> Result<(), DirStoreError> {
         if record.inode == 0 || record.name.is_empty() {
             return Err(DirStoreError::InvalidEntry);
@@ -56,6 +67,7 @@ impl DirectoryStore {
         self.entries.sort_by(|a, b| a.name.cmp(&b.name));
         Ok(())
     }
+    /// Entfernt den Eintrag mit diesem Namen und gibt ihn zurueck.
     pub fn remove(&mut self, name: &str) -> Result<DirectoryRecord, DirStoreError> {
         let i = self
             .entries
@@ -64,12 +76,14 @@ impl DirectoryStore {
             .ok_or(DirStoreError::NotFound)?;
         Ok(self.entries.remove(i))
     }
+    /// Laenge der binaeren Form in Byte.
     pub fn encoded_len(&self) -> Result<usize, DirStoreError> {
         self.entries.iter().try_fold(0usize, |n, e| {
             n.checked_add(e.encoded_len().map_err(|_| DirStoreError::InvalidEntry)?)
                 .ok_or(DirStoreError::InvalidEntry)
         })
     }
+    /// Schreibt alle Eintraege in den Puffer.
     pub fn encode(&self, out: &mut [u8]) -> Result<usize, DirStoreError> {
         let need = self.encoded_len()?;
         if out.len() < need {
@@ -83,6 +97,7 @@ impl DirectoryStore {
         }
         Ok(off)
     }
+    /// Liest Eintraege bis zur Nullfuellung.
     pub fn decode(input: &[u8], capacity: usize) -> Result<Self, DirStoreError> {
         let mut s = Self::new(capacity)?;
         let mut off = 0;
@@ -97,6 +112,7 @@ impl DirectoryStore {
         }
         Ok(s)
     }
+    /// Bildet die kodierten Eintraege auf zusammenhaenggende Bloecke ab.
     pub fn extent_for_bytes(
         &self,
         physical_start: u64,
