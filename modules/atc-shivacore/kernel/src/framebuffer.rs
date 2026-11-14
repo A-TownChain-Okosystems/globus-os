@@ -13,6 +13,7 @@ const CHAR_HEIGHT: RasterHeight = RasterHeight::Size16;
 const CHAR_WIDTH: usize = get_raster_width(FontWeight::Regular, CHAR_HEIGHT);
 const LINE_SPACING: usize = 2;
 
+/// Textausgabe auf den Framebuffer mit Cursorposition.
 pub struct FbWriter {
     framebuffer: &'static mut [u8],
     info: FrameBufferInfo,
@@ -23,6 +24,7 @@ pub struct FbWriter {
 unsafe impl Send for FbWriter {}
 
 impl FbWriter {
+    /// Schreiber am Anfang des Puffers, mit Schriftmass und Groesse aus dem Framebuffer.
     pub fn new(buffer: &'static mut FrameBuffer) -> Self {
         let info = buffer.info();
         Self {
@@ -33,6 +35,7 @@ impl FbWriter {
         }
     }
 
+    /// Fuellt den ganzen Bildschirm mit der Farbe und setzt den Cursor nach oben links.
     pub fn clear(&mut self, r: u8, g: u8, b: u8) {
         for py in 0..self.info.height {
             for px in 0..self.info.width {
@@ -150,14 +153,17 @@ impl fmt::Write for FbWriter {
     }
 }
 
+/// Der eine Schreiber des Kernels; None, solange kein Framebuffer gesetzt ist.
 pub static WRITER: Mutex<Option<FbWriter>> = Mutex::new(None);
 
+/// Setzt den Framebuffer und faerbt ihn dunkelgruen, damit sichtbar ist, dass der Kernel laeuft.
 pub fn init(buffer: &'static mut FrameBuffer) {
     let mut writer = FbWriter::new(buffer);
     writer.clear(0, 20, 0); // dunkelgrün = "Kernel laeuft"
     *WRITER.lock() = Some(writer);
 }
 
+/// Gibt Text aus und sperrt dafuer kurz die Unterbrechungen; ohne gesetzten Schreiber passiert nichts.
 #[doc(hidden)]
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
