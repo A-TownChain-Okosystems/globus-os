@@ -32,12 +32,15 @@ pub enum PrivilegeLevel {
 }
 
 impl PrivilegeLevel {
+    /// True fuer Ring 0.
     pub fn is_kernel(&self) -> bool {
         matches!(self, PrivilegeLevel::Kernel)
     }
+    /// True fuer Ring 3.
     pub fn is_user(&self) -> bool {
         matches!(self, PrivilegeLevel::User)
     }
+    /// Ringnummer als Zahl.
     pub fn dpl(&self) -> u8 {
         *self as u8
     }
@@ -50,13 +53,21 @@ impl PrivilegeLevel {
 /// Layout eines User-Address-Space (flat model, 4 GiB window)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserAddressSpace {
+    /// Anfang des Codesegments.
     pub code_base: u64,
+    /// Groesse des Codesegments.
     pub code_size: u64,
+    /// Anfang des Datensegments.
     pub data_base: u64,
+    /// Groesse des Datensegments.
     pub data_size: u64,
+    /// Oberes Ende des Stapels; er waechst nach unten.
     pub stack_base: u64, // Top of stack (grows downward)
+    /// Groesse des Stapels.
     pub stack_size: u64,
+    /// Anfang des Haufens.
     pub heap_base: u64,
+    /// Groesse des Haufens.
     pub heap_size: u64,
 }
 
@@ -80,15 +91,19 @@ impl UserAddressSpace {
     pub fn contains(&self, addr: u64) -> bool {
         self.in_code(addr) || self.in_data(addr) || self.in_stack(addr) || self.in_heap(addr)
     }
+    /// True innerhalb des Codesegments; untere Grenze einbegriffen, obere nicht.
     pub fn in_code(&self, addr: u64) -> bool {
         addr >= self.code_base && addr < self.code_base + self.code_size
     }
+    /// True innerhalb des Datensegments; untere Grenze einbegriffen, obere nicht.
     pub fn in_data(&self, addr: u64) -> bool {
         addr >= self.data_base && addr < self.data_base + self.data_size
     }
+    /// True innerhalb des Stapels; obere Grenze einbegriffen, untere nicht, weil er nach unten waechst.
     pub fn in_stack(&self, addr: u64) -> bool {
         addr > self.stack_base - self.stack_size && addr <= self.stack_base
     }
+    /// True innerhalb des Haufens; untere Grenze einbegriffen, obere nicht.
     pub fn in_heap(&self, addr: u64) -> bool {
         addr >= self.heap_base && addr < self.heap_base + self.heap_size
     }
@@ -150,9 +165,13 @@ impl UserAddressSpace {
 /// A loadable user binary (simplified — code + data + entry point)
 #[derive(Clone, Debug)]
 pub struct UserBinary {
+    /// Einsprungadresse.
     pub entry_point: u64,
+    /// Maschinenbefehle.
     pub code: Vec<u8>,
+    /// Vorbelegte Daten.
     pub data: Vec<u8>,
+    /// Anzeigename.
     pub name: String,
 }
 
@@ -175,9 +194,11 @@ impl UserBinary {
             name: name.to_string(),
         }
     }
+    /// Laenge des Codes in Byte.
     pub fn code_len(&self) -> usize {
         self.code.len()
     }
+    /// Laenge der Daten in Byte.
     pub fn data_len(&self) -> usize {
         self.data.len()
     }
@@ -386,16 +407,27 @@ pub unsafe fn enter_ring3(ctx: &UserContext) -> ! {
 /// Saved CPU state for a user process (what IRET needs to restore)
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserContext {
+    /// Prozesskennung.
     pub pid: Pid,
+    /// Ring, in dem der Prozess laeuft.
     pub privilege: PrivilegeLevel,
-    pub rip: u64,    // Instruction Pointer
-    pub rsp: u64,    // Stack Pointer
-    pub rbp: u64,    // Base Pointer
-    pub rax: u64,    // Return value register
-    pub cs: u16,     // Code Segment selector (ring 3 = 0x1B, ring 0 = 0x08)
-    pub ss: u16,     // Stack Segment selector (ring 3 = 0x23, ring 0 = 0x10)
+    /// Befehlszeiger.
+    pub rip: u64, // Instruction Pointer
+    /// Stapelzeiger.
+    pub rsp: u64, // Stack Pointer
+    /// Rahmenzeiger.
+    pub rbp: u64, // Base Pointer
+    /// Rueckgaberegister.
+    pub rax: u64, // Return value register
+    /// Code-Segment; 0x1B steht fuer Ring 3.
+    pub cs: u16, // Code Segment selector (ring 3 = 0x1B, ring 0 = 0x08)
+    /// Stapel-Segment; 0x23 steht fuer Ring 3.
+    pub ss: u16, // Stack Segment selector (ring 3 = 0x23, ring 0 = 0x10)
+    /// Flag-Register; fuer den Userspace muss das Interrupt-Flag gesetzt sein.
     pub rflags: u64, // CPU flags (IF must be set for user mode)
+    /// Layout des Adressraums.
     pub addr_space: UserAddressSpace,
+    /// Rueckgabewert, sobald der Prozess beendet ist.
     pub exit_code: Option<ExitCode>,
 }
 
@@ -451,11 +483,16 @@ impl UserContext {
 ///   Entry 4: User Data (ring 3)    → selector 0x23
 ///   Entry 5: TSS                    → selector 0x2B
 pub struct GdtSelectors {
+    /// Kernel-Code, 0x08.
     pub kernel_cs: u16, // 0x08
+    /// Kernel-Daten, 0x10.
     pub kernel_ds: u16, // 0x10
-    pub user_cs: u16,   // 0x1B
-    pub user_ds: u16,   // 0x23
-    pub tss: u16,       // 0x2B
+    /// User-Code, 0x1B.
+    pub user_cs: u16, // 0x1B
+    /// User-Daten, 0x23.
+    pub user_ds: u16, // 0x23
+    /// Task-State-Segment, 0x2B.
+    pub tss: u16, // 0x2B
 }
 
 impl Default for GdtSelectors {
@@ -484,15 +521,24 @@ impl GdtSelectors {
 // Userspace Errors
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Ablehnungsgruende der Prozessverwaltung.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum UserspaceError {
+    /// Kein Prozess mit dieser Kennung.
     ProcessNotFound,
+    /// Der Prozess ist bereits beendet.
     ProcessAlreadyExited,
+    /// Die Adresse liegt ausserhalb des Adressraums.
     InvalidAddress,
+    /// Der Zugriff faellt in kein Segment.
     SegmentFault,
+    /// Der Stapel ist erschoepft.
     StackOverflow,
+    /// Die Datei ist nicht ladbar, insbesondere wenn der Code leer ist.
     InvalidBinary,
+    /// Der Zugriff verletzt die Rechte.
     PermissionDenied,
+    /// Die Hoechstzahl gleichzeitiger Prozesse ist erreicht.
     MaxProcessesReached,
 }
 
@@ -518,6 +564,7 @@ impl core::fmt::Display for UserspaceError {
 /// Maximum number of concurrent user processes
 const MAX_USER_PROCESSES: usize = 64;
 
+/// Verwaltung der User-Prozesse mit Kennungsvergabe und hinterlegten Segmentselektoren.
 pub struct UserspaceManager {
     users: Vec<UserContext>,
     next_pid: u32,
@@ -532,6 +579,7 @@ impl Default for UserspaceManager {
 }
 
 impl UserspaceManager {
+    /// Leere Verwaltung; Prozesskennungen beginnen bei 1000.
     pub fn new() -> Self {
         Self {
             users: Vec::new(),
@@ -561,6 +609,7 @@ impl UserspaceManager {
     pub fn get_context(&self, pid: Pid) -> Option<&UserContext> {
         self.users.iter().find(|u| u.pid == pid)
     }
+    /// Veraenderbarer Zugriff auf den Kontext eines Prozesses.
     pub fn get_context_mut(&mut self, pid: Pid) -> Option<&mut UserContext> {
         self.users.iter_mut().find(|u| u.pid == pid)
     }
@@ -639,15 +688,19 @@ impl UserspaceManager {
     pub fn list_users(&self) -> Vec<&UserContext> {
         self.users.iter().collect()
     }
+    /// Anzahl der eingetragenen Prozesse, beendete einbegriffen.
     pub fn user_count(&self) -> usize {
         self.users.len()
     }
+    /// Anzahl der nicht beendeten Prozesse.
     pub fn active_count(&self) -> usize {
         self.users.iter().filter(|u| !u.is_exited()).count()
     }
+    /// Anzahl der gezaehlten Systemaufrufe.
     pub fn syscall_count(&self) -> u64 {
         self.syscall_count
     }
+    /// Die hinterlegten Segmentselektoren.
     pub fn gdt_selectors(&self) -> &GdtSelectors {
         &self.gdt
     }
