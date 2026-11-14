@@ -6,15 +6,17 @@
 // entscheidet der Kernel statt des Init. Dieser Pfad dreht es um: der Aufruf kommt
 // per Syscall, der Kernel prueft und ordnet zu.
 //
-// EHRLICHE GRENZE: Die Seitentabellen eines neuen Prozesses brauchen Frames, und
-// ein Frame-Allokator ist zur Syscall-Zeit nicht erreichbar (er lebt im Bootpfad).
-// Deshalb endet die Annahme hier mit `ResourcesUnavailable` und einem Protokoll —
-// sie erfindet keinen PID. Was fehlt, ist genau ein globaler Frame-Vorrat.
+// EHRLICHE GRENZE (berichtigt am 14.11.2026): Der Frame-Vorrat ist laengst
+// veroeffentlicht (`memory::FRAME_ALLOCATOR`) und wird im Tick benutzt. Was
+// fehlte, war der aufbauende Weg: Wurzel, Mapper und Abbildung aus dem
+// Laufzeitkontext. Er steht jetzt in `build_space` und benutzt dieselben
+// Bausteine wie der Bootpfad — kein zweiter Weg zum selben Ziel. Der Aufruf
+// ueber die ABI (SpawnProcess) ist noch nicht verdrahtet.
 // ─────────────────────────────────────────────────────────────────────────
 
 use crate::elf_loader::ElfParser;
 use crate::ramdisk::{self, Entry};
-use crate::userspace::UserAddressSpace;
+use crate::userspace::{UserAddressSpace, UserBinary};
 use spin::Mutex;
 
 /// Ergebnis einer Spawn-Annahme.
@@ -41,6 +43,14 @@ pub enum SpawnError {
     EntryOutsideWindow,
     /// Kein Verzeichnis im Speicher (Image ohne Ramdisk).
     NoDirectory,
+    /// Kein freier Platz fuer einen weiteren Prozess.
+    NoFreeSlot,
+    /// Bootbezug (Speicherabstand oder Kernel-Wurzel) fehlt.
+    NotReady,
+    /// Der Frame-Vorrat reicht fuer den Adressraum nicht.
+    ResourcesUnavailable,
+    /// Die Abbildung des Programms ist fehlgeschlagen.
+    MapFailed,
 }
 
 /// Einstieg gegen das Nutzercode-Fenster pruefen (Spezifikation, nicht Vermutung).
@@ -206,5 +216,77 @@ mod attempt_tests {
         note_attempt(1001, plan, Some(SpawnError::NotFound));
         let reported = take_unreported().expect("Meldung");
         assert_eq!(reported.error, Some(SpawnError::NotFound));
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Der aufbauende Weg: Platzregel
+//
+// Der Bau eines Adressraums selbst braucht die Seitentabellen der Bin-Kiste
+// (`spawn_build`), weil `x86_64` und der Frame-Vorrat nur dort haengen. Was
+// ohne QEMU pruefbar ist, steht hier: die Platzregel. Deterministisch aus dem
+// Platz abgeleitet, damit zwei Prozesse nie dasselbe Fenster bekommen und ein
+// Raum nach einem Neustart dieselben Adressen hat.
+// ─────────────────────────────────────────────────────────────────────────
+
+/// Erster Platz fuer einen neuen Prozess.
+///
+/// Die beim Boot vergebenen Fenster liegen zwischen 0x0140_0000 und
+/// 0x01C0_0000; darueber ist Platz bis unter das Stack-Fenster (0x07FF_F000).
+pub const SPAWN_WINDOW_BASE: u64 = 0x0400_0000;
+/// Abstand zweier Plaetze (4 MiB).
+pub const SPAWN_WINDOW_STRIDE: u64 = 0x0040_0000;
+/// Anzahl der Plaetze bis 0x0700_0000.
+pub const SPAWN_MAX_SLOTS: u64 = 12;
+
+/// Fenster eines Spawn-Platzes.
+pub fn layout_for_slot(slot: u64) -> Option<UserAddressSpace> {
+    if slot >= SPAWN_MAX_SLOTS {
+        return None;
+    }
+    let base = SPAWN_WINDOW_BASE + slot * SPAWN_WINDOW_STRIDE;
+    Some(UserAddressSpace {
+        code_base: base,
+        code_size: 0x0010_0000,
+        data_base: base + 0x0010_0000,
+        data_size: 0x0010_0000,
+        heap_base: base + 0x0020_0000,
+        heap_size: 0x0010_0000,
+        stack_base: base + 0x003E_0000,
+        stack_size: 0x0001_0000,
+    })
+}
+
+#[cfg(test)]
+mod slot_tests {
+    use super::*;
+
+    #[test]
+    fn plaetze_sind_disjunkt_und_geordnet() {
+        let first = layout_for_slot(0).expect("Platz 0");
+        let second = layout_for_slot(1).expect("Platz 1");
+        assert!(first.code_base < second.code_base);
+        assert!(
+            first.code_base + SPAWN_WINDOW_STRIDE <= second.code_base,
+            "Fenster duerfen sich nicht ueberlappen"
+        );
+        assert!(first.code_base + first.code_size <= first.data_base);
+        assert!(first.data_base + first.data_size <= first.heap_base);
+        assert!(first.heap_base + first.heap_size <= first.stack_base);
+        assert!(first.stack_base + first.stack_size <= first.code_base + SPAWN_WINDOW_STRIDE);
+        assert!(first.stack_base < 0x07FF_F000, "unter dem Boot-Stapelfenster");
+    }
+
+    #[test]
+    fn die_boot_fenster_bleiben_frei() {
+        assert!(SPAWN_WINDOW_BASE > 0x01C0_0000, "Bootfenster bleiben unberuehrt");
+        let last = layout_for_slot(SPAWN_MAX_SLOTS - 1).expect("letzter Platz");
+        assert!(last.stack_base + last.stack_size < 0x07FF_F000);
+    }
+
+    #[test]
+    fn ueber_dem_letzten_platz_gibt_es_keinen() {
+        assert!(layout_for_slot(SPAWN_MAX_SLOTS).is_none());
+        assert!(layout_for_slot(u64::MAX).is_none());
     }
 }
