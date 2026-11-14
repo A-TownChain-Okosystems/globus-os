@@ -3,15 +3,20 @@
 use alloc::vec;
 use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Geometrie eines Blockgeraets.
 pub struct BlockGeometry {
+    /// Blockgroesse in Byte.
     pub block_size: u32,
+    /// Anzahl der Bloecke.
     pub block_count: u64,
 }
 
 impl BlockGeometry {
+    /// Kapazitaet in Byte; None bei Ueberlauf.
     pub fn capacity_bytes(&self) -> Option<u64> {
         u64::from(self.block_size).checked_mul(self.block_count)
     }
+    /// True, wenn Blockgroesse und Blockzahl brauchbar sind.
     pub fn valid(&self) -> bool {
         self.block_size.is_power_of_two()
             && (512..=65536).contains(&self.block_size)
@@ -20,28 +25,41 @@ impl BlockGeometry {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein Lese- oder Schreibauftrag.
 pub struct BlockRequest {
+    /// Erster logischer Block.
     pub lba: u64,
+    /// Anzahl der Bloecke.
     pub blocks: u32,
+    /// True fuer Schreiben, false fuer Lesen.
     pub write: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler eines Blockzugriffs.
 pub enum BlockError {
+    /// Die Geometrie ist unbrauchbar.
     InvalidGeometry,
+    /// Der Auftrag liegt ausserhalb des Geraets.
     OutOfRange,
+    /// Der Auftrag umfasst keinen Block.
     ZeroLength,
+    /// Die Byte-Rechnung laeuft ueber.
     Overflow,
+    /// Der Puffer passt nicht zum Auftrag.
     InvalidBuffer,
+    /// Das Geraet ist nicht bereit.
     NotReady,
     /// Das Geraet ist nur lesbar. Fehlte, obwohl ein Geraet mit dieser
     /// Eigenschaft existiert; ohne eigene Variante muesste der Aufrufer
     /// "nicht bereit" von "darf nicht" unterscheiden, indem er den Fehler
     /// errät.
     ReadOnly,
+    /// Das Geraet hat einen IO-Fehler gemeldet.
     Io,
 }
 
+/// Prueft Geometrie und Auftrag gegeneinander.
 pub fn validate_request(g: BlockGeometry, r: BlockRequest) -> Result<(), BlockError> {
     if !g.valid() {
         return Err(BlockError::InvalidGeometry);
@@ -59,9 +77,13 @@ pub fn validate_request(g: BlockGeometry, r: BlockRequest) -> Result<(), BlockEr
     Ok(())
 }
 
+/// Ein Blockgeraet.
 pub trait BlockDevice {
+    /// Geometrie des Geraets.
     fn geometry(&self) -> BlockGeometry;
+    /// Liest die angeforderten Bloecke in den Puffer.
     fn read(&mut self, request: BlockRequest, destination: &mut [u8]) -> Result<(), BlockError>;
+    /// Schreibt den Puffer in die angeforderten Bloecke.
     fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError>;
 }
 
@@ -74,6 +96,7 @@ pub struct MemoryBlockDevice {
 }
 
 impl MemoryBlockDevice {
+    /// Legt ein Geraet mit vollstaendig genulltem Speicher an.
     pub fn new(geometry: BlockGeometry) -> Result<Self, BlockError> {
         let bytes = geometry.capacity_bytes().ok_or(BlockError::Overflow)?;
         if !geometry.valid() || bytes > usize::MAX as u64 {
