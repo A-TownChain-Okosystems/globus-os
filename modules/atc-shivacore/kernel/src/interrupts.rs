@@ -619,6 +619,24 @@ pub fn cleanup_process(pid: Pid) -> usize {
             ipc.double_close_blocked
         );
     }
+    // Die Bildflaeche gehoert nicht dem Prozess, sondern dem System: endet der
+    // Inhaber, schreibt der Kernel wieder. Ohne diesen Schritt blieb "gehoert
+    // dem Userspace" stehen und der Bildschirm war nach dem letzten Absturz
+    // fuer immer tot.
+    if crate::framebuffer::take_back_from(u64::from(pid.0)) {
+        crate::framebuffer::clear_screen();
+        crate::framebuffer::write_text("GlobusOS: Konsole zurueck beim Kernel (Dienst beendet)\n");
+        shivacore::security::record(
+            "kernel",
+            "console.reclaimed",
+            &alloc::format!("pid={:?}", pid),
+            shivacore::security::AuditResult::Allowed,
+        );
+        serial_println!(
+            "ShivaCore: Konsole zurueck beim Kernel (PID={:?} hat sie nicht mehr)",
+            pid
+        );
+    }
     // TLB leeren: die Rechte sind weg, die uebersetzten Eintraege duerfen nicht
     // als Rest im Adressuebersetzer stehen bleiben.
     x86_64::instructions::tlb::flush_all();
@@ -702,7 +720,7 @@ fn handle_console(pid: Pid, request: SyscallRequest) -> shivacore::syscall::Sysc
 
     match request.arg0 {
         CONSOLE_OP_CLEAR => {
-            if crate::framebuffer::hand_over_to_userspace() {
+            if crate::framebuffer::hand_over_to_userspace(u64::from(pid.0)) {
                 serial_println!(
                     "ShivaCore: Konsole an Ring 3 uebergeben (PID={}); Kernel schreibt nur noch seriell",
                     pid.0
