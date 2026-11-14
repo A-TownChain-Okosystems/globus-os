@@ -185,6 +185,7 @@ pub struct GenesisConfig {
 }
 
 impl GenesisConfig {
+    /// Konfiguration mit Chain-ID und Zeitpunkt, ohne Validatoren, Zuteilungen und Memo; die Netzwerkparameter uebernehmen die Chain-ID.
     pub fn new(chain_id: u32, timestamp: u64) -> Self {
         Self {
             chain_id,
@@ -442,6 +443,7 @@ impl Default for GenesisState {
 }
 
 impl GenesisState {
+    /// Leerer Genesis-Zustand mit leeren Tabellen fuer Guthaben, Validatoren, Nonces und Vertraege.
     pub fn new() -> Self {
         Self {
             balances: BTreeMap::new(),
@@ -501,21 +503,37 @@ impl GenesisState {
 /// Fehler beim Genesis-Block
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GenesisError {
+    /// Die Chain-ID entspricht nicht der Genesis-Chain; verify meldet diesen Code auch fuer einen Block, der kein Genesis ist.
     InvalidChainId,
+    /// Es ist kein Validator eingetragen.
     NoValidators,
+    /// Es sind weniger als vier Validatoren eingetragen.
     TooFewValidators,
+    /// Es sind mehr als hundert Validatoren eingetragen.
     TooManyValidators,
+    /// Der Einsatz eines Validators liegt unter der Mindesthoehe.
     StakeTooLow,
+    /// Die Summe der Einsaetze liegt unter dem Mindestbetrag je Validator; da add_validator den Mindesteinsatz schon einzeln prueft, greift die Bedingung nur bei von Hand gefuellten Listen.
     InsufficientTotalStake,
+    /// Diese DID ist bereits als Validator eingetragen.
     DuplicateValidator,
+    /// Dieser oeffentliche Schluessel ist bereits eingetragen.
     DuplicatePubkey,
+    /// Diese Adresse kommt in den Zuteilungen mehrfach vor.
     DuplicateAllocation,
+    /// Es ist keine Zuteilung eingetragen.
     NoAllocations,
+    /// Der Betrag einer Zuteilung ist Null.
     InvalidAmount,
+    /// Die Adresse beginnt nicht mit ATC.
     InvalidAddress,
+    /// Das Memo ist laenger als 256 Byte.
     MemoTooLong,
+    /// Der Genesis-Block ist nicht signiert.
     NotSigned,
+    /// Der Genesis-Block ist bereits signiert.
     AlreadySigned,
+    /// Die Signatur passt nicht zum Block; dieser Code wird derzeit von keiner Stelle erzeugt.
     InvalidSignature,
 }
 
