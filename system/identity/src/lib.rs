@@ -417,6 +417,28 @@ mod tests {
     }
 
     #[test]
+    fn neuspeisung_haelt_die_erzeugung_an_und_gibt_sie_wieder_frei() {
+        // REQ-REC-16 am Durchsetzungspunkt: nach dem Aufwachen aus S3/S4 ist
+        // die Erzeugung gesperrt, bis eine Neuspeisung bestanden ist.
+        let mut gate = EntropyGate::from_host();
+        let user = UserId::new("owner").unwrap();
+        let first = create_wallet_with_gate(&mut gate, user.clone(), 600, "devnet", 1)
+            .expect("gesundes Tor");
+
+        gate.invalidate();
+        match create_wallet_with_gate(&mut gate, user.clone(), 600, "devnet", 1) {
+            Ok(_) => panic!("nach dem Aufwachen darf keine Wallet entstehen"),
+            Err(error) => assert_eq!(error, IdentityError::EntropyUnavailable),
+        }
+
+        gate.reseed(&mut OsEntropy, &mut OsEntropy);
+        assert_eq!(gate.status(), globus_entropy_core::EntropyState::Ready);
+        let second = create_wallet_with_gate(&mut gate, user, 600, "devnet", 1)
+            .expect("nach bestandener Neuspeisung wieder bereit");
+        assert_ne!(first.recovery_phrase(), second.recovery_phrase());
+    }
+
+    #[test]
     fn zwei_phrasen_aus_demselben_tor_sind_verschieden() {
         let mut gate = EntropyGate::from_host();
         let first =
