@@ -2,7 +2,7 @@
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
 > **Stand:** 14.11.2026, erzeugt aus `git ls-tree -r origin/main` gegen
-> `5830fca`: 533 Dateien. Die Liste ist vollständig; der vorige Stand
+> `5830fca` zuzueglich des Anmeldefensters: 538 Dateien. Die Liste ist vollständig; der vorige Stand
 > nannte 522 und war um 15 Einträge unvollständig (unter anderem fehlten die
 > neueren Dokumente aus dem Kernel-Strang).
 > **Zeilenzahlen** aus dem committeten Stand, Binärdateien ohne Zahl.
@@ -57,6 +57,7 @@
 | `docs/IDENTITY_WALLET_FLOW.md` | 78 |
 | `docs/IMPLEMENTATION_STATUS.md` | 60 |
 | `docs/KERNEL_IMAGE_BUILD.md` | 100 |
+| `docs/LOGIN_WINDOW.md` | 98 |
 | `docs/MEDIA-LICENSING.md` | 60 |
 | `docs/OS_STANDARD_COMPONENTS.md` | 190 |
 | `docs/REPOSITORY_STANDARD.md` | 37 |
@@ -270,6 +271,10 @@
 | `modules/atc-shivacore/docs/SC-006_EVENT_KANAL_ENTWURF.md` | 74 |
 | `modules/atc-shivacore/docs/SC-ABI-002-ARGUMENTBLOCK.md` | 106 |
 | `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 65 |
+| `modules/atc-shivacore/greeter/.cargo/config.toml` | 8 |
+| `modules/atc-shivacore/greeter/Cargo.toml` | 17 |
+| `modules/atc-shivacore/greeter/linker.ld` | 37 |
+| `modules/atc-shivacore/greeter/src/main.rs` | 348 |
 | `modules/atc-shivacore/init_program/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/init_program/Cargo.toml` | 17 |
 | `modules/atc-shivacore/init_program/linker.ld` | 35 |
