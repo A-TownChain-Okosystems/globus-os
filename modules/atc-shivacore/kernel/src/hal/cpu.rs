@@ -3,36 +3,57 @@
 
 use core::arch::x86_64::__cpuid;
 
+/// Hersteller, soweit er sich aus der Herstellerkennung ableiten laesst.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CpuVendor {
+    /// Intel.
     Intel,
+    /// AMD.
     Amd,
+    /// Jeder andere, auch ein Gastgeber mit eigener Kennung.
     Other,
 }
 
+/// Die Merkmale, die der Kernel prueft.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuFeatures {
+    /// Streaming SIMD, zweite Fassung.
     pub sse2: bool,
+    /// Nicht ausfuehrbare Seiten.
     pub nx: bool,
+    /// Interrupt-Controller auf dem Prozessor.
     pub apic: bool,
+    /// Erweiterte Form des APIC.
     pub x2apic: bool,
+    /// Der Systemaufruf-Befehl.
     pub syscall: bool,
+    /// Seiten von einem GiB.
     pub one_gib_pages: bool,
+    /// Zeitstempelzaehler mit gleichbleibender Frequenz.
     pub invariant_tsc: bool,
 }
 
+/// Was der Prozessor ueber sich meldet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct CpuInfo {
+    /// Hersteller.
     pub vendor: CpuVendor,
+    /// Familie, um den erweiterten Anteil ergaenzt, wenn die Grundfamilie 15 ist.
     pub family: u8,
+    /// Modell, in den Familien 6 und 15 um den erweiterten Anteil ergaenzt.
     pub model: u8,
+    /// Fertigungsschritt.
     pub stepping: u8,
+    /// Hoechste grundlegende CPUID-Funktion.
     pub max_basic_leaf: u32,
+    /// Hoechste erweiterte CPUID-Funktion.
     pub max_extended_leaf: u32,
+    /// Die geprueften Merkmale.
     pub features: CpuFeatures,
 }
 
 impl CpuInfo {
+    /// Liest Hersteller, Familie, Modell und Merkmale ueber CPUID.
     pub fn detect() -> Self {
         let basic = __cpuid(0);
         let max_basic_leaf = basic.eax;
@@ -83,6 +104,7 @@ impl CpuInfo {
         }
     }
 
+    /// Herstellername fuer das Startprotokoll.
     pub const fn vendor_name(&self) -> &'static str {
         match self.vendor {
             CpuVendor::Intel => "Intel",
@@ -91,6 +113,7 @@ impl CpuInfo {
         }
     }
 
+    /// True, wenn SSE2, NX und APIC vorhanden sind; mehr verlangt der Start nicht.
     pub const fn boot_compatible(&self) -> bool {
         self.features.sse2 && self.features.nx && self.features.apic
     }
