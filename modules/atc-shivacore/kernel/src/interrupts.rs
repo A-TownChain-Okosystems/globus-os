@@ -764,6 +764,97 @@ fn handle_console(pid: Pid, request: SyscallRequest) -> shivacore::syscall::Sysc
     }
 }
 
+
+/// Prueft ein Passwort aus dem Anmeldefenster.
+///
+/// Berechtigt ist nur der Besitzer der Konsole: das Anmeldefenster haelt die
+/// Konsolen-Capability, ein beliebiges Programm nicht. Der Nachweis laeuft
+/// ueber dieselbe Capability wie das Schreiben auf den Bildschirm.
+fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscall::SyscallResponse {
+    use libshivacore::{AbiError, IDENTITY_MAX_PASSWORD_BYTES};
+    use shivacore::capability::{CapId, ResourceType, Rights};
+    use shivacore::syscall::SyscallResponse;
+
+    let Some(handle) = request.capability else {
+        return SyscallResponse::err(AbiError::PermissionDenied);
+    };
+    let permitted = {
+        let mut guard = SYSCALL_GATE.lock();
+        let gate = guard.get_or_insert_with(SyscallGate::new);
+        let capabilities = gate.capabilities();
+        capabilities
+            .get(CapId(handle.0))
+            .map(|cap| {
+                cap.owner == pid
+                    && cap.resource_type == ResourceType::Console
+                    && cap.rights.has(Rights::WRITE)
+            })
+            .unwrap_or(false)
+    };
+    if !permitted {
+        shivacore::security::record(
+            "identity",
+            "identity.denied",
+            &alloc::format!("pid={:?} cap={}", pid, handle.0),
+            shivacore::security::AuditResult::Denied,
+        );
+        return SyscallResponse::err(AbiError::PermissionDenied);
+    }
+
+    let length = request.buffer_len;
+    if length == 0 || length > IDENTITY_MAX_PASSWORD_BYTES {
+        return SyscallResponse::err(AbiError::InvalidPayload);
+    }
+    let space = USER_SCHEDULER
+        .lock()
+        .as_ref()
+        .and_then(|scheduler| scheduler.address_space(pid));
+    let Some(space) = space else {
+        return SyscallResponse::err(AbiError::InvalidPayload);
+    };
+    if !space.range_readable(request.buffer_ptr, length) {
+        return SyscallResponse::err(AbiError::InvalidPayload);
+    }
+
+    // Kopie in den Kernel, danach wird nur noch Kernspeicher gelesen.
+    let mut password = [0u8; IDENTITY_MAX_PASSWORD_BYTES];
+    unsafe {
+        core::ptr::copy_nonoverlapping(
+            request.buffer_ptr as *const u8,
+            password.as_mut_ptr(),
+            length,
+        );
+    }
+    let started = unsafe { core::arch::x86_64::_rdtsc() };
+    let outcome = crate::identity_gate::check(&password[..length]);
+    let cycles = unsafe { core::arch::x86_64::_rdtsc() }.saturating_sub(started);
+    // Das Passwort bleibt nicht im Kernspeicher liegen.
+    password.fill(0);
+
+    serial_println!(
+        "ShivaCore: Anmeldepruefung: PID={} Ergebnis={:?} ({} TSC-Zyklen, {} Byte)",
+        pid.0,
+        outcome,
+        cycles,
+        length
+    );
+    shivacore::security::record(
+        "identity",
+        "identity.checked",
+        &alloc::format!("pid={:?} outcome={:?}", pid, outcome),
+        match outcome {
+            shivacore::identity_check::CheckOutcome::Ok => {
+                shivacore::security::AuditResult::Allowed
+            }
+            shivacore::identity_check::CheckOutcome::WrongPassword => {
+                shivacore::security::AuditResult::Denied
+            }
+            _ => shivacore::security::AuditResult::Error,
+        },
+    );
+    SyscallResponse::ok(outcome.code())
+}
+
 /// Gibt einem Prozess Leserecht auf den Kernel-Eingabekanal und merkt, dass der Userspace liest.
 pub fn grant_input_read(pid: Pid) -> Option<u64> {
     let mut gate = SYSCALL_GATE.lock();
@@ -1987,6 +2078,14 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
     // behandelt — an derselben Stelle wie `Exit`, aus demselben Grund.
     if request.syscall_id == libshivacore::Syscall::Console.id() {
         let response = handle_console(pid, request);
+        reply(frame, response.value, response.error);
+        return;
+    }
+
+    // Anmeldepruefung: wie die Konsole braucht sie Bildschirmbesitz und eine
+    // Kopie aus dem Prozessspeicher, deshalb an derselben Stelle.
+    if request.syscall_id == libshivacore::Syscall::IdentityCheck.id() {
+        let response = handle_identity_check(pid, request);
         reply(frame, response.value, response.error);
         return;
     }
