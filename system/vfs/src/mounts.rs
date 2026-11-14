@@ -3,14 +3,17 @@
 use crate::{Mount, path};
 
 #[derive(Debug, Default, Clone)]
+/// Einhaengepunkte und ihre Zuordnung zu Pfaden.
 pub struct MountTable {
     mounts: Vec<Mount>,
 }
 
 impl MountTable {
+    /// Leere Tabelle.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Fuegt einen Mount ein; falsch bei ungueltigem Pfad oder Doppelung.
     pub fn add(&mut self, mount: Mount) -> bool {
         let Ok(path) = path::normalize(&mount.mountpoint) else {
             return false;
@@ -29,6 +32,7 @@ impl MountTable {
         });
         true
     }
+    /// Mount fuer einen Pfad; der Root-Mount passt auf jeden absoluten Pfad.
     pub fn resolve(&self, path: &str) -> Option<&Mount> {
         let normalized = path::normalize(path).ok()?;
         self.mounts.iter().find(|m| {
@@ -38,6 +42,7 @@ impl MountTable {
                 || normalized.starts_with(&(m.mountpoint.clone() + "/"))
         })
     }
+    /// Alle Mounts in Einfuegereihenfolge.
     pub fn mounts(&self) -> &[Mount] {
         &self.mounts
     }
