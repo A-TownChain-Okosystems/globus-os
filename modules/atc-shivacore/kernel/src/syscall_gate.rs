@@ -158,6 +158,8 @@ mod tests {
 
     #[test]
     fn gate_enforces_capability_ownership() {
+        let _kanal = crate::ipc_lifecycle::CHANNELS_TEST_LOCK.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         let mut gate = SyscallGate::new();
         let cap =
             gate.capabilities_mut()
@@ -225,6 +227,8 @@ mod tests {
 
     #[test]
     fn gate_records_capability_events_in_audit_log() {
+        let _kanal = crate::ipc_lifecycle::CHANNELS_TEST_LOCK.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         let mut gate = SyscallGate::new();
         let before = crate::security::recorded_events();
         let cap = gate.grant_channel_read(pid(11), 0x1234);
