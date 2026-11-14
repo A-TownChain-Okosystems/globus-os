@@ -151,6 +151,36 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("Heap-Initialisierung fehlgeschlagen");
     serial_println!("ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).");
 
+    // IDENT-001 Messung (Owner-Entscheidung 14.11.2026): Die Pruefung braucht
+    // 19 MiB am Stueck. Ob das Image sie bereitstellen kann, wird gemessen und
+    // nicht geschaetzt; ohne die 19 MiB lehnt die KDF fail-closed ab.
+    {
+        use core::alloc::Layout;
+        let need = Layout::from_size_align(19 * 1024 * 1024, 8).expect("Layout 19 MiB");
+        // Safety: nur anfordern und bei Erfolg sofort zurueckgeben.
+        let probe = unsafe { alloc::alloc::alloc(need) };
+        serial_println!(
+            "ShivaCore: IDENT-001 Haufen: HEAP_START={:#x} HEAP_SIZE={} KiB, Allokator meldet frei={} Byte, Probe-Zeiger={:?}",
+            allocator::HEAP_START,
+            allocator::HEAP_SIZE / 1024,
+            allocator::free_bytes(),
+            probe
+        );
+        if probe.is_null() {
+            serial_println!(
+                "ShivaCore: IDENT-001 Messung: 19 MiB NICHT verfuegbar (Haufen {} KiB) — die Pruefung wuerde fail-closed ablehnen",
+                allocator::HEAP_SIZE / 1024
+            );
+        } else {
+            // Safety: derselbe Zeiger, derselbe Layout wie oben.
+            unsafe { alloc::alloc::dealloc(probe, need) };
+            serial_println!(
+                "ShivaCore: IDENT-001 Messung: 19 MiB verfuegbar (Haufen {} KiB) — Messung im Image moeglich",
+                allocator::HEAP_SIZE / 1024
+            );
+        }
+    }
+
     // SC-006 REQ-03: Die LAPIC-Registerschicht an das MMIO-Fenster anbinden.
     // Ohne diesen Schritt blieb `apic.rs` folgenlos.
     let lapic_address = map_mmio_page(&mut mapper, &mut frame_allocator, lapic_base);
