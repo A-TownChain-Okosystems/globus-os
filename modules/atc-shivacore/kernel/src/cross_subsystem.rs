@@ -23,10 +23,15 @@ use crate::process::{ProcessManager, ProcessState};
 
 /// Test-Harness: erzeugt ein frisches Set aller Subsysteme
 pub struct TestHarness {
+    /// Capability-Tabelle des Harness; jede Rechtepruefung laeuft gegen dieses eine Exemplar.
     pub caps: CapabilityTable,
+    /// Speicherverwaltung des Harness.
     pub mem: KernelMemoryManager,
+    /// Dateisystem des Harness.
     pub fs: AtcFileSystem,
+    /// Prozessverwaltung des Harness.
     pub proc_mgr: ProcessManager,
+    /// IPC-Subsystem des Harness.
     pub ipc: IpcSubsystem,
 }
 
@@ -37,6 +42,7 @@ impl Default for TestHarness {
 }
 
 impl TestHarness {
+    /// Frisches Set aller fuenf Subsysteme fuer einen Testlauf.
     pub fn new() -> Self {
         Self {
             caps: CapabilityTable::new(),
