@@ -70,13 +70,13 @@ Form oder Lücke · **NEIN** = nicht vorhanden.
 | `generate_mnemonic` | `create_wallet` → `Mnemonic::generate_in(Language::English, 24)` (`identity/src/lib.rs:237`) | **JA**, aber im Identity-Crate, nicht in einer Wallet |
 | `validate_mnemonic` | `Mnemonic::parse_in_normalized` + Wortzahlprüfung (`lib.rs:269`), `RecoveryConfirmation` (`account_lifecycle.rs:58`) | **JA** |
 | `derive_wallet_keys` | `derive_private_key`: `HMAC-SHA256(key = "A-TownChain", seed)` (`lib.rs:286`) | **JA — eine einzige Strecke, kein Pfad, keine Domäne** |
-| `get_wallet_public_identity` | `public_key_to_address`: doppelt SHA-256, 35 Zeichen `ATC…` (`lib.rs:298`) | **JA** |
+| `get_wallet_public_identity` | `public_key_to_address`: doppelt SHA-256, 35 Zeichen `ATC…` (`lib.rs:329`) | **JA** |
 | `sign_transaction` | `WalletService::sign` (`wallet-service/src/lib.rs:91`) über `KeyStore`; in Tests ein Platzhalter, **kein echtes Signaturverfahren** | **TEILS** |
 | `restore_wallet` | `restore_wallet` (`lib.rs:258`), `IdentityService::restore` (`service.rs:106`) | **JA** |
 
 **Befund, der die Spezifikation betrifft (verschärft in `SPEC-RECOVERY-001.md`
 §15.1): `derive_public_key` ist `SHA-256` des privaten Werts
-(`system/identity/src/lib.rs:295`), also ein Hash und kein Kurvenpunkt; und
+(`system/identity/src/lib.rs:326`), also ein Hash und kein Kurvenpunkt; und
 `create_wallet` verwirft privaten und öffentlichen Wert nach der
 Adressberechnung. Es gibt deshalb heute **kein** Wallet-Schlüsselmaterial, weder
 gespeichert noch im Speicher, und keine prüfbare Signatur.
