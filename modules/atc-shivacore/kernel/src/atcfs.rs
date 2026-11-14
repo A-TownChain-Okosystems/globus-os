@@ -26,14 +26,23 @@ pub type FileHandle = u64;
 /// Datei-/Verzeichnis-Knoten
 #[derive(Debug, Clone, PartialEq)]
 pub struct AtcNode {
+    /// Vollstaendiger Pfad des Knotens.
     pub path: String,
+    /// Letzter Abschnitt des Pfades.
     pub name: String,
+    /// True bei einem Verzeichnis.
     pub is_dir: bool,
+    /// Prozess, dem der Knoten gehoert.
     pub owner: Pid,
+    /// Kennung des Inhalts; bei einem Verzeichnis leer.
     pub content_cid: Cid,
+    /// Groesse des Inhalts in Byte.
     pub size: u64,
+    /// Zeitpunkt der Anlage in der simulierten Zeit.
     pub created: u64,
+    /// Zeitpunkt der letzten Aenderung in der simulierten Zeit.
     pub modified: u64,
+    /// Pfade der direkten Kinder; bei einer Datei leer.
     pub children: Vec<String>,
 }
 
@@ -58,12 +67,19 @@ struct OpenFile {
 /// Fehler bei FS-Operationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FsError {
+    /// Kein Knoten unter diesem Pfad.
     NotFound,
+    /// Der Aufrufer darf nicht zugreifen.
     PermissionDenied,
+    /// Unter dem Pfad liegt bereits ein Knoten.
     AlreadyExists,
+    /// Ein Teil des Pfades ist eine Datei; von keiner Stelle erzeugt.
     NotADirectory,
+    /// Der Aufruf erwartet eine Datei, bekommen hat er ein Verzeichnis.
     IsADirectory,
+    /// Die Dateikennung ist unbekannt; von keiner Stelle erzeugt.
     InvalidHandle,
+    /// Kein Platz mehr; von keiner Stelle erzeugt.
     OutOfSpace,
 }
 
@@ -100,6 +116,7 @@ impl Default for AtcFileSystem {
 }
 
 impl AtcFileSystem {
+    /// Dateisystem mit angelegter Wurzel; Dateikennungen beginnen bei 1.
     pub fn new() -> Self {
         let mut fs = Self {
             nodes: BTreeMap::new(),
@@ -179,6 +196,7 @@ impl AtcFileSystem {
         }
     }
 
+    /// True, wenn unter dem Pfad ein Knoten liegt; ein abschliessender Schraegstrich wird ignoriert.
     pub fn exists(&self, path: &str) -> bool {
         self.nodes.contains_key(path.trim_end_matches('/')) || path == "/"
     }
@@ -343,9 +361,13 @@ impl AtcFileSystem {
 /// Manifest fuer On-Chain-Anchoring
 #[derive(Debug, Clone, PartialEq)]
 pub struct Manifest {
+    /// Wurzel-Hash ueber die sortierten Eintraege aus Pfad und Inhaltskennung, ohne Domaenenpraefix.
     pub root_hash: String,
+    /// Anzahl der Dateien; Verzeichnisse zaehlen nicht mit.
     pub file_count: u64,
+    /// Summe der gespeicherten Inhalte. Gleiche Inhalte liegen nur einmal und zaehlen einmal.
     pub total_size: u64,
+    /// Zeitpunkt der Erzeugung in der simulierten Zeit.
     pub generated_at: u64,
 }
 
