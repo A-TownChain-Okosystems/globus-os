@@ -65,6 +65,42 @@ muss der Syscall-Pfad dieselben Bausteine benutzen, die der Bootpfad benutzt
 Ein Spawn, der `ok(pid)` zurueckgibt, waere eine Luege; ein Spawn, der
 `ResourceExhausted` sagt, waere die Wahrheit.
 
+## 4a. Der aufbauende Weg steht (14.11.2026)
+
+Der Bau eines Adressraums aus dem Laufzeitkontext ist umgesetzt und im Lauf
+belegt, nicht nur geplant:
+
+- **Bootbezug veroeffentlicht** (`spawn_build::publish_boot_reference`):
+  Speicherabstand und physische Adresse der **Kernel-Wurzel**. Die aktive Wurzel
+  taugt nicht als Quelle — beim Bau eines zweiten Raums ist das schon die
+  Tabelle des ersten, und daraus geerbt wandert dessen Stapel mit.
+- **Platzregel in der lib** (`spawn::layout_for_slot`, drei Tests): Platz *n*
+  bekommt `0x0400_0000 + n * 4 MiB`, Code/Daten/Haufen/Stapel im Fenster
+  disjunkt, unter dem Boot-Stapelfenster, und die beim Boot vergebenen Fenster
+  (`0x0140_0000..0x01C0_0000`) bleiben unberuehrt. Deterministisch, damit ein
+  Raum nach einem Neustart dieselben Adressen hat.
+- **`spawn_build::build_space`** benutzt dieselben Bausteine wie der Bootpfad
+  (`AddressSpace::create` aus der Kernel-Wurzel, `map_binary`, Anmeldung beim
+  Reclaimer) — kein zweiter Weg zum selben Ziel.
+
+Ein Befund aus dem ersten Versuch, der eine Annahme widerlegt: `map_binary`
+schreibt ueber die **virtuellen** Adressen des neuen Raums. Der Bootpfad ruft
+deshalb vorher `install()`; ein Raum, der nicht aktiv ist, hat diese Adressen
+nicht, und der Schreibzugriff endet in einem Seitenfehler bei `0x0400_0000`
+(im Lauf gesehen). Deshalb wechselt `build_space` fuer die Abbildung kurz auf
+den neuen Raum und danach zurueck — die Kernel-Haelfte ist in beiden gleich,
+laufender Code und Stapel bleiben gueltig, Unterbrechungen sind fuer die Dauer
+des Wechsels aus.
+
+Nachweis im Lauf (Boot-Selbsttest, der einen Raum baut und wieder freigibt):
+
+```
+Aufbauender Weg: Adressraum gebaut (Platz=0, Wurzel=0x149000, 23 Frames), 23 Frames wieder freigegeben
+```
+
+Damit fehlt fuer einen echten Prozessstart nur noch die ABI-Seite: Nummer,
+Recht und die Uebergabe an den Scheduler (Abschnitt 6).
+
 ## 5. Reihenfolge
 
 1. Segmente abbilden (Blocker 1) — reine Kernel-Korrektheit, keine ABI-Aenderung,
