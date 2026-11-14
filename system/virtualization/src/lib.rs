@@ -6,30 +6,45 @@
 use std::collections::BTreeMap;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Identifier of a managed VM.
 pub struct VmId(pub u64);
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Guest OS profile a config targets.
 pub enum GuestProfile {
+    /// 64-bit x86 Linux guest.
     LinuxX86_64,
+    /// 64-bit x86 Windows guest.
     WindowsX86_64,
+    /// macOS guest; depends on the platform hypervisor.
     MacOs,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Requested shape of a VM.
 pub struct VmConfig {
+    /// Display name; must not be empty.
     pub name: String,
+    /// Guest OS profile.
     pub guest: GuestProfile,
+    /// Virtual CPU count; must be non-zero.
     pub vcpus: u16,
+    /// Memory in MiB; must be non-zero.
     pub memory_mib: u64,
+    /// Disk in MiB; must be non-zero.
     pub disk_mib: u64,
 }
 
 /// Last lifecycle state confirmed by a successful backend operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VmState {
+    /// Created in the backend, never started.
     Created,
+    /// Backend confirmed the guest is running.
     Running,
+    /// Execution suspended, state preserved.
     Paused,
+    /// Stopped; can be started again or destroyed.
     Stopped,
     /// Reserved for a future backend-reconciliation path. The current manager
     /// never sets this variant because an operation error alone cannot prove
@@ -38,46 +53,74 @@ pub enum VmState {
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+/// Permissions the caller presents for one operation.
 pub struct VmPermissions {
+    /// Create and destroy VMs.
     pub manage: bool,
+    /// Start and resume VMs.
     pub start: bool,
+    /// Pause running VMs.
     pub pause: bool,
+    /// Stop VMs.
     pub stop: bool,
+    /// Destroy VMs and release their storage.
     pub destroy: bool,
+    /// Read state, metrics and listings.
     pub inspect: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Host-wide quotas plus the memory the host keeps for itself.
 pub struct ResourceLimits {
+    /// Maximum number of managed VMs.
     pub max_vms: usize,
+    /// Upper bound for the summed vCPUs.
     pub max_total_vcpus: u64,
+    /// Upper bound for the summed guest memory in MiB.
     pub max_total_memory_mib: u64,
+    /// Upper bound for the summed guest disk in MiB.
     pub max_total_disk_mib: u64,
+    /// Memory kept free for the host.
     pub host_memory_reserve_mib: u64,
+    /// Total host memory available.
     pub host_memory_total_mib: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Snapshot of one VM for listings.
 pub struct VmMetrics {
+    /// VM the snapshot belongs to.
     pub id: VmId,
+    /// Last confirmed lifecycle state.
     pub state: VmState,
+    /// Configured vCPU count.
     pub vcpus: u16,
+    /// Configured memory in MiB.
     pub memory_mib: u64,
+    /// Configured disk in MiB.
     pub disk_mib: u64,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
+/// Failures of the VM manager.
 pub enum VmError {
+    /// The caller lacks the permission for this operation.
     PermissionDenied,
+    /// Config rejected; the string names the offending field.
     InvalidConfig(&'static str),
+    /// A quota would be exceeded; the string names it.
     ResourceLimit(&'static str),
+    /// No VM with that identifier is managed here.
     UnknownVm(VmId),
+    /// Operation is not allowed in the current state.
     InvalidState {
         id: VmId,
         state: VmState,
         operation: &'static str,
     },
+    /// The identifier counter is exhausted.
     IdExhausted,
+    /// Backend reported an error; the real state may be uncertain.
     Backend(String),
 }
 
@@ -88,13 +131,20 @@ pub enum VmError {
 /// backend state as potentially uncertain after an error and reconcile it
 /// before retrying or making destructive decisions.
 pub trait VmBackend {
+    /// Backend-defined handle for one VM.
     type Handle: Clone;
 
+    /// Creates the VM in the backend without starting it.
     fn create(&mut self, config: &VmConfig) -> Result<Self::Handle, String>;
+    /// Starts a created VM; error when the transition cannot be confirmed.
     fn start(&mut self, handle: &Self::Handle) -> Result<(), String>;
+    /// Suspends a running VM.
     fn pause(&mut self, handle: &Self::Handle) -> Result<(), String>;
+    /// Resumes a paused VM.
     fn resume(&mut self, handle: &Self::Handle) -> Result<(), String>;
+    /// Stops a VM and keeps its definition.
     fn stop(&mut self, handle: &Self::Handle) -> Result<(), String>;
+    /// Destroys the VM and releases its storage.
     fn destroy(&mut self, handle: &Self::Handle) -> Result<(), String>;
 }
 
@@ -114,6 +164,7 @@ pub struct VmManager<B: VmBackend> {
 }
 
 impl<B: VmBackend> VmManager<B> {
+    /// Creates the manager; rejects a host reserve larger than host memory.
     pub fn new(backend: B, limits: ResourceLimits) -> Result<Self, VmError> {
         if limits.host_memory_reserve_mib > limits.host_memory_total_mib {
             return Err(VmError::InvalidConfig("host reserve exceeds host memory"));
@@ -126,6 +177,7 @@ impl<B: VmBackend> VmManager<B> {
         })
     }
 
+    /// Validates config and quotas, then creates the VM in the backend.
     pub fn create_vm(
         &mut self,
         config: VmConfig,
@@ -191,6 +243,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(id)
     }
 
+    /// Created to Running, only after the backend confirmed the start.
     pub fn start_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.start {
             return Err(VmError::PermissionDenied);
@@ -210,6 +263,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
+    /// Running to Paused.
     pub fn pause_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.pause {
             return Err(VmError::PermissionDenied);
@@ -227,6 +281,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
+    /// Paused to Running; needs the start permission.
     pub fn resume_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.start {
             return Err(VmError::PermissionDenied);
@@ -244,6 +299,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
+    /// Created, Running or Paused to Stopped; a created VM is not stopped in the backend.
     pub fn stop_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.stop {
             return Err(VmError::PermissionDenied);
@@ -266,6 +322,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
+    /// Destroys a Created, Stopped or Failed VM and removes it from the map.
     pub fn destroy_vm(&mut self, id: VmId, permissions: VmPermissions) -> Result<(), VmError> {
         if !permissions.destroy {
             return Err(VmError::PermissionDenied);
@@ -286,6 +343,7 @@ impl<B: VmBackend> VmManager<B> {
         Ok(())
     }
 
+    /// Last state the backend confirmed.
     pub fn get_vm_state(&self, id: VmId, permissions: VmPermissions) -> Result<VmState, VmError> {
         if !permissions.inspect {
             return Err(VmError::PermissionDenied);
@@ -296,6 +354,7 @@ impl<B: VmBackend> VmManager<B> {
             .ok_or(VmError::UnknownVm(id))
     }
 
+    /// Metrics of one VM.
     pub fn get_vm_metrics(
         &self,
         id: VmId,
@@ -314,6 +373,7 @@ impl<B: VmBackend> VmManager<B> {
         })
     }
 
+    /// Metrics of all managed VMs, sorted by identifier.
     pub fn list_vms(&self, permissions: VmPermissions) -> Result<Vec<VmMetrics>, VmError> {
         if !permissions.inspect {
             return Err(VmError::PermissionDenied);
@@ -331,6 +391,7 @@ impl<B: VmBackend> VmManager<B> {
             .collect())
     }
 
+    /// Consumes the manager and returns the backend.
     pub fn into_backend(self) -> B {
         self.backend
     }
