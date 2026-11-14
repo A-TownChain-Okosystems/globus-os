@@ -36,29 +36,49 @@ const PF_R: u32 = 4; // Read
 // ELF64 Header
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Kopfdaten einer ELF64-Datei, wie der Parser sie liefert.
 #[derive(Clone, Debug)]
 pub struct Elf64Header {
+    /// Klassenbyte; 2 steht fuer 64 Bit.
     pub e_class: u8,
+    /// Bytereihenfolge; 1 steht fuer little-endian.
     pub e_data: u8,
+    /// Dateityp; 2 steht fuer ausfuehrbar.
     pub e_type: u16,
+    /// Befehlsarchitektur; 62 steht fuer x86-64.
     pub e_machine: u16,
+    /// Einsprungadresse.
     pub e_entry: u64,
+    /// Versatz der Programmkopftabelle.
     pub e_phoff: u64, // Program header table offset
+    /// Versatz der Abschnittskopftabelle; wird gelesen, beim Laden aber nicht ausgewertet.
     pub e_shoff: u64, // Section header table offset
+    /// Anzahl der Programmkoepfe.
     pub e_phnum: u16, // Number of program headers
+    /// Anzahl der Abschnittskoepfe; wird beim Laden nicht ausgewertet.
     pub e_shnum: u16, // Number of section headers
+    /// Index der Abschnittsnamen-Tabelle; wird beim Laden nicht ausgewertet.
     pub e_shstrndx: u16,
 }
 
+/// Ablehnungsgruende beim Lesen einer ELF64-Datei.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ElfParseError {
+    /// Die ersten vier Byte sind keine ELF-Kennung.
     InvalidMagic,
+    /// Die Datei ist nicht fuer 64 Bit gebaut.
     InvalidClass,
+    /// Die Datei ist nicht little-endian.
     InvalidEndian,
+    /// Die Datei ist nicht als ausfuehrbar gekennzeichnet.
     InvalidType,
+    /// Die Datei ist nicht fuer x86-64 gebaut.
     InvalidMachine,
+    /// Die Eingabe ist kuerzer als der angekuendigte Inhalt.
     Truncated,
+    /// Ein Kopf- oder Segmentversatz liegt ausserhalb der Eingabe.
     InvalidOffset,
+    /// Kein Segment ist zum Laden markiert.
     NoLoadableSegments,
 }
 
@@ -81,34 +101,49 @@ impl core::fmt::Display for ElfParseError {
 // ELF64 Program Header
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Ein Programmsegment mit Typ, Rechten, Versatz, Adressen und Laengen.
 #[derive(Clone, Debug)]
 pub struct Elf64ProgramHeader {
+    /// Segmenttyp.
     pub p_type: u32,
+    /// Rechtebits: 1 ausfuehren, 2 schreiben, 4 lesen.
     pub p_flags: u32,
+    /// Versatz des Segmentinhalts in der Datei.
     pub p_offset: u64,
+    /// Virtuelle Adresse des Segments; der Ladepfad uebernimmt den Inhalt, nicht die Adresse.
     pub p_vaddr: u64,
+    /// Physische Adresse aus der Datei; wird beim Laden nicht verwendet.
     pub p_paddr: u64,
+    /// Laenge des Inhalts in der Datei.
     pub p_filesz: u64,
+    /// Laenge im Speicher; ein groesserer Wert als p_filesz bedeutet Nullauffuellung.
     pub p_memsz: u64,
+    /// Ausrichtung des Segments; wird beim Laden nicht ausgewertet.
     pub p_align: u64,
 }
 
 impl Elf64ProgramHeader {
+    /// True fuer ein Segment vom Typ PT_LOAD.
     pub fn is_loadable(&self) -> bool {
         self.p_type == PT_LOAD
     }
+    /// True, wenn das Ausfuehrrecht gesetzt ist.
     pub fn is_executable(&self) -> bool {
         (self.p_flags & PF_X) != 0
     }
+    /// True, wenn das Schreibrecht gesetzt ist.
     pub fn is_writable(&self) -> bool {
         (self.p_flags & PF_W) != 0
     }
+    /// True, wenn das Leserecht gesetzt ist.
     pub fn is_readable(&self) -> bool {
         (self.p_flags & PF_R) != 0
     }
+    /// True, wenn das Segment im Speicher laenger ist als in der Datei.
     pub fn needs_bss(&self) -> bool {
         self.p_memsz > self.p_filesz
     }
+    /// Differenz zwischen Speicher- und Dateilaenge; nie negativ.
     pub fn bss_size(&self) -> u64 {
         self.p_memsz.saturating_sub(self.p_filesz)
     }
@@ -118,6 +153,7 @@ impl Elf64ProgramHeader {
 // ELF64 Parser
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Gelesene Datei mit Kopf und Programmkoepfen.
 pub struct ElfParser<'a> {
     data: &'a [u8],
     header: Elf64Header,
@@ -210,15 +246,19 @@ impl<'a> ElfParser<'a> {
         })
     }
 
+    /// Einsprungadresse aus dem Kopf.
     pub fn entry_point(&self) -> u64 {
         self.header.e_entry
     }
+    /// Kopf der Datei.
     pub fn header(&self) -> &Elf64Header {
         &self.header
     }
+    /// Alle Programmkoepfe in Dateireihenfolge.
     pub fn program_headers(&self) -> &[Elf64ProgramHeader] {
         &self.program_headers
     }
+    /// Nur die zum Laden markierten Segmente.
     pub fn loadable_segments(&self) -> impl Iterator<Item = &Elf64ProgramHeader> {
         self.program_headers.iter().filter(|p| p.is_loadable())
     }
@@ -250,6 +290,7 @@ impl<'a> ElfParser<'a> {
 
 use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
 
+/// Laedt eine ELF64-Datei in die Prozessverwaltung; uebernommen werden Einsprungadresse sowie Code- und Datensegment-Inhalt.
 pub struct ElfLoader;
 
 impl ElfLoader {
@@ -334,10 +375,14 @@ impl ElfLoader {
     }
 }
 
+/// Fehler beim Laden.
 #[derive(Debug)]
 pub enum ElfLoadError {
+    /// Die Datei ist nicht lesbar; der Grund steht im Parserfehler.
     Parse(ElfParseError),
+    /// Es gibt kein ausfuehrbares Segment.
     NoCodeSegment,
+    /// Die Prozessverwaltung hat die Datei abgelehnt.
     Userspace(UserspaceError),
 }
 
@@ -384,6 +429,7 @@ pub enum Signal {
 }
 
 impl Signal {
+    /// Signal zu einer Nummer; None bei unbekannter Nummer.
     pub fn from_u32(n: u32) -> Option<Self> {
         match n {
             1 => Some(Signal::SigHup),
@@ -400,15 +446,18 @@ impl Signal {
             _ => None,
         }
     }
+    /// True fuer Signale, die sich nicht sperren lassen.
     pub fn is_unblockable(&self) -> bool {
         matches!(self, Signal::SigKill | Signal::SigStop)
     }
+    /// True fuer Signale, deren Standardwirkung den Prozess beendet.
     pub fn is_fatal(&self) -> bool {
         matches!(
             self,
             Signal::SigKill | Signal::SigTerm | Signal::SigSegv | Signal::SigHup | Signal::SigInt
         )
     }
+    /// Kurzname des Signals.
     pub fn name(&self) -> &'static str {
         match self {
             Signal::SigHup => "SIGHUP",
@@ -441,14 +490,20 @@ pub enum SignalDisposition {
 /// Default action for a signal
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SignalAction {
+    /// Der Prozess wird beendet.
     Terminate,
+    /// Der Prozess wird beendet und ein Kernabbild geschrieben.
     TerminateCore, // Terminate + core dump
+    /// Der Prozess wird angehalten.
     Stop,
+    /// Ein angehaltener Prozess laeuft weiter.
     Continue,
+    /// Das Signal bleibt ohne Wirkung.
     Ignore,
 }
 
 impl Signal {
+    /// Standardwirkung des Signals.
     pub fn default_action(&self) -> SignalAction {
         match self {
             Signal::SigKill | Signal::SigTerm | Signal::SigHup | Signal::SigInt => {
@@ -467,8 +522,11 @@ impl Signal {
 /// Pending signal for a process
 #[derive(Clone, Debug)]
 pub struct PendingSignal {
+    /// Das anstehende Signal.
     pub signal: Signal,
+    /// Absender, sofern bekannt.
     pub sender: Option<Pid>,
+    /// Begleitwert des Signals.
     pub data: u64,
 }
 
@@ -492,6 +550,7 @@ impl Default for SignalManager {
 }
 
 impl SignalManager {
+    /// Leere Verwaltung ohne Handler, ohne Anstehendes, ohne Sperren und mit Nullzaehlern.
     pub fn new() -> Self {
         Self {
             handlers: Vec::new(),
@@ -680,9 +739,11 @@ impl SignalManager {
     pub fn signals_sent(&self) -> u64 {
         self.signals_sent
     }
+    /// Anzahl ausgelieferter Signale.
     pub fn signals_delivered(&self) -> u64 {
         self.signals_delivered
     }
+    /// Anzahl der Prozesse mit hinterlegten Handlern.
     pub fn registered_count(&self) -> usize {
         self.handlers.len()
     }
