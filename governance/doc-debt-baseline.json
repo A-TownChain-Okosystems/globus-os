@@ -1,7 +1,7 @@
 {
-  "total": 1163,
+  "total": 1119,
   "per_crate": {
     "modules/atc-shivacore/kernel": 864,
-    "modules/atc-shivacore/service_space": 299
+    "modules/atc-shivacore/service_space": 255
   }
 }
