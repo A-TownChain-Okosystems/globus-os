@@ -1,11 +1,7 @@
 {
-  "repo": "globus-os",
-  "head": "9472b4c",
-  "metric": "v2: Top-Level-Items + oeffentliche Felder + Enum-Varianten + Trait-Items, ohne legacy/ und archive/",
-  "note": "Neuanordnung der Messung, kein Regress: v1 (2457 bzw. 3051) war eine Teilmenge. Ab hier gilt nur noch sinkend.",
-  "total": 2781,
+  "total": 2680,
   "per_crate": {
-    "modules/atc-shivacore/kernel": 1288,
+    "modules/atc-shivacore/kernel": 1187,
     "modules/atc-shivacore/service_space": 1493
   }
 }
