@@ -2,7 +2,11 @@
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
 > **Stand:** 14.11.2026, erzeugt aus `git ls-tree -r origin/main` gegen
-> `5830fca` zuzueglich des Anmeldefensters: 540 Dateien. Die Liste ist vollständig; der vorige Stand
+> `5830fca` zuzueglich des Anmeldefensters: 540 Dateien; dazu die
+> Wiederherstellungsspezifikation mit ihrem Layout-Pruefer
+> (`docs/identity/SPEC-RECOVERY-001.md`, `scripts/check_recovery_spec.py`)
+> und die Bestandsaufnahme `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md`.
+> Die Liste ist vollständig; der vorige Stand
 > nannte 522 und war um 15 Einträge unvollständig (unter anderem fehlten die
 > neueren Dokumente aus dem Kernel-Strang).
 > **Zeilenzahlen** aus dem committeten Stand, Binärdateien ohne Zahl.
@@ -38,7 +42,7 @@
 | `CONTRIBUTING.md` | 9 |
 | `Cargo.lock` | 5.390 |
 | `Cargo.toml` | 40 |
-| `FILE_REGISTER.md` | 545 |
+| `FILE_REGISTER.md` | 564 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
@@ -80,6 +84,8 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 674 |
+| `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 187 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
 | `governance/doc-debt-baseline.json` | 4 |
@@ -403,6 +409,7 @@
 | `modules/atc-windows-edition/src/wallet.rs` | 38 |
 | `scripts/boot_monitor.py` | 270 |
 | `scripts/check_evidence_binding.py` | 156 |
+| `scripts/check_recovery_spec.py` | 318 |
 | `scripts/doc_debt.py` | 157 |
 | `scripts/qemu_boot.sh` | 91 |
 | `sdk/Cargo.toml` | 11 |
