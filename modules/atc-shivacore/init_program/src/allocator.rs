@@ -11,6 +11,8 @@ use core::sync::atomic::{AtomicUsize, Ordering};
 
 const ARENA_BYTES: usize = 64 * 1024;
 
+/// Bump-Allocator ueber einem festen 64-KiB-Puffer. Gibt nie frei, weil ein
+/// Programm ohne Betriebssystem nur Speicher fuer Syscall-Puffer braucht.
 pub struct Arena {
     memory: UnsafeCell<[u8; ARENA_BYTES]>,
     used: AtomicUsize,
