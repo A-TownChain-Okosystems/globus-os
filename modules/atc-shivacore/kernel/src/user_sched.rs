@@ -24,10 +24,15 @@ use crate::userspace::{PrivilegeLevel, UserContext, UserspaceError, UserspaceMan
 /// On x86-64, IRET pops: SS, RSP, RFLAGS, CS, RIP (in that order from stack).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct IretFrame {
+    /// Ruecksprungadresse im Userspace.
     pub rip: u64,
+    /// Code-Segment; die unteren zwei Bit tragen die Ringnummer.
     pub cs: u16,
+    /// Flag-Register; das Interrupt-Flag muss gesetzt sein.
     pub rflags: u64,
+    /// Stapelzeiger im Userspace.
     pub rsp: u64,
+    /// Stapel-Segment; die unteren zwei Bit tragen die Ringnummer.
     pub ss: u16,
 }
 
@@ -63,25 +68,42 @@ impl IretFrame {
 /// On x86-64, these are pushed/popped manually before/after IRET.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct SavedRegisters {
+    /// Allgemeines Register rax.
     pub rax: u64,
+    /// Allgemeines Register rbx.
     pub rbx: u64,
+    /// Allgemeines Register rcx.
     pub rcx: u64,
+    /// Allgemeines Register rdx.
     pub rdx: u64,
+    /// Allgemeines Register rsi.
     pub rsi: u64,
+    /// Allgemeines Register rdi.
     pub rdi: u64,
+    /// Rahmenzeiger.
     pub rbp: u64,
+    /// Stapelzeiger.
     pub rsp: u64,
+    /// Allgemeines Register r8.
     pub r8: u64,
+    /// Allgemeines Register r9.
     pub r9: u64,
+    /// Allgemeines Register r10.
     pub r10: u64,
+    /// Allgemeines Register r11.
     pub r11: u64,
+    /// Allgemeines Register r12.
     pub r12: u64,
+    /// Allgemeines Register r13.
     pub r13: u64,
+    /// Allgemeines Register r14.
     pub r14: u64,
+    /// Allgemeines Register r15.
     pub r15: u64,
 }
 
 impl SavedRegisters {
+    /// Uebernimmt rax, rbp und rsp aus dem Kontext; die uebrigen dreizehn Register bleiben Null, weil UserContext sie nicht fuehrt. Vollstaendig gefuellt werden sie im Ausnahmepfad aus dem Trap-Rahmen.
     pub fn from_user_context(ctx: &UserContext) -> Self {
         Self {
             rax: ctx.rax,
@@ -91,6 +113,7 @@ impl SavedRegisters {
         }
     }
 
+    /// Schreibt rax, rbp und rsp in den Kontext zurueck; die uebrigen Register werden nicht zurueckgeschrieben.
     pub fn apply_to(&self, ctx: &mut UserContext) {
         ctx.rax = self.rax;
         ctx.rbp = self.rbp;
@@ -101,11 +124,14 @@ impl SavedRegisters {
 /// Full saved context: registers + IRET frame
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct SavedContext {
+    /// Allgemeine Register.
     pub regs: SavedRegisters,
+    /// Rahmen fuer den Ruecksprung in den Ring 3.
     pub iret: IretFrame,
 }
 
 impl SavedContext {
+    /// Baut Register und Ruecksprungrahmen aus dem Kontext.
     pub fn from_user_context(ctx: &UserContext) -> Self {
         Self {
             regs: SavedRegisters::from_user_context(ctx),
@@ -113,6 +139,7 @@ impl SavedContext {
         }
     }
 
+    /// Schreibt Register sowie Befehlszeiger, Stapelzeiger und Flags in den Kontext.
     pub fn apply_to(&self, ctx: &mut UserContext) {
         self.regs.apply_to(ctx);
         ctx.rip = self.iret.rip;
@@ -120,9 +147,11 @@ impl SavedContext {
         ctx.rflags = self.iret.rflags;
     }
 
+    /// True, wenn Code- und Stapelsegment auf Ring 3 zeigen.
     pub fn is_ring3(&self) -> bool {
         self.iret.is_ring3()
     }
+    /// True, wenn der Rahmen nach Ring 3 zeigt, Stapel und Befehlszeiger gesetzt sind und das Interrupt-Flag steht.
     pub fn is_valid(&self) -> bool {
         self.iret.is_valid()
     }
@@ -142,6 +171,7 @@ pub struct Quantum {
 }
 
 impl Quantum {
+    /// Zeitscheibe, deren Rest dem Gesamtwert entspricht.
     pub fn new(ticks: u32) -> Self {
         Self {
             ticks_remaining: ticks,
@@ -149,6 +179,7 @@ impl Quantum {
         }
     }
 
+    /// Zeitscheibe von zehn Intervallen.
     pub fn default_quantum() -> Self {
         Self::new(10)
     }
@@ -161,13 +192,16 @@ impl Quantum {
         self.ticks_remaining == 0
     }
 
+    /// Setzt den Rest auf den Gesamtwert.
     pub fn reset(&mut self) {
         self.ticks_remaining = self.ticks_total;
     }
 
+    /// True, wenn kein Intervall mehr uebrig ist.
     pub fn is_expired(&self) -> bool {
         self.ticks_remaining == 0
     }
+    /// Verbleibende Intervalle.
     pub fn remaining(&self) -> u32 {
         self.ticks_remaining
     }
@@ -208,15 +242,19 @@ pub enum BlockReason {
 }
 
 impl SchedState {
+    /// True fuer bereit und laufend.
     pub fn is_runnable(&self) -> bool {
         matches!(self, SchedState::Ready | SchedState::Running)
     }
+    /// True nur im Zustand laufend.
     pub fn is_running(&self) -> bool {
         matches!(self, SchedState::Running)
     }
+    /// True bei jedem Wartegrund.
     pub fn is_blocked(&self) -> bool {
         matches!(self, SchedState::Blocked(_))
     }
+    /// True bei beendetem, noch nicht abgeholtem Prozess.
     pub fn is_zombie(&self) -> bool {
         matches!(self, SchedState::Zombie(_))
     }
@@ -229,13 +267,21 @@ impl SchedState {
 /// A user process entry in the scheduler
 #[derive(Clone, Debug)]
 pub struct SchedEntry {
+    /// Prozesskennung.
     pub pid: Pid,
+    /// Ablaufzustand.
     pub state: SchedState,
+    /// Aktuelle Zeitscheibe.
     pub quantum: Quantum,
+    /// Prioritaet; 0 ist die hoechste.
     pub priority: u8, // 0 = highest
+    /// Zuletzt gesicherter Kontext.
     pub saved_ctx: SavedContext,
+    /// Summe der dem Prozess zugeteilten Intervalle.
     pub total_cpu_ticks: u64,
+    /// Anzahl der Kontextsicherungen dieses Prozesses.
     pub context_switches: u64,
+    /// Intervall, ab dem ein schlafender Prozess wieder bereit ist.
     pub wake_tick: Option<u64>, // When to wake (for Sleep)
     /// Abbild des Prozesses. Der Syscall-Pfad braucht es, um einen Zeiger aus
     /// dem Userspace gegen die richtige Prozessabbildung zu pruefen; ohne diese
@@ -248,6 +294,7 @@ pub struct SchedEntry {
 }
 
 impl SchedEntry {
+    /// Neuer Eintrag im Zustand bereit mit Standardscheibe und ohne hinterlegte Seitentabelle.
     pub fn new(pid: Pid, ctx: &UserContext, priority: u8) -> Self {
         Self {
             pid,
@@ -263,6 +310,7 @@ impl SchedEntry {
         }
     }
 
+    /// True, wenn der Zustand bereit oder laufend ist.
     pub fn is_runnable(&self) -> bool {
         self.state.is_runnable()
     }
@@ -272,6 +320,7 @@ impl SchedEntry {
         self.save_saved_context(SavedContext::from_user_context(ctx));
     }
 
+    /// Uebernimmt den gesicherten Kontext und zaehlt die Sicherung mit.
     pub fn save_saved_context(&mut self, ctx: SavedContext) {
         self.saved_ctx = ctx;
         self.context_switches += 1;
@@ -315,6 +364,7 @@ impl Default for UserScheduler {
 }
 
 impl UserScheduler {
+    /// Leerer Ablaufplan ohne laufenden Prozess und ohne Zaehler.
     pub fn new() -> Self {
         Self {
             entries: Vec::new(),
@@ -343,6 +393,7 @@ impl UserScheduler {
             .filter(|cr3| *cr3 != 0)
     }
 
+    /// Traegt einen Prozess als bereit ein.
     pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
         self.entries.push(SchedEntry::new(pid, ctx, priority));
     }
@@ -371,6 +422,7 @@ impl UserScheduler {
     pub fn address_space(&self, pid: Pid) -> Option<crate::userspace::UserAddressSpace> {
         self.get_entry(pid).map(|e| e.addr_space.clone())
     }
+    /// Veraenderbarer Zugriff auf den Eintrag eines Prozesses.
     pub fn get_entry_mut(&mut self, pid: Pid) -> Option<&mut SchedEntry> {
         self.entries.iter_mut().find(|e| e.pid == pid)
     }
@@ -508,6 +560,7 @@ impl UserScheduler {
         }
     }
 
+    /// Zaehlt das Intervall, weckt faellige Schlaefer, verbraucht die Zeitscheibe des laufenden Prozesses und plant bei Ablauf neu; sonst sichert er dessen Kontext. Ohne laufenden Prozess wird sofort geplant.
     pub fn timer_tick_saved(&mut self, current_ctx: SavedContext) -> Option<(Pid, SavedContext)> {
         self.timer_ticks += 1;
 
@@ -692,6 +745,7 @@ impl UserScheduler {
     pub fn entries(&self) -> &[SchedEntry] {
         &self.entries
     }
+    /// Anzahl der eingetragenen Prozesse.
     pub fn entry_count(&self) -> usize {
         self.entries.len()
     }
@@ -700,12 +754,15 @@ impl UserScheduler {
     pub fn timer_ticks(&self) -> u64 {
         self.timer_ticks
     }
+    /// Anzahl der Kontextwechsel.
     pub fn context_switches(&self) -> u64 {
         self.context_switches
     }
+    /// Anzahl der Wechsel wegen abgelaufener Zeitscheibe.
     pub fn preemptions(&self) -> u64 {
         self.preemptions
     }
+    /// Anzahl der freiwilligen Abgaben.
     pub fn voluntary_yields(&self) -> u64 {
         self.voluntary_yields
     }
@@ -723,8 +780,11 @@ impl UserScheduler {
 /// Combines UserspaceManager + SignalManager + UserScheduler
 /// into a single coherent user-space process management system.
 pub struct UserProcessSystem {
+    /// Prozessverwaltung im Userspace.
     pub userspace: UserspaceManager,
+    /// Signalverwaltung.
     pub signals: SignalManager,
+    /// Ablaufplanung.
     pub scheduler: UserScheduler,
 }
 
@@ -735,6 +795,7 @@ impl Default for UserProcessSystem {
 }
 
 impl UserProcessSystem {
+    /// Leeres System aus Prozessverwaltung, Signalverwaltung und Ablaufplanung.
     pub fn new() -> Self {
         Self {
             userspace: UserspaceManager::new(),
@@ -816,6 +877,7 @@ impl UserProcessSystem {
     pub fn process_count(&self) -> usize {
         self.scheduler.entry_count()
     }
+    /// Anzahl der laufbereiten Prozesse.
     pub fn runnable_count(&self) -> usize {
         self.scheduler.runnable_count()
     }
