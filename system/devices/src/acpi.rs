@@ -2,33 +2,50 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RsdpV1 {
+    /// Revision des RSDP.
     pub revision: u8,
+    /// Physische Adresse der RSDT.
     pub rsdt_address: u32,
+    /// Pruefsumme ueber die ersten 20 Byte.
     pub checksum: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Root System Description Pointer in Version 2.
 pub struct RsdpV2 {
+    /// Revision des RSDP.
     pub revision: u8,
+    /// Physische Adresse der RSDT.
     pub rsdt_address: u32,
+    /// Physische Adresse der XSDT.
     pub xsdt_address: u64,
+    /// Laenge der Struktur in Byte.
     pub length: u32,
+    /// Pruefsumme ueber die ersten 20 Byte.
     pub checksum: u8,
+    /// Pruefsumme ueber die volle Laenge.
     pub extended_checksum: u8,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler beim Auswerten der ACPI-Tabellen.
 pub enum AcpiError {
+    /// Die Signatur passt nicht.
     InvalidSignature,
+    /// Die Pruefsumme passt nicht.
     InvalidChecksum,
+    /// Die Laenge ist unbrauchbar.
     InvalidLength,
+    /// Eine Adresse ist unbrauchbar oder laeuft ueber.
     InvalidAddress,
 }
 
+/// True, wenn die Bytes in Summe 0 ergeben.
 pub fn checksum_valid(bytes: &[u8]) -> bool {
     bytes.iter().fold(0u8, |a, &b| a.wrapping_add(b)) == 0
 }
 
+/// Prueft Signatur, Laenge und Pruefsummen eines RSDP.
 pub fn validate_rsdp(bytes: &[u8]) -> Result<(), AcpiError> {
     if bytes.len() < 8 {
         return Err(AcpiError::InvalidLength);
@@ -62,10 +79,15 @@ pub fn validate_rsdp(bytes: &[u8]) -> Result<(), AcpiError> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein Fenster aus der MCFG-Tabelle fuer PCI-Konfigurationszugriffe.
 pub struct McfgWindow {
+    /// Physische Basisadresse der ECAM.
     pub base_address: u64,
+    /// PCI-Segment.
     pub segment: u16,
+    /// Erster Bus im Fenster.
     pub start_bus: u8,
+    /// Letzter Bus im Fenster.
     pub end_bus: u8,
 }
 
@@ -86,6 +108,7 @@ impl McfgWindow {
         Ok(())
     }
 
+    /// Adresse eines Konfigurationsregisters; None ausserhalb des Fensters.
     pub fn ecam_address(&self, bus: u8, device: u8, function: u8, offset: u16) -> Option<u64> {
         self.validate().ok()?;
         if bus < self.start_bus
