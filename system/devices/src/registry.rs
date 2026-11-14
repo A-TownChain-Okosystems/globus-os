@@ -5,14 +5,17 @@ use alloc::string::String;
 use alloc::vec::Vec;
 
 #[derive(Debug, Default)]
+/// Erkannte Geraete und ihre Treiberbindung.
 pub struct DeviceRegistry {
     devices: Vec<Device>,
 }
 
 impl DeviceRegistry {
+    /// Leere Registry.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Nimmt ein Geraet auf; false bei doppelter Kennung.
     pub fn register(&mut self, device: Device) -> bool {
         if self.devices.iter().any(|d| d.id == device.id) {
             return false;
@@ -21,6 +24,7 @@ impl DeviceRegistry {
         self.devices.sort_by_key(|d| d.id);
         true
     }
+    /// Bindet einen Treiber an ein Geraet; false, wenn die Kennung unbekannt ist.
     pub fn bind_driver(&mut self, id: DeviceId, driver: String) -> bool {
         let Some(device) = self.devices.iter_mut().find(|d| d.id == id) else {
             return false;
@@ -31,12 +35,15 @@ impl DeviceRegistry {
         device.driver = driver;
         true
     }
+    /// Geraete einer Klasse.
     pub fn by_class(&self, class: DeviceClass) -> impl Iterator<Item = &Device> {
         self.devices.iter().filter(move |d| d.class == class)
     }
+    /// Geraet zu einer Kennung.
     pub fn get(&self, id: DeviceId) -> Option<&Device> {
         self.devices.iter().find(|d| d.id == id)
     }
+    /// Alle Geraete.
     pub fn devices(&self) -> &[Device] {
         &self.devices
     }
