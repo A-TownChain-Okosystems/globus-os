@@ -15,10 +15,13 @@ jobs:
       - uses: actions/checkout@v4
       # Aktuelles Rust Stable (MSRV 1.100, deklariert in jeder Cargo.toml).
       # Nightly bleibt allein dem Kernel-Boot-Image vorbehalten (build-std).
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-uefi
-          components: rustfmt, clippy
+      - name: Toolchain aus rust-toolchain.toml (verbindlich 1.100.0)
+        run: |
+          rustup target add x86_64-unknown-uefi
+          rustup show active-toolchain
+          rustc -vV | grep -qx 'release: 1.100.0'
+          rustc -Vv
+          cargo -V
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Build workspace
