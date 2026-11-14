@@ -75,9 +75,13 @@ pub const RATE_BYTES_REFILL: u32 = 256 * 1024;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum V1Type {
+    /// Tauscht die Faehigkeiten beider Seiten aus (Phase 3 des Handshakes).
     CapabilityExchange = 10,
+    /// Fordert die Gegenstelle zur Authentifizierung auf (Phase 4).
     AuthChallenge = 11,
+    /// Antwort der Gegenstelle auf die Authentifizierungsaufforderung (Phase 4).
     AuthResponse = 12,
+    /// Tauscht Schluesselmaterial fuer die Sitzung aus (Phase 5).
     KeyExchange = 13,
 }
 
@@ -513,12 +517,19 @@ impl SeenSet {
 /// Handshake-Phasen (§8) — strikte Übergänge, Verstoß = PhaseViolation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum HandshakePhase {
+    /// Noch kein Handshake begonnen.
     None = 0,
+    /// Phase 1: HELLO gesendet.
     HelloSent = 1,     // Phase 1 (HELLO)
+    /// Phase 2: Protokollfassung ausgehandelt.
     Negotiated = 2,    // Phase 2 (PROTOCOL_NEGOTIATION)
+    /// Phase 3: Faehigkeiten ausgetauscht.
     Capabilities = 3,  // Phase 3 (CAPABILITY_EXCHANGE)
+    /// Phase 4: Gegenstelle authentifiziert.
     Authenticated = 4, // Phase 4 (AUTHENTICATION)
+    /// Phase 5: Sitzungsschluessel ausgetauscht.
     KeysExchanged = 5, // Phase 5 (KEY_EXCHANGE)
+    /// Phase 6: Sitzung steht.
     Established = 6,   // Phase 6 (SESSION_ESTABLISHED)
 }
 
