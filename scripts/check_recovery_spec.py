@@ -21,6 +21,7 @@ Exit: 0 = alle Zusagen halten, 1 = Widerspruch (mit Stelle im Dokument).
 
 import os
 import struct
+import hmac
 import sys
 
 WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -235,9 +236,9 @@ ADDR_V1_PREFIX = "ATC"
 ADDR_V2_PREFIX = "ATC2"
 DOMAENE_ADRESSE_V2 = "ATC-ADDR-V2"
 DOMAENE_ADRESSE_V2_CHECK = "ATC-ADDR-V2-CHECK"
-LABEL_WALLET = "GLOBUS-WALLET-KEY-V1"
-LABEL_IDENTITAET = "GLOBUS-IDENTITY-KEY-V1"
-LABEL_KNOTEN = "GLOBUS-NODE-KEY-V1"
+LABEL_WALLET = "GLOBUS-WALLET-KEY-V2"
+LABEL_IDENTITAET = "GLOBUS-IDENTITY-KEY-V2"
+LABEL_KNOTEN = "GLOBUS-NODE-KEY-V2"
 
 HEX_PRO_WEITE = 2          # zwei Zeichen je Byte
 ADRESSE_HEX_BYTES = 14     # 14 Byte Hauptteil
@@ -348,12 +349,112 @@ def pruefe_dokument(repo_wurzel: str) -> None:
     for marke, was in [
         ("ADDRESS_ONLY", "E-6: ADDRESS_ONLY steht im Dokument"),
         ("NON_SIGNING", "E-6: NON_SIGNING steht im Dokument"),
-        ("GLOBUS-WALLET-KEY-V1", "E1.3: HKDF-Label Wallet benannt"),
+        (LABEL_WALLET, "E1.3: HKDF-Label Wallet benannt (Suffix = key_version)"),
+        (LABEL_IDENTITAET, "E1.3: HKDF-Label Identitaet benannt"),
+        (LABEL_KNOTEN, "E1.3: HKDF-Label Knoten benannt"),
+        ("PRK", "15.9: gemeinsamer HKDF-PRK benannt"),
+        (SEED_WALLET, "15.9: Wallet-Seed eingefroren"),
+        (ADRESSE_V2_15_9, "15.9: Adresse v2 eingefroren"),
+        (ADRESSE_V1_15_9, "15.9: v1-Adresse als Negativanker eingefroren"),
+        ("REC-T-61", "12: v1/v2-Negativtests in der Matrix"),
         (DID_PREFIX, "E1.4: DID-Praefix steht im Dokument"),
         (DOMAENE_ADRESSE_V2, "E1.4: Domaene der Adresse v2 benannt"),
     ]:
         pruefe(marke in text, was)
 
+
+
+# --------------------------------------------------------------------------
+# Eingefrorene Ableitung key_version = 2 (Abschnitt 15.9)
+#
+# Der Pruefer rechnet PBKDF2, HKDF und beide Adressformen nach. Die
+# Ed25519-Kurvenpunkte kann er nicht rechnen (kein Krypto in der
+# Standardbibliothek); sie stehen deshalb als feste Vektoren und werden ueber
+# DID und Adresse geprueft, also ueber die Rechnung, die aus ihnen folgt.
+# --------------------------------------------------------------------------
+
+SATZ_15_9 = ("abandon " * 23 + "art").strip()
+SEED_BIP39 = ("408b285c123836004f4b8842c89324c1f01382450c0d439af345ba7fc49acf70"
+              "5489c6fc77dbd4e3dc1dd8cc6bc9f043db8ada1e243c4a0eafb290d399480840")
+SEED_WALLET = "8779592f116a7e4a10780ec04e09fbc6fa3263b9d02cc2abf39fbca2c524b190"
+SEED_IDENT = "76bb1b4ae2ff1bf0bb07814d389f06a3c1d33a980d27c07720bb987d6a876513"
+SEED_KNOTEN = "7424cb067cc00dedef77720fcacc251adc60ec86a1225bc48beb66ad150c3898"
+PUB_WALLET = "ce61a516ea04a58b3742ebebd81eeaa135901e7e6cfdd194406d3bb135f3b0a1"
+ADRESSE_V2_15_9 = "ATC29CB48DFF96FEB380FD24F9A44EB42316"
+ADRESSE_V1_15_9 = "ATCEA9DF048839BCA9C9C410E8C2ADEBDBA"
+V1_HMAC = "2650593ba4d3e9576d7998e40c0ba712b61b85fc2f0cadd0d5b40aa9688f61c0"
+V1_PUB = "453f844224e9b0c1cd4236d4dc00b831b9ea9a923fd9624ebf428a35704f16b9"
+TC1_OKM = "3cb25f25faacd57a90434f64d0362f2a2d2d0a90cf1a5a4c5db02d56ecc4c5bf34007208d5b887185865"
+TC3_OKM = "8da4e775a563c18f715f802a063c5a31b8a11f5c5ee1879ec3454e5f3c738d2d9d201395faa4b61a96c8"
+
+
+def hkdf_extract(salt: bytes, ikm: bytes) -> bytes:
+    return hmac.new(salt, ikm, hashlib.sha256).digest()
+
+
+def hkdf_expand(prk: bytes, info: bytes, laenge: int) -> bytes:
+    okm, t, i = b"", b"", 1
+    while len(okm) < laenge:
+        t = hmac.new(prk, t + info + bytes([i]), hashlib.sha256).digest()
+        okm += t
+        i += 1
+    return okm[:laenge]
+
+
+def hkdf(salt: bytes, ikm: bytes, info: bytes, laenge: int) -> bytes:
+    return hkdf_expand(hkdf_extract(salt, ikm), info, laenge)
+
+
+def pruefe_ableitung_v2() -> None:
+    print("\n== Eingefrorene Ableitung key_version = 2 (15.9) ==")
+
+    # 1. HKDF gegen die Norm, damit die Handimplementierung belegt ist.
+    pruefe(hkdf(bytes.fromhex("000102030405060708090a0b0c"), bytes.fromhex("0b" * 22),
+                bytes.fromhex("f0f1f2f3f4f5f6f7f8f9"), 42).hex() == TC1_OKM,
+           "HKDF RFC 5869 TC1 OKM stimmt")
+    pruefe(hkdf(b"", bytes.fromhex("0b" * 22), b"", 42).hex() == TC3_OKM,
+           "HKDF RFC 5869 TC3 OKM stimmt (leeres Salz, leeres info)")
+
+    # 2. Wurzel und die drei Domaenen.
+    seed = hashlib.pbkdf2_hmac("sha512", SATZ_15_9.encode(), b"mnemonic", 2048, 64)
+    pruefe(seed.hex() == SEED_BIP39, "BIP39-Seed aus der Phrase stimmt")
+    pruefe(len(SATZ_15_9.split()) == 24, "Testphrase hat 24 Woerter")
+
+    salt = b"\x00" * 32
+    for label, soll in ((LABEL_WALLET, SEED_WALLET),
+                        (LABEL_IDENTITAET, SEED_IDENT),
+                        (LABEL_KNOTEN, SEED_KNOTEN)):
+        okm = hkdf(salt, seed, label.encode() + b"\x00", 32)
+        pruefe(okm.hex() == soll, f"OKM {label} stimmt")
+        ohne_null = hkdf(salt, seed, label.encode(), 32)
+        pruefe(ohne_null != okm,
+               f"{label}: info ohne Nullbyte ergibt einen anderen OKM")
+
+    # 3. Gemeinsamer PRK, drei Ausgaben: Extract nur einmal.
+    prk = hkdf_extract(salt, seed)
+    for label, soll in ((LABEL_WALLET, SEED_WALLET),
+                        (LABEL_IDENTITAET, SEED_IDENT),
+                        (LABEL_KNOTEN, SEED_KNOTEN)):
+        pruefe(hkdf_expand(prk, label.encode() + b"\x00", 32).hex() == soll,
+               f"{label}: derselbe PRK, andere Expand-Domaene")
+    pruefe(len({SEED_WALLET, SEED_IDENT, SEED_KNOTEN}) == 3,
+           "drei verschiedene OKM, keine gemeinsame Ausgabe")
+
+    # 4. Oeffentliche Kennungen aus den festen Vektoren.
+    pub = bytes.fromhex(PUB_WALLET)
+    pruefe(adresse_v2(pub) == ADRESSE_V2_15_9, "Adresse v2 aus dem Wallet-Pubkey stimmt")
+    pruefe(did(pub) == DID_PREFIX + PUB_WALLET, "DID aus dem Wallet-Pubkey stimmt")
+    pruefe(adresse_v1(bytes.fromhex(V1_HMAC)) == ADRESSE_V1_15_9,
+           "v1-Adresse aus dem v1-HMAC stimmt")
+    pruefe(len(ADRESSE_V1_15_9) == 35 and len(ADRESSE_V2_15_9) == 36,
+           "35 gegen 36 Zeichen: die Fassungen sind beim Lesen unterscheidbar")
+
+    # 5. Die vier Negativzusagen aus 15.9.
+    pruefe(SEED_WALLET != V1_HMAC, "Wallet-Seed ist nicht der v1-HMAC")
+    pruefe(PUB_WALLET != V1_PUB, "Wallet-Pubkey ist nicht der v1-Hash")
+    pruefe(ADRESSE_V2_15_9 != ADRESSE_V1_15_9, "Adresse v2 ist nicht Adresse v1")
+    pruefe(ADRESSE_V2_15_9[4:] != ADRESSE_V1_15_9[3:],
+           "Adresskoerper v2 unterscheidet sich von v1 (kein Umrechnen)")
 
 def main():
     print("== Tresor-Container GLBVAULT ==")
@@ -445,6 +546,7 @@ def main():
         pruefe(fehler == erwartet, f"{name} -> {erwartet} (war {fehler})")
 
     pruefe_identifikatoren()
+    pruefe_ableitung_v2()
     pruefe_kreuzbezug(WURZEL)
     pruefe_dokument(WURZEL)
 
