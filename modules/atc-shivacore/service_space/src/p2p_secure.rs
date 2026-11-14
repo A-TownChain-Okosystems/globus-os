@@ -48,7 +48,9 @@ pub const DOMAIN_SEPARATION: &[u8] = b"ATC-P2P-v1\0";
 
 /// Verhandelte Versionsspanne (§18: supported_versions).
 pub const SUPPORTED_VERSIONS: [(u8, u8, u8); 2] = [(0, 9, 0), (1, 0, 0)];
+/// Kleinste Protokollversion, die der Handshake noch annimmt.
 pub const MINIMUM_VERSION: (u8, u8, u8) = (0, 9, 0);
+/// Größte Protokollversion, die der Handshake noch annimmt.
 pub const MAXIMUM_VERSION: (u8, u8, u8) = (1, 0, 0);
 
 /// Timestamp-Toleranzfenster ±120 s (§15 — Millisekunden).
@@ -59,8 +61,11 @@ pub const SEEN_SET_MAX: usize = 4096;
 
 /// Rate-Limit-Defaults (§14).
 pub const RATE_MSG_CAPACITY: u32 = 100; // Messages/s je Peer
+/// Nachfüllrate des Nachrichtenkontingents je Peer, Nachrichten je Sekunde.
 pub const RATE_MSG_REFILL: u32 = 100;
+/// Größe des Bytekontingents je Peer in Byte.
 pub const RATE_BYTES_CAPACITY: u32 = 256 * 1024; // Bytes/s je Peer
+/// Nachfüllrate des Bytekontingents je Peer, Byte je Sekunde.
 pub const RATE_BYTES_REFILL: u32 = 256 * 1024;
 
 // ─── v1.0.0-Message-Types (ATC-PROTO-P2P-001 §4) ─────────────────────────────
@@ -77,6 +82,7 @@ pub enum V1Type {
 }
 
 impl V1Type {
+    /// Kontrolltyp zum Zahlenwert; unbekannte Werte ergeben None.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             10 => Some(V1Type::CapabilityExchange),
@@ -97,27 +103,43 @@ pub fn is_control_type(msg_type: u8) -> bool {
 
 // ─── Fehler-Protokoll (ATC-PROTO-P2P-001 §12 — K14-Errors + v1.0.0-NEU) ──────
 
+/// Fehlerprotokoll der sicheren P2P-Schicht nach ATC-PROTO-P2P-001 §12.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum V1Error {
     /// ATC-PROTO-P2P-001..009: K14-Basis-Errors (siehe P2pError-Mapping der Spezifikation)
     MessageTooShort,
+    /// Der Nachrichtentyp ist dieser Schicht unbekannt.
     UnknownMessageType(u8),
+    /// Die Chain-ID der Nachricht passt nicht zu dieser Kette.
     WrongChainId(u32),
+    /// Zu dieser Peer-ID gibt es keinen Eintrag.
     PeerNotFound,
+    /// Der Handshake ist gescheitert.
     HandshakeFailed,
+    /// Die Absender-DID ist ungültig.
     InvalidDID,
+    /// Es besteht keine Verbindung.
     NotConnected,
     /// ATC-PROTO-P2P-010..019: v1.0.0-NEU
-    EnvelopeInvalid, // 010 (VALIDATION)
-    SignatureInvalid,        // 011 (SECURITY)
-    NonceReuse,              // 012 (SECURITY)
-    CapabilityDenied,        // 013 (AUTHORIZATION)
-    RateLimited,             // 014 (RATE_LIMIT)
-    ReplayDetected,          // 015 (SECURITY)
-    TimestampOutsideWindow,  // 016 (VALIDATION)
-    HandshakePhaseViolation, // 017 (PROTOCOL)
-    PeerBanned,              // 018 (SECURITY)
-    VersionIncompatible,     // 019 (PROTOCOL)
+    EnvelopeInvalid,
+    /// Die Signatur passt nicht zum Schlüssel oder zur Nachricht.
+    SignatureInvalid,
+    /// Die Nonce wurde in dieser Sitzung bereits verwendet.
+    NonceReuse,
+    /// Die geforderte Fähigkeit wurde nicht ausgehandelt.
+    CapabilityDenied,
+    /// Das Kontingent des Peers ist erschöpft.
+    RateLimited,
+    /// Die Nachrichtenkennung wurde bereits gesehen.
+    ReplayDetected,
+    /// Der Zeitstempel liegt außerhalb des Toleranzfensters.
+    TimestampOutsideWindow,
+    /// Die Nachricht ist in der aktuellen Phase nicht erlaubt.
+    HandshakePhaseViolation,
+    /// Der Peer ist gesperrt.
+    PeerBanned,
+    /// Es gibt keine gemeinsame Protokollversion.
+    VersionIncompatible,
 }
 
 impl V1Error {
@@ -144,6 +166,7 @@ impl V1Error {
         }
     }
 
+    /// Kategorie des Fehlers für Protokoll und Auswertung.
     pub fn category(&self) -> &'static str {
         match self {
             V1Error::MessageTooShort
@@ -165,6 +188,7 @@ impl V1Error {
         }
     }
 
+    /// True, wenn ein erneuter Versuch sinnvoll ist.
     pub fn retryable(&self) -> bool {
         matches!(
             self,
@@ -175,6 +199,7 @@ impl V1Error {
         )
     }
 
+    /// Schweregrad des Fehlers.
     pub fn severity(&self) -> &'static str {
         match self {
             V1Error::WrongChainId(_)
@@ -200,6 +225,7 @@ impl V1Error {
 // MAC-Simulation über eine 32-Byte-Mixing-Funktion — für Unit-Tests und
 // Trait-basierte Backends wie im Rest des Kernels).
 
+/// Austauschbarer Signatur-Backend; die Schicht kennt nur diese Schnittstelle, nicht das Verfahren selbst.
 pub trait SignatureProvider {
     /// Erzeugt ein deterministisches Schlüsselpaar aus einem Seed (Tests/CI).
     fn keypair(&self, seed: u64) -> ([u8; 32], [u8; 32]); // (secret, public)
@@ -263,21 +289,32 @@ impl SignatureProvider for SimulatedSigner {
 pub struct Capabilities(pub u32);
 
 impl Capabilities {
+    /// Fähigkeitsbit für Konsensnachrichten.
     pub const CONSENSUS: u32 = 1 << 0;
+    /// Fähigkeitsbit für versionierte Transaktionen.
     pub const TX_VERSIONS: u32 = 1 << 1;
+    /// Fähigkeitsbit für Zero-Knowledge-Nachweise.
     pub const ZKP: u32 = 1 << 2;
+    /// Fähigkeitsbit für das gemeinsame Kodierverfahren.
     pub const ENCODING: u32 = 1 << 3;
+    /// Fähigkeitsbit für komprimierte Nutzlasten.
     pub const COMPRESSION: u32 = 1 << 4;
+    /// Fähigkeitsbit für die erweiterte Funktionsliste.
     pub const FEATURES: u32 = 1 << 5;
+    /// Fähigkeitsbit für die Hülle der Fassung 1.0.0.
     pub const V1_ENVELOPE: u32 = 1 << 6;
+    /// Fähigkeitsbit für den Kompatibilitätsmodus 0.9.
     pub const V0_9_COMPAT: u32 = 1 << 7;
 
+    /// Fähigkeiten aus einem Bitmuster.
     pub fn with(bits: u32) -> Self {
         Capabilities(bits)
     }
+    /// True, wenn das Bit gesetzt ist.
     pub fn has(&self, bit: u32) -> bool {
         self.0 & bit != 0
     }
+    /// Schnittmenge zweier Fähigkeitsmengen, also das, was beide Seiten können.
     pub fn intersection(&self, other: Capabilities) -> Capabilities {
         Capabilities(self.0 & other.0)
     }
@@ -286,6 +323,7 @@ impl Capabilities {
     pub fn to_bytes(&self) -> [u8; 4] {
         self.0.to_be_bytes()
     }
+    /// Liest die Fähigkeiten aus vier Byte; kürzere Eingaben ergeben None.
     pub fn from_bytes(b: &[u8]) -> Option<Self> {
         if b.len() < 4 {
             return None;
@@ -296,18 +334,29 @@ impl Capabilities {
 
 // ─── Envelope v1.0.0 (ATC-PROTO-P2P-001 §3 — 9+1 Pflichtfelder) ────────────────
 
+/// Hülle der Fassung 1.0.0 mit den Pflichtfeldern aus ATC-PROTO-P2P-001 §3.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Envelope {
-    pub protocol: [u8; 16],    // 1: ATC-PROTO-P2P (§3.1 fixed 16)
+    /// Protokoll-Bezeichner, auf 16 Byte gepolstert.
+    pub protocol: [u8; 16], // 1: ATC-PROTO-P2P (§3.1 fixed 16)
+    /// Protokollversion des Absenders.
     pub version: (u8, u8, u8), // 2: SemVer des Absenders
-    pub message_type: u8,      // 3: §4-Tabelle
-    pub message_id: [u8; 32],  // 4: eindeutig (Seen-Set, §7/§15)
-    pub timestamp: u64,        // 5: ms seit Epoch
-    pub sender: String,        // 6: DID (K6) — Identität, nie IP (§9)
-    pub nonce: [u8; 16],       // 7: Replay-Schutz (§15)
-    pub payload: Vec<u8>,      // 8: typspezifisch (§4)
-    pub signature: [u8; 64],   // 9: Signatur über kanonische Bytes (§11)
-    pub chain_id: u32,         // 10: 658467 (§15 — Abweichung = Disconnect)
+    /// Nachrichtentyp nach der Tabelle in §4.
+    pub message_type: u8, // 3: §4-Tabelle
+    /// Eindeutige Kennung für Dedup und Replay-Schutz.
+    pub message_id: [u8; 32], // 4: eindeutig (Seen-Set, §7/§15)
+    /// Zeitpunkt in Millisekunden seit Epoche.
+    pub timestamp: u64, // 5: ms seit Epoch
+    /// Absender-DID; die Identität ist nie die IP-Adresse.
+    pub sender: String, // 6: DID (K6) — Identität, nie IP (§9)
+    /// Nonce gegen Wiedereinspielung.
+    pub nonce: [u8; 16], // 7: Replay-Schutz (§15)
+    /// Typspezifische Nutzlast.
+    pub payload: Vec<u8>, // 8: typspezifisch (§4)
+    /// Signatur über die kanonischen Bytes.
+    pub signature: [u8; 64], // 9: Signatur über kanonische Bytes (§11)
+    /// Chain-ID; eine Abweichung beendet die Verbindung.
+    pub chain_id: u32, // 10: 658467 (§15 — Abweichung = Disconnect)
 }
 
 impl Envelope {
@@ -418,6 +467,7 @@ impl Envelope {
 
 // ─── Seen-Set (§7 Gossip-Dedup, bounded) ───────────────────────────────────────
 
+/// Begrenzte Menge bereits gesehener Nachrichtenkennungen, verdrängt in Aufnahmereihenfolge.
 pub struct SeenSet {
     seen: BTreeSet<[u8; 32]>,
     order: VecDeque<[u8; 32]>,
@@ -425,6 +475,7 @@ pub struct SeenSet {
 }
 
 impl SeenSet {
+    /// Set mit Höchstzahl max.
     pub fn new(max: usize) -> Self {
         SeenSet {
             seen: BTreeSet::new(),
@@ -447,6 +498,7 @@ impl SeenSet {
         true
     }
 
+    /// Anzahl der Kennungen im Set.
     pub fn len(&self) -> usize {
         self.seen.len()
     }
@@ -470,21 +522,34 @@ pub enum HandshakePhase {
     Established = 6,   // Phase 6 (SESSION_ESTABLISHED)
 }
 
+/// Sicherheitszustand eines Gegenübers.
 pub struct SecurePeer {
+    /// Erreichte Handshake-Phase.
     pub phase: HandshakePhase,
+    /// Öffentlicher Schlüssel des Gegenübers, sobald bekannt.
     pub their_public: Option<[u8; 32]>,
+    /// Ausgehandelte Fähigkeiten des Gegenübers.
     pub their_capabilities: Capabilities,
+    /// Ausgehandelte Protokollversion.
     pub negotiated_version: Option<(u8, u8, u8)>,
+    /// Sitzungsschlüssel nach dem Schlüsselaustausch.
     pub session_key: Option<[u8; 32]>,
+    /// Ausgegebene Anforderung der Authentifizierung.
     pub challenge: Option<[u8; 32]>,
+    /// Sperre gilt bis zu diesem Zeitpunkt; 0 heißt keine Sperre.
     pub banned_until: u64,
+    /// True, wenn die Authentifizierung bestanden wurde.
     pub verified: bool,
+    /// Kontingent für Nachrichten je Sekunde.
     pub msg_bucket: TokenBucket,
+    /// Kontingent für Byte je Sekunde.
     pub bytes_bucket: TokenBucket,
+    /// Bereits gesehene Nonces dieser Sitzung.
     pub nonces: BTreeSet<[u8; 16]>,
 }
 
 impl SecurePeer {
+    /// Frisches Gegenüber in der Phase None mit vollen Kontingenten.
     pub fn new(now: u64) -> Self {
         SecurePeer {
             phase: HandshakePhase::None,
@@ -502,6 +567,7 @@ impl SecurePeer {
     }
 }
 
+/// Zustand aller Gegenüber hinter einer Sperre.
 pub struct SecurePeerTable {
     peers: Mutex<BTreeMap<u64, Box<SecurePeer>>>,
 }
@@ -513,12 +579,14 @@ impl Default for SecurePeerTable {
 }
 
 impl SecurePeerTable {
+    /// Leere Tabelle.
     pub fn new() -> Self {
         SecurePeerTable {
             peers: Mutex::new(BTreeMap::new()),
         }
     }
 
+    /// Legt das Gegenüber an, falls es noch fehlt.
     pub fn ensure(&self, peer_id: u64, now: u64) {
         let mut peers = self.peers.lock();
         peers
@@ -526,14 +594,17 @@ impl SecurePeerTable {
             .or_insert_with(|| Box::new(SecurePeer::new(now)));
     }
 
+    /// Ausgegebene Anforderung, sofern vorhanden.
     pub fn challenge_of(&self, peer_id: u64) -> Option<[u8; 32]> {
         self.peers.lock().get(&peer_id).and_then(|p| p.challenge)
     }
 
+    /// Öffentlicher Schlüssel, sofern bekannt.
     pub fn public_of(&self, peer_id: u64) -> Option<[u8; 32]> {
         self.peers.lock().get(&peer_id).and_then(|p| p.their_public)
     }
 
+    /// Fähigkeiten des Gegenübers; leer, wenn unbekannt.
     pub fn capabilities_of(&self, peer_id: u64) -> Capabilities {
         self.peers
             .lock()
@@ -542,6 +613,7 @@ impl SecurePeerTable {
             .unwrap_or_default()
     }
 
+    /// Ändert den Zustand eines Gegenübers und legt ihn bei Bedarf mit Baseline 0 an.
     pub fn update(&self, peer_id: u64, f: impl FnOnce(&mut SecurePeer)) {
         let mut peers = self.peers.lock();
         // Update-Semantik: fehlende Einträge werden angelegt (lazy creation,
@@ -552,6 +624,7 @@ impl SecurePeerTable {
         f(p);
     }
 
+    /// Handshake-Phase; None, wenn das Gegenüber unbekannt ist.
     pub fn phase(&self, peer_id: u64) -> HandshakePhase {
         self.peers
             .lock()
@@ -560,6 +633,7 @@ impl SecurePeerTable {
             .unwrap_or(HandshakePhase::None)
     }
 
+    /// True, wenn das Gegenüber authentifiziert ist.
     pub fn is_verified(&self, peer_id: u64) -> bool {
         self.peers
             .lock()
@@ -568,10 +642,12 @@ impl SecurePeerTable {
             .unwrap_or(false)
     }
 
+    /// Sitzungsschlüssel, sofern ausgehandelt.
     pub fn session_key(&self, peer_id: u64) -> Option<[u8; 32]> {
         self.peers.lock().get(&peer_id).and_then(|p| p.session_key)
     }
 
+    /// Sperrt das Gegenüber bis zum Zeitpunkt und hebt die Verifizierung auf.
     pub fn ban(&self, peer_id: u64, until: u64) {
         self.update(peer_id, |p| {
             p.banned_until = until;
@@ -579,6 +655,7 @@ impl SecurePeerTable {
         });
     }
 
+    /// True, wenn die Sperre noch läuft.
     pub fn is_banned(&self, peer_id: u64, now: u64) -> bool {
         self.peers
             .lock()
@@ -587,6 +664,7 @@ impl SecurePeerTable {
             .unwrap_or(false)
     }
 
+    /// Anzahl der Gegenüber in der Tabelle.
     pub fn count(&self) -> usize {
         self.peers.lock().len()
     }
@@ -606,6 +684,7 @@ pub fn derive_session_key(pub_a: &[u8; 32], pub_b: &[u8; 32], salt: &[u8; 32]) -
     mix32(0x5A827999, &[DOMAIN_SEPARATION, lo, hi, salt].concat())
 }
 
+/// Sichere P2P-Schicht über der Basis aus 0.9, mit Handshake, Hüllen und Kontingenten.
 pub struct SecureP2pNode {
     /// K14-Basis (v0.9): PeerTable, Gossip, Transport-Anbindung.
     pub inner: Arc<P2pNode>,
@@ -619,6 +698,7 @@ pub struct SecureP2pNode {
 }
 
 impl SecureP2pNode {
+    /// Baut die Schicht über einer Basis, mit Schlüsselpaar aus dem Seed und leerer Peer-Tabelle.
     pub fn new(inner: Arc<P2pNode>, seed: u64) -> Self {
         let signer: Box<dyn SignatureProvider + Send + Sync> = Box::new(SimulatedSigner);
         let (our_secret, our_public) = signer.keypair(seed);
@@ -634,9 +714,11 @@ impl SecureP2pNode {
         }
     }
 
+    /// Eigener öffentlicher Schlüssel.
     pub fn our_public_key(&self) -> [u8; 32] {
         self.our_public
     }
+    /// Tabelle aller Gegenüber.
     pub fn secure_peers(&self) -> &SecurePeerTable {
         &self.peers
     }
@@ -650,6 +732,7 @@ impl SecureP2pNode {
         *rng
     }
 
+    /// Neue Nonce aus Zufallsfolge und fortlaufender Nummer.
     pub fn next_nonce(&self) -> [u8; 16] {
         let mut n = [0u8; 16];
         n[..8].copy_from_slice(&self.next_random().to_be_bytes());
@@ -663,6 +746,7 @@ impl SecureP2pNode {
         n
     }
 
+    /// Neue Nachrichtenkennung aus zwei Zufallswerten.
     pub fn next_message_id(&self) -> [u8; 32] {
         mix32(self.next_random(), &self.next_random().to_be_bytes())
     }
@@ -715,6 +799,7 @@ impl SecureP2pNode {
         p
     }
 
+    /// Liest Port, Versionsliste und öffentlichen Schlüssel aus einer HELLO-Nutzlast.
     pub fn parse_hello(payload: &[u8]) -> Result<HelloPayload, V1Error> {
         if payload.len() < 3 {
             return Err(V1Error::MessageTooShort);
@@ -991,6 +1076,7 @@ impl SecureP2pNode {
         Ok(self.build_envelope(msg_type, timestamp, payload).to_bytes())
     }
 
+    /// Sperrt einen Peer für 24 Stunden ab now.
     pub fn ban_peer(&self, peer_id: u64, now: u64) {
         self.peers.ban(peer_id, now + 24 * 3600 * 1000); // Default 24 h (§10)
     }
@@ -999,7 +1085,9 @@ impl SecureP2pNode {
 /// Empfangenes Wire-Ergebnis: v1.0.0-Envelope oder v0.9-Kompatibilitätsmodus.
 #[derive(Clone, Debug)]
 pub enum WireMessage {
+    /// Nachricht in der Hülle der Fassung 1.0.0.
     V1(Envelope),
+    /// Nachricht im Kompatibilitätsformat 0.9.
     V09(P2pMessage),
 }
 
