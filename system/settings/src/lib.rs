@@ -8,51 +8,82 @@ use core::fmt;
 /// Supported settings domains.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Domain {
+    /// Core system behaviour.
     System,
+    /// Security policy.
     Security,
+    /// Privacy defaults.
     Privacy,
+    /// Network configuration.
     Network,
+    /// Display and graphics.
     Display,
+    /// Audio devices and levels.
     Audio,
+    /// Storage and volumes.
     Storage,
+    /// Installed applications.
     Applications,
+    /// Identity and accounts.
     Identity,
+    /// AI runtime and model settings.
     Ai,
+    /// Chain and wallet settings.
     Blockchain,
+    /// Developer options and debug switches.
     Developer,
+    /// Update channel and schedule.
     Updates,
 }
 
 /// Value types accepted by the settings store.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Value {
+    /// Boolean switch.
     Bool(bool),
+    /// Signed integer value.
     Integer(i64),
+    /// Free text value.
     Text(String),
 }
 
 /// Authorization capability required for a setting mutation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Capability {
+    /// Read any setting.
     ReadSettings,
+    /// Write settings in the system domain.
     WriteSystem,
+    /// Write security policy settings.
     WriteSecurity,
+    /// Write privacy settings.
     WritePrivacy,
+    /// Write network settings.
     WriteNetwork,
+    /// Write device settings: display, audio, storage.
     WriteDevice,
+    /// Write identity and account settings.
     WriteIdentity,
+    /// Write AI runtime settings.
     WriteAi,
+    /// Write chain and wallet settings.
     WriteBlockchain,
+    /// Write developer options.
     WriteDeveloper,
+    /// Write update settings.
     WriteUpdates,
 }
 
 /// Errors returned by the settings core.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub enum Error {
+    /// The setting key is empty.
     EmptyKey,
+    /// The domain does not match the key.
     InvalidDomain,
+    /// The caller lacks the required capability.
     PermissionDenied,
+    /// No such setting.
     NotFound,
 }
 
@@ -71,8 +102,11 @@ impl fmt::Display for Error {
 /// A validated setting mutation request.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct Mutation {
+    /// Domain the setting belongs to.
     pub domain: Domain,
+    /// Setting key within the domain.
     pub key: String,
+    /// New value.
     pub value: Value,
 }
 
