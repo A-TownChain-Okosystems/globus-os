@@ -1,6 +1,7 @@
 //! GlobusOS security primitives. Authority is explicit and deny-by-default.
 
 pub mod capability_registry;
+/// Principals and identity types built on the capability model.
 pub mod identity;
 pub use capability_registry::{CapabilityObject, CapabilityRegistry};
 
