@@ -11,3 +11,6 @@ license = "Apache-2.0"
 path = "src/lib.rs"
 
 [dependencies]
+
+[lints]
+workspace = true
