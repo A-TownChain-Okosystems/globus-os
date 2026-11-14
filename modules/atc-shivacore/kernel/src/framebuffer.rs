@@ -6,6 +6,7 @@
 
 use bootloader_api::info::{FrameBuffer, FrameBufferInfo, PixelFormat};
 use core::fmt;
+use core::sync::atomic::{AtomicBool, Ordering};
 use noto_sans_mono_bitmap::{get_raster, get_raster_width, FontWeight, RasterHeight};
 use spin::Mutex;
 
@@ -156,6 +157,42 @@ impl fmt::Write for FbWriter {
 /// Der eine Schreiber des Kernels; None, solange kein Framebuffer gesetzt ist.
 pub static WRITER: Mutex<Option<FbWriter>> = Mutex::new(None);
 
+/// True, sobald ein Ring-3-Prozess die Konsole uebernommen hat.
+///
+/// Ab dann schreibt der Kernel nur noch auf die serielle Schnittstelle. Die
+/// Flaeche hat genau einen Schreiber: entweder den Kernel oder den Prozess,
+/// dem die Console-Cap gehoert. Ohne diese Umschaltung wuerde jede
+/// Kernel-Zeile das Anmeldefenster ueberschreiben.
+pub static CONSOLE_OWNED_BY_USERSPACE: AtomicBool = AtomicBool::new(false);
+
+/// Leert den Bildschirm und setzt den Cursor nach oben links.
+pub fn clear_screen() {
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| {
+        if let Some(writer) = WRITER.lock().as_mut() {
+            // Dunkles Blaugrau statt Schwarz: der Bildschirm ist dann auch
+            // dann als "angemeldet wartend" erkennbar, wenn kein Text steht.
+            writer.clear(4, 6, 14);
+        }
+    });
+}
+
+/// Schreibt Text an die aktuelle Cursorposition. `\n` beginnt eine neue Zeile.
+pub fn write_text(text: &str) {
+    use core::fmt::Write;
+    use x86_64::instructions::interrupts;
+    interrupts::without_interrupts(|| {
+        if let Some(writer) = WRITER.lock().as_mut() {
+            let _ = writer.write_str(text);
+        }
+    });
+}
+
+/// Uebergibt die Flaeche an den Ring 3 und liefert true beim ersten Aufruf.
+pub fn hand_over_to_userspace() -> bool {
+    !CONSOLE_OWNED_BY_USERSPACE.swap(true, Ordering::SeqCst)
+}
+
 /// Setzt den Framebuffer und faerbt ihn dunkelgruen, damit sichtbar ist, dass der Kernel laeuft.
 pub fn init(buffer: &'static mut FrameBuffer) {
     let mut writer = FbWriter::new(buffer);
@@ -168,6 +205,11 @@ pub fn init(buffer: &'static mut FrameBuffer) {
 pub fn _print(args: fmt::Arguments) {
     use core::fmt::Write;
     use x86_64::instructions::interrupts;
+    // Nach der Uebergabe gehoert die Flaeche dem Ring 3. Der Kernel schreibt
+    // dann nur noch seriell; das Fenster bleibt stehen.
+    if CONSOLE_OWNED_BY_USERSPACE.load(Ordering::Relaxed) {
+        return;
+    }
     interrupts::without_interrupts(|| {
         if let Some(writer) = WRITER.lock().as_mut() {
             let _ = writer.write_fmt(args);
