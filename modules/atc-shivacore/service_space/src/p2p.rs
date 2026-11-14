@@ -22,10 +22,12 @@ use crate::tcpip::{
 
 // ─── Chain-ID ───────────────────────────────────────────────────────────────
 
+/// Kennung der Kette; jede Nachricht traegt sie und wird bei Abweichung verworfen.
 pub const CHAIN_ID: u32 = 658467;
 
 // ─── P2P-Message-Types ──────────────────────────────────────────────────────
 
+/// Nachrichtentypen der Basis-Ebene.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MessageType {
@@ -41,6 +43,7 @@ pub enum MessageType {
 }
 
 impl MessageType {
+    /// Typ zum Zahlenwert; unbekannte Werte ergeben None.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             1 => Some(MessageType::Ping),
@@ -59,16 +62,23 @@ impl MessageType {
 
 // ─── P2P-Message ──────────────────────────────────────────────────────────────
 
+/// Nachricht der Basis-Ebene mit Typ, Chain-ID, Absender, Zeitpunkt und Nutzlast.
 #[derive(Clone, Debug, PartialEq)]
 pub struct P2pMessage {
+    /// Typ der Nachricht.
     pub msg_type: MessageType,
+    /// Kennung der Kette; eine Abweichung ergibt WrongChainId.
     pub chain_id: u32,
+    /// Absender-DID.
     pub sender_did: String,
+    /// Zeitpunkt der Erzeugung.
     pub timestamp: u64,
+    /// Typspezifische Nutzlast.
     pub payload: Vec<u8>,
 }
 
 impl P2pMessage {
+    /// Nachricht mit der festen Chain-ID dieses Moduls.
     pub fn new(
         msg_type: MessageType,
         sender_did: String,
@@ -97,6 +107,7 @@ impl P2pMessage {
         buf
     }
 
+    /// Liest eine Nachricht und prueft Typ, Chain-ID und Laengen; die DID wird verlustbehaftet als Text gedeutet.
     pub fn from_bytes(data: &[u8]) -> Result<Self, P2pError> {
         if data.len() < 15 {
             return Err(P2pError::MessageTooShort);
@@ -135,46 +146,73 @@ impl P2pMessage {
 
 // ─── P2P-Error ────────────────────────────────────────────────────────────────
 
+/// Fehler der Basis-Ebene.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum P2pError {
+    /// Die Bytefolge ist kuerzer, als der Kopf verlangt.
     MessageTooShort,
+    /// Der Nachrichtentyp ist unbekannt.
     UnknownMessageType(u8),
+    /// Die Chain-ID passt nicht zu dieser Kette.
     WrongChainId(u32),
+    /// Zu dieser Kennung gibt es keinen Peer.
     PeerNotFound,
+    /// Der Peer ist bereits eingetragen; auch die erreichte Hoechstzahl meldet diesen Fehler.
     PeerAlreadyConnected,
+    /// Der Handshake ist gescheitert; der Text nennt den Grund.
     HandshakeFailed(String),
+    /// Es besteht keine Verbindung.
     NotConnected,
+    /// Die DID ist ungueltig.
     InvalidDID,
+    /// Die Rundsendung ist gescheitert.
     BroadcastFailed,
 }
 
 // ─── Peer-Status ──────────────────────────────────────────────────────────────
 
+/// Verbindungszustand eines Peers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PeerStatus {
+    /// Keine Verbindung.
     Disconnected,
+    /// Verbindungsaufbau laeuft.
     Connecting,
+    /// Verbindung steht.
     Connected,
+    /// Der Peer ist gesperrt.
     Banned,
 }
 
 // ─── Peer ──────────────────────────────────────────────────────────────────────
 
+/// Eintrag eines Gegenuebers mit Adresse, Zustand und Zaehlern.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Peer {
+    /// Kennung, die die Tabelle fortlaufend vergibt.
     pub id: u64,
+    /// IP-Adresse des Gegenuebers.
     pub ip: Ipv4Address,
+    /// Port des Gegenuebers.
     pub port: u16,
+    /// DID, sobald der Handshake sie geliefert hat.
     pub did: Option<String>,
+    /// Verbindungszustand.
     pub status: PeerStatus,
+    /// Zeitpunkt der letzten Lebensmeldung.
     pub last_seen: u64,
+    /// Bisher gesendete Byte.
     pub bytes_sent: u64,
+    /// Bisher empfangene Byte.
     pub bytes_recv: u64,
+    /// Bisher gesendete Nachrichten.
     pub messages_sent: u64,
+    /// Bisher empfangene Nachrichten.
     pub messages_recv: u64,
 }
 
 impl Peer {
+    /// Peer im Zustand Disconnected, ohne DID und mit Nullzaehlern.
     pub fn new(id: u64, ip: Ipv4Address, port: u16) -> Self {
         Peer {
             id,
@@ -193,6 +231,7 @@ impl Peer {
 
 // ─── Peer-Table ────────────────────────────────────────────────────────────────
 
+/// Verzeichnis der Peers mit Adressindex und fortlaufender Kennung.
 pub struct PeerTable {
     peers: Mutex<BTreeMap<u64, Peer>>,
     by_ip_port: Mutex<BTreeMap<(Ipv4Address, u16), u64>>,
@@ -202,6 +241,7 @@ pub struct PeerTable {
 }
 
 impl PeerTable {
+    /// Leeres Verzeichnis mit eigener DID und Hoechstzahl.
     pub fn new(our_did: String, max_peers: usize) -> Self {
         PeerTable {
             peers: Mutex::new(BTreeMap::new()),
@@ -212,6 +252,7 @@ impl PeerTable {
         }
     }
 
+    /// Traegt einen Peer ein; ein bekannter Adresseintrag oder die erreichte Hoechstzahl wird abgelehnt.
     pub fn add_peer(&self, ip: Ipv4Address, port: u16) -> Result<u64, P2pError> {
         // Check if already known
         {
@@ -240,6 +281,7 @@ impl PeerTable {
         Ok(id)
     }
 
+    /// Entfernt einen Peer samt Adresseintrag; true, wenn er vorhanden war.
     pub fn remove_peer(&self, id: u64) -> bool {
         let mut peers = self.peers.lock();
         if let Some(peer) = peers.remove(&id) {
@@ -250,10 +292,12 @@ impl PeerTable {
         }
     }
 
+    /// Kopie des Peers, sofern vorhanden.
     pub fn get_peer(&self, id: u64) -> Option<Peer> {
         self.peers.lock().get(&id).cloned()
     }
 
+    /// Peer zu Adresse und Port.
     pub fn find_by_addr(&self, ip: Ipv4Address, port: u16) -> Option<Peer> {
         let by_ip = self.by_ip_port.lock();
         by_ip
@@ -261,24 +305,28 @@ impl PeerTable {
             .and_then(|&id| self.peers.lock().get(&id).cloned())
     }
 
+    /// Setzt den Verbindungszustand.
     pub fn set_status(&self, id: u64, status: PeerStatus) {
         if let Some(peer) = self.peers.lock().get_mut(&id) {
             peer.status = status;
         }
     }
 
+    /// Hinterlegt die DID des Gegenuebers.
     pub fn set_did(&self, id: u64, did: String) {
         if let Some(peer) = self.peers.lock().get_mut(&id) {
             peer.did = Some(did);
         }
     }
 
+    /// Setzt den Zeitpunkt der letzten Lebensmeldung.
     pub fn touch(&self, id: u64, timestamp: u64) {
         if let Some(peer) = self.peers.lock().get_mut(&id) {
             peer.last_seen = timestamp;
         }
     }
 
+    /// Zaehlt eine gesendete Nachricht und ihre Byte.
     pub fn record_sent(&self, id: u64, bytes: u64) {
         if let Some(peer) = self.peers.lock().get_mut(&id) {
             peer.bytes_sent += bytes;
@@ -286,6 +334,7 @@ impl PeerTable {
         }
     }
 
+    /// Zaehlt eine empfangene Nachricht und ihre Byte.
     pub fn record_recv(&self, id: u64, bytes: u64) {
         if let Some(peer) = self.peers.lock().get_mut(&id) {
             peer.bytes_recv += bytes;
@@ -293,10 +342,12 @@ impl PeerTable {
         }
     }
 
+    /// Anzahl der eingetragenen Peers.
     pub fn peer_count(&self) -> usize {
         self.peers.lock().len()
     }
 
+    /// Anzahl der Peers im Zustand Connected.
     pub fn connected_count(&self) -> usize {
         self.peers
             .lock()
@@ -305,10 +356,12 @@ impl PeerTable {
             .count()
     }
 
+    /// Kopien aller Peers.
     pub fn list_peers(&self) -> Vec<Peer> {
         self.peers.lock().values().cloned().collect()
     }
 
+    /// Eigene DID dieses Verzeichnisses.
     pub fn our_did(&self) -> &str {
         &self.our_did
     }
@@ -316,12 +369,14 @@ impl PeerTable {
 
 // ─── Gossip-Protocol ────────────────────────────────────────────────────────
 
+/// Verteilt Nachrichten an verbundene Peers und sammelt eingehende in einer Warteschlange.
 pub struct GossipProtocol {
     peers: Arc<PeerTable>,
     recv_queue: Mutex<Vec<(u64, P2pMessage)>>, // (peer_id, message)
 }
 
 impl GossipProtocol {
+    /// Protokoll ueber einem Peer-Verzeichnis mit leerer Warteschlange.
     pub fn new(peers: Arc<PeerTable>) -> Self {
         GossipProtocol {
             peers,
@@ -472,6 +527,7 @@ impl GossipProtocol {
 
 // ─── P2P-Node (Top-Level Integration) ───────────────────────────────────────
 
+/// Vollstaendiger Knoten der Basis-Ebene mit Peer-Verzeichnis, Gossip und Lauschport.
 pub struct P2pNode {
     peers: Arc<PeerTable>,
     gossip: Arc<GossipProtocol>,
@@ -479,6 +535,7 @@ pub struct P2pNode {
 }
 
 impl P2pNode {
+    /// Knoten mit eigenem Verzeichnis und Gossip, ohne Peers.
     pub fn new(our_did: String, listen_port: u16, max_peers: usize) -> Self {
         let peers = Arc::new(PeerTable::new(our_did, max_peers));
         let gossip = Arc::new(GossipProtocol::new(peers.clone()));
@@ -578,15 +635,19 @@ impl P2pNode {
         Ok(())
     }
 
+    /// Peer-Verzeichnis des Knotens.
     pub fn peers(&self) -> &Arc<PeerTable> {
         &self.peers
     }
+    /// Gossip-Protokoll des Knotens.
     pub fn gossip(&self) -> &Arc<GossipProtocol> {
         &self.gossip
     }
+    /// Port, auf dem der Knoten lauscht.
     pub fn listen_port(&self) -> u16 {
         self.listen_port
     }
+    /// Anzahl der eingetragenen Peers.
     pub fn peer_count(&self) -> usize {
         self.peers.peer_count()
     }
