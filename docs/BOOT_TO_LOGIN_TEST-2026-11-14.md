@@ -81,8 +81,23 @@ Die Reihenfolge ist nicht beliebig; jeder Schritt braucht eine Entscheidung, bev
 
 - QEMU ohne KVM: Software-Emulation, keine echte Hardware, kein echter Grafikchip, keine echte Tastatur.
 - Kein CI-Lauf auf diesem Stand; Workflow-Läufe enden seit dem 03.11.2026 mit `startup_failure` (`docs/CI_STATUS.md`). Deshalb `CI_VERIFIED` nicht vergeben.
-- Das Bildschirmfoto belegt den sichtbaren Inhalt, nicht die Abwesenheit eines Fensters in jedem denkbaren Zustand: es gibt keinen Zustand, in dem eines erscheinen könnte, weil kein Code dafür existiert.
+- Das Bildschirmfoto belegt den sichtbaren Inhalt dieses Laufs. Zum Zeitpunkt der Messung existierte kein Code fuer ein Fenster; dieses Blatt beschreibt den Stand VOR dem Anmeldefenster (siehe Nachtrag).
 
 ## 7. Nächster kleinster Schritt
 
 Zuerst die Entscheidung aus Punkt 1: **wem gehört die Anzeige.** Ohne sie würde jeder Login-Versuch eine zweite Zeichenroute neben der Kernel-Konsole aufmachen — genau die parallele Implementierung, die die Architektur-Grundregel ausschließt. Danach ist der Greeter ein Ring-3-Programm mit Identity-Login, Tastatureingabe über den bestehenden Kanal und einer Anzeige-Capability; alles darunter ist bereits belegt.
+
+## 8. Nachtrag 14.11.2026 — das Fenster existiert
+
+Der Punkt 7 dieses Blattes ist erledigt, und die Entscheidung aus Punkt 1 ist
+vorlaeufig gefallen: die Anzeige bleibt beim Kernel, der Ring 3 zeichnet ueber
+den Syscall `Console` gegen ein eigenes Recht. Damit gibt es keine zweite
+Zeichenroute, sondern genau eine — der Kernel besitzt die Flaeche und gibt sie
+nur gegen die Capability frei. Das ist als Vorschlag umgesetzt, nicht als
+ratifizierte Entscheidung; die Alternative (Ring-3-Konsolendienst) bleibt offen,
+weil der Syscall so geschnitten ist, dass sie darauf aufsetzen kann.
+
+Belegt ist ein bedienbares Anmeldefenster mit Tastatureingabe, Maskierung,
+Feldwechsel und Enter-Zustand. Nachweis, Mechanik und die zwei dabei gefundenen
+Fehler stehen in [LOGIN_WINDOW.md](LOGIN_WINDOW.md). Ausdruecklich offen bleibt
+die Pruefung der Anmeldedaten: es gibt im Image keine Identitaetsablage.
