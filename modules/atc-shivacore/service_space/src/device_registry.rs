@@ -35,17 +35,26 @@ use shivacore::capability::{Capability, ResourceType, Rights};
 /// Geraeteklassen, wie sie ein Dienst zum Filtern braucht.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DeviceClass {
+    /// Datentraeger.
     Storage,
+    /// Netzwerkgeraet.
     Network,
+    /// Anzeigegeraet.
     Display,
+    /// Eingabegeraet.
     Input,
+    /// Audiogeraet.
     Audio,
+    /// USB-Geraet.
     Usb,
+    /// Grafikprozessor.
     Gpu,
+    /// Alles, was keiner der uebrigen Klassen zugeordnet ist.
     Other,
 }
 
 impl DeviceClass {
+    /// Kurzform der Klasse fuer Filter und Berichte.
     pub fn as_str(self) -> &'static str {
         match self {
             DeviceClass::Storage => "storage",
@@ -63,18 +72,24 @@ impl DeviceClass {
 /// Was ueber ein Geraet oeffentlich ist.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeviceEntry {
+    /// Kennung des Geraets, bei PCI aus Bus, Geraet und Funktion, bei ACPI aus Art und Basisadresse gebildet; ueber Neustarts stabil.
     pub id: u64,
+    /// Klasse des Geraets.
     pub class: DeviceClass,
+    /// Anzeigename mit Herkunft, Adresse und Kennungen der Quelle.
     pub name: String,
 }
 
 /// Ein Anspruch: wer ein Geraet besitzt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DeviceClaim {
+    /// Geraetekennung, auf die sich der Anspruch bezieht.
     pub device: u64,
+    /// Prozess, der das Geraet besitzt.
     pub owner: Pid,
 }
 
+/// Ablehnungsgruende der Registratur.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RegistryError {
     /// Die Cap ist keine Device-Cap.
@@ -93,11 +108,16 @@ pub enum RegistryError {
     NotTheOwner,
 }
 
+/// Zaehler der Registratur.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct RegistryStats {
+    /// Anzahl eingetragener Geraete, auch solcher ohne Anspruch.
     pub registered: u64,
+    /// Anzahl erfolgreicher Ansprueche.
     pub claimed: u64,
+    /// Anzahl abgelehnter Ansprueche ohne passende Cap.
     pub denied_no_cap: u64,
+    /// Anzahl abgelehnter Ansprueche auf ein fremdes Geraet.
     pub denied_foreign_claim: u64,
 }
 
@@ -112,6 +132,7 @@ pub struct DeviceRegistry {
 }
 
 impl DeviceRegistry {
+    /// Leere Registratur mit Nullzaehlern.
     pub fn new() -> Self {
         Self {
             devices: Vec::new(),
@@ -240,6 +261,7 @@ impl DeviceRegistry {
         }
     }
 
+    /// Besitzer eines Geraets; None, wenn das Geraet unbekannt oder nicht beansprucht ist.
     pub fn owner_of(&self, device: u64) -> Option<Pid> {
         self.devices
             .iter()
@@ -247,6 +269,7 @@ impl DeviceRegistry {
             .and_then(|(_, owner)| *owner)
     }
 
+    /// Kopie der Zaehler.
     pub fn stats(&self) -> RegistryStats {
         self.stats
     }
@@ -365,7 +388,9 @@ pub fn entry_from_acpi(device: &AcpiDevice) -> DeviceEntry {
 /// Ergebnis eines Abgleichs mit der Enum-Quelle.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DiscoveryOutcome {
+    /// Anzahl der beim Abgleich uebernommenen Geraete.
     pub adopted: u64,
+    /// Anzahl der bereits bekannten Geraete, die nicht doppelt eingetragen wurden.
     pub already_known: u64,
 }
 
