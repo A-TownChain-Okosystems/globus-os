@@ -125,7 +125,7 @@ impl EthernetFrame {
         }
     }
 
-    /// Serialisiert das Frame zu Bytes (dst[6] + src[6] + type[2] + payload).
+    /// Serialisiert das Frame zu Bytes (`dst[6] + src[6] + type[2] + payload`).
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(14 + self.payload.len());
         buf.extend_from_slice(&self.dst_mac.0);
