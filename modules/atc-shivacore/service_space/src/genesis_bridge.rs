@@ -5,7 +5,7 @@
 //!
 //! 6 Integration-Gaps geschlossen:
 //!   1. GenesisBlock → Block Konverter (mit state_root + validator_set)
-//!   2. PoH Seed mit echtem Genesis-Hash (statt [0x42;32])
+//!   2. PoH Seed mit echtem Genesis-Hash (statt `[0x42;32]`)
 //!   3. Validator Bulk-Init aus GenesisConfig
 //!   4. State Root verbunden (GenesisState → Block.state_root)
 //!   5. Chain-ID-Validierung in add_block (658467)
@@ -109,7 +109,7 @@ pub struct BridgePohEntry {
 }
 
 impl BridgePoh {
-    /// NEU: Wird mit dem Genesis-Hash geseedt (nicht mehr [0x42;32])
+    /// NEU: Wird mit dem Genesis-Hash geseedt (nicht mehr `[0x42;32]`)
     pub fn new(genesis_hash: [u8; 32]) -> Self {
         BridgePoh {
             current_hash: genesis_hash,
