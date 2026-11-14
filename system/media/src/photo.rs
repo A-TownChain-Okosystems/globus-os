@@ -27,6 +27,7 @@ pub enum PhotoCodec {
     Webp,
     /// AVIF.
     Avif,
+    /// Unbekannter Kodek.
     Unknown,
 }
 
