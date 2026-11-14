@@ -1,6 +1,7 @@
 //! Deterministic free-space bitmap for persistent filesystem allocation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler bei der Verwaltung der Freispeicher-Bitmap.
 pub enum BitmapError {
     /// Die Blockzahl ist 0 oder laesst sich nicht abbilden.
     InvalidGeometry,
