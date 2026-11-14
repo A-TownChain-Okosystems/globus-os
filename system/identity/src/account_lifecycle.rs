@@ -16,13 +16,18 @@ use zeroize::Zeroizing;
 pub struct AccountUsername(String);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler beim Anlegen eines Kontos.
 pub enum AccountLifecycleError {
+    /// Der Benutzername verletzt die Regeln.
     InvalidUsername,
+    /// Die Wiederherstellungsphrase ist keine gueltige 24-Wort-Phrase.
     InvalidRecoveryPhrase,
+    /// Die drei abgefragten Woerter stimmen nicht.
     InvalidConfirmation,
 }
 
 impl AccountUsername {
+    /// Normalisiert auf Kleinbuchstaben und akzeptiert nur 3 bis 32 Zeichen aus [a-z0-9_.-].
     pub fn parse(value: &str) -> Result<Self, AccountLifecycleError> {
         let normalized = value.to_ascii_lowercase();
         let bytes = normalized.as_bytes();
@@ -40,6 +45,7 @@ impl AccountUsername {
         Ok(Self(normalized))
     }
 
+    /// Kanonische Form des Benutzernamens.
     pub fn as_str(&self) -> &str {
         &self.0
     }
@@ -55,6 +61,7 @@ pub struct RecoveryConfirmation {
 }
 
 impl RecoveryConfirmation {
+    /// Waehlt drei verschiedene Wortpositionen aus einer gueltigen 24-Wort-BIP-39-Phrase.
     pub fn new(phrase: &str) -> Result<Self, AccountLifecycleError> {
         let words: Vec<&str> = phrase.split_whitespace().collect();
         if words.len() != 24
