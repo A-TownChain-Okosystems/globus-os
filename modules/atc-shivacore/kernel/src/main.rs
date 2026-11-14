@@ -16,6 +16,7 @@ extern crate alloc;
 
 mod allocator;
 mod framebuffer;
+mod spawn_build;
 mod gdt;
 mod hal;
 mod interrupts;
@@ -1377,6 +1378,51 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     {
         let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
         *slot = Some(frame_allocator);
+    }
+
+    // Aufbauender Weg: den Bootbezug veroeffentlichen (Speicherabstand und
+    // Kernel-Wurzel), damit ein spaeterer Prozessstart denselben Weg benutzen
+    // kann wie der Bootpfad. Danach baut der Selbsttest einen Adressraum ueber
+    // genau diese Funktion und gibt ihn wieder frei — ein Bau ohne Start.
+    spawn_build::publish_boot_reference(
+        phys_mem_offset_raw,
+        boot_cr3_frame.start_address().as_u64(),
+    );
+    {
+        let probe_slot = 0u64;
+        let layout = shivacore::spawn::layout_for_slot(probe_slot)
+            .expect("Platz 0 muss es geben");
+        let binary = userspace::UserBinary::from_bytes(
+            "aufbau-selbsttest",
+            alloc::vec![0xF4],
+            layout.code_base,
+        );
+        match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
+            Ok(built) => {
+                // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
+                shivacore::reclaim::RECLAIMER
+                    .queue_process(shivacore::ats1000::Pid(0x0C21));
+                let freed = {
+                    let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
+                    match slot.as_mut() {
+                        Some(allocator) => shivacore::reclaim::RECLAIMER
+                            .drain_with(|frame| allocator.deallocate_frame(frame)),
+                        None => 0,
+                    }
+                };
+                serial_println!(
+                    "ShivaCore: Aufbauender Weg: Adressraum gebaut (Platz={}, Wurzel={:#x}, {} Frames), {} Frames wieder freigegeben",
+                    probe_slot,
+                    built.cr3,
+                    built.frames,
+                    freed
+                );
+            }
+            Err(error) => serial_println!(
+                "ShivaCore: Aufbauender Weg: nicht gebaut ({:?})",
+                error
+            ),
+        }
     }
     // Selbsttest der Seitentabellen-Frame-Freigabe: zwei echte Frames holen,
     // als Adressraum eines synthetischen Prozesses anmelden, einsammeln und die
