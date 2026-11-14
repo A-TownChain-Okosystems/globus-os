@@ -109,6 +109,42 @@ durch `Console` belegt). Ein Dienst, dessen Datensegment ueber 64 KiB liegt,
 laeuft weiter, wird beim Neustart aber nicht zurueckgesetzt; das steht dann im
 seriellen Protokoll.
 
+## Ein Absturz ist auch ein Neustart
+
+Der Supervisor kannte bisher nur zwei Wege zurueck: den Exit-Syscall und `Esc`.
+Ein **Fehler** beendete den Prozess (FAULT-001), und damit waere nach einem
+Absturz im Anmeldefenster ein toter Bildschirm stehen geblieben — die Zusage
+"Beenden heisst Neustart" haette nur fuer den freiwilligen Weg gegolten.
+
+Die Entscheidung liegt jetzt in `fault::decide(kind, origin, process)` und
+haengt von der Rolle ab, nicht von der Ausnahme: ein Fehler aus Ring 3 in einem
+eingetragenen Dienst ergibt `RestartService`, in einem gewoehnlichen Programm
+`TerminateProcess`, aus Ring 0 immer `PanicKernel`. Die Rolle liest der
+Ausnahmepfad aus der Diensteverwaltung, **bevor** er entscheidet; die
+Entscheidung selbst bleibt eine reine Funktion und ist ohne QEMU geprueft. Der
+Neustart laeuft wie beim Exit-Syscall **vor** dem Widerruf der Capabilities und
+setzt Stapel, Register, Startvertrag und Datensegment zurueck. Ist das
+Neustart-Limit erreicht, wird der Dienst beendet — das steht im Protokoll, statt
+dass er endlos neu startet.
+
+Die Zaehler trennen die beiden Fragen: `terminated` zaehlt beendete Prozesse,
+`service_restarts` die neu begonnenen. Ein Neustart ist kein Ende, und das
+Protokoll soll das nicht verwechseln.
+
+Nachweis mit einem absichtlich fehlerhaften Testprogramm (Schreibzugriff auf
+Adresse 0, nur in `/tmp` gebaut, **nicht** im Repo):
+
+```
+Dienst 'greeter' PID=1003 nach Seitenfehler bei Adresse 0x0 (Seite nicht vorhanden, Schreiben) neu gestartet (Versuch 1/5)
+... Versuch 2/5 ... 3/5 ... 4/5 ... 5/5
+Dienst PID=Pid(1003) Neustart-Limit erreicht — der Fehler beendet ihn
+Seitenfehler PID=Pid(1003) Adresse=0x0 (...) [beendet: 1, Kernel: 0]
+```
+
+Der letzte Eintrag zeigt, dass die Zaehler stimmen: fuenf Neustarts, ein Ende.
+Der Normalbetrieb bleibt unveraendert (0 Seitenfehler im Lauf, `Esc` setzt
+weiterhin Stapel und Daten zurueck, Bildschirm vor und nach `Esc` "Start 2").
+
 ## Nachweis (QEMU, BIOS, Software-Emulation)
 
 Alle Laeufe: `scripts/qemu_boot.sh` baut Kernel, Init und Fenster, das Image
@@ -136,8 +172,9 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1795 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1797 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
+| Fehlerentscheidung | 15 Tests: Ring entscheidet, Rolle entscheidet (Dienst startet neu, Programm wird beendet), Neustart zaehlt nicht als Ende, Fehlercode-Auswertung |
 | Diensteverwaltung | 8 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad, Startabbild hinterlegen/ersetzen, leeres Abbild, Grenze 64 KiB |
 | ELF-Abbild | 6 Tests: Code+Daten+bss-Nullen, ohne Datensegment, ohne Codesegment, Grenze (genau/ein Byte darueber/bss allein) |
 | Datenfenster | 1 Test: Fenstergroesse zulaessig, ein Byte darueber nicht |
