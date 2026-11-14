@@ -52,6 +52,7 @@ pub enum WindowError {
     Exists,
     /// Das Fenster existiert nicht.
     Missing,
+    /// Das Fenster ist geschlossen oder minimiert.
     Closed,
     /// Die Groesse unterschreitet das Minimum oder ist leer.
     InvalidSize,
