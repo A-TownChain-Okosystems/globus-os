@@ -1,6 +1,7 @@
 //! Deterministic on-disk metadata layout calculation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler bei der Berechnung des On-Disk-Layouts.
 pub enum LayoutError {
     /// Geometrie oder Blockzahl ist unbrauchbar.
     InvalidGeometry,
