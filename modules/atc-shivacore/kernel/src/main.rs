@@ -1118,15 +1118,27 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     //   48 C7 C2 01 00 00 00  mov rdx, 1            (Kanal-ID des Eingabekanals)
     //   CD 80              int  0x80
     //   EB FC              jmp  zurueck auf int 0x80
-    let input_cap = interrupts::grant_input_read(ats1000::Pid(1002))
-        .expect("ShivaCore: Leserecht auf den Eingabekanal");
+    //
+    // Mit einem zweiten Ramdisk-Programm (Anmeldefenster) gehoert die Tastatur
+    // dem Greeter. Zwei Leser an einem Kanal wuerden sich die Tasten teilen,
+    // und das Anmeldefeld saehe nur die Haelfte. Ohne Greeter bleibt der
+    // bisherige Pfad: PID 1002 liest, der Kernel legt ein Testereignis ab.
+    let greeter_present = ramdisk_second.is_some();
+    let input_cap = if greeter_present {
+        0
+    } else {
+        interrupts::grant_input_read(ats1000::Pid(1002))
+            .expect("ShivaCore: Leserecht auf den Eingabekanal")
+    };
     // P1-3D-Nachweis: ein Tastenereignis auf demselben Weg wie der echte IRQ —
     // ablegen im Geraete-FIFO. Die Pumpe im Tick schiebt es in den Kanal der
     // Registry, PID 1002 holt es per Syscall. Erst hier, nicht frueher: ohne
     // angemeldeten Nutzerkonsument liest der Kernel das FIFO selbst.
-    interrupts::INPUT_QUEUE.lock().push(
-        shivacore::input_queue::InputEvent::new(0x1E, Some('a')),
-    );
+    if !greeter_present {
+        interrupts::INPUT_QUEUE.lock().push(
+            shivacore::input_queue::InputEvent::new(0x1E, Some('a')),
+        );
+    }
     // ABI 2.0.0: Der Prozess baut einen Argumentblock in seiner Datenseite und
     // uebergibt den Zeiger. Das Abbild der Anweisungen wird hier aufgebaut, und
     // alle Spruenge und der Platz der Capability werden aus der jeweils
@@ -1155,7 +1167,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     // Block: Groesse, Opcode/Flags, Capability, Kanal, arg1, Puffer, Laenge.
     syscall_loop.extend_from_slice(&store_qword_at(DATA_BASE, 56));
-    syscall_loop.extend_from_slice(&store_qword_at(DATA_BASE + 8, 0x0011));
+    // Ohne Greeter holt diese Schleife Tastenereignisse ab (IpcReceive).
+    // Mit Greeter gibt sie die CPU ab (Yield), statt mit einem fremden
+    // Cap-Handle abgelehnt zu werden: ein Fehlschlag im Kreis waere nur
+    // Rauschen im Audit-Log.
+    let third_process_opcode: u32 = if greeter_present { 0x0001 } else { 0x0011 };
+    syscall_loop.extend_from_slice(&store_qword_at(DATA_BASE + 8, third_process_opcode));
     let capability_slot = syscall_loop.len() + 2;
     syscall_loop.extend_from_slice(&mov_rdi(0));
     syscall_loop.extend_from_slice(&[0x48, 0x89, 0x3C, 0x25, 0x10, 0x00, 0x90, 0x01]);
@@ -1258,11 +1275,31 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             process_space.all_frames(),
         );
         cr3_fourth = process_space.frame().start_address().as_u64();
-        let context = userspace::UserContext::new(ats1000::Pid(1003), &binary, space);
+        // Startvertrag fuer das Anmelde-Programm: die beiden Cap-Nummern
+        // stehen als zwei Worte am Anfang seines Stapels. Die Nummern vergibt
+        // die Capability-Tabelle; der Prozess kann sie nicht erraten, sondern
+        // liest sie beim Einstieg. Ohne diesen Vertrag muesste der Kernel
+        // Nummern hartkodieren, die er selbst vergibt.
+        let console_cap = interrupts::grant_console(ats1000::Pid(1003)).unwrap_or(0);
+        let input_cap = interrupts::grant_input_read(ats1000::Pid(1003)).unwrap_or(0);
+        let start_rsp = space.stack_base - 16;
+        // Der Adressraum dieses Prozesses ist an dieser Stelle aktiv (oben
+        // installiert und abgebildet), deshalb ist der Stapel ueber seine
+        // virtuelle Adresse erreichbar.
+        unsafe {
+            let slot = start_rsp as *mut u64;
+            core::ptr::write_volatile(slot, console_cap);
+            core::ptr::write_volatile(slot.add(1), input_cap);
+        }
+        let mut context = userspace::UserContext::new(ats1000::Pid(1003), &binary, space);
+        context.rsp = start_rsp;
+        context.rbp = start_rsp;
         serial_println!(
-            "ShivaCore: vierter Prozess PID=1003 aus Ramdisk-Programm '{}' RIP={:#x}",
+            "ShivaCore: vierter Prozess PID=1003 aus Ramdisk-Programm '{}' RIP={:#x} Konsole-Cap={} Eingabe-Cap={}",
             name,
-            context.rip
+            context.rip,
+            console_cap,
+            input_cap
         );
         context
     });
