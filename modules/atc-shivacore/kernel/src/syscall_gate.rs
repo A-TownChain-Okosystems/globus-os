@@ -111,14 +111,17 @@ impl SyscallGate {
         self.dispatcher.on_tick();
     }
 
+    /// Anzahl der bisher verarbeiteten Timer-Ticks.
     pub fn ticks(&self) -> u64 {
         self.dispatcher.ticks()
     }
 
+    /// Sperrt die zentrale Capability-Tabelle und gibt sie heraus.
     pub fn capabilities(&self) -> MutexGuard<'_, CapabilityTable> {
         self.authority.lock()
     }
 
+    /// Nimmt dieselbe Sperre wie `capabilities`; der Name sagt nur, dass der Aufrufer schreiben will, zusaetzliche Rechte gibt er nicht.
     pub fn capabilities_mut(&self) -> MutexGuard<'_, CapabilityTable> {
         self.authority.lock()
     }
