@@ -5,11 +5,13 @@
 
 use std::collections::HashMap;
 
+/// Settings-Tab: Konfiguration, Theme, Netzwerk, Ueber. Stub.
 pub struct SettingsTab {
     // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl SettingsTab {
+    /// Legt einen leeren Tab an.
     pub fn new() -> Self {
         Self {}
     }
