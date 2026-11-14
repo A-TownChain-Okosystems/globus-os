@@ -1,6 +1,7 @@
 //! Hardware-neutral GPU/media buffer boundary.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Speicherformat eines Medienpuffers.
 pub enum BufferFormat {
     /// Rot, Gruen, Blau, Alpha mit 8 Bit je Kanal.
     Rgba8,
