@@ -2,22 +2,35 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InodeDiskError {
+    /// Der Puffer ist kleiner als ein Inode.
     Buffer,
+    /// Inode-Nummer oder Linkzahl ist 0 beziehungsweise ungueltig.
     Invalid,
+    /// Die Rechnung laeuft ueber den Wertebereich hinaus.
     Overflow,
 }
 
+/// Feste Groesse eines Inode auf Platte in Byte.
 pub const INODE_SIZE: usize = 64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Inode in seiner Plattenform.
 pub struct DiskInode {
+    /// Inode-Nummer.
     pub id: u64,
+    /// Rechte-Bits.
     pub mode: u16,
+    /// Art des Inode als Byte.
     pub kind: u8,
+    /// Anzahl harter Verweise.
     pub links: u32,
+    /// Groesse in Byte.
     pub size: u64,
+    /// Generationszaehler fuer die Wiederverwendung.
     pub generation: u64,
+    /// Erster Datenblock.
     pub data_start: u64,
+    /// Anzahl Datenbloecke.
     pub data_blocks: u64,
 }
 
@@ -31,6 +44,7 @@ fn checksum(bytes: &[u8]) -> u32 {
 }
 
 impl DiskInode {
+    /// Schreibt den Inode und prueft Nummer, Linkzahl und Pruefsumme.
     pub fn encode(&self, out: &mut [u8]) -> Result<(), InodeDiskError> {
         if out.len() < INODE_SIZE {
             return Err(InodeDiskError::Buffer);
@@ -52,6 +66,7 @@ impl DiskInode {
         Ok(())
     }
 
+    /// Liest einen Inode und prueft Pruefsumme und Feldwerte.
     pub fn decode(input: &[u8]) -> Result<Self, InodeDiskError> {
         if input.len() < INODE_SIZE {
             return Err(InodeDiskError::Buffer);
@@ -113,11 +128,13 @@ impl DiskInode {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Vergibt fortlaufende Inode-Nummern.
 pub struct InodeAllocator {
     next: u64,
 }
 
 impl InodeAllocator {
+    /// Erste zu vergebende Nummer; 0 wird abgelehnt.
     pub fn new(first: u64) -> Result<Self, InodeDiskError> {
         if first == 0 {
             return Err(InodeDiskError::Invalid);
@@ -125,6 +142,7 @@ impl InodeAllocator {
         Ok(Self { next: first })
     }
 
+    /// Naechste freie Inode-Nummer.
     pub fn allocate(&mut self) -> Result<u64, InodeDiskError> {
         let id = self.next;
         self.next = self.next.checked_add(1).ok_or(InodeDiskError::Overflow)?;
