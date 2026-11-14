@@ -22,5 +22,6 @@ license = "Apache-2.0"
 repository = "https://github.com/A-TownChain-Okosystems/globus-os"
 [workspace.lints.rust]
 unsafe_code = "warn"
+missing_docs = "warn"
 [workspace.lints.clippy]
 all = "warn"
