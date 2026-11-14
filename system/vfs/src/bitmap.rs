@@ -2,21 +2,29 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BitmapError {
+    /// Die Blockzahl ist 0 oder laesst sich nicht abbilden.
     InvalidGeometry,
+    /// Blocknummer oder Laenge ist ungueltig.
     InvalidBlock,
+    /// Der Block war bereits frei.
     AlreadyFree,
+    /// Der Block ist bereits belegt.
     AlreadyAllocated,
+    /// Es gibt keinen freien Lauf dieser Laenge.
     NoSpace,
+    /// Der Zielpuffer ist zu klein.
     Buffer,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Freispeicher-Bitmap ueber eine feste Blockzahl.
 pub struct FreeSpaceBitmap {
     total_blocks: u64,
     bits: Vec<u8>,
 }
 
 impl FreeSpaceBitmap {
+    /// Legt eine Bitmap ueber `total_blocks` Bloecke an, alle frei.
     pub fn new(total_blocks: u64) -> Result<Self, BitmapError> {
         if total_blocks == 0 {
             return Err(BitmapError::InvalidGeometry);
@@ -38,6 +46,7 @@ impl FreeSpaceBitmap {
         Ok(Self { total_blocks, bits })
     }
 
+    /// Anzahl der abgedeckten Bloecke.
     pub fn len(&self) -> u64 {
         self.total_blocks
     }
@@ -47,6 +56,7 @@ impl FreeSpaceBitmap {
         self.len() == 0
     }
 
+    /// Anzahl der abgedeckten Bloecke, wie bei `len`.
     pub fn total_blocks(&self) -> u64 {
         self.total_blocks
     }
@@ -76,6 +86,7 @@ impl FreeSpaceBitmap {
         Ok(())
     }
 
+    /// Markiert einen Bereich als belegt.
     pub fn reserve(&mut self, start: u64, count: u64) -> Result<(), BitmapError> {
         let end = start.checked_add(count).ok_or(BitmapError::InvalidBlock)?;
         if count == 0 || end > self.total_blocks {
@@ -87,6 +98,7 @@ impl FreeSpaceBitmap {
         Ok(())
     }
 
+    /// Markiert einen Bereich als frei.
     pub fn release(&mut self, start: u64, count: u64) -> Result<(), BitmapError> {
         let end = start.checked_add(count).ok_or(BitmapError::InvalidBlock)?;
         if count == 0 || end > self.total_blocks {
@@ -98,11 +110,13 @@ impl FreeSpaceBitmap {
         Ok(())
     }
 
+    /// True, wenn der Block frei ist.
     pub fn is_free(&self, block: u64) -> Result<bool, BitmapError> {
         let (index, mask) = self.check(block)?;
         Ok(self.bits[index] & mask != 0)
     }
 
+    /// Sucht den ersten freien Lauf dieser Laenge und liefert seinen Startblock.
     pub fn allocate(&mut self, count: u64) -> Result<u64, BitmapError> {
         if count == 0 {
             return Err(BitmapError::InvalidBlock);
@@ -126,10 +140,12 @@ impl FreeSpaceBitmap {
         Err(BitmapError::NoSpace)
     }
 
+    /// Laenge der binaeren Form in Byte.
     pub fn encoded_len(&self) -> usize {
         self.bits.len()
     }
 
+    /// Schreibt die Bitmap in den Puffer.
     pub fn encode(&self, out: &mut [u8]) -> Result<(), BitmapError> {
         if out.len() < self.bits.len() {
             return Err(BitmapError::Buffer);
@@ -138,6 +154,7 @@ impl FreeSpaceBitmap {
         Ok(())
     }
 
+    /// Liest eine Bitmap mit dieser Blockzahl.
     pub fn decode(total_blocks: u64, input: &[u8]) -> Result<Self, BitmapError> {
         let mut bitmap = Self::new(total_blocks)?;
         if input.len() < bitmap.bits.len() {
