@@ -2,34 +2,44 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TimerFrequency {
+    /// Frequenz in Hertz.
     pub hz: u64,
 }
 
 impl TimerFrequency {
+    /// True, wenn die Frequenz groesser 0 ist.
     pub fn valid(self) -> bool {
         self.hz > 0
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein abgelaufener Tick.
 pub struct TimerTick {
+    /// Fortlaufende Nummer des Ticks.
     pub sequence: u64,
+    /// Seit dem Start verstrichene Nanosekunden.
     pub elapsed_ns: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des Timers.
 pub enum TimerError {
+    /// Die Frequenz ist 0.
     InvalidFrequency,
+    /// Die Zeitrechnung laeuft ueber.
     Overflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Monoton laufender Timer.
 pub struct MonotonicTimer {
     frequency: TimerFrequency,
     ticks: u64,
 }
 
 impl MonotonicTimer {
+    /// Legt einen Timer mit gueltiger Frequenz an.
     pub fn new(frequency: TimerFrequency) -> Result<Self, TimerError> {
         if !frequency.valid() {
             return Err(TimerError::InvalidFrequency);
@@ -40,10 +50,12 @@ impl MonotonicTimer {
         })
     }
 
+    /// Frequenz des Timers.
     pub fn frequency(&self) -> TimerFrequency {
         self.frequency
     }
 
+    /// Zaehlt einen Tick und liefert seine Nummer und Zeit.
     pub fn tick(&mut self) -> Result<TimerTick, TimerError> {
         self.ticks = self.ticks.checked_add(1).ok_or(TimerError::Overflow)?;
         let elapsed_ns = self
@@ -56,6 +68,7 @@ impl MonotonicTimer {
         })
     }
 
+    /// Bisher gezaehlte Ticks.
     pub fn ticks(&self) -> u64 {
         self.ticks
     }
