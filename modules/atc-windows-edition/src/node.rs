@@ -5,11 +5,13 @@
 
 use std::collections::HashMap;
 
+/// Node-Tab: Status, Peers, Bloecke, Sync. Stub.
 pub struct NodeTab {
     // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl NodeTab {
+    /// Legt einen leeren Tab an.
     pub fn new() -> Self {
         Self {}
     }
