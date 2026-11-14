@@ -1,6 +1,7 @@
 //! Audio/video synchronization policy with bounded resynchronization.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Entscheidung fuer das naechste Bild.
 pub enum SyncAction {
     /// Bild zeigen; der Versatz liegt im Toleranzband.
     Present,
