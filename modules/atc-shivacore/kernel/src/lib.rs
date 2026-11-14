@@ -16,50 +16,94 @@ extern crate std;
 // die alten Pfade `shivacore::madt::…` am Leben.
 pub use libshivacore::{acpi_devices, madt};
 
+/// Eigener Adressraum je Prozess mit Seitentabellen und Fenstern.
 pub mod addr_space;
+/// Physikalischer Framespeicher; nur im Testbuild eingebunden.
 #[cfg(test)]
 pub mod allocator;
+/// Local APIC: Basisadresse, Register und Interrupt-Zustellung.
 pub mod apic;
+/// ATC-FS, das inhaltsadressierte Dateisystem des Kernels.
 pub mod atcfs;
+/// ATS-1000-Kernelschnittstelle mit Prozesskennung, Beendigungsgrund und Prozessverwaltung.
 pub mod ats1000;
+/// Die eine Instanz, die ueber Berechtigungen entscheidet.
 pub mod cap_authority;
+/// Capability-System mit Rechten, Tabellen und Pruefungen.
 pub mod capability;
+/// Zusammenspiel der Teilsysteme in einem Ablauf.
 pub mod cross_subsystem;
+/// Grenze zwischen Fehlerbehandlung und Ereignismeldung.
 pub mod diagnostics;
+/// Beurteilung von DMA-Bereichen, bevor ein Geraet darauf zugreift.
 pub mod dma_auth;
+/// Laden von ELF64-Dateien und die Signalverwaltung.
 pub mod elf_loader;
+/// Ausnahmen und Fehlerwege aus dem Userspace in den Kernel.
 pub mod fault;
+/// Hardware-Abstraktion; derzeit die Prozessorinformation.
 pub mod hal;
+/// Begrenzte Eingabewarteschlange zwischen Interrupt-Handler und Konsument.
 pub mod input_queue;
+/// IO-APIC: indirekte Register und Umleitung von Geraeteinterrupts.
 pub mod ioapic;
+/// Interprozesskommunikation mit Nachrichten und Warteschlangen.
 pub mod ipc;
+/// Lebensdauer von Kanaelen und Handles: oeffnen, teilen, schliessen, widerrufen.
 pub mod ipc_lifecycle;
+/// Keccak-256 in reinem Rust.
 pub mod keccak;
+/// IRQ-Vermittlung mit ihren Fehlern.
 pub mod irq;
+/// Verbindung von der IRQ-Tabelle zum Maskenregister.
 pub mod irq_bridge;
+/// Zuordnung von Geraete-IRQs zu Vektoren.
 pub mod irq_routing;
+/// Kernel-Abos auf IRQ-Leitungen.
 pub mod kernel_caps;
+/// Ablauf des Kernelstarts.
 pub mod kernel_init;
+/// Tastenereignisse vom Kernel zum Abonnenten; Entwurf, nicht verdrahtet.
 pub mod key_events;
+/// Scancode zu Tastencode fuer die PS/2-Tastatur (Satz 1).
 pub mod keymap;
+/// Umsetzung der Speicherverwaltungsschnittstelle.
 pub mod memory_manager;
+/// Prozessverwaltung mit Prozesszustand und Prozessliste.
 pub mod process;
+/// Ablaufplanung nach DA-HEFT mit Prioritaeten und Zeitscheiben.
 pub mod scheduler;
+/// Verzoegerte Freigabe von Seitentabellen-Frames.
 pub mod reclaim;
+/// Mehrfachsignatur, Schluessel und Sicherheitspruefungen.
 pub mod security;
+/// Stabile Systemaufruf-Grenze.
 pub mod syscall;
+/// Der einzige Uebergang vom Userspace in den Kernel.
 pub mod syscall_gate;
+/// Systemstart in Phasen, mit Zustand und Auswertung.
 pub mod system;
+/// Zeitquelle (HPET, PIT, TSC oder simuliert) und Zeitgeber.
 pub mod timer;
+/// Ablaufplanung der Ring-3-Prozesse mit Kontextwechsel.
 pub mod user_sched;
+/// User-Prozesse, Adressraum-Layout und Segmentselektoren.
 pub mod userspace;
+/// Dateibaum im Speicher mit Capability-Pruefung.
 pub mod vfs;
+/// Validierung und Seitentabellen des virtuellen Speichers.
 pub mod vmm;
 
+/// Vorrat der beim Boot gefundenen Geraete.
 pub mod boot_devices;
+/// Ladbare Kernelmodule mit ihrem Ladezustand; nur im Testbuild eingebunden.
 #[cfg(test)]
 pub mod lkm;
+/// Konfigurationsraum-Adressen und Geraetesuche auf dem PCI-Bus.
 pub mod pci_scan;
+/// Ramdisk mit Verzeichnis und Kennung.
 pub mod ramdisk;
+/// Annahme und Ergebnis eines Prozessstarts.
 pub mod spawn;
+/// Textausgabe auf dem Bildschirm mit fester Zeichenbreite.
 pub mod screen;
