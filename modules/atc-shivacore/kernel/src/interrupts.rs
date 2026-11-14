@@ -23,9 +23,12 @@ use x86_64::structures::idt::{
 };
 use x86_64::VirtAddr;
 
+/// Erster Vektor der ersten PIC-Bank; ab hier liegen die Geraetevektoren, nicht die Ausnahmen.
 pub const PIC_1_OFFSET: u8 = 0x20;
+/// Erster Vektor der zweiten PIC-Bank, acht Vektoren nach der ersten.
 pub const PIC_2_OFFSET: u8 = PIC_1_OFFSET + 8;
 
+/// Beide verketteten PIC-Banken hinter einer Sperre.
 pub static PICS: Mutex<ChainedPics> =
     Mutex::new(unsafe { ChainedPics::new(PIC_1_OFFSET, PIC_2_OFFSET) });
 
@@ -75,6 +78,7 @@ pub fn next_free_vector() -> Option<u8> {
     DEVICE_ROUTES.lock().next_free_vector()
 }
 
+/// Anzahl der vergebenen Geraetelinien.
 pub fn routed_lines() -> usize {
     DEVICE_ROUTES.lock().len()
 }
@@ -162,6 +166,7 @@ pub fn subscribe_kernel_line(line: u32) -> Result<u32, &'static str> {
 /// Rueckfall direkt gesperrt wurden. Beide Zahlen im Log machen sichtbar, ob
 /// der Pfad wirklich ueber die Tabelle geht.
 pub static BRIDGED_DELIVERIES: AtomicU64 = AtomicU64::new(0);
+/// Zustellungen, die nicht ueber die Tabelle liefen, sondern im Rueckfall direkt gesperrt wurden.
 pub static DIRECT_FALLBACKS: AtomicU64 = AtomicU64::new(0);
 /// Eingabewarteschlange zwischen Handler und Konsument (dem Tick).
 ///
@@ -254,6 +259,7 @@ pub fn set_process_cr3(pid: crate::ats1000::Pid, cr3: u64) {
     }
 }
 
+/// Setzt den Userspace-Planer mit bis zu vier Kontexten und ihren Seitentabellen auf.
 pub fn init_user_scheduler(
     first: &UserContext,
     second: &UserContext,
@@ -353,11 +359,13 @@ pub fn cap_count_for(pid: Pid) -> usize {
 /// ist das nur bei einer CPU sicher.
 static ONLINE_CPUS: core::sync::atomic::AtomicUsize = core::sync::atomic::AtomicUsize::new(1);
 
+/// Setzt die Zahl der aktiven Prozessoren, mindestens einen, und gibt sie an die Freigabe weiter.
 pub fn set_online_cpus(count: usize) {
     ONLINE_CPUS.store(count.max(1), Ordering::Release);
     shivacore::reclaim::set_online_cpus(count);
 }
 
+/// Anzahl der beim Start aktivierten Prozessoren.
 pub fn online_cpus() -> usize {
     ONLINE_CPUS.load(Ordering::Acquire)
 }
@@ -562,6 +570,7 @@ pub fn self_test_cleanup() -> (usize, usize, usize) {
     (before, revoked, after)
 }
 
+/// Gibt einem Prozess Leserecht auf den Kernel-Eingabekanal und merkt, dass der Userspace liest.
 pub fn grant_input_read(pid: Pid) -> Option<u64> {
     let mut gate = SYSCALL_GATE.lock();
     // Das Gate frueh anlegen: der Payload braucht die Cap-Nummer, bevor der
@@ -572,10 +581,12 @@ pub fn grant_input_read(pid: Pid) -> Option<u64> {
     Some(cap.0)
 }
 
+/// Feste Vektoren, die der Kernel selbst belegt.
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
     Timer = PIC_1_OFFSET,
+    /// Tastatur; der Vektor folgt direkt auf den Zeitgeber.
     Keyboard,
 }
 
@@ -630,10 +641,12 @@ lazy_static! {
     };
 }
 
+/// Laedt die Interrupt-Tabelle.
 pub fn init_idt() {
     IDT.load();
 }
 
+/// Initialisiert beide PIC-Banken und gibt nur die Zeitgeberleitung frei, alle anderen bleiben gesperrt.
 pub fn init_pics() {
     unsafe {
         PICS.lock().initialize();
@@ -685,28 +698,49 @@ extern "x86-interrupt" fn page_fault_handler(
     serial_println!("{:#?}", stack_frame);
 }
 
+/// Registerstand beim Uebergang in den Kernel; die Reihenfolge entspricht dem Stapelbild.
 #[repr(C)]
 #[derive(Clone, Copy, Debug, Default)]
 pub struct UserTrapFrame {
+    /// Akkumulator und Rueckgabewert.
     pub rax: u64,
+    /// Allzweckregister.
     pub rbx: u64,
+    /// Allzweckregister.
     pub rcx: u64,
+    /// Allzweckregister.
     pub rdx: u64,
+    /// Quellzeiger bei Zeichenkettenbefehlen.
     pub rsi: u64,
+    /// Zielzeiger bei Zeichenkettenbefehlen.
     pub rdi: u64,
+    /// Rahmenzeiger.
     pub rbp: u64,
+    /// Erweitertes Allzweckregister.
     pub r8: u64,
+    /// Erweitertes Allzweckregister.
     pub r9: u64,
+    /// Erweitertes Allzweckregister.
     pub r10: u64,
+    /// Erweitertes Allzweckregister.
     pub r11: u64,
+    /// Erweitertes Allzweckregister.
     pub r12: u64,
+    /// Erweitertes Allzweckregister.
     pub r13: u64,
+    /// Erweitertes Allzweckregister.
     pub r14: u64,
+    /// Erweitertes Allzweckregister.
     pub r15: u64,
+    /// Befehlszeiger beim Unterbrechungspunkt.
     pub rip: u64,
+    /// Code-Segment des unterbrochenen Codes.
     pub cs: u64,
+    /// Flag-Register beim Unterbruch.
     pub rflags: u64,
+    /// Stapelzeiger vor dem Uebergang.
     pub rsp: u64,
+    /// Stapel-Segment vor dem Uebergang.
     pub ss: u64,
 }
 
