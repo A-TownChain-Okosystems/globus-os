@@ -85,6 +85,29 @@ impl EntropyGate {
         self.pool.state()
     }
 
+    /// Verwirft alles und faellt auf `Uninitialized` zurueck (REQ-REC-16).
+    ///
+    /// Nach dem Aufwachen aus S3/S4 und nach dem Laden eines Images aufzurufen.
+    /// Danach ist jede Erzeugung gesperrt, bis [`EntropyGate::reseed`] den
+    /// Selbsttest bestanden hat.
+    pub fn invalidate(&mut self) {
+        self.pool.invalidate();
+    }
+
+    /// Speist neu; scheitert der Test, bleibt es bei `Failed` und ohne Material.
+    pub fn reseed(
+        &mut self,
+        hardware: &mut impl EntropySource,
+        jitter: &mut impl EntropySource,
+    ) -> EntropyState {
+        self.pool.reseed(hardware, jitter)
+    }
+
+    /// Zaehler der Speisungen (Nonce-Trennung).
+    pub const fn generation(&self) -> u64 {
+        self.pool.generation()
+    }
+
     /// Holt Material. Ausserhalb von `Ready` gibt es keins, auch keine Nullen.
     pub fn fill(&mut self, out: &mut [u8]) -> Result<(), IdentityError> {
         self.pool
@@ -206,6 +229,43 @@ mod tests {
         assert_ne!(first, second, "zwei Zuege duerfen nicht gleich sein");
         assert_eq!(gate.status(), EntropyState::Ready);
         assert!(!gate.needs_reseed());
+    }
+
+    #[test]
+    fn aufwachen_aus_s3_sperrt_bis_zur_bestandenen_neuspeisung() {
+        let mut gate = EntropyGate::from_host();
+        assert_eq!(gate.status(), EntropyState::Ready);
+        let before = gate.generation();
+
+        // S3/S4 oder neues Image: kein Material, keine Erzeugung.
+        gate.invalidate();
+        assert_eq!(gate.status(), EntropyState::Uninitialized);
+        assert_eq!(
+            gate.fill(&mut [0u8; 32]),
+            Err(IdentityError::EntropyUnavailable)
+        );
+
+        // Neuspeisung mit gesunder Quelle: wieder bereit, neue Generation.
+        assert_eq!(
+            gate.reseed(&mut healthy(41), &mut healthy(42)),
+            EntropyState::Ready
+        );
+        assert!(gate.generation() > before);
+        assert_eq!(gate.fill(&mut [0u8; 32]), Ok(()));
+
+        // Neuspeisung mit erkrankter Quelle: gesperrt, nicht "fast bereit".
+        gate.invalidate();
+        let mut flat = Fixed {
+            data: vec![0xFFu8; HEALTH_BYTES],
+        };
+        assert_eq!(
+            gate.reseed(&mut healthy(43), &mut flat),
+            EntropyState::Failed
+        );
+        assert_eq!(
+            gate.fill(&mut [0u8; 32]),
+            Err(IdentityError::EntropyUnavailable)
+        );
     }
 
     #[test]
