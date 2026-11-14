@@ -585,6 +585,7 @@ pub fn grant_input_read(pid: Pid) -> Option<u64> {
 #[derive(Debug, Clone, Copy)]
 #[repr(u8)]
 pub enum InterruptIndex {
+    /// Zeitgeber auf dem ersten programmierbaren Interrupt-Controller.
     Timer = PIC_1_OFFSET,
     /// Tastatur; der Vektor folgt direkt auf den Zeitgeber.
     Keyboard,
