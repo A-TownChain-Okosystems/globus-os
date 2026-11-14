@@ -5,7 +5,8 @@
 **Stand:** 14.11.2026
 **Eigentümer:** GlobusOS Identity Service
 **Status:** SPEZIFIZIERT — keine Implementierungs- und keine Produktionsbehauptung.
-Geprüft gegen den Quellstand `37bf130` (`main`).
+Geprüft gegen den Quellstand `c25dbb0` (`main`, 14.11.2026); Vorfassung geprüft
+gegen `37bf130`.
 **Vorgänger:** `docs/IDENTITY_WALLET_ARCHITECTURE.md`,
 `docs/IDENTITY_WALLET_FLOW.md`, `docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md`,
 `docs/LOGIN_WINDOW.md`, `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md`,
@@ -123,6 +124,10 @@ klingt.
 | **Daten-Recovery** | **fehlt**, ausdrücklich nicht Teil dieser Fassung | Abschnitt 1 |
 
 ### Drei Befunde, die vor der Umsetzung zu entscheiden sind
+
+> **Nachtrag 14.11.2026:** Die Frage, was die 32 Byte aus der Ableitung
+> eigentlich sind, ist in Abschnitt 15 beantwortet — und die Antwort ist
+> unangenehmer als „Kandidat". Abschnitt 16 regelt die fehlende Entropiequelle.
 
 **F-1 · Die Wallet-Ableitung ist eine einzige Strecke ohne Trennung.**
 `derive_private_key` rechnet `HMAC-SHA256(key = b"A-TownChain", message = seed)`
@@ -612,6 +617,18 @@ Spalte „erwartet“ ist die Zusage.
 | REC-T-31 | zwei Konten, gleiche Anzeigenamen, verschiedene Phrasen | getrennte `user_id`, getrennte Tresore |
 | REC-T-32 | Tresor mit `m_cost_kib` unter 19456 | abgewiesen (keine Absenkung der Parameter) |
 | REC-T-33 | Layout-Prüfer `scripts/check_recovery_spec.py` | Exit 0 gegen das Dokument |
+| REC-T-34 | RFC 8032, Testvektor 1: Signatur aus dem Seed | Signatur bytegleich zum Vektor |
+| REC-T-35 | Öffentlicher Schlüssel aus dem Wallet-Seed | 32 Byte aus der Kurve, **nicht** `SHA-256(seed)` |
+| REC-T-36 | Dieselbe Phrase, Wallet- und Identitätslabel | zwei verschiedene Schlüssel, keiner aus dem anderen rechnbar |
+| REC-T-37 | `key_version` 1 anfordern | fail-closed: kein signierfähiges Material, keine Wallet-Freigabe |
+| REC-T-38 | WalletService mit einem Schlüssel aufrufen | genau 32 Byte, kein Hash, kein Zwischenwert |
+| REC-T-39 | Signatur über die Signierbytes aus ATC-STD-600 §5.1 | mit `ed25519-dalek` unabhängig verifiziert |
+| REC-T-40 | Betrag 8025 in den Signierbytes | `00 00 00 00 00 00 1F 59` (big-endian), little-endian scheitert |
+| REC-T-41 | `entropy_status() == Uninitialized`, Registrierung | `EntropyUnavailable`, keine Phrase, kein Konto |
+| REC-T-42 | Selbsttest mit festhängendem Bit | `Failed`, keine Phrase |
+| REC-T-43 | Selbsttest mit konstanter Ausgabe | `Failed`, keine Phrase |
+| REC-T-44 | Zwei aufeinanderfolgende Blöcke gleich | `Failed` (Quelle wiederholt sich) |
+| REC-T-45 | Nach Neuspeisung und bestandenem Test, danach Verwerfen der Entropie | `Ready`, Puffer genullt |
 
 Die Fälle 17, 18, 20, 21, 24 und 27 sind nur mit echter Implementierung prüfbar;
 sie stehen hier als Abnahmebedingung, nicht als erledigt.
@@ -632,7 +649,9 @@ umgesetzt.
 | **R-5** | Fenster: Phraseneingabe, Positionsfehler, Adressanzeige, neues Passwort | Bedienung im laufenden Image belegt (Bildschirmfotos + Log ohne Geheimnisse) |
 
 Die Stufe **R-1** steht vorn, weil ohne sie jede erzeugte Phrase ein Zufall ohne
-Zufall wäre. Bis dahin darf im Image **keine** Phrase erzeugt werden.
+Zufall wäre. Bis dahin darf im Image **keine** Phrase erzeugt werden. Sie ist
+inhaltlich in Abschnitt 16 ausgeführt; ihre Nummer ist historisch (sie entstand
+vor der E1-Untersuchung), ihre Position ist die erste.
 
 ---
 
@@ -640,15 +659,197 @@ Zufall wäre. Bis dahin darf im Image **keine** Phrase erzeugt werden.
 
 | Nr. | Frage | Empfehlung | blockiert |
 |---|---|---|---|
-| **E-1** | Phrase stellt nur Identität und Wallet her, oder auch Nutzdaten? | nur Identität und Wallet; Daten eigener Mechanismus (Abschnitt 1) | R-2, R-4 |
+| ~~**E-1**~~ | Phrase stellt nur Identität und Wallet her, oder auch Nutzdaten? | **ENTSCHIEDEN 14.11.2026:** nur Identität und Wallet; Nutzdaten eigener Mechanismus (§7.3/§7.4 der Architektur-Spezifikation) | — |
 | **E-2** | Wortliste Englisch (BIP39-Standard) oder zusätzlich Deutsch? | Englisch; eine zweite Wortliste ist eine zweite Fassung und braucht `inner_version` 2 | R-2 |
-| **E-3** | `key_version` für neue Konten | 2 (getrennte Pfade), Fassung 1 bleibt lesbar | Abschnitt 5, R-4 |
+| ~~**E-3**~~ | `key_version` für neue Konten | **ENTSCHIEDEN 14.11.2026:** 2 (getrennte Pfade), Fassung 1 bleibt lesbar | — |
+| **E-6** | Wird `key_version` 1 ausdrücklich als **nicht signierfähig** gekennzeichnet (Adresse ja, Wallet nein)? | ja; ohne diese Kennzeichnung wird eine Adresse als Wallet ausgegeben, die nicht zahlen kann (Abschnitt 15.3) | E2, R-4 |
 | **E-4** | Wo liegt der Tresor, solange das Image keinen dauerhaften Speicher hat? | bis zum Vorhandensein: Ramdisk und ausdrücklich „nicht dauerhaft“ in der Oberfläche; kein Versprechen, das die Technik nicht hält | R-2, R-5 |
 | **E-5** | Darf die Wiederherstellung eine Schlüsselrotation anbieten? | nein, getrennter Vorgang nach der Bindungsspezifikation §6 | REQ-REC-10 |
 
 ---
 
-## 15. Nicht-Ziele
+## 15. Schlüsselmaterial-Semantik und Signaturautorität (E1)
+
+### 15.1 Der Befund, der alles andere bestimmt
+
+**Das heutige Wallet-Schlüsselmaterial ist kein Schlüssel.** Am Quellstand
+nachgelesen und mit einem Test belegbar:
+
+| Frage (E1.1) | Antwort | Beleg |
+|---|---|---|
+| Sind die 32 Byte ein Ed25519-Seed? | **Nein** | kein `ed25519-dalek` in `system/identity` |
+| Sind die 32 Byte ein secp256k1-Skalar? | **Nein** | `secp256k1` kommt im kompilierten Quelltext nicht vor |
+| Werden sie vor Verwendung transformiert? | **Ja, aber nicht in einen Schlüssel** | `derive_public_key` = `SHA-256(privater Wert)` (`system/identity/src/lib.rs:295`) |
+| Gibt es eine Schlüsselvalidierung? | **Nein** | keine Skalar-/Punktprüfung, weil es keinen Punkt gibt |
+| Was erreicht `WalletService`? | **Nichts von beidem** | `create_wallet` verwirft privaten und öffentlichen Wert; `WalletCreation` trägt nur Phrase, Adresse, Bindung (`lib.rs:186`) |
+
+Daraus folgt, was der Bestand wirklich ist: Die 32 Byte sind ein
+HMAC-Ausgang, der in eine Hashfunktion geht. Der „öffentliche Schlüssel" ist
+`SHA-256` dieses Werts, also ein **Hash, kein Kurvenpunkt**. Gegen einen Hash
+lässt sich keine Signatur prüfen. Und der private Wert wird nach der
+Adressberechnung verworfen: es gibt heute **kein** Wallet-Schlüsselmaterial,
+weder auf der Platte noch im Speicher.
+
+**Konsequenz, die ausgesprochen werden muss:** Eine Phrase erzeugt heute
+reproduzierbar eine Adresse, aber niemand kann mit dem zugehörigen Schlüssel
+signieren. Die Adresse ist eine Selbstverpflichtung auf ein Geheimnis, kein
+Wallet. Die drei Fragen aus P0-A und P0-B haben damit dieselbe Antwort: es gibt
+genau **eine** Implementierung, und sie enthält kein Signaturverfahren
+(E1.2 = kein produktiver Pfad für Wallets).
+
+**Der einzige produktive Signaturcode im Repository** ist Ed25519 für Pakete und
+Updates: `system/package` (Prüfen, `ed25519-dalek` 3.0, `verify_package`), Tests
+in `system/update` (Signieren mit `SigningKey`), `service_space/src/did.rs` für
+DIDs. Für Wallets existiert er nicht.
+
+### 15.2 Was die Norm sagt (E1.5)
+
+`ATC-STD-600` ist gelesen, nicht angenommen: **Chain Identity & Network
+Identification, Version 1.3.0, status `approved`, lifecycle `frozen`**
+(`atc-standards/standards/os/ATC-STD-600.md`, Blob `7f08b2f`).
+
+| Festlegung der Norm | Wert |
+|---|---|
+| Signatur der kanonischen L1-Transaktion | **Ed25519** über die exakten Signierbytes (§5.2) |
+| Signierdomäne | `ATC-TX-DOMAIN-V2`; `ATC-TX-DOMAIN` ist zurückgezogen, keine Doppelannahme |
+| Beträge, Gebühr, Grenze, Nonce, Zeit | **jeweils u64, big-endian** (§5.1) |
+| Kette | `chain_id = 658467` für die aktuelle L1 |
+| Sender/Empfänger | DID-Zeichenketten (u32-Länge + UTF-8), nicht die 35-Zeichen-Adresse dieses Repositorys |
+
+Drei Folgen, die sofort gelten:
+
+1. **Die Krypto-Frage ist in der Norm entschieden, nicht offen.** Sie ist nur in
+   der Implementierung offen. Wer L1-Transaktionen signieren will, braucht
+   Ed25519; für GlobusOS heißt das: der Wallet-Schlüssel aus der Phrase muss ein
+   Ed25519-Schlüssel sein, sonst ist die Wallet nichtzahlungsfähig.
+2. **Ein echter, aber heute latenter Formatkonflikt:** Die Norm verlangt u64
+   **big-endian** in den Signierbytes; die Genesis-Serialisierung dieses
+   Repositorys schreibt `to_le_bytes` (`service_space/src/genesis.rs:307`). Es
+   gibt keinen Transaktions-Signiercode, also bricht heute nichts — jede neue
+   Signierimplementierung nimmt big-endian aus der Norm, nicht little-endian aus
+   der Nachbarschaft.
+3. **Die 35-Zeichen-Adresse ist nicht die Adresse der Norm.** `ATC`+28+4
+   Hexzeichen (`lib.rs:298`) ist eine Eigenform dieses Repositorys; die Norm
+   spricht von `sender_did`. Beides darf nebeneinander bestehen (lokale
+   Konto-/Wallet-Referenz vs. Ketten-DID), aber nicht füreinander ausgegeben
+   werden.
+
+`ATC-STD-603` (Globus OS Standard) enthält **keine** Identity-, Keystore- oder
+Recovery-Regeln. Für die Betriebssystemseite gibt es damit keine Norm, die diese
+Spezifikation überstimmt — und auch keine, die sie deckt. Sie bleibt Vorschlag
+mit Eigentümer GlobusOS.
+
+### 15.3 Mindestvertrag für `key_version` 2 (E1.3)
+
+Bevor eine Ableitung als „Wallet" gelten darf, müssen diese acht Punkte
+festgelegt und geprüft sein. Ohne sie ist jede Signatur unbelegt.
+
+| Eigenschaft | Anforderung |
+|---|---|
+| Algorithmus | Ed25519 (Norm), nicht „irgendeine Kurve" |
+| Privates Format | 32-Byte-Seed; Quelle: HKDF-Label `GLOBUS-WALLET-KEY-V1` (Abschnitt 5) |
+| Öffentliches Format | 32 Byte, `SigningKey::verifying_key()`, niemals ein Hash |
+| Signaturformat | 64 Byte, RFC 8032 |
+| Nachrichtenkodierung | die Signierbytes aus `ATC-STD-600` §5.1, byteweise identisch |
+| Verifikation | unabhängig reproduzierbar, mit `ed25519-dalek` (schon im Repo) |
+| Testvektoren | RFC 8032 Vektor 1 bis 3 plus ein Vektor aus der Norm |
+| Adressbildung | eigene, benannte Regel; ausdrücklich **nicht** die DID der Norm |
+
+**Und eine Absage, die dazugehört:** `key_version` 1 ist ab dann
+**nicht-signierfähig**. Sie bleibt lesbar, damit bestehende Devnet-Adressen
+reproduzierbar sind, aber sie darf nie als Wallet im Sinne von Zahlungsfähigkeit
+ausgegeben werden. Wer das anders will, muss eine Signatur mit einem Hash als
+öffentlichem Schlüssel vorlegen — und das geht nicht.
+
+### 15.4 Domänentrennung mit Ed25519 (E1.4)
+
+BIP32 ist für Ed25519 nicht anwendbar; wer es trotzdem benutzt, bekommt je nach
+Implementierung verschiedene Schlüssel. Diese Spezifikation benutzt deshalb die
+HKDF-Struktur aus Abschnitt 5: **ein** Seed (BIP39), **getrennte** Labels,
+getrennte 32-Byte-Seeds für Wallet, Identität und Knoten. Drei Regeln:
+
+- Ein Identitätsschlüssel darf **nie** als Transaktionsschlüssel verwendet
+  werden, auch nicht „nur zum Testen".
+- Der Knotenschlüssel ist ein eigener Schlüssel je Gerät und kein Ableger des
+  Wallet-Schlüssels.
+- Zwei Labels ergeben zwei Seeds; dass beide aus derselben Phrase stammen, ist
+  Absicht und kein Fehler, solange die Labels verschieden sind und bleiben.
+
+---
+
+## 16. Entropiebereitschaft und Wiederherstellungssicherheit (R-1)
+
+Eine BIP39-Phrase mit 24 Wörtern trägt 256 Bit **nur dann**, wenn diese 256 Bit
+wirklich zufällig sind. `Mnemonic::generate_in` ist eine Kodierung, keine
+Zufallsquelle: sie nimmt, was der Aufrufer liefert. Im Host-Build ist das
+`OsRng`; **im Image gibt es diese Quelle nicht** (`RDRAND`/`RDSEED` kommen im
+Quelltext nicht vor). Bis das behoben ist, darf im Image keine Phrase entstehen.
+
+### 16.1 Drei Zustände, kein „ungefähr bereit"
+
+```text
+Hardware-Quellen (RDRAND/RDSEED, Zeitgeber-Jitter)
+        |
+        v
+Initialisierung  -->  Selbsttest (Gesundheitsprüfung)
+        |
+        v
+  UNINITIALIZED  --(Selbsttest bestanden)-->  READY
+        |                                      |
+        |(Selbsttest fehlgeschlagen)           |(späterer Fehler)
+        v                                      v
+      FAILED  <-------------------------------+
+```
+
+| Zustand | Bedeutung | Folge für die Registrierung |
+|---|---|---|
+| `UNINITIALIZED` | Quelle noch nicht geprüft | **keine** Phrase, kein Konto, Fehler `EntropyUnavailable` |
+| `READY` | Gesundheitsprüfung bestanden, Ausgabe mischt Hardware und Jitter | Phrase erzeugen, normal weiter |
+| `FAILED` | Quelle liefert nichts Brauchbares oder widersprüchlich | **keine** Phrase; ein bereits ausgestelltes Konto bleibt unberührt |
+
+### 16.2 Anforderungen
+
+**REQ-REC-13 — Kein Zufall ohne Prüfung.** Der Kernel stellt eine Funktion
+`entropy_status() -> {Uninitialized, Ready, Failed}` bereit; die Registrierung
+fragt sie **vor** jeder Erzeugung und bricht bei allem außer `Ready` ab.
+
+**REQ-REC-14 — Der Selbsttest ist konkret.** Beim Start: mindestens 4096
+Ausgabebytes aus der Hardwarequelle, Prüfung auf (a) nicht konstant, (b) keine
+festhängenden Bits in jeder Bitposition, (c) mindestens 64 verschiedene
+Bytewerte, (d) zwei aufeinanderfolgende Blöcke ungleich. Ohne bestandenen
+Selbsttest bleibt der Zustand `UNINITIALIZED`.
+
+**REQ-REC-15 — Mischen, nicht vertrauen.** Die Ausgabe für Nutzer ist immer
+CSPRNG-Ausgabe (ChaCha20-basierter DRBG oder gleichwertig), gespeist aus
+Hardwarequelle **und** Zeitgeber-Jitter; ein Ausfall einer Quelle darf den
+Zustand höchstens auf `Uninitialized`/`Failed` setzen, nie stillschweigend
+weiterlaufen.
+
+**REQ-REC-16 — Nachspeisung und Neustart.** Nach dem Aufwachen aus S3/S4 und
+nach dem Laden eines Images wird neu gespeist; der Zustand fällt bis zum
+bestandenen Test auf `UNINITIALIZED` zurück.
+
+**REQ-REC-17 — Kein Zwischenspeicher.** Erzeugte Entropie wird nicht aufbewahrt,
+nicht protokolliert und beim Verwerfen genullt (gilt für 32 Byte Entropie, Seed,
+Phrase).
+
+**REQ-REC-18 — Ehrliche Anzeige.** Bei `Uninitialized`/`Failed` zeigt das Fenster
+„Zufallsquelle nicht bereit — keine Kontoanlage möglich", nicht ein leeres Feld
+und keinen stillen Fehlschlag.
+
+### 16.3 Grenzen, die dazugehören
+
+- Ein Hardware-Zufallswert allein ist kein Beweis. Hersteller können fehlerhafte
+  Generatoren liefern; deshalb der Selbsttest und das Mischen.
+- In einer QEMU-Emulation ohne KVM ist die „Hardwarequelle" ein Modell des
+  Hypervisors. Ein grüner Lauf dort belegt die Architektur, nicht die Güte der
+  Quelle auf echter Hardware.
+- Ohne diese Stufe bleibt Registrierung im Image unmöglich. Sie ist deshalb
+  **vor** R-2 zu erledigen, obwohl sie in der Nummerierung dahinter steht.
+
+---
+
+## 17. Nicht-Ziele
 
 - Keine Aussage über die Sicherheit des ATC-Wallet-Verfahrens; das ist
   `atc-wallet` und die ATC-Standards.
@@ -663,7 +864,7 @@ Zufall wäre. Bis dahin darf im Image **keine** Phrase erzeugt werden.
 
 ---
 
-## 16. Referenzen
+## 18. Referenzen
 
 - `docs/IDENTITY_WALLET_ARCHITECTURE.md` — Architektur und Datenklassifikation
 - `docs/IDENTITY_WALLET_FLOW.md` — Zustandsmaschine Boot → Login → Register
