@@ -46,6 +46,7 @@ pub trait MediaGpuBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Verweis auf einen geteilten Puffer.
 pub struct SharedBufferHandle {
+    /// Kennung des Puffers.
     pub id: u64,
     /// True, wenn nur gelesen werden darf.
     pub read_only: bool,
