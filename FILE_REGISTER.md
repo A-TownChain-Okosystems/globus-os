@@ -1,7 +1,7 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Stand:** 14.11.2026, gegen `d7a9fef` nachgezaehlt: 554 Dateien. Der
+> **Stand:** 14.11.2026, gegen `dde2de2` nachgezaehlt: 555 Dateien. Der
 > vorige Kopf nannte 540, waehrend die Tabelle bereits 548 Zeilen hatte; beim
 > Nachzaehlen fehlten drei Kernel-Dateien
 > (`modules/atc-shivacore/kernel/src/identity_check.rs`, `identity_file.rs`,
@@ -88,7 +88,7 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
-| `docs/identity/SPEC-RECOVERY-001.md` | 1046 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 1062 |
 | `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 204 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
@@ -298,7 +298,7 @@
 | `modules/atc-shivacore/init_program/src/main.rs` | 145 |
 | `modules/atc-shivacore/kernel/.cargo/config.toml` | 2 |
 | `modules/atc-shivacore/kernel/.gitignore` | 1 |
-| `modules/atc-shivacore/kernel/Cargo.toml` | 52 |
+| `modules/atc-shivacore/kernel/Cargo.toml` | 53 |
 | `modules/atc-shivacore/kernel/src/addr_space.rs` | 374 |
 | `modules/atc-shivacore/kernel/src/allocator.rs` | 105 |
 | `modules/atc-shivacore/kernel/src/apic.rs` | 416 |
@@ -312,6 +312,7 @@
 | `modules/atc-shivacore/kernel/src/diagnostics.rs` | 98 |
 | `modules/atc-shivacore/kernel/src/dma_auth.rs` | 383 |
 | `modules/atc-shivacore/kernel/src/elf_loader.rs` | 1490 |
+| `modules/atc-shivacore/kernel/src/entropy_gate.rs` | 329 |
 | `modules/atc-shivacore/kernel/src/fault.rs` | 465 |
 | `modules/atc-shivacore/kernel/src/framebuffer.rs` | 228 |
 | `modules/atc-shivacore/kernel/src/gdt.rs` | 99 |
@@ -333,7 +334,7 @@
 | `modules/atc-shivacore/kernel/src/kernel_init.rs` | 377 |
 | `modules/atc-shivacore/kernel/src/key_events.rs` | 157 |
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 420 |
-| `modules/atc-shivacore/kernel/src/lib.rs` | 114 |
+| `modules/atc-shivacore/kernel/src/lib.rs` | 115 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.625 |
 | `modules/atc-shivacore/kernel/src/main.rs` | 1999 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 124 |
