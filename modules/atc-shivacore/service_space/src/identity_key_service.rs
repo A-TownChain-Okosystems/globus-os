@@ -16,15 +16,20 @@ pub struct KeyHandle(pub u64);
 /// Operations that may be requested from the identity key service.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeyOperation {
+    /// Laedt den Verschluesselungsschluessel.
     LoadEncryptionKey,
 }
 
 /// Errors returned without exposing key material.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IdentityKeyError {
+    /// Das Handle bezeichnet keinen Schluessel.
     InvalidHandle,
+    /// Der Aufrufer ist nicht berechtigt; der Dienst prueft dabei nur das ihm uebergebene Merkmal.
     NotAuthorized,
+    /// Zu diesem Handle ist kein Schluessel verfuegbar.
     KeyUnavailable,
+    /// Der Schluesselbereich meldet einen Fehler.
     HardwareFailure,
 }
 
@@ -40,6 +45,7 @@ pub struct IdentityKeyService<B> {
 }
 
 impl<B> IdentityKeyService<B> {
+    /// Dienst um das uebergebene Schluessel-Backend.
     pub const fn new(backend: B) -> Self {
         Self { backend }
     }
