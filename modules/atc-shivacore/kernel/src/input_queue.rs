@@ -18,11 +18,14 @@ pub const INPUT_CAPACITY: usize = 64;
 /// verfaelschen.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct InputEvent {
+    /// Rohcode der Taste.
     pub scancode: u8,
+    /// Beim Druecken uebersetztes Zeichen; None, wenn die Taste keines erzeugt.
     pub character: Option<char>,
 }
 
 impl InputEvent {
+    /// Ereignis aus Rohcode und bereits uebersetztem Zeichen.
     pub const fn new(scancode: u8, character: Option<char>) -> Self {
         Self {
             scancode,
@@ -63,6 +66,7 @@ impl InputEvent {
     }
 }
 
+/// Fester Ringpuffer fuer Tastenereignisse.
 pub struct InputQueue {
     buffer: [InputEvent; INPUT_CAPACITY],
     /// Position des aeltesten Eintrags.
@@ -78,6 +82,7 @@ impl Default for InputQueue {
 }
 
 impl InputQueue {
+    /// Leerer Puffer ohne verworfene Ereignisse.
     pub const fn new() -> Self {
         Self {
             buffer: [InputEvent {
@@ -113,10 +118,12 @@ impl InputQueue {
         Some(event)
     }
 
+    /// Anzahl der gespeicherten Ereignisse.
     pub fn len(&self) -> usize {
         self.len
     }
 
+    /// True, solange nichts gespeichert ist.
     pub fn is_empty(&self) -> bool {
         self.len == 0
     }
