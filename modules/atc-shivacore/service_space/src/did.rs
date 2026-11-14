@@ -16,10 +16,10 @@ use alloc::vec::Vec;
 
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 
-/// Dezentrale Identitaet: did:shivacore:<hex-public-key>
+/// Dezentrale Identitaet: `did:shivacore:<hex-public-key>`
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Did {
-    /// Kennung als Text, gebildet nach dem Muster did:shivacore:<Schluessel>.
+    /// Kennung als Text, gebildet nach dem Muster `did:shivacore:<Schluessel>`.
     pub value: String,
 }
 
