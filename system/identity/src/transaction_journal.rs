@@ -21,6 +21,7 @@ const MAX_PAYLOAD_LEN: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
+/// Zustand eines Journaleintrags.
 pub enum TransactionState {
     Prepared = 1,
     Committed = 2,
@@ -41,33 +42,51 @@ impl TryFrom<u8> for TransactionState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Eintrag im Journal.
 pub struct JournalRecord {
+    /// Kennung der Transaktion.
     pub transaction_id: [u8; 16],
+    /// Zustand der Transaktion.
     pub state: TransactionState,
     /// Non-secret operation metadata used by the caller's reconciliation protocol.
     pub payload: Vec<u8>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler des Journals.
 pub enum JournalError {
+    /// Der Eintrag ist unvollstaendig.
     TruncatedRecord,
+    /// Der Magic-Wert passt nicht.
     InvalidMagic,
+    /// Die Journalversion wird nicht unterstuetzt.
     UnsupportedVersion,
+    /// Der Zustandsbyte ist unbekannt.
     InvalidState,
+    /// Das reservierte Byte ist nicht 0.
     InvalidReservedByte,
+    /// Die Nutzlast ueberschreitet 64 KiB.
     PayloadTooLarge,
+    /// Die SHA-256-Pruefsumme passt nicht.
     ChecksumMismatch,
+    /// Fuer diese Transaktion existiert bereits ein Prepare.
     DuplicatePrepare,
+    /// Der Wechsel setzt ein Prepare voraus.
     TransitionWithoutPrepare,
+    /// Die Transaktion ist bereits beendet.
     TerminalTransaction,
+    /// Die Nutzlast weicht vom vorherigen Eintrag ab.
     ConflictingPayload,
+    /// Das Backend hat einen Fehler gemeldet.
     Backend(String),
 }
 
 /// Implementations must make append + flush/sync durable before returning success.
 /// Callers must serialize mutations and must not expose accounts until replay/reconciliation ends.
 pub trait JournalBackend {
+    /// Liest das gesamte Journal.
     fn read_all(&self) -> Result<Vec<u8>, JournalError>;
+    /// Haengt an und synct, bevor Erfolg gemeldet wird.
     fn append_sync(&mut self, bytes: &[u8]) -> Result<(), JournalError>;
 }
 
