@@ -20,6 +20,7 @@ pub const LAST_DEVICE_VECTOR: u8 = 0xEF;
 /// So viele Eintraege hat die Redirection Table eines IOAPIC hoechstens.
 pub const MAX_ROUTES: usize = 24;
 
+/// Ablehnungsgruende beim Eintragen einer Zuordnung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RouteError {
     /// Vektor liegt im Bereich der Prozessor-Exceptions oder hinter dem Ende.
@@ -37,8 +38,11 @@ pub enum RouteError {
 /// Eine Line mit ihrem Vektor.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IrqRoute {
+    /// Nummer der Line.
     pub irq: u8,
+    /// Globaler System-Interrupt des IOAPIC.
     pub gsi: u32,
+    /// Vektor, unter dem der Prozessor den Interrupt annimmt.
     pub vector: u8,
 }
 
@@ -54,6 +58,7 @@ impl Default for IrqRouting {
 }
 
 impl IrqRouting {
+    /// Leere Tabelle ohne Zuordnungen.
     pub fn new() -> Self {
         Self {
             routes: [None; MAX_ROUTES],
@@ -94,6 +99,7 @@ impl IrqRouting {
             .find(|vector| self.route_for_vector(*vector).is_none())
     }
 
+    /// Zuordnung einer Line.
     pub fn route_for_irq(&self, irq: u8) -> Option<IrqRoute> {
         self.routes
             .iter()
@@ -111,6 +117,7 @@ impl IrqRouting {
             .find(|route| route.vector == vector)
     }
 
+    /// Zuordnung eines GSI. Mehrere Lines duerfen denselben GSI nennen, dann gewinnt der erste Eintrag; eine eigene Pruefung auf doppelte GSI gibt es nicht.
     pub fn route_for_gsi(&self, gsi: u32) -> Option<IrqRoute> {
         self.routes
             .iter()
@@ -119,10 +126,12 @@ impl IrqRouting {
             .find(|route| route.gsi == gsi)
     }
 
+    /// Anzahl der belegten Plaetze.
     pub fn len(&self) -> usize {
         self.routes.iter().flatten().count()
     }
 
+    /// True, solange nichts eingetragen ist.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
