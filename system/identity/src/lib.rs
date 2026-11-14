@@ -46,7 +46,6 @@ type HmacSha256 = Hmac<Sha256>;
 pub struct UserId(String);
 impl UserId {
     /// Nimmt einen nicht leeren Bezeichner mit hoechstens 128 Zeichen an.
-    /// Prueft Anzeigename und verlangt, dass die Bindung zum Benutzer passt.
     pub fn new(value: impl Into<String>) -> Result<Self, IdentityError> {
         let value = value.into();
         if value.is_empty() || value.len() > 128 {
@@ -95,6 +94,7 @@ pub struct AccountProfile {
     pub binding: IdentityBinding,
 }
 impl AccountProfile {
+    /// Prueft Anzeigename und verlangt, dass die Bindung zum Benutzer passt.
     pub fn new(
         user_id: UserId,
         display_name: impl Into<String>,
