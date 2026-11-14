@@ -22,10 +22,12 @@ SKIP = ('target', '.git', 'node_modules', 'legacy', 'archive')
 ITEM = re.compile(r'^(\s*)pub\s+(?:async\s+)?(?:unsafe\s+)?(?:extern\s+"C"\s+)?'
                   r'(fn|struct|enum|trait|const|static|type|mod|union)\b')
 FIELD = re.compile(r'^(\s*)pub\s+[A-Za-z_][A-Za-z0-9_]*\s*:')
-VARIANT = re.compile(r'^(\s*)([A-Z][A-Za-z0-9_]*)\s*(?:[({,])')
+VARIANT = re.compile(r'^(\s*)([A-Z][A-Za-z0-9_]*)\s*(?:[({,=])')
 TRAIT_ITEM = re.compile(r'^(\s*)(?:fn|type|const)\s+[A-Za-z_]')
 ATTR = re.compile(r'^\s*#\[')
-DOC = re.compile(r'^\s*(///|//!|/\*\*|\*)')
+DOC = re.compile(r'^\s*(///|/\*\*|\*)')
+# `//!` ist ein inneres Modul-Attribut und dokumentiert das folgende Item NICHT.
+INNER = re.compile(r'^\s*//!')
 BLANK = re.compile(r'^\s*$')
 
 root_holder = ['.']
@@ -36,6 +38,8 @@ def documented(lines, i):
     while j >= 0:
         if BLANK.match(lines[j]):
             j -= 1; continue
+        if INNER.match(lines[j]):
+            return False
         if DOC.match(lines[j]):
             return True
         if ATTR.match(lines[j]):
@@ -60,6 +64,10 @@ def scan_file(path):
         m = ITEM.match(l)
         if m:
             kind = m.group(2)
+            # `pub mod x;` traegt seine Doku in x.rs, die dort eigenstaendig
+            # gezaehlt wird; die Deklaration selbst hat keinen Doc-Slot.
+            if kind == 'mod' and re.match(r'^\s*pub\s+mod\s+[A-Za-z_][A-Za-z0-9_]*\s*;', l):
+                continue
             if not documented(lines, i):
                 n += 1
             if kind in ('struct', 'enum', 'trait') and '{' in l:
