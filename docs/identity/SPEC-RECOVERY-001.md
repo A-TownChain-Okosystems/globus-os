@@ -952,6 +952,49 @@ und keinen stillen Fehlschlag.
 
 ---
 
+### 16.4 Wo die Entropie-Einheit liegt (entschieden 14.11.2026)
+
+**ENTSCHEIDUNG.** Die Einheit liegt **nicht** kernelintern, sondern als eigener
+`no_std`-Baustein in `system/entropy-core` (`globus-entropy-core`) und wird vom
+Kernel und von `system/identity` gemeinsam benutzt.
+
+Vier Gründe, jeder am Quellstand belegbar:
+
+1. **Zwei Nutzer mit gegensätzlicher Umgebung.** Der Kernel hat kein `std`, aber
+   RDRAND/RDSEED und Zeitgeber-Jitter; `system/identity` hat `std` und heute
+   `OsRng`. Eine kernelinterne Einheit müsste im Host nachgebaut werden — zwei
+   Wahrheiten über dieselbe Zustandsmaschine.
+2. **Das Muster existiert im Repository bereits.**
+   `globus-identity-core` ist `no_std` + `alloc`, wird von
+   `modules/atc-shivacore/kernel` und von `system/identity` benutzt, und der
+   Kernel hängt schon an diesem Baustein aus `system/`.
+3. **Die Abhängigkeitsrichtung bleibt abwärts.** `system/entropy-core` hängt an
+   nichts aus `modules/`. Der Kernel zeigt auf `system/`, nie umgekehrt.
+4. **Prüfbarkeit.** Die Anforderungen REC-T-41 bis REC-T-45 verlangen
+   einspeisbare Quellen (konstant, festhängendes Bit, Wiederholung). Ein
+   kernelinterner Zustand ist nur über QEMU sichtbar, dieser Kern gegen
+   gesteuerte Quellen im Host prüfbar.
+
+**Hardware bleibt am Rand.** Der Zugriff auf RDRAND/RDSEED und den
+Zeitgeberstand kommt über den Trait `EntropySource` von außen; `unsafe` steht
+dort, nicht im Kern. `chaCha20` als DRBG ist bewusst gewählt, weil `sha2` für
+`x86_64-unknown-none` nicht übersetzt (Befund 07.11.2026), `chacha20` 0.9.1
+dagegen schon (Rust 1.100.0, nachgewiesen am 14.11.2026).
+
+**Was der Kern enthält:** Zustandsmaschine `Uninitialized`/`Ready`/`Failed`,
+stückweiser Selbsttest nach REQ-REC-14 (kein 4-KiB-Stapelpuffer), ChaCha20-DRBG
+mit XOR-Mischung aus beiden Quellen, fail-closed ohne Teilausgabe, Nullung.
+**Was er nicht enthält:** keine Hardware, keinen Aufrufer, keine Phrase.
+
+**EHRLICHE GRENZE.** Der Kern hat heute **keinen Aufrufer im Produktivpfad**:
+`system/identity` erzeugt Phrasen weiterhin aus `OsRng`, der Kernel hat keinen
+Registrierungspfad. Ohne den Durchsetzungspunkt (Registrierung fragt
+`state()` und bricht bei allem außer `Ready` ab) verhindert der Baustein so
+wenig wie eine Bibliothek ohne Aufrufer. REQ-REC-13 bis REQ-REC-18 sind damit
+**teilweise** umgesetzt: Kern ja, Durchsetzung nein.
+
+---
+
 ## 17. Nicht-Ziele
 
 - Keine Aussage über die Sicherheit des ATC-Wallet-Verfahrens; das ist
