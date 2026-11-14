@@ -91,3 +91,9 @@ Damit bleiben als Voraussetzungen fuer einen echten Prozessstart: der
 Frame-Allokator im Syscall-Pfad (Blocker 3, beim Boot schon als
 `memory::FRAME_ALLOCATOR` veroeffentlicht) und die ABI-Entscheidung (Blocker 2,
 Nummer nicht mehr 0x0050, siehe Abschnitt 6).
+
+Die Grenze fuer den Datenanteil ist `MAX_IMAGE_DATA_BYTES` = 1 MiB (das
+Datenfenster des Prozesses, nicht eine VM-Grenze). Sie greift **vor** der
+Allokation der bss-Nullen, und `map_user_binary` prueft zusaetzlich mit
+`data_fits` gegen das Fenster des konkreten Prozesses. Damit ist `p_memsz` aus
+einer Datei keine ungepruefte Groesse mehr, aus der ein Puffer gebaut wird.
