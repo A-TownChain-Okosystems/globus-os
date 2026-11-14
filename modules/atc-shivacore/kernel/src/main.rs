@@ -33,6 +33,7 @@ use shivacore::userspace;
 
 // Bootloader anweisen, das gesamte physische RAM linear ins virtuelle
 // Adressvolumen zu mappen (Voraussetzung fuer den Paging-Mapper in memory.rs).
+/// Bootloader-Konfiguration: das physische RAM wird linear ins virtuelle Adressvolumen abgebildet, sonst koennte der Paging-Mapper in memory.rs nicht arbeiten.
 pub static BOOTLOADER_CONFIG: BootloaderConfig = {
     let mut config = BootloaderConfig::new_default();
     config.mappings.physical_memory = Some(Mapping::Dynamic);
