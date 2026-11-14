@@ -1,5 +1,6 @@
 //! NVMe MMIO register programming and controller initialization runtime.
 
+/// Registeroffset der Controller-Faehigkeiten.
 pub const CAP: u64 = 0x00;
 /// Registeroffset der Controller-Version.
 pub const VS: u64 = 0x08;
