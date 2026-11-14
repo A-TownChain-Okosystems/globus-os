@@ -10,35 +10,65 @@ use spin::Mutex;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Opcode {
+    /// Tut nichts; kostet trotzdem sein Gas.
     Nop = 0x00,
+    /// Liest acht Byte Operand aus dem Programm und legt den Wert auf den Stapel.
     Push = 0x01,
+    /// Verwirft den obersten Stapelwert.
     Pop = 0x02,
+    /// Addiert die zwei obersten Werte; ein Ueberlauf wickelt.
     Add = 0x10,
+    /// Subtrahiert den oberen vom darunterliegenden Wert; ein Unterlauf wickelt.
     Sub = 0x11,
+    /// Multipliziert die zwei obersten Werte; ein Ueberlauf wickelt.
     Mul = 0x12,
+    /// Teilt den darunterliegenden durch den oberen Wert; Teiler 0 ergibt DivisionByZero.
     Div = 0x13,
+    /// Bildet den Rest der Division; Teiler 0 ergibt DivisionByZero.
     Mod = 0x14,
+    /// Legt 1 ab, wenn beide Werte gleich sind, sonst 0.
     Eq = 0x20,
+    /// Legt 1 ab, wenn die Werte ungleich sind, sonst 0.
     Ne = 0x21,
+    /// Legt 1 ab, wenn der darunterliegende Wert kleiner ist, sonst 0.
     Lt = 0x22,
+    /// Legt 1 ab, wenn der darunterliegende Wert groesser ist, sonst 0.
     Gt = 0x23,
+    /// Legt 1 ab, wenn der darunterliegende Wert kleiner oder gleich ist, sonst 0.
     Lte = 0x24,
+    /// Legt 1 ab, wenn der darunterliegende Wert groesser oder gleich ist, sonst 0.
     Gte = 0x25,
+    /// Legt 1 ab, wenn beide Werte ungleich 0 sind, sonst 0.
     And = 0x30,
+    /// Legt 1 ab, wenn mindestens einer der Werte ungleich 0 ist, sonst 0.
     Or = 0x31,
+    /// Legt 1 ab, wenn der Wert 0 ist, sonst 0.
     Not = 0x32,
+    /// Springt an das Ziel, das vom Stapel gelesen wird; ein Ziel ausserhalb des Programms ergibt InvalidJump.
     Jump = 0x40,
+    /// Springt an das Ziel vom Stapel, wenn der darunterliegende Wert ungleich 0 ist.
     JumpIf = 0x41,
+    /// Springt an das Ziel vom Stapel, wenn der darunterliegende Wert 0 ist.
     JumpIfNot = 0x42,
+    /// Platzhalter ohne echten Aufruf: liest Ziel und ein weiteres Argument und legt fuer Ziel 1 den Wert 42 ab, fuer jedes andere Ziel 0.
     Call = 0x50,
+    /// Nimmt den Rueckgabewert vom Stapel und beendet den Aufruf erfolgreich.
     Ret = 0x51,
+    /// Liest den Speicherwert des Vertrags zum Schluessel vom Stapel; unbekannte Schluessel ergeben 0.
     Load = 0x60,
+    /// Schreibt einen Wert unter dem Schluessel sofort in den Speicher; eine spaetere Ruecknahme gibt es nicht, die Aenderung wird vermerkt.
     Store = 0x61,
+    /// Legt einen Protokolleintrag aus Thema und einem Wert an.
     Log = 0x70,
+    /// Legt die ersten acht Byte des Hash der Vertragsadresse ab.
     Self_ = 0x80,
+    /// Legt die ersten acht Byte des Hash der Aufrufer-DID ab.
     Caller = 0x81,
+    /// Legt das Guthaben des Vertrags ab; der zuvor vom Stapel genommene Wert wird nicht ausgewertet.
     Balance = 0x82,
+    /// Legt einen Protokolleintrag mit Thema 0xDEAD an; es wird kein Guthaben bewegt.
     Transfer = 0x83,
+    /// Beendet die Ausfuehrung erfolgreich.
     Halt = 0xFF,
 }
 impl Opcode {
