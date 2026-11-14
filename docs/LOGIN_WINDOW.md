@@ -145,6 +145,27 @@ Der letzte Eintrag zeigt, dass die Zaehler stimmen: fuenf Neustarts, ein Ende.
 Der Normalbetrieb bleibt unveraendert (0 Seitenfehler im Lauf, `Esc` setzt
 weiterhin Stapel und Daten zurueck, Bildschirm vor und nach `Esc` "Start 2").
 
+## Der Exit-Code nennt die Ursache
+
+Ein abgestuerzter Prozess stand bisher in jedem Fall mit `-11` im Zombie-Fach,
+gleich ob ihm eine Seite fehlte oder er eine unmoegliche Anweisung ausgefuehrt
+hat. Das Protokoll unterschied die Arten, das Zombie-Fach nicht — wer den
+Absturz spaeter nachliest, sah nur eine Zahl.
+
+`fault::exit_code(kind)` leitet den Code aus der Fehlerart ab: Seitenfehler und
+Schutzverletzung sind `SIGSEGV` (-11), ein ungueltiger Opcode ist `SIGILL` (-4).
+Nachgewiesen mit einem zweiten Testprogramm (`ud2`, ebenfalls nur in `/tmp`):
+`Zombie-Reaping: PID=Pid(1003) exit=-4`. Beim Zugriffsfehler steht dort
+weiterhin `-11`.
+
+Dazu zwei Aufraeumarbeiten am Ausnahmepfad: die Rolle des Prozesses wird mit
+`services::is_service` erfragt, statt den Diensteintrag zu klonen — eine
+Ausnahme ist kein Ort fuer eine Speicheranforderung. Und die Neustartzeile nennt
+die Adresse nur bei Ausnahmen mit Fehlercode; beim ungueltigen Opcode gibt es
+keinen, und CR2 steht dann auf dem letzten Wert: dort steht jetzt
+"`nach Ungueltiger Opcode (ohne Fehlercode) neu gestartet`" statt einer Adresse,
+die mit dem Fehler nichts zu tun hat.
+
 ## Nachweis (QEMU, BIOS, Software-Emulation)
 
 Alle Laeufe: `scripts/qemu_boot.sh` baut Kernel, Init und Fenster, das Image
@@ -172,9 +193,9 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1797 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1799 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
-| Fehlerentscheidung | 15 Tests: Ring entscheidet, Rolle entscheidet (Dienst startet neu, Programm wird beendet), Neustart zaehlt nicht als Ende, Fehlercode-Auswertung |
+| Fehlerentscheidung | 16 Tests, darunter der Exit-Code je Fehlerart (SIGSEGV/SIGILL); Ring entscheidet, Rolle entscheidet (Dienst startet neu, Programm wird beendet), Neustart zaehlt nicht als Ende, Fehlercode-Auswertung |
 | Diensteverwaltung | 8 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad, Startabbild hinterlegen/ersetzen, leeres Abbild, Grenze 64 KiB |
 | ELF-Abbild | 6 Tests: Code+Daten+bss-Nullen, ohne Datensegment, ohne Codesegment, Grenze (genau/ein Byte darueber/bss allein) |
 | Datenfenster | 1 Test: Fenstergroesse zulaessig, ein Byte darueber nicht |
