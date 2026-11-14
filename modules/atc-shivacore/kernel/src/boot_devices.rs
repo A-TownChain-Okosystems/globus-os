@@ -57,10 +57,12 @@ impl DeviceStore {
         self.devices.lock().clone()
     }
 
+    /// Anzahl der gefundenen PCI-Geraete.
     pub fn len(&self) -> usize {
         self.devices.lock().len()
     }
 
+    /// True, solange kein PCI-Geraet gefunden wurde.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
@@ -105,10 +107,12 @@ impl AcpiDeviceStore {
         self.devices.lock().clone()
     }
 
+    /// Anzahl der gefundenen ACPI-Geraete.
     pub fn len(&self) -> usize {
         self.devices.lock().len()
     }
 
+    /// True, solange kein ACPI-Geraet gefunden wurde.
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
