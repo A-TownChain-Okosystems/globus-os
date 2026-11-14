@@ -164,6 +164,45 @@ pub fn parse(image: &[u8]) -> Result<Vec<Entry>, RamdiskError> {
     Ok(entries)
 }
 
+/// Wer einen Eintrag lesen will.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Reader {
+    /// Der Kernel selbst (Boot, Anmeldung, Dienstverwaltung).
+    Kernel,
+    /// Ein Dienst (Ring 3, mit Dienstvertrag).
+    Service,
+    /// Ein gewoehnliches Programm (Ring 3).
+    Program,
+}
+
+/// Namensraum der Eintraege, die nur der Kernel liest.
+///
+/// Der Anmeldedatensatz liegt hier (Entscheidung des Owners 14.11.2026: eigene
+/// Datei auf der Ramdisk, strikte Rechte, keine einkompilierten Zugangsdaten).
+/// Der Namensraum ist die eine Stelle, an der die Regel steht.
+pub const SYSTEM_PREFIX: &str = "sys.";
+
+/// Darf dieser Leser den Eintrag sehen?
+///
+/// Nur der Kernel sieht System-Eintraege. Fuer alle anderen ist ein solcher
+/// Eintrag **nicht vorhanden** — kein "Zugriff verweigert", weil schon die
+/// Existenz eines Anmeldedatensatzes nichts angeht, was ein Programm wissen
+/// muss.
+pub fn may_read(name: &str, reader: Reader) -> bool {
+    match reader {
+        Reader::Kernel => true,
+        Reader::Service | Reader::Program => !name.starts_with(SYSTEM_PREFIX),
+    }
+}
+
+/// Sucht einen Eintrag nach Namen, mit Rechtepruefung.
+pub fn lookup<'a>(entries: &'a [Entry], name: &str, reader: Reader) -> Option<&'a Entry> {
+    if !may_read(name, reader) {
+        return None;
+    }
+    find(entries, name)
+}
+
 /// Sucht einen Eintrag nach Namen.
 pub fn find<'a>(entries: &'a [Entry], name: &str) -> Option<&'a Entry> {
     entries.iter().find(|entry| entry.name == name)
@@ -328,5 +367,24 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(entries[0].length, 0);
         assert_eq!(entries[0].data(&image), Some(&[][..]));
+    }
+
+    #[test]
+    fn system_eintraege_sieht_nur_der_kernel() {
+        let image = build(&[("init", &[1, 2]), ("sys.identity", &[9; 64])]).expect("Abbild");
+        let entries = parse(&image).expect("Verzeichnis");
+        assert!(lookup(&entries, "sys.identity", Reader::Kernel).is_some());
+        assert!(lookup(&entries, "sys.identity", Reader::Service).is_none());
+        assert!(lookup(&entries, "sys.identity", Reader::Program).is_none());
+        // Gewoehnliche Programme bleiben lesbar — auch fuer den Kernel.
+        assert!(lookup(&entries, "init", Reader::Program).is_some());
+        assert!(lookup(&entries, "init", Reader::Kernel).is_some());
+    }
+
+    #[test]
+    fn der_praefix_wirkt_nur_am_anfang() {
+        assert!(!may_read("sys.identity", Reader::Program));
+        assert!(may_read("mysys.identity", Reader::Program));
+        assert!(may_read("init", Reader::Program));
     }
 }
