@@ -87,6 +87,48 @@ Offen fuer die Ramdisk-Ablage (Entscheidung 2): eigene Datei, strikte Rechte,
 und der Weg, auf dem nur der Pruefprozess sie liest. Der Datensatz ist ein
 Dateiformat, die Ablage folgt.
 
+## Datensatz aus der Ramdisk (Entscheidung 2)
+
+Der Datensatz ist eine eigene Datei, kein Teil des Programms: eine
+Passwortaenderung ist damit kein neuer Kernel-Build.
+
+- Name und Namensraum: `sys.identity`. Der Praefix `sys.` ist der
+  Systemnamensraum; die Regel steht an einer Stelle (`ramdisk::may_read`).
+  Fuer Dienste und Programme ist der Eintrag **nicht vorhanden** — kein
+  "Zugriff verweigert", weil schon die Existenz eines Anmeldedatensatzes ein
+  Programm nichts angeht. Lesen darf ihn nur der Kernel.
+- `identity_file::load` ist fail-closed: fehlender Eintrag (`Missing`),
+  Eintrag passt nicht ins Abbild (`Unreadable`), Inhalt ist kein gueltiger
+  Datensatz (`Invalid(VerifyError)`). Es wird nie ein Ersatzdatensatz
+  erfunden.
+- Ausstellen: `cargo run -p globus-identity-core --example issue-record --
+  <passwort> <datei>` (Host-Werkzeug, Salz aus /dev/urandom, Parameter aus dem
+  Kern). Ablage: als Ramdisk-Eintrag `sys.identity=<datei>` beim Bauen.
+
+Belegt im Lauf (QEMU/BIOS):
+
+```
+IDENT-002 Datensatz aus der Ramdisk: gelesen (64 Byte, Argon2id 19456 KiB t=2 p=1)
+Ramdisk-Verzeichnis: 2 Programme (init, greeter)
+```
+
+und ohne die Datei:
+
+```
+IDENT-002 Datensatz aus der Ramdisk: Missing — fail-closed, keine Anmeldung
+```
+
+Dabei ein Fehler gefunden und behoben: die Programmwahl im Bootpfad nahm
+`entries.first()` und haette den Anmeldedatensatz als Programm starten koennen.
+Jetzt laufen Auswahl und Verzeichnisanzeige ueber `Reader::Program`; der
+Datensatz erscheint weder in der Liste noch als Kandidat.
+
+### Nachtrag zur Messung
+
+Zweiter Lauf: 276 ms (659542416 TSC bei 2.381.429.640 Hz). Die Groessenordnung
+ist stabil (267 / 276 ms), die Streuung kommt aus der Software-Emulation ohne
+KVM.
+
 ## Was ausdruecklich NICHT passiert ist
 
 - Keine Sitzung, keine PID, kein Scheduler-Uebergang in der Anmeldung
