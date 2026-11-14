@@ -31,14 +31,23 @@ pub const CHAIN_ID: u32 = 658467;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MessageType {
+    /// Lebenszeichen an die Gegenstelle.
     Ping = 1,
+    /// Antwort auf ein Ping.
     Pong = 2,
+    /// Eroeffnet die Verbindung.
     Handshake = 3,
+    /// Bestaetigt den Handshake.
     HandshakeAck = 4,
+    /// Kuendigt einen Block an.
     BlockAnnounce = 5,
+    /// Kuendigt eine Transaktion an.
     TxAnnounce = 6,
+    /// Uebermittelt eine Konsensstimme.
     Vote = 7,
+    /// Uebermittelt bekannte Gegenstellen.
     PeerList = 8,
+    /// Beendet die Verbindung.
     Bye = 9,
 }
 
