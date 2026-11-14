@@ -17,7 +17,7 @@ mod allocator;
 
 /// Einsprungpunkt, der `ud2` ausfuehrt und damit absichtlich eine
 /// Undefined-Instruction-Exception ausloest.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     unsafe {
         core::arch::asm!("ud2", options(nomem, nostack, preserves_flags));
