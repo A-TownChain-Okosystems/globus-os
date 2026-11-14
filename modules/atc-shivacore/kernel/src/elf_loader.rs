@@ -290,6 +290,41 @@ impl<'a> ElfParser<'a> {
 
 use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
 
+
+/// Baut ein Userspace-Abbild aus einer ELF-Datei.
+///
+/// Bis hierher nahm der Bootpfad nur das ausfuehrbare Segment mit; alles andere
+/// war nicht abgebildet. Die Folge war eine harte Regel ohne Dokument: kein
+/// Nutzerprogramm durfte Stringliterale, statische Tabellen oder
+/// null-initialisierte Puffer benutzen (belegt: Seitenfehler bei 0x0 und 0x31,
+/// siehe docs/SPAWN-ANNAHME-2026-11-09.md, Blocker 1).
+///
+/// Jetzt kommen beide Segmente mit: der Code aus dem ausfuehrbaren `PT_LOAD`,
+/// die vorbelegten Daten aus dem beschreibbaren. Der Teil von `p_memsz` hinter
+/// `p_filesz` ist der `.bss`-Anteil; er wird als Nullauffuellung an die Daten
+/// gehaengt, damit die Abbildung ihn als Seiten abdeckt und nullt. Damit ist
+/// ein statischer Puffer im Programm kein Seitenfehler mehr.
+pub fn user_binary_from_elf(name: &str, elf: &[u8]) -> Result<UserBinary, ElfLoadError> {
+    let parser = ElfParser::parse(elf)?;
+    let code_segment = parser.code_segment().ok_or(ElfLoadError::NoCodeSegment)?;
+    let code = parser.segment_data(code_segment)?.to_vec();
+    let mut data = Vec::new();
+    if let Some(segment) = parser.data_segment() {
+        let bytes = parser.segment_data(segment)?;
+        data.extend_from_slice(bytes);
+        let bss = segment.p_memsz.saturating_sub(segment.p_filesz);
+        if bss > 0 {
+            data.resize(data.len() + bss as usize, 0);
+        }
+    }
+    Ok(UserBinary {
+        entry_point: parser.entry_point(),
+        code,
+        data,
+        name: name.to_string(),
+    })
+}
+
 /// Laedt eine ELF64-Datei in die Prozessverwaltung; uebernommen werden Einsprungadresse sowie Code- und Datensegment-Inhalt.
 pub struct ElfLoader;
 
@@ -1282,7 +1317,74 @@ mod tests {
         assert_eq!(format!("{}", e), "no executable code segment");
     }
 
+    /// Zwei Segmente: Code und Daten mit einem .bss-Anteil hinter den Daten.
+    fn two_segment_elf(entry: u64, code: &[u8], data: &[u8], bss: u64) -> Vec<u8> {
+        let mut elf = alloc::vec![0u8; 64 + 2 * 56];
+        elf[0..4].copy_from_slice(b"\x7fELF");
+        elf[4] = 2;
+        elf[5] = 1;
+        elf[6] = 1;
+        elf[16..18].copy_from_slice(&2u16.to_le_bytes());
+        elf[18..20].copy_from_slice(&62u16.to_le_bytes());
+        elf[20..24].copy_from_slice(&1u32.to_le_bytes());
+        elf[24..32].copy_from_slice(&entry.to_le_bytes());
+        elf[32..40].copy_from_slice(&64u64.to_le_bytes());
+        elf[52..54].copy_from_slice(&64u16.to_le_bytes());
+        elf[54..56].copy_from_slice(&56u16.to_le_bytes());
+        elf[56..58].copy_from_slice(&2u16.to_le_bytes());
+        let code_off: u64 = 64 + 2 * 56;
+        let data_off: u64 = code_off + code.len() as u64;
+        for (index, (flags, offset, filesz, memsz)) in [
+            (PF_R | PF_X, code_off, code.len() as u64, code.len() as u64),
+            (PF_R | PF_W, data_off, data.len() as u64, data.len() as u64 + bss),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let base = 64 + index * 56;
+            elf[base..base + 4].copy_from_slice(&PT_LOAD.to_le_bytes());
+            elf[base + 4..base + 8].copy_from_slice(&flags.to_le_bytes());
+            elf[base + 8..base + 16].copy_from_slice(&offset.to_le_bytes());
+            let vaddr = if index == 0 { entry } else { 0x01D0_0000 };
+            elf[base + 16..base + 24].copy_from_slice(&vaddr.to_le_bytes());
+            elf[base + 24..base + 32].copy_from_slice(&vaddr.to_le_bytes());
+            elf[base + 32..base + 40].copy_from_slice(&filesz.to_le_bytes());
+            elf[base + 40..base + 48].copy_from_slice(&memsz.to_le_bytes());
+            elf[base + 48..base + 56].copy_from_slice(&0x1000u64.to_le_bytes());
+        }
+        elf.extend_from_slice(code);
+        elf.extend_from_slice(data);
+        elf
+    }
+
     #[test]
+    fn abbild_enthaelt_code_daten_und_bss_nullen() {
+        let elf = two_segment_elf(0x01C0_0000, &[0x90, 0x90, 0xF4], b"ABCD", 12);
+        let binary = user_binary_from_elf("probe", &elf).expect("Abbild nicht baubar");
+        assert_eq!(binary.entry_point, 0x01C0_0000);
+        assert_eq!(binary.code, alloc::vec![0x90, 0x90, 0xF4]);
+        assert_eq!(binary.data.len(), 16, "Daten plus bss-Auffuellung");
+        assert_eq!(&binary.data[..4], b"ABCD");
+        assert!(binary.data[4..].iter().all(|byte| *byte == 0), "bss nicht genullt");
+    }
+
+    #[test]
+    fn abbild_ohne_datensegment_bleibt_gueltig() {
+        let elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0x90, 0xF4]);
+        let binary = user_binary_from_elf("nur-code", &elf).expect("Abbild nicht baubar");
+        assert_eq!(binary.code.len(), 2);
+        assert!(binary.data.is_empty());
+    }
+
+    #[test]
+    fn abbild_ohne_codesegment_wird_abgelehnt() {
+        let elf = alloc::vec![0u8; 64];
+        assert!(matches!(
+            user_binary_from_elf("leer", &elf),
+            Err(ElfLoadError::Parse(_))
+        ));
+    }
+
     fn test_elf_with_multiple_segments() {
         // Create ELF with 2 PT_LOAD segments (code + data)
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
