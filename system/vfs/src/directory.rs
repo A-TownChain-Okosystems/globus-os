@@ -1,6 +1,7 @@
 //! Deterministic persistent directory-entry encoding and validation.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler beim Kodieren oder Pruefen eines Verzeichniseintrags.
 pub enum DirectoryError {
     /// Der Zielpuffer ist zu klein.
     Buffer,
@@ -17,8 +18,11 @@ pub enum DirectoryError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Art eines Verzeichniseintrags.
 pub enum DirectoryType {
+    /// Regulaere Datei.
     File = 1,
+    /// Verzeichnis.
     Directory = 2,
+    /// Symbolischer Verweis.
     Symlink = 3,
 }
 
