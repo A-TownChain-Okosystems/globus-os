@@ -3,24 +3,38 @@
 use crate::codec::{AudioSpec, PcmFrame};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Failures of an output device.
 pub enum OutputError {
+    /// The output was not opened.
     NotOpen,
+    /// The output is already open.
     AlreadyOpen,
+    /// The frame does not match the opened spec.
     SpecMismatch,
+    /// The buffer cannot take another frame.
     BufferFull,
+    /// Capacity of zero frames.
     InvalidCapacity,
 }
 
+/// Boundary every output device implements.
 pub trait AudioOutput {
+    /// Opens the device for a fixed spec.
     fn open(&mut self, spec: AudioSpec) -> Result<(), OutputError>;
+    /// Starts playback.
     fn start(&mut self) -> Result<(), OutputError>;
+    /// Stops playback and drops queued frames.
     fn stop(&mut self) -> Result<(), OutputError>;
+    /// Writes one frame and returns how many frames were taken.
     fn write(&mut self, frame: &PcmFrame) -> Result<usize, OutputError>;
+    /// Frames waiting in the buffer.
     fn queued_frames(&self) -> usize;
+    /// Frames between write and audible output.
     fn latency_frames(&self) -> usize;
 }
 
 #[derive(Debug, Clone)]
+/// Output backed by a fixed ring buffer of frames.
 pub struct RingAudioOutput {
     capacity_frames: usize,
     spec: Option<AudioSpec>,
@@ -29,6 +43,7 @@ pub struct RingAudioOutput {
 }
 
 impl RingAudioOutput {
+    /// Creates a ring output with a non-zero capacity.
     pub fn new(capacity_frames: usize) -> Result<Self, OutputError> {
         if capacity_frames == 0 {
             return Err(OutputError::InvalidCapacity);
@@ -41,6 +56,7 @@ impl RingAudioOutput {
         })
     }
 
+    /// True between start and stop.
     pub fn is_running(&self) -> bool {
         self.running
     }
