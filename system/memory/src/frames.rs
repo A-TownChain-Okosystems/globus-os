@@ -2,20 +2,29 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameRange {
+    /// Erste Adresse des Bereichs.
     pub start: u64,
+    /// Anzahl Frames im Bereich.
     pub frames: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Warum eine Frame-Allokation nicht moeglich ist.
 pub enum FrameError {
+    /// Seitengroesse ist 0 oder keine Zweierpotenz.
     InvalidPageSize,
+    /// Start oder Ende liegt nicht auf einer Seitengrenze.
     Unaligned,
+    /// Der Bereich enthaelt keinen Frame.
     Empty,
+    /// Die Rechnung laeuft ueber den Adressraum hinaus.
     Overflow,
+    /// Es sind nicht mehr genug freie Frames vorhanden.
     Exhausted,
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Vergibt physische Frames fortlaufend aus einem nutzbaren Bereich.
 pub struct FrameAllocator {
     next: u64,
     end: u64,
@@ -23,6 +32,7 @@ pub struct FrameAllocator {
 }
 
 impl FrameAllocator {
+    /// Prueft Seitengroesse, Ausrichtung und Groesse des Bereichs.
     pub fn new(start: u64, end: u64, page_size: u64) -> Result<Self, FrameError> {
         if page_size == 0 || !page_size.is_power_of_two() {
             return Err(FrameError::InvalidPageSize);
@@ -40,6 +50,7 @@ impl FrameAllocator {
         })
     }
 
+    /// Vergibt `frames` zusammenhaengende Frames.
     pub fn allocate(&mut self, frames: u64) -> Result<FrameRange, FrameError> {
         if frames == 0 {
             return Err(FrameError::Empty);
@@ -59,6 +70,7 @@ impl FrameAllocator {
         Ok(range)
     }
 
+    /// Verbleibende freie Frames.
     pub fn remaining(&self) -> u64 {
         (self.end - self.next) / self.page_size
     }
