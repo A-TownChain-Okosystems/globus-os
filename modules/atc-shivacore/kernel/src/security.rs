@@ -204,6 +204,7 @@ pub struct AuditEntry {
     pub actor_did: String,
 /// Aktionsname, etwa `capability.grant` oder `process.exit`.
     pub action: String,
+/// Ressource, auf die sich die Aktion bezog.
     pub resource: String,
 /// Ergebnis der Aktion.
     pub result: AuditResult,
@@ -817,7 +818,12 @@ pub enum SecurityError {
 /// Es liegen bereits so viele Signaturen vor, wie Signer zugelassen sind.
     TooManySignatures,
 /// Die Schwelle ist nicht erreicht; Anzahl und Schwelle stehen im Fehler.
-    InsufficientSignatures { have: u32, required: u32 },
+    InsufficientSignatures {
+        /// Anzahl der bereits gueltigen Signaturen.
+        have: u32,
+        /// Erforderliche Anzahl Signaturen.
+        required: u32,
+    },
 /// Zu dieser ID gibt es keinen Antrag.
     ProposalNotFound,
 /// Fuer diesen Peer besteht kein offener Kanal.
