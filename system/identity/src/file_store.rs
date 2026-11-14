@@ -20,14 +20,17 @@ const PRESENT: u8 = 1;
 const DELETED: u8 = 0;
 const HEADER_LEN: usize = 4 + 1 + 1 + 8 + 8;
 
+/// Atomarer Einzeldatei-Speicher fuer einen verschluesselten Identity-Blob.
 pub struct FileBlobStore {
     path: PathBuf,
 }
 
 impl FileBlobStore {
+    /// Bindet den Speicher an einen Pfad, ohne das Dateisystem anzufassen.
     pub fn open(path: impl Into<PathBuf>) -> Self {
         Self { path: path.into() }
     }
+    /// Pfad der Zustandsdatei.
     pub fn path(&self) -> &Path {
         &self.path
     }
