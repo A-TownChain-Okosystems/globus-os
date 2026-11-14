@@ -6,17 +6,26 @@ const MAGIC: &[u8; 8] = b"GBOOT001";
 const SIZE: usize = 32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a boot state could not be written or read.
 pub enum BootStateError {
+    /// The output buffer is smaller than the 32-byte block.
     Buffer,
+    /// Magic, length or checksum did not match.
     Invalid,
+    /// The attempt counter cannot grow any further.
     Overflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Persistent A/B boot selection: slot, attempts, confirmation and generation.
 pub struct BootState {
+    /// Slot the system booted from.
     pub slot: Slot,
+    /// Boot attempts since the last confirmation.
     pub attempts: u32,
+    /// True once userspace confirmed the boot.
     pub confirmed: bool,
+    /// Monotonic generation counter, bumped on every state write.
     pub generation: u64,
 }
 
@@ -30,6 +39,7 @@ fn checksum(bytes: &[u8]) -> u32 {
 }
 
 impl BootState {
+    /// Writes the state into `out` with magic and FNV checksum.
     pub fn encode(&self, out: &mut [u8]) -> Result<(), BootStateError> {
         if out.len() < SIZE {
             return Err(BootStateError::Buffer);
@@ -48,6 +58,7 @@ impl BootState {
         Ok(())
     }
 
+    /// Parses and verifies a state block; rejects foreign or corrupt data.
     pub fn decode(input: &[u8]) -> Result<Self, BootStateError> {
         if input.len() < SIZE || &input[..8] != MAGIC {
             return Err(BootStateError::Invalid);
@@ -87,6 +98,7 @@ impl BootState {
         })
     }
 
+    /// Counts one boot attempt.
     pub fn record_attempt(&mut self) -> Result<(), BootStateError> {
         self.attempts = self
             .attempts
@@ -96,10 +108,12 @@ impl BootState {
         Ok(())
     }
 
+    /// Marks the boot as confirmed.
     pub fn confirm(&mut self) {
         self.confirmed = true;
     }
 
+    /// Switches to the other slot and resets the attempt counter.
     pub fn switch_slot(&mut self) -> Result<(), BootStateError> {
         self.slot = match self.slot {
             Slot::A => Slot::B,
