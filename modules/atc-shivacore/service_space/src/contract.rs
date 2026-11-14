@@ -8,14 +8,17 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use libshivacore::simple_hash;
+/// Fuehrt Bereitstellung und Aufruf von Vertraegen aus Transaktionen aus.
 pub struct ContractExecutor {
     vm: Arc<VmEngine>,
     state: Arc<crate::mempool::StateDb>,
 }
 impl ContractExecutor {
+    /// Ausfuehrer ueber VM und Zustandstabelle.
     pub fn new(vm: Arc<VmEngine>, state: Arc<crate::mempool::StateDb>) -> Self {
         ContractExecutor { vm, state }
     }
+    /// Liest die Laengenangabe, nimmt das Bytecode-Stueck, leitet die Adresse aus Absender, Nonce und PoH-Hash ab, stellt bereit und ruft einmal auf; ein fehlgeschlagener Aufruf gilt als Fehler der Bereitstellung.
     pub fn process_deploy(&self, tx: &Transaction) -> Result<String, ContractError> {
         if tx.tx_type != TxType::ContractDeploy {
             return Err(ContractError::WrongTxType);
@@ -45,6 +48,7 @@ impl ContractExecutor {
         }
         Ok(addr)
     }
+    /// Liest die Adresse aus der Nutzlast, prueft die Registratur und ruft den Vertrag auf; Nutzlastbytes hinter der Adresse wertet die Methode nicht aus.
     pub fn process_call(&self, tx: &Transaction) -> Result<ExecResult, ContractError> {
         if tx.tx_type != TxType::ContractCall {
             return Err(ContractError::WrongTxType);
@@ -68,6 +72,7 @@ impl ContractExecutor {
         }
         Ok(r)
     }
+    /// Leitet nach Transaktionstyp an Bereitstellung oder Aufruf weiter.
     pub fn process_tx(&self, tx: &Transaction) -> Result<TxProcessingResult, ContractError> {
         match tx.tx_type {
             TxType::ContractDeploy => {
@@ -81,29 +86,41 @@ impl ContractExecutor {
             _ => Err(ContractError::NotAContractTx),
         }
     }
+    /// VM, auf der die Vertraege laufen.
     pub fn vm(&self) -> &Arc<VmEngine> {
         &self.vm
     }
 }
+/// Ergebnis der Verarbeitung als Bereitstellung oder Aufruf.
 #[derive(Debug, Clone, PartialEq)]
 pub enum TxProcessingResult {
+    /// Adresse des bereitgestellten Vertrags.
     Deployed(String),
+    /// Ergebnis des Aufrufs.
     Called(ExecResult),
 }
+/// Ablehnungsgruende der Vertragsverarbeitung.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ContractError {
+    /// Der Transaktionstyp passt nicht zur aufgerufenen Verarbeitung.
     WrongTxType,
+    /// Die Transaktion ist weder Bereitstellung noch Aufruf.
     NotAContractTx,
+    /// Die Nutzlast ist zu kurz oder ihre Laengenangabe passt nicht zum Inhalt.
     InvalidPayload(String),
+    /// Zur Adresse ist kein Vertrag bereitgestellt.
     ContractNotFound(String),
+    /// Die Ausfuehrung ist gescheitert; der Text enthaelt das Ergebnis der VM.
     ExecutionFailed(String),
 }
+/// Baut eine Bereitstellungsnutzlast aus vier Byte Laenge in grosser Ordnung und dem Bytecode.
 pub fn build_deploy_payload(bytecode: &[u8]) -> Vec<u8> {
     let mut p = Vec::new();
     p.extend_from_slice(&(bytecode.len() as u32).to_be_bytes());
     p.extend_from_slice(bytecode);
     p
 }
+/// Baut eine Aufrufnutzlast aus zwei Byte Adresslaenge, der Adresse und den Aufrufdaten; process_call liest die Aufrufdaten derzeit nicht aus.
 pub fn build_call_payload(addr: &str, call_data: &[u8]) -> Vec<u8> {
     let mut p = Vec::new();
     let ab = addr.as_bytes();
