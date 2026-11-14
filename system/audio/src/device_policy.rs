@@ -3,41 +3,59 @@
 use crate::AudioSessionId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kind of output a route can target.
 pub enum AudioOutputKind {
+    /// Built-in speaker.
     Speaker,
+    /// Headphone jack.
     Headphones,
+    /// Audio over HDMI.
     Hdmi,
+    /// USB audio device.
     Usb,
+    /// Bluetooth audio device.
     Bluetooth,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Assignment of one session to one output.
 pub struct AudioRoute {
+    /// Session that owns the route.
     pub session: AudioSessionId,
+    /// Output the session plays on.
     pub output: AudioOutputKind,
+    /// True when the session needs the output to itself.
     pub exclusive: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a route change was refused.
 pub enum RouteError {
+    /// The session already has a route.
     DuplicateSession,
+    /// The output is held exclusively, or would be.
     ExclusiveConflict,
+    /// The session has no route.
     MissingSession,
 }
 
 #[derive(Debug, Default)]
+/// Routes, kept sorted by session identifier.
 pub struct AudioRouteTable {
     routes: Vec<AudioRoute>,
 }
 
 impl AudioRouteTable {
+    /// Empty table.
     pub fn new() -> Self {
         Self::default()
     }
+    /// All routes, sorted by session.
     pub fn routes(&self) -> &[AudioRoute] {
         &self.routes
     }
 
+    /// Adds a route, rejecting duplicates and exclusive conflicts.
     pub fn add(&mut self, route: AudioRoute) -> Result<(), RouteError> {
         if self.routes.iter().any(|r| r.session == route.session) {
             return Err(RouteError::DuplicateSession);
@@ -57,6 +75,7 @@ impl AudioRouteTable {
         Ok(())
     }
 
+    /// Removes the route of a session.
     pub fn remove(&mut self, session: AudioSessionId) -> Result<(), RouteError> {
         let before = self.routes.len();
         self.routes.retain(|r| r.session != session);
@@ -66,6 +85,7 @@ impl AudioRouteTable {
         Ok(())
     }
 
+    /// Route of a session, if it has one.
     pub fn route_for(&self, session: AudioSessionId) -> Option<AudioRoute> {
         self.routes.iter().copied().find(|r| r.session == session)
     }
