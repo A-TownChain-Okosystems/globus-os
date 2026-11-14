@@ -25,3 +25,16 @@ unsafe_code = "warn"
 missing_docs = "warn"
 [workspace.lints.clippy]
 all = "warn"
+
+# Kernel-Image: eigene Panik-Strategie.
+#
+# Der Image-Builder (modules/atc-shivacore/boot) kompiliert den Kernel nicht,
+# er nimmt einen fertig gebauten ELF entgegen. Die Strategie des Kernel-Binaries
+# haengt deshalb an dem Profil, mit dem es gebaut wird, und das wird hier
+# festgelegt statt beim Aufrufer gelassen. `panic = "abort"` heisst: im Kernel
+# gibt es keine Entfaltung, ein Panik endet an der Panikstelle. Fuer
+# Test- und Host-Builds bleibt das Standardprofil `release`/`test` mit
+# Entfaltung, damit `should_panic`-Tests weiter funktionieren.
+[profile.kernel]
+inherits = "release"
+panic = "abort"
