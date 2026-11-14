@@ -3,6 +3,7 @@
 use core::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+/// Service classes that the boot plan puts in a fixed order.
 pub enum BootService {
     Security,
     Memory,
@@ -28,6 +29,7 @@ impl fmt::Display for BootService {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// One boot step: the service that starts and the services it requires.
 pub struct BootStep {
     pub service: BootService,
     pub requires: &'static [BootService],
@@ -143,6 +145,7 @@ pub const BOOT_PLAN: &[BootStep] = &[
     },
 ];
 
+/// Returns true when every requirement of a step appears earlier in the plan.
 pub fn validate_boot_plan() -> bool {
     for (index, step) in BOOT_PLAN.iter().enumerate() {
         for requirement in step.requires {
