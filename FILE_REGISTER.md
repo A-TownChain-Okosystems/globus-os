@@ -57,7 +57,7 @@
 | `docs/IDENTITY_WALLET_FLOW.md` | 78 |
 | `docs/IMPLEMENTATION_STATUS.md` | 60 |
 | `docs/KERNEL_IMAGE_BUILD.md` | 100 |
-| `docs/LOGIN_WINDOW.md` | 173 |
+| `docs/LOGIN_WINDOW.md` | 182 |
 | `docs/MEDIA-LICENSING.md` | 60 |
 | `docs/OS_STANDARD_COMPONENTS.md` | 190 |
 | `docs/REPOSITORY_STANDARD.md` | 37 |
@@ -271,7 +271,7 @@
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
 | `modules/atc-shivacore/docs/SC-006_EVENT_KANAL_ENTWURF.md` | 74 |
 | `modules/atc-shivacore/docs/SC-ABI-002-ARGUMENTBLOCK.md` | 106 |
-| `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 93 |
+| `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 99 |
 | `modules/atc-shivacore/greeter/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/greeter/Cargo.toml` | 17 |
 | `modules/atc-shivacore/greeter/linker.ld` | 46 |
@@ -300,7 +300,7 @@
 | `modules/atc-shivacore/kernel/src/cross_subsystem.rs` | 550 |
 | `modules/atc-shivacore/kernel/src/diagnostics.rs` | 98 |
 | `modules/atc-shivacore/kernel/src/dma_auth.rs` | 383 |
-| `modules/atc-shivacore/kernel/src/elf_loader.rs` | 1420 |
+| `modules/atc-shivacore/kernel/src/elf_loader.rs` | 1490 |
 | `modules/atc-shivacore/kernel/src/fault.rs` | 342 |
 | `modules/atc-shivacore/kernel/src/framebuffer.rs` | 182 |
 | `modules/atc-shivacore/kernel/src/gdt.rs` | 99 |
@@ -339,7 +339,7 @@
 | `modules/atc-shivacore/kernel/src/system.rs` | 1.470 |
 | `modules/atc-shivacore/kernel/src/timer.rs` | 571 |
 | `modules/atc-shivacore/kernel/src/user_sched.rs` | 1.626 |
-| `modules/atc-shivacore/kernel/src/userspace.rs` | 1.358 |
+| `modules/atc-shivacore/kernel/src/userspace.rs` | 1406 |
 | `modules/atc-shivacore/kernel/src/vfs.rs` | 1.254 |
 | `modules/atc-shivacore/kernel/src/vmm.rs` | 1.528 |
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/README.md` | 20 |
