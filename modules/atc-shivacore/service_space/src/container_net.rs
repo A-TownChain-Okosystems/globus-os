@@ -39,31 +39,39 @@ fn next_dns_id() -> u64 {
 // IP ADDRESSES
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// IPv4-Adresse in Netzwerkbytefolge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct Ipv4Addr(pub [u8; 4]);
 
 impl Ipv4Addr {
+    /// Adresse aus ihren vier Oktetten.
     pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
         Self([a, b, c, d])
     }
+    /// Unbestimmte Adresse 0.0.0.0.
     pub fn zero() -> Self {
         Self([0, 0, 0, 0])
     }
+    /// True fuer 0.0.0.0.
     pub fn is_zero(&self) -> bool {
         self.0 == [0; 4]
     }
+    /// Adresse als 32-Bit-Zahl in Hostbytefolge.
     pub fn to_u32(&self) -> u32 {
         ((self.0[0] as u32) << 24)
             | ((self.0[1] as u32) << 16)
             | ((self.0[2] as u32) << 8)
             | (self.0[3] as u32)
     }
+    /// Adresse aus einer 32-Bit-Zahl.
     pub fn from_u32(v: u32) -> Self {
         Self([(v >> 24) as u8, (v >> 16) as u8, (v >> 8) as u8, v as u8])
     }
+    /// Adresse in Punktnotation, etwa `10.0.0.2`.
     pub fn as_dotted(&self) -> String {
         format!("{}.{}.{}.{}", self.0[0], self.0[1], self.0[2], self.0[3])
     }
+    /// True, wenn die Adresse im angegebenen Subnetz liegt.
     pub fn in_subnet(&self, net: &IpSubnet) -> bool {
         let addr = self.to_u32();
         let net_addr = net.network_addr.to_u32();
@@ -78,31 +86,39 @@ impl core::fmt::Display for Ipv4Addr {
     }
 }
 
+/// MAC-Adresse in Netzwerkbytefolge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct MacAddr(pub [u8; 6]);
 
 impl MacAddr {
+    /// Adresse aus ihren sechs Oktetten.
     pub fn new(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> Self {
         Self([a, b, c, d, e, f])
     }
+    /// Broadcast-Adresse ff:ff:ff:ff:ff:ff.
     pub fn broadcast() -> Self {
         Self([0xFF; 6])
     }
+    /// Unbestimmte Adresse 00:00:00:00:00:00.
     pub fn zero() -> Self {
         Self([0; 6])
     }
+    /// True fuer die Broadcast-Adresse.
     pub fn is_broadcast(&self) -> bool {
         self.0 == [0xFF; 6]
     }
+    /// True fuer die unbestimmte Adresse.
     pub fn is_zero(&self) -> bool {
         self.0 == [0; 6]
     }
+    /// Adresse in Doppelpunktnotation.
     pub fn as_colon(&self) -> String {
         format!(
             "{:02x}:{:02x}:{:02x}:{:02x}:{:02x}:{:02x}",
             self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5]
         )
     }
+    /// Zufaellige Adresse mit lokal verwaltetem Bit.
     pub fn random() -> Self {
         let id = VETH_SEQ.fetch_add(1, Ordering::SeqCst);
         Self([
@@ -122,13 +138,17 @@ impl core::fmt::Display for MacAddr {
     }
 }
 
+/// IPv4-Subnetz aus Netzadresse und Praefixlaenge.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct IpSubnet {
+    /// Netzadresse des Subnetzes.
     pub network_addr: Ipv4Addr,
+    /// Praefixlaenge in Bits, 0 bis 32.
     pub prefix_len: u8,
 }
 
 impl IpSubnet {
+    /// Subnetz aus Adresse und Praefix.
     pub fn new(addr: Ipv4Addr, prefix: u8) -> Self {
         let mask = Self::mask_from_prefix(prefix);
         let net = Ipv4Addr::from_u32(addr.to_u32() & mask);
@@ -137,9 +157,11 @@ impl IpSubnet {
             prefix_len: prefix,
         }
     }
+    /// Netzmaske als 32-Bit-Zahl.
     pub fn netmask(&self) -> u32 {
         Self::mask_from_prefix(self.prefix_len)
     }
+    /// Netzmaske zu einer Praefixlaenge; ungueltige Laengen werden auf den Rand gezogen.
     pub fn mask_from_prefix(prefix: u8) -> u32 {
         if prefix == 0 {
             return 0;
@@ -149,9 +171,11 @@ impl IpSubnet {
         }
         !0u32 << (32 - prefix)
     }
+    /// Broadcast-Adresse des Subnetzes.
     pub fn broadcast_addr(&self) -> Ipv4Addr {
         Ipv4Addr::from_u32(self.network_addr.to_u32() | !self.netmask())
     }
+    /// Nutzbare Hostadressen im Subnetz.
     pub fn host_capacity(&self) -> u64 {
         if self.prefix_len >= 32 {
             1
@@ -161,6 +185,7 @@ impl IpSubnet {
             (1u64 << (32 - self.prefix_len)) - 2
         }
     }
+    /// True, wenn die Adresse im Subnetz liegt.
     pub fn contains(&self, addr: Ipv4Addr) -> bool {
         addr.in_subnet(self)
     }
@@ -176,23 +201,35 @@ impl core::fmt::Display for IpSubnet {
 // NETWORK NAMESPACE
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Kennung eines Netzwerk-Namespace.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub struct NetNsId(pub u64);
 
+/// Ein Netzwerk-Namespace mit eigenen Schnittstellen, Routen und Namensaufloesung.
 #[derive(Clone, Debug)]
 pub struct NetworkNamespace {
+    /// Kennung des Namespace.
     pub id: NetNsId,
+    /// Name des Namespace.
     pub name: String,
+    /// PID des Containers, der den Namespace haelt.
     pub container_pid: u32,
+    /// Schnittstellen des Namespace, nach ID sortiert.
     pub interfaces: BTreeMap<u64, NetInterface>,
+    /// Routentabelle des Namespace.
     pub routing_table: Vec<Route>,
+    /// Namensaufloesung des Namespace.
     pub dns_config: DnsConfig,
+    /// True, wenn das Loopback-Interface oben ist.
     pub loopback_up: bool,
+    /// Zeitpunkt der Erstellung in Timer-Ticks.
     pub created_at: u64,
+    /// Zaehler des Namespace.
     pub stats: NetNsStats,
 }
 
 impl NetworkNamespace {
+    /// Legt einen Namespace mit oben liegendem Loopback an.
     pub fn new(name: &str, container_pid: u32) -> Self {
         let id = NetNsId(next_ns_id());
         let mut interfaces = BTreeMap::new();
@@ -232,32 +269,40 @@ impl NetworkNamespace {
             stats: NetNsStats::default(),
         }
     }
+    /// Fuegt eine Schnittstelle hinzu und liefert ihre ID.
     pub fn add_interface(&mut self, iface: NetInterface) -> u64 {
         let id = iface.id;
         self.interfaces.insert(id, iface);
         id
     }
+    /// Entfernt eine Schnittstelle und liefert sie zurueck.
     pub fn remove_interface(&mut self, iface_id: u64) -> Option<NetInterface> {
         self.interfaces.remove(&iface_id)
     }
+    /// Schnittstelle nach ID.
     pub fn get_interface(&self, id: u64) -> Option<&NetInterface> {
         self.interfaces.get(&id)
     }
+    /// Schnittstelle nach ID, veraenderbar.
     pub fn get_interface_mut(&mut self, id: u64) -> Option<&mut NetInterface> {
         self.interfaces.get_mut(&id)
     }
+    /// Alle Schnittstellen des Namespace.
     pub fn list_interfaces(&self) -> Vec<&NetInterface> {
         self.interfaces.values().collect()
     }
+    /// Traegt eine Route ein.
     pub fn add_route(&mut self, route: Route) {
         self.routing_table.push(route);
         self.routing_table.sort_by_key(|r| r.metric);
     }
+    /// Entfernt die Route zu einem Zielnetz.
     pub fn remove_route(&mut self, dest: IpSubnet) -> bool {
         let b = self.routing_table.len();
         self.routing_table.retain(|r| r.dest != dest);
         self.routing_table.len() < b
     }
+    /// Passende Route fuer eine Zieladresse; die spezifischste gewinnt.
     pub fn lookup_route(&self, dest: Ipv4Addr) -> Option<&Route> {
         let mut best: Option<&Route> = None;
         let mut best_p = 0u8;
@@ -269,6 +314,7 @@ impl NetworkNamespace {
         }
         best
     }
+    /// Setzt Namensserver und Suchdomains.
     pub fn set_dns(&mut self, servers: Vec<Ipv4Addr>, search: Vec<String>) {
         self.dns_config = DnsConfig {
             servers,
@@ -276,6 +322,7 @@ impl NetworkNamespace {
             ..Default::default()
         };
     }
+    /// Setzt eine Schnittstelle auf oben oder unten.
     pub fn set_interface_up(&mut self, id: u64, up: bool) -> bool {
         if let Some(i) = self.interfaces.get_mut(&id) {
             i.up = up;
@@ -287,6 +334,7 @@ impl NetworkNamespace {
             false
         }
     }
+    /// Setzt Adresse und Praefix einer Schnittstelle.
     pub fn set_interface_ip(&mut self, id: u64, ip: Ipv4Addr, p: u8) -> bool {
         if let Some(i) = self.interfaces.get_mut(&id) {
             i.ip = ip;
@@ -296,6 +344,7 @@ impl NetworkNamespace {
             false
         }
     }
+    /// Setzt die MTU einer Schnittstelle.
     pub fn set_mtu(&mut self, id: u64, mtu: u32) -> bool {
         if !(68..=65536).contains(&mtu) {
             return false;
@@ -307,6 +356,7 @@ impl NetworkNamespace {
             false
         }
     }
+    /// Zaehlt empfangene Bytes und Pakete einer Schnittstelle.
     pub fn rx(&mut self, id: u64, b: u64, p: u64) {
         if let Some(i) = self.interfaces.get_mut(&id) {
             i.rx_bytes += b;
@@ -315,6 +365,7 @@ impl NetworkNamespace {
             self.stats.total_rx_packets += p;
         }
     }
+    /// Zaehlt gesendete Bytes und Pakete einer Schnittstelle.
     pub fn tx(&mut self, id: u64, b: u64, p: u64) {
         if let Some(i) = self.interfaces.get_mut(&id) {
             i.tx_bytes += b;
@@ -323,6 +374,7 @@ impl NetworkNamespace {
             self.stats.total_tx_packets += p;
         }
     }
+    /// Zaehlt einen Fehler in Empfangs- oder Senderichtung.
     pub fn record_error(&mut self, id: u64, is_rx: bool) {
         if let Some(i) = self.interfaces.get_mut(&id) {
             if is_rx {
@@ -340,17 +392,25 @@ impl NetworkNamespace {
 // NETWORK INTERFACE
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Art einer Netzwerkschnittstelle.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum InterfaceKind {
+    /// Loopback-Schnittstelle.
     Loopback,
+    /// Ende eines veth-Paares.
     Veth,
+    /// Bridge-Schnittstelle.
     Bridge,
+    /// Physische Schnittstelle.
     Physical,
+    /// VLAN-Schnittstelle.
     Vlan,
+    /// Gebundelte Schnittstelle.
     Bond,
 }
 
 impl InterfaceKind {
+    /// Kurzname der Art.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Loopback => "loopback",
@@ -363,29 +423,46 @@ impl InterfaceKind {
     }
 }
 
+/// Eine Netzwerkschnittstelle mit Adresse, Zaehlern und Peer-Bezug.
 #[derive(Clone, Debug)]
 pub struct NetInterface {
+    /// Kennung der Schnittstelle innerhalb ihres Namespace.
     pub id: u64,
+    /// Schnittstellenname.
     pub name: String,
+    /// Art der Schnittstelle.
     pub kind: InterfaceKind,
+    /// MAC-Adresse.
     pub mac: MacAddr,
+    /// IPv4-Adresse.
     pub ip: Ipv4Addr,
+    /// Praefixlaenge der Adresse.
     pub prefix_len: u8,
     /// Maximale Nutzlast in Byte. u32, weil Loopback 65536 traegt und
     /// unzulaessige 70000 noch darstellbar sein muessen, um sie abzulehnen.
     pub mtu: u32,
+    /// True, wenn die Schnittstelle oben ist.
     pub up: bool,
+    /// Empfangene Bytes.
     pub rx_bytes: u64,
+    /// Gesendete Bytes.
     pub tx_bytes: u64,
+    /// Empfangene Pakete.
     pub rx_packets: u64,
+    /// Gesendete Pakete.
     pub tx_packets: u64,
+    /// Empfangsfehler.
     pub rx_errors: u64,
+    /// Sendefehler.
     pub tx_errors: u64,
+    /// Namespace des Gegenendes, falls vorhanden.
     pub peer_ns: Option<NetNsId>,
+    /// ID des Gegenendes im Peer-Namespace.
     pub peer_iface: Option<u64>,
 }
 
 impl NetInterface {
+    /// Legt ein veth-Ende ohne Adresse an.
     pub fn new_veth(name: &str) -> Self {
         Self {
             id: next_veth_id(),
@@ -406,6 +483,7 @@ impl NetInterface {
             peer_iface: None,
         }
     }
+    /// Legt eine Bridge-Schnittstelle an.
     pub fn new_bridge(name: &str) -> Self {
         Self {
             id: next_veth_id(),
@@ -426,12 +504,15 @@ impl NetInterface {
             peer_iface: None,
         }
     }
+    /// Subnetz aus Adresse und Praefix der Schnittstelle.
     pub fn subnet(&self) -> IpSubnet {
         IpSubnet::new(self.ip, self.prefix_len)
     }
+    /// True, wenn die Schnittstelle oben ist.
     pub fn is_up(&self) -> bool {
         self.up
     }
+    /// True, wenn eine Adresse gesetzt ist.
     pub fn has_ip(&self) -> bool {
         !self.ip.is_zero()
     }
@@ -441,15 +522,21 @@ impl NetInterface {
 // ROUTING
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Ein Eintrag der Routentabelle.
 #[derive(Clone, Debug)]
 pub struct Route {
+    /// Zielnetz.
     pub dest: IpSubnet,
+    /// Naechster Hop; die Nulladresse bedeutet direkt verbunden.
     pub gateway: Ipv4Addr,
+    /// Ausgehende Schnittstelle.
     pub iface_id: u64,
+    /// Metrik; kleinere Werte werden bevorzugt.
     pub metric: u32,
 }
 
 impl Route {
+    /// Standardroute ueber ein Gateway.
     pub fn default(gw: Ipv4Addr, iface: u64) -> Self {
         Self {
             dest: IpSubnet::new(Ipv4Addr::zero(), 0),
@@ -458,6 +545,7 @@ impl Route {
             metric: 100,
         }
     }
+    /// True fuer die Standardroute.
     pub fn is_default(&self) -> bool {
         self.dest.prefix_len == 0
     }
@@ -467,16 +555,23 @@ impl Route {
 // DNS
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Namensaufloesung eines Namespace.
 #[derive(Clone, Debug, Default)]
 pub struct DnsConfig {
+    /// Namensserver in Abfragereihenfolge.
     pub servers: Vec<Ipv4Addr>,
+    /// Suchdomains fuer unvollstaendige Namen.
     pub search_domains: Vec<String>,
+    /// Mindestzahl an Punkten, bevor ein Name als vollstaendig gilt.
     pub ndots: u8,
+    /// Zeitlimit je Abfrage in Millisekunden.
     pub timeout_ms: u16,
+    /// Wiederholungen je Abfrage.
     pub attempts: u8,
 }
 
 impl DnsConfig {
+    /// Konfiguration mit Namensservern und Standardwerten.
     pub fn new(servers: Vec<Ipv4Addr>) -> Self {
         Self {
             servers,
@@ -488,13 +583,20 @@ impl DnsConfig {
     }
 }
 
+/// Ein Eintrag der internen Namensaufloesung.
 #[derive(Clone, Debug)]
 pub struct DnsEntry {
+    /// Kennung des Eintrags.
     pub id: u64,
+    /// Hostname.
     pub hostname: String,
+    /// Zugeordnete Adresse.
     pub ip: Ipv4Addr,
+    /// Namespace, in dem der Name gilt.
     pub namespace: NetNsId,
+    /// Gueltigkeit in Sekunden.
     pub ttl: u32,
+    /// Zeitpunkt der Eintragung.
     pub created_at: u64,
 }
 
@@ -502,18 +604,27 @@ pub struct DnsEntry {
 // VETH PAIR
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Ein veth-Paar zwischen Host und Container.
 #[derive(Clone, Debug)]
 pub struct VethPair {
+    /// Kennung des Paares.
     pub id: u64,
+    /// Hostseitige Schnittstelle.
     pub host_iface: NetInterface,
+    /// Containerseitige Schnittstelle.
     pub container_iface: NetInterface,
+    /// Namespace der Hostseite.
     pub host_ns: NetNsId,
+    /// Namespace der Containerseite.
     pub container_ns: NetNsId,
+    /// Bridge, an der das Hostende haengt.
     pub bridge_iface: Option<u64>,
+    /// Zeitpunkt der Erstellung.
     pub created_at: u64,
 }
 
 impl VethPair {
+    /// Legt beide Enden an und verknuepft sie miteinander.
     pub fn new(host_name: &str, c_name: &str, host_ns: NetNsId, c_ns: NetNsId) -> Self {
         let id = next_veth_id();
         let mut host = NetInterface::new_veth(host_name);
@@ -532,25 +643,31 @@ impl VethPair {
             created_at: 0,
         }
     }
+    /// Setzt Adresse und Praefix am Containerende.
     pub fn set_container_ip(&mut self, ip: Ipv4Addr, p: u8) {
         self.container_iface.ip = ip;
         self.container_iface.prefix_len = p;
     }
+    /// Setzt Adresse und Praefix am Hostende.
     pub fn set_host_ip(&mut self, ip: Ipv4Addr, p: u8) {
         self.host_iface.ip = ip;
         self.host_iface.prefix_len = p;
     }
+    /// Setzt beide Enden auf oben.
     pub fn bring_up(&mut self) {
         self.host_iface.up = true;
         self.container_iface.up = true;
     }
+    /// Setzt beide Enden auf unten.
     pub fn tear_down(&mut self) {
         self.host_iface.up = false;
         self.container_iface.up = false;
     }
+    /// Haengt das Hostende an eine Bridge.
     pub fn attach_to_bridge(&mut self, b: u64) {
         self.bridge_iface = Some(b);
     }
+    /// Loest das Hostende von seiner Bridge.
     pub fn detach_from_bridge(&mut self) {
         self.bridge_iface = None;
     }
@@ -560,34 +677,56 @@ impl VethPair {
 // BRIDGE
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Eine Bridge mit Ports, Lerntabelle und Zaehlern.
 #[derive(Clone, Debug)]
 pub struct Bridge {
+    /// Kennung der Bridge.
     pub id: u64,
+    /// Name der Bridge.
     pub name: String,
+    /// Schnittstelle der Bridge.
     pub iface: NetInterface,
+    /// Ports der Bridge.
     pub ports: BTreeSet<u64>,
+    /// True, wenn Spanning Tree aktiv ist.
     pub stp_enabled: bool,
+    /// Gewaehlte Wurzel fuer Spanning Tree.
     pub stp_root: Option<u64>,
+    /// ARP-Tabelle der Bridge.
     pub arp_table: BTreeMap<Ipv4Addr, MacAddr>,
+    /// Lerntabelle von MAC-Adresse zu Port.
     pub mac_table: BTreeMap<MacAddr, u64>,
+    /// Subnetz der Bridge, falls gesetzt.
     pub subnet: Option<IpSubnet>,
+    /// Gateway-Adresse der Bridge.
     pub gateway_ip: Option<Ipv4Addr>,
+    /// DHCP-Bereich der Bridge, falls aktiviert.
     pub dhcp_pool: Option<DhcpPool>,
+    /// Zeitpunkt der Erstellung.
     pub created_at: u64,
+    /// Zaehler der Bridge.
     pub stats: BridgeStats,
 }
 
+/// Zaehler einer Bridge.
 #[derive(Clone, Debug, Default)]
 pub struct BridgeStats {
+    /// Weitergeleitete Frames.
     pub frames_forwarded: u64,
+    /// Verworfene Frames.
     pub frames_dropped: u64,
+    /// Als Broadcast verteilte Frames.
     pub frames_broadcast: u64,
+    /// Frames mit unbekanntem Ziel, die geflutet wurden.
     pub frames_unknown_unicast: u64,
+    /// Gestellte ARP-Anfragen.
     pub arp_requests: u64,
+    /// Beantwortete ARP-Anfragen.
     pub arp_replies: u64,
 }
 
 impl Bridge {
+    /// Legt eine Bridge ohne Subnetz an.
     pub fn new(name: &str, _ns: NetNsId) -> Self {
         let mut iface = NetInterface::new_bridge(name);
         iface.up = true;
@@ -607,12 +746,14 @@ impl Bridge {
             stats: BridgeStats::default(),
         }
     }
+    /// Setzt Subnetz und Gateway der Bridge.
     pub fn set_subnet(&mut self, s: IpSubnet, gw: Ipv4Addr) {
         self.subnet = Some(s);
         self.gateway_ip = Some(gw);
         self.iface.ip = gw;
         self.iface.prefix_len = s.prefix_len;
     }
+    /// Aktiviert den DHCP-Bereich zwischen zwei Adressen.
     pub fn enable_dhcp(&mut self, start: Ipv4Addr, end: Ipv4Addr, lease_h: u32) {
         self.dhcp_pool = Some(DhcpPool {
             start,
@@ -622,25 +763,32 @@ impl Bridge {
             next_lease: start,
         });
     }
+    /// Fuegt einen Port hinzu; false, wenn er schon eingetragen ist.
     pub fn add_port(&mut self, p: u64) -> bool {
         self.ports.insert(p)
     }
+    /// Entfernt einen Port; false, wenn er nicht eingetragen war.
     pub fn remove_port(&mut self, p: u64) -> bool {
         self.ports.remove(&p)
     }
+    /// Traegt eine MAC-Adresse auf einen Port ein.
     pub fn learn_mac(&mut self, mac: MacAddr, port: u64) {
         self.mac_table.insert(mac, port);
     }
+    /// Port zu einer MAC-Adresse.
     pub fn lookup_port(&self, mac: MacAddr) -> Option<u64> {
         self.mac_table.get(&mac).copied()
     }
+    /// MAC-Adresse zu einer bekannten IP.
     pub fn arp_resolve(&self, ip: Ipv4Addr) -> Option<MacAddr> {
         self.arp_table.get(&ip).copied()
     }
+    /// Traegt eine Zuordnung von IP zu MAC ein.
     pub fn arp_learn(&mut self, ip: Ipv4Addr, mac: MacAddr) {
         self.arp_table.insert(ip, mac);
         self.stats.arp_replies += 1;
     }
+    /// Leitet einen Frame weiter und liefert die Entscheidung.
     pub fn forward_frame(&mut self, dst: MacAddr, src: MacAddr, in_port: u64) -> ForwardDecision {
         self.learn_mac(src, in_port);
         if dst.is_broadcast() {
@@ -667,20 +815,25 @@ impl Bridge {
             }
         }
     }
+    /// Aktiviert Spanning Tree mit gewaehlter Wurzel.
     pub fn enable_stp(&mut self, root: u64) {
         self.stp_enabled = true;
         self.stp_root = Some(root);
     }
+    /// Schaltet Spanning Tree ab.
     pub fn disable_stp(&mut self) {
         self.stp_enabled = false;
         self.stp_root = None;
     }
+    /// Vergibt eine Adresse an einen Container, solange der Bereich reicht.
     pub fn allocate_ip(&mut self, cid: u32) -> Option<Ipv4Addr> {
         self.dhcp_pool.as_mut()?.allocate(cid)
     }
+    /// Gibt eine Adresse frei; false, wenn sie nicht vergeben war.
     pub fn release_ip(&mut self, ip: Ipv4Addr) -> bool {
         self.dhcp_pool.as_mut().is_some_and(|p| p.release(ip))
     }
+    /// Vergebene Adressen mit Container, Vergabe- und Ablaufzeit.
     pub fn leased_ips(&self) -> Vec<(Ipv4Addr, u32, u64)> {
         self.dhcp_pool.as_ref().map_or(vec![], |p| {
             p.allocated
@@ -691,23 +844,34 @@ impl Bridge {
     }
 }
 
+/// DHCP-Bereich einer Bridge.
 #[derive(Clone, Debug)]
 pub struct DhcpPool {
+    /// Erste Adresse des Bereichs.
     pub start: Ipv4Addr,
+    /// Letzte Adresse des Bereichs.
     pub end: Ipv4Addr,
+    /// Leasedauer in Stunden.
     pub lease_hours: u32,
+    /// Vergebene Adressen mit ihren Leases.
     pub allocated: BTreeMap<Ipv4Addr, DhcpLease>,
+    /// Naechste Adresse fuer die Vergabe.
     pub next_lease: Ipv4Addr,
 }
 
+/// Ein vergebenes Lease.
 #[derive(Clone, Debug)]
 pub struct DhcpLease {
+    /// Container, der die Adresse haelt.
     pub container_id: u32,
+    /// Zeitpunkt der Vergabe.
     pub leased_at: u64,
+    /// Zeitpunkt des Ablaufs.
     pub expires_at: u64,
 }
 
 impl DhcpPool {
+    /// Anzahl der Adressen im Bereich.
     pub fn capacity(&self) -> u64 {
         let s = self.start.to_u32();
         let e = self.end.to_u32();
@@ -717,6 +881,7 @@ impl DhcpPool {
             0
         }
     }
+    /// Vergibt die naechste freie Adresse; abgelaufene Leases werden dabei uebersprungen.
     pub fn allocate(&mut self, cid: u32) -> Option<Ipv4Addr> {
         let s = self.start.to_u32();
         let e = self.end.to_u32();
@@ -745,12 +910,15 @@ impl DhcpPool {
             }
         }
     }
+    /// Gibt ein Lease frei; false, wenn die Adresse nicht vergeben war.
     pub fn release(&mut self, ip: Ipv4Addr) -> bool {
         self.allocated.remove(&ip).is_some()
     }
+    /// True, wenn das Lease zum Zeitpunkt `now` abgelaufen ist.
     pub fn is_expired(&self, ip: Ipv4Addr, now: u64) -> bool {
         self.allocated.get(&ip).is_none_or(|l| now > l.expires_at)
     }
+    /// Entfernt abgelaufene Leases und liefert deren Anzahl.
     pub fn cleanup_expired(&mut self, now: u64) -> u32 {
         let b = self.allocated.len();
         self.allocated.retain(|_, l| l.expires_at > now);
@@ -758,10 +926,14 @@ impl DhcpPool {
     }
 }
 
+/// Entscheidung der Bridge fuer einen Frame.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ForwardDecision {
+    /// Frame an einen Port weiterleiten.
     Forward(u64),
+    /// Frame an alle Ports ausser dem Eingang verteilen.
     Flood,
+    /// Frame verwerfen.
     Drop,
 }
 
@@ -769,13 +941,18 @@ pub enum ForwardDecision {
 // FIREWALL (nftables-style)
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Kette einer Firewall.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash, PartialOrd, Ord)]
 pub enum FirewallChain {
+    /// Eingehende Pakete.
     Input,
+    /// Ausgehende Pakete.
     Output,
+    /// Weitergeleitete Pakete.
     Forward,
 }
 impl FirewallChain {
+    /// Kurzname der Kette.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Input => "INPUT",
@@ -785,24 +962,37 @@ impl FirewallChain {
     }
 }
 
+/// Urteil einer Firewall-Regel.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum FirewallVerdict {
+    /// Durchlassen.
     Accept,
+    /// Verwerfen ohne Antwort.
     Drop,
+    /// Verwerfen mit Ablehnung.
     Reject,
+    /// Protokollieren und weiter pruefen.
     Log,
+    /// Pruefung an den Aufrufer zurueckgeben.
     Return,
+    /// In eine andere Kette springen.
     Jump(u64),
 }
 
+/// Transportprotokoll einer Regel.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Protocol {
+    /// TCP.
     Tcp,
+    /// UDP.
     Udp,
+    /// ICMP.
     Icmp,
+    /// Beliebiges Protokoll.
     Any,
 }
 impl Protocol {
+    /// Kurzname des Protokolls.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Tcp => "tcp",
@@ -813,37 +1003,61 @@ impl Protocol {
     }
 }
 
+/// Eine Firewall-Regel mit Treffern und Zaehlern.
 #[derive(Clone, Debug)]
 pub struct FirewallRule {
+    /// Kennung der Regel.
     pub id: u64,
+    /// Kette der Regel.
     pub chain: FirewallChain,
+    /// Namespace, in dem die Regel gilt.
     pub ns_id: NetNsId,
+    /// Transportprotokoll.
     pub protocol: Protocol,
+    /// Quelladresse, falls eingeschraenkt.
     pub src_ip: Option<Ipv4Addr>,
+    /// Praefixlaenge der Quelladresse.
     pub src_mask: Option<u8>,
+    /// Zieladresse, falls eingeschraenkt.
     pub dst_ip: Option<Ipv4Addr>,
+    /// Praefixlaenge der Zieladresse.
     pub dst_mask: Option<u8>,
+    /// Quellport, falls eingeschraenkt.
     pub src_port: Option<u16>,
+    /// Zielport, falls eingeschraenkt.
     pub dst_port: Option<u16>,
+    /// Bereich von Quellports.
     pub src_port_range: Option<(u16, u16)>,
+    /// Bereich von Zielports.
     pub dst_port_range: Option<(u16, u16)>,
+    /// Eingangsschnittstelle, falls eingeschraenkt.
     pub iface_in: Option<String>,
+    /// Ausgangsschnittstelle, falls eingeschraenkt.
     pub iface_out: Option<String>,
+    /// Urteil der Regel.
     pub verdict: FirewallVerdict,
+    /// Prioritaet; hoehere Werte werden zuerst geprueft.
     pub priority: i32,
+    /// Anzahl der Treffer.
     pub counter_hits: u64,
+    /// Summe der durchgelassenen Bytes.
     pub counter_bytes: u64,
+    /// Praefix fuer die Protokollzeile.
     pub log_prefix: Option<String>,
+    /// Freier Kommentar.
     pub comment: Option<String>,
 }
 
 impl FirewallRule {
+    /// Regel, die alles durchlaesst.
     pub fn accept(ns: NetNsId, c: FirewallChain) -> Self {
         Self::new(ns, c, FirewallVerdict::Accept)
     }
+    /// Regel, die alles verwirft.
     pub fn drop(ns: NetNsId, c: FirewallChain) -> Self {
         Self::new(ns, c, FirewallVerdict::Drop)
     }
+    /// Regel mit Urteil und ohne Einschraenkungen.
     pub fn new(ns: NetNsId, c: FirewallChain, v: FirewallVerdict) -> Self {
         Self {
             id: next_rule_id(),
@@ -868,48 +1082,59 @@ impl FirewallRule {
             comment: None,
         }
     }
+    /// Schraenkt auf ein Protokoll ein.
     pub fn with_protocol(mut self, p: Protocol) -> Self {
         self.protocol = p;
         self
     }
+    /// Schraenkt auf ein Quellnetz ein.
     pub fn with_src(mut self, ip: Ipv4Addr, m: u8) -> Self {
         self.src_ip = Some(ip);
         self.src_mask = Some(m);
         self
     }
+    /// Schraenkt auf ein Zielnetz ein.
     pub fn with_dst(mut self, ip: Ipv4Addr, m: u8) -> Self {
         self.dst_ip = Some(ip);
         self.dst_mask = Some(m);
         self
     }
+    /// Schraenkt auf einen Zielport ein.
     pub fn with_dst_port(mut self, p: u16) -> Self {
         self.dst_port = Some(p);
         self
     }
+    /// Schraenkt auf einen Zielportbereich ein.
     pub fn with_dst_port_range(mut self, a: u16, b: u16) -> Self {
         self.dst_port_range = Some((a, b));
         self
     }
+    /// Schraenkt auf einen Quellport ein.
     pub fn with_src_port(mut self, p: u16) -> Self {
         self.src_port = Some(p);
         self
     }
+    /// Schraenkt auf eine Eingangsschnittstelle ein.
     pub fn with_iface_in(mut self, n: &str) -> Self {
         self.iface_in = Some(n.to_string());
         self
     }
+    /// Schraenkt auf eine Ausgangsschnittstelle ein.
     pub fn with_iface_out(mut self, n: &str) -> Self {
         self.iface_out = Some(n.to_string());
         self
     }
+    /// Setzt die Prioritaet.
     pub fn with_priority(mut self, p: i32) -> Self {
         self.priority = p;
         self
     }
+    /// Setzt das Protokollpraefix.
     pub fn with_log(mut self, p: &str) -> Self {
         self.log_prefix = Some(p.to_string());
         self
     }
+    /// Setzt den Kommentar.
     pub fn with_comment(mut self, c: &str) -> Self {
         self.comment = Some(c.to_string());
         self
@@ -918,6 +1143,7 @@ impl FirewallRule {
     // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
     // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
     // gehoert nicht in die Portierung dieses Moduls.
+    /// Prueft, ob ein Paket zu dieser Regel passt; zaehlt den Treffer dabei nicht.
     #[allow(clippy::too_many_arguments)]
     pub fn matches(
         &self,
@@ -987,18 +1213,27 @@ impl FirewallRule {
     }
 }
 
+/// Eine Firewall-Kette mit Regeln und Zaehlern.
 #[derive(Clone, Debug)]
 pub struct FirewallChainData {
+    /// Name der Kette.
     pub name: FirewallChain,
+    /// Namespace der Kette.
     pub ns_id: NetNsId,
+    /// Regeln der Kette.
     pub rules: Vec<FirewallRule>,
+    /// Urteil, wenn keine Regel greift.
     pub default_policy: FirewallVerdict,
+    /// Summe der Treffer.
     pub total_hits: u64,
+    /// Verworfene Pakete.
     pub total_dropped: u64,
+    /// Durchgelassene Pakete.
     pub total_accepted: u64,
 }
 
 impl FirewallChainData {
+    /// Leere Kette mit Urteil `Drop` als Vorgabe.
     pub fn new(name: FirewallChain, ns: NetNsId) -> Self {
         Self {
             name,
@@ -1010,21 +1245,25 @@ impl FirewallChainData {
             total_accepted: 0,
         }
     }
+    /// Fuegt eine Regel hinzu; die Reihenfolge folgt der Prioritaet.
     pub fn add_rule(&mut self, r: FirewallRule) {
         self.rules.push(r);
         self.rules.sort_by_key(|r| r.priority);
     }
+    /// Entfernt eine Regel; false, wenn sie nicht vorhanden war.
     pub fn remove_rule(&mut self, id: u64) -> bool {
         let b = self.rules.len();
         self.rules.retain(|r| r.id != id);
         self.rules.len() < b
     }
+    /// Setzt das Urteil fuer nicht passende Pakete.
     pub fn set_policy(&mut self, v: FirewallVerdict) {
         self.default_policy = v;
     }
     // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
     // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
     // gehoert nicht in die Portierung dieses Moduls.
+    /// Prueft ein Paket gegen die Kette und liefert das Urteil; Zaehler werden dabei fortgeschrieben.
     #[allow(clippy::too_many_arguments)]
     pub fn evaluate(
         &mut self,
@@ -1072,13 +1311,18 @@ impl FirewallChainData {
 // PORT FORWARDING (NAT)
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Art der Adressumsetzung.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum NatType {
+    /// Zieladresse und Zielport umschreiben.
     Dnat,
+    /// Quelladresse umschreiben.
     Snat,
+    /// Quelladresse auf die externe Adresse umschreiben.
     Masquerade,
 }
 impl NatType {
+    /// Kurzname der Art.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Dnat => "DNAT",
@@ -1088,22 +1332,35 @@ impl NatType {
     }
 }
 
+/// Eine Weiterleitung von einem Hostport auf einen Container.
 #[derive(Clone, Debug)]
 pub struct PortForward {
+    /// Kennung der Weiterleitung.
     pub id: u64,
+    /// Art der Umsetzung.
     pub nat_type: NatType,
+    /// Namespace des Containers.
     pub ns_id: NetNsId,
+    /// Adresse auf der Hostseite.
     pub host_ip: Ipv4Addr,
+    /// Port auf der Hostseite.
     pub host_port: u16,
+    /// Adresse des Containers.
     pub container_ip: Ipv4Addr,
+    /// Port im Container.
     pub container_port: u16,
+    /// Transportprotokoll.
     pub protocol: Protocol,
+    /// True, solange die Weiterleitung aktiv ist.
     pub active: bool,
+    /// Anzahl der Verbindungen.
     pub connections: u64,
+    /// Weitergeleitete Bytes.
     pub bytes_forwarded: u64,
 }
 
 impl PortForward {
+    /// Weiterleitung von einem Hostport auf einen Containerport.
     pub fn dnat(
         ns: NetNsId,
         hip: Ipv4Addr,
@@ -1126,6 +1383,7 @@ impl PortForward {
             bytes_forwarded: 0,
         }
     }
+    /// Umsetzung der Quelladresse auf die externe Adresse.
     pub fn masquerade(ns: NetNsId, cip: Ipv4Addr) -> Self {
         Self {
             id: next_portfwd_id(),
@@ -1141,12 +1399,15 @@ impl PortForward {
             bytes_forwarded: 0,
         }
     }
+    /// Zieladresse und Zielport nach der Umsetzung.
     pub fn translate_dst(&self) -> (Ipv4Addr, u16) {
         (self.container_ip, self.container_port)
     }
+    /// Quelladresse und Quellport nach der Umsetzung.
     pub fn translate_src(&self, ext: Ipv4Addr) -> (Ipv4Addr, u16) {
         (ext, self.host_port)
     }
+    /// Zaehlt eine Verbindung und ihre Bytes.
     pub fn record_connection(&mut self, bytes: u64) {
         self.connections += 1;
         self.bytes_forwarded += bytes;
@@ -1157,22 +1418,32 @@ impl PortForward {
 // NAMESPACE STATS
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Zaehler eines Namespace ueber alle Schnittstellen.
 #[derive(Clone, Debug, Default)]
 pub struct NetNsStats {
+    /// Empfangene Bytes.
     pub total_rx_bytes: u64,
+    /// Gesendete Bytes.
     pub total_tx_bytes: u64,
+    /// Empfangene Pakete.
     pub total_rx_packets: u64,
+    /// Gesendete Pakete.
     pub total_tx_packets: u64,
+    /// Empfangsfehler.
     pub total_rx_errors: u64,
+    /// Sendefehler.
     pub total_tx_errors: u64,
 }
 impl NetNsStats {
+    /// Summe aus empfangenen und gesendeten Bytes.
     pub fn total_bytes(&self) -> u64 {
         self.total_rx_bytes + self.total_tx_bytes
     }
+    /// Summe aus empfangenen und gesendeten Paketen.
     pub fn total_packets(&self) -> u64 {
         self.total_rx_packets + self.total_tx_packets
     }
+    /// Anteil der Fehler an allen Paketen.
     pub fn error_rate(&self) -> f64 {
         let t = self.total_rx_packets + self.total_tx_packets;
         if t == 0 {
@@ -1187,22 +1458,35 @@ impl NetNsStats {
 // CONTAINER NETWORK MANAGER
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Verwaltung aller Namespaces, Bridges, Paare, Weiterleitungen, Regeln und Namen.
 #[derive(Clone, Debug)]
 pub struct ContainerNetManager {
+    /// Namespaces nach Kennung.
     pub namespaces: BTreeMap<NetNsId, NetworkNamespace>,
+    /// Bridges nach Kennung.
     pub bridges: BTreeMap<u64, Bridge>,
+    /// veth-Paare nach Kennung.
     pub veth_pairs: BTreeMap<u64, VethPair>,
+    /// Portweiterleitungen nach Kennung.
     pub port_forwards: BTreeMap<u64, PortForward>,
+    /// Firewall-Ketten je Namespace und Kette.
     pub firewall_chains: BTreeMap<(NetNsId, FirewallChain), FirewallChainData>,
+    /// Namenseintraege nach Kennung.
     pub dns_entries: BTreeMap<u64, DnsEntry>,
+    /// Namenseintraege nach Hostname.
     pub dns_by_name: BTreeMap<String, DnsEntry>,
+    /// Subnetz fuer neu angelegte Bridges.
     pub default_subnet: IpSubnet,
+    /// Gateway fuer neu angelegte Bridges.
     pub default_gateway: Ipv4Addr,
+    /// Externe Adresse fuer die Umsetzung nach aussen.
     pub external_ip: Ipv4Addr,
+    /// Naechste freie Bridge-Kennung.
     pub bridge_counter: u64,
 }
 
 impl ContainerNetManager {
+    /// Verwaltung mit Vorgaben aus dem Bereich 10.88.0.0/16.
     pub fn new() -> Self {
         Self {
             namespaces: BTreeMap::new(),
@@ -1219,6 +1503,7 @@ impl ContainerNetManager {
         }
     }
 
+    /// Legt einen Namespace an und liefert seine Kennung.
     pub fn create_namespace(&mut self, name: &str, pid: u32) -> NetNsId {
         let ns = NetworkNamespace::new(name, pid);
         let id = ns.id;
@@ -1233,6 +1518,7 @@ impl ContainerNetManager {
         }
         id
     }
+    /// Loescht einen Namespace samt Schnittstellen und Ketten.
     pub fn destroy_namespace(&mut self, ns: NetNsId) -> bool {
         self.veth_pairs
             .retain(|_, vp| vp.host_ns != ns && vp.container_ns != ns);
@@ -1251,16 +1537,20 @@ impl ContainerNetManager {
         }
         self.namespaces.remove(&ns).is_some()
     }
+    /// Namespace nach Kennung.
     pub fn get_namespace(&self, ns: NetNsId) -> Option<&NetworkNamespace> {
         self.namespaces.get(&ns)
     }
+    /// Namespace nach Kennung, veraenderbar.
     pub fn get_namespace_mut(&mut self, ns: NetNsId) -> Option<&mut NetworkNamespace> {
         self.namespaces.get_mut(&ns)
     }
+    /// Alle Namespaces.
     pub fn list_namespaces(&self) -> Vec<&NetworkNamespace> {
         self.namespaces.values().collect()
     }
 
+    /// Legt eine Bridge mit Subnetz, Gateway und DHCP an.
     pub fn create_bridge(&mut self, name: &str, host_ns: NetNsId) -> u64 {
         let mut b = Bridge::new(name, host_ns);
         b.set_subnet(self.default_subnet, self.default_gateway);
@@ -1277,17 +1567,21 @@ impl ContainerNetManager {
         self.bridge_counter += 1;
         id
     }
+    /// Loescht eine Bridge.
     pub fn destroy_bridge(&mut self, bid: u64) -> bool {
         self.veth_pairs.retain(|_, vp| vp.bridge_iface != Some(bid));
         self.bridges.remove(&bid).is_some()
     }
+    /// Bridge nach Kennung.
     pub fn get_bridge(&self, bid: u64) -> Option<&Bridge> {
         self.bridges.get(&bid)
     }
+    /// Bridge nach Kennung, veraenderbar.
     pub fn get_bridge_mut(&mut self, bid: u64) -> Option<&mut Bridge> {
         self.bridges.get_mut(&bid)
     }
 
+    /// Legt ein veth-Paar an, haengt das Hostende an die Bridge und vergibt die Containeradresse.
     pub fn create_veth_pair(
         &mut self,
         host_ns: NetNsId,
@@ -1331,6 +1625,7 @@ impl ContainerNetManager {
         self.veth_pairs.insert(vid, veth);
         Ok(vid)
     }
+    /// Loescht ein veth-Paar.
     pub fn destroy_veth_pair(&mut self, vid: u64) -> bool {
         if let Some(veth) = self.veth_pairs.remove(&vid) {
             if let Some(bid) = veth.bridge_iface {
@@ -1351,6 +1646,7 @@ impl ContainerNetManager {
         }
     }
 
+    /// Legt eine Weiterleitung von Hostport auf Containerport an.
     pub fn add_port_forward(
         &mut self,
         ns: NetNsId,
@@ -1364,21 +1660,25 @@ impl ContainerNetManager {
         self.port_forwards.insert(id, pf);
         id
     }
+    /// Entfernt eine Weiterleitung.
     pub fn remove_port_forward(&mut self, id: u64) -> bool {
         self.port_forwards.remove(&id).is_some()
     }
+    /// Legt eine Umsetzung der Quelladresse an.
     pub fn add_masquerade(&mut self, ns: NetNsId, cip: Ipv4Addr) -> u64 {
         let pf = PortForward::masquerade(ns, cip);
         let id = pf.id;
         self.port_forwards.insert(id, pf);
         id
     }
+    /// Weiterleitung zu einem Hostport und Protokoll.
     pub fn lookup_port_forward(&self, hp: u16, proto: Protocol) -> Option<&PortForward> {
         self.port_forwards
             .values()
             .find(|pf| pf.host_port == hp && pf.protocol == proto && pf.active)
     }
 
+    /// Traegt eine Firewall-Regel ein; false, wenn die Kette sie ablehnt.
     pub fn add_firewall_rule(&mut self, r: FirewallRule) -> bool {
         if let Some(c) = self.firewall_chains.get_mut(&(r.ns_id, r.chain)) {
             c.add_rule(r);
@@ -1387,6 +1687,7 @@ impl ContainerNetManager {
             false
         }
     }
+    /// Entfernt eine Firewall-Regel.
     pub fn remove_firewall_rule(&mut self, id: u64) -> bool {
         for c in self.firewall_chains.values_mut() {
             if c.remove_rule(id) {
@@ -1395,6 +1696,7 @@ impl ContainerNetManager {
         }
         false
     }
+    /// Setzt das Urteil einer Kette fuer nicht passende Pakete.
     pub fn set_firewall_policy(
         &mut self,
         ns: NetNsId,
@@ -1411,6 +1713,7 @@ impl ContainerNetManager {
     // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
     // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
     // gehoert nicht in die Portierung dieses Moduls.
+    /// Prueft ein Paket gegen die Kette eines Namespace.
     #[allow(clippy::too_many_arguments)]
     pub fn check_firewall(
         &mut self,
@@ -1430,6 +1733,7 @@ impl ContainerNetManager {
         }
     }
 
+    /// Traegt einen Namen fuer einen Namespace ein.
     pub fn register_dns(&mut self, host: &str, ip: Ipv4Addr, ns: NetNsId, ttl: u32) -> u64 {
         let e = DnsEntry {
             id: next_dns_id(),
@@ -1444,6 +1748,7 @@ impl ContainerNetManager {
         self.dns_entries.insert(id, e);
         id
     }
+    /// Loest einen Namen in einem Namespace auf.
     pub fn resolve_dns(&self, host: &str, ns: NetNsId) -> Option<Ipv4Addr> {
         for e in self.dns_entries.values() {
             if e.hostname == host && e.namespace == ns {
@@ -1452,6 +1757,7 @@ impl ContainerNetManager {
         }
         self.dns_by_name.get(host).map(|e| e.ip)
     }
+    /// Entfernt einen Namenseintrag.
     pub fn unregister_dns(&mut self, id: u64) -> bool {
         if let Some(e) = self.dns_entries.remove(&id) {
             self.dns_by_name.remove(&e.hostname);
@@ -1464,6 +1770,7 @@ impl ContainerNetManager {
     // Bewusste Ausnahme: die Parameter spiegeln Paketfelder eins zu eins.
     // Sie in eine Struktur zu buendeln waere eine eigene API-Entscheidung und
     // gehoert nicht in die Portierung dieses Moduls.
+    /// Simuliert ein Paket durch die Netzkette und liefert das Ergebnis.
     #[allow(clippy::too_many_arguments)]
     pub fn simulate_packet(
         &mut self,
@@ -1527,37 +1834,48 @@ impl ContainerNetManager {
         PacketResult::Delivered { bytes }
     }
 
+    /// Zaehler eines Namespace.
     pub fn namespace_stats(&self, ns: NetNsId) -> Option<&NetNsStats> {
         self.namespaces.get(&ns).map(|ns| &ns.stats)
     }
+    /// Zaehler einer Bridge.
     pub fn bridge_stats(&self, bid: u64) -> Option<&BridgeStats> {
         self.bridges.get(&bid).map(|b| &b.stats)
     }
+    /// Zaehler einer Firewall-Kette.
     pub fn firewall_stats(&self, ns: NetNsId, c: FirewallChain) -> Option<&FirewallChainData> {
         self.firewall_chains.get(&(ns, c))
     }
+    /// Alle Weiterleitungen mit ihren Zaehlern.
     pub fn port_forward_stats(&self) -> Vec<&PortForward> {
         self.port_forwards.values().collect()
     }
+    /// Anzahl der Namespaces.
     pub fn total_namespaces(&self) -> usize {
         self.namespaces.len()
     }
+    /// Anzahl der Bridges.
     pub fn total_bridges(&self) -> usize {
         self.bridges.len()
     }
+    /// Anzahl der veth-Paare.
     pub fn total_veth_pairs(&self) -> usize {
         self.veth_pairs.len()
     }
+    /// Anzahl der Portweiterleitungen.
     pub fn total_port_forwards(&self) -> usize {
         self.port_forwards.len()
     }
+    /// Anzahl der Namenseintraege.
     pub fn total_dns_entries(&self) -> usize {
         self.dns_entries.len()
     }
+    /// Anzahl der Firewall-Regeln ueber alle Ketten.
     pub fn total_firewall_rules(&self) -> usize {
         self.firewall_chains.values().map(|c| c.rules.len()).sum()
     }
 
+    /// Bericht ueber Namespaces, Bridges, Paare, Weiterleitungen und Regeln.
     pub fn report(&self) -> String {
         let mut r = String::new();
         r.push_str("═══ Container Network Report ═══\n");
@@ -1621,16 +1939,21 @@ impl Default for ContainerNetManager {
     }
 }
 
+/// Ergebnis einer Paketsimulation.
 #[derive(Clone, Debug)]
 pub enum PacketResult {
+    /// Paket wurde im Ziel-Namespace abgeliefert.
     Delivered {
         bytes: u64,
     },
+    /// Paket wurde weitergeleitet.
     Forwarded {
         new_dst: (Ipv4Addr, u16),
         bytes: u64,
     },
+    /// Paket wurde verworfen; der Grund steht im Text.
     Dropped(String),
+    /// Paket wurde abgelehnt; der Grund steht im Text.
     Rejected(String),
 }
 
