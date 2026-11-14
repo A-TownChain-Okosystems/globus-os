@@ -1,6 +1,7 @@
 //! Deterministic physical-frame allocator over firmware-discovered usable ranges.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein zusammenhaengender Bereich nutzbarer Frames.
 pub struct FrameRange {
     /// Erste Adresse des Bereichs.
     pub start: u64,
