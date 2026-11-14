@@ -1,6 +1,7 @@
 //! Stable on-disk inode representation and deterministic inode allocation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler beim Lesen oder Schreiben der On-Disk-Inode.
 pub enum InodeDiskError {
     /// Der Puffer ist kleiner als ein Inode.
     Buffer,
