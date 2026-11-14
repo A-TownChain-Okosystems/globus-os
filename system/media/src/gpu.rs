@@ -12,21 +12,17 @@ pub enum BufferFormat {
     Yuv420p,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Ein Bildpuffer auf der GPU.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct MediaBuffer {
-    /// Kennung des Puffers.
     /// Kennung des Puffers.
     pub id: u64,
     /// Breite in Pixel.
-    /// Breite in Pixel.
     pub width: u32,
-    /// Hoehe in Pixel.
     /// Hoehe in Pixel.
     pub height: u32,
     /// Pufferformat.
     pub format: BufferFormat,
-    /// Zeilenabstand in Byte.
     /// Zeilenabstand in Byte.
     pub stride: u32,
     /// True, wenn der Puffer mit anderen Prozessen geteilt wird.
@@ -43,19 +39,19 @@ pub trait MediaGpuBackend {
     fn present(&mut self, buffer: MediaBuffer, timestamp_us: u64) -> bool;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Verweis auf einen geteilten Puffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SharedBufferHandle {
+    /// Kennung des Puffers.
     pub id: u64,
     /// True, wenn nur gelesen werden darf.
     pub read_only: bool,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Umwandlung zwischen zwei Pufferformaten.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ColorConversion {
     /// Ausgangsformat.
-    /// Pufferformat der Overlayquelle.
     pub source: BufferFormat,
     /// Zielformat.
     pub destination: BufferFormat,
@@ -73,23 +69,25 @@ impl ColorConversion {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Ein DMA-Puffer, wie ihn der Kernel herausgibt.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DmaBufDescriptor {
     /// Dateideskriptor des Puffers.
     pub fd: i32,
     /// Groesse in Byte.
     pub size_bytes: u64,
+    /// Zeilenabstand in Byte.
     pub stride: u32,
     /// Versatz des Bildanfangs im Puffer.
     pub offset: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Hardware-Overlay ueber dem Bild.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HardwareOverlay {
     /// True, wenn das Overlay aktiv ist.
     pub enabled: bool,
+    /// Pufferformat der Overlayquelle.
     pub source: BufferFormat,
     /// Ebene des Overlays.
     pub z_order: i32,
@@ -115,18 +113,19 @@ pub trait DisplayOutput {
     fn queue_frame(&mut self, buffer: MediaBuffer, presentation_us: u64) -> bool;
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Aufloesung und Bildwiederholrate.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DisplayMode {
+    /// Breite in Pixel.
     pub width: u32,
+    /// Hoehe in Pixel.
     pub height: u32,
-    /// Bildwiederholrate in Hertz.
     /// Bildwiederholrate in Hertz.
     pub refresh_hz: u32,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Zeitraster der Ausgabe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FrameTiming {
     /// Bildwiederholrate in Hertz.
     pub refresh_hz: u32,
@@ -163,8 +162,8 @@ impl FrameTiming {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Haelt die Ausgabe im Zeitraster.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FramePacer {
     /// Zeitraster.
     pub timing: FrameTiming,
