@@ -986,12 +986,23 @@ stückweiser Selbsttest nach REQ-REC-14 (kein 4-KiB-Stapelpuffer), ChaCha20-DRBG
 mit XOR-Mischung aus beiden Quellen, fail-closed ohne Teilausgabe, Nullung.
 **Was er nicht enthält:** keine Hardware, keinen Aufrufer, keine Phrase.
 
-**EHRLICHE GRENZE.** Der Kern hat heute **keinen Aufrufer im Produktivpfad**:
-`system/identity` erzeugt Phrasen weiterhin aus `OsRng`, der Kernel hat keinen
-Registrierungspfad. Ohne den Durchsetzungspunkt (Registrierung fragt
-`state()` und bricht bei allem außer `Ready` ab) verhindert der Baustein so
-wenig wie eine Bibliothek ohne Aufrufer. REQ-REC-13 bis REQ-REC-18 sind damit
-**teilweise** umgesetzt: Kern ja, Durchsetzung nein.
+**Der Durchsetzungspunkt (14.11.2026, nachgezogen).** `system/identity` hat jetzt
+`EntropyGate` (`src/entropy.rs`): es hält den Kern, prüft `status()` **vor** jeder
+Erzeugung und gibt außerhalb von `Ready` nichts heraus — der Fehler heißt
+`EntropyUnavailable`, es entsteht keine Phrase. `create_wallet` läuft über das
+Tor (`create_wallet_with_gate` ist der offene Einstieg für Aufrufer, die den
+Zustand selbst führen), die 256 Bit der Phrase stammen aus dem DRBG statt aus
+`Mnemonic::generate_in`. Prüfbar: `uninitialisiertes_tor_verhindert_jede_phrase`
+und `erkranktes_tor_verhindert_jede_phrase` (zu REC-T-41), `phrase_kommt_aus_dem_tor_und_adresse_bleibt_reproduzierbar`
+(zu REC-T-45, Adresse weiterhin 35 Zeichen und aus derselben Phrase reproduzierbar).
+
+**EHRLICHE GRENZE.** Damit ist der Host-Pfad geschlossen, der Image-Pfad nicht:
+der Kernel hat weiterhin **keinen Registrierungspfad**, der `status()` abfragt,
+und REQ-REC-16 (Neuspeisung nach S3/S4 mit Rückfall auf `UNINITIALIZED`) ist
+nicht umgesetzt. Auf dem Host sind beide Quellen zwei Züge aus `OsRng`; die
+Trennung in Hardware und Jitter greift erst im Image. REQ-REC-13 bis REQ-REC-18
+bleiben **teilweise** umgesetzt: Kern ja, Host-Durchsetzung ja, Kernel-Gate und
+Neuspeisung nein.
 
 ---
 
