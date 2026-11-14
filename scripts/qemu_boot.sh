@@ -31,7 +31,10 @@ rustup +nightly component list --installed 2>/dev/null | grep -q llvm-tools \
 export RUSTFLAGS='-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
 
 echo "== 1/5 Kernel-ELF bauen =="
-(cd "$ROOT" && cargo +nightly build -p shivacore --release \
+# Das Profil `kernel` erbt `release` und setzt `panic = "abort"`: das Image
+# entsteht ohne Entfaltung. Die Strategie steht im Root-Manifest, nicht hier,
+# damit sie nicht vom Aufrufer abhaengt.
+(cd "$ROOT" && cargo +nightly build -p shivacore --profile kernel \
   --target x86_64-unknown-none --features x86-boot)
 
 echo "== 2/5 Boot-Image-Builder bauen =="
