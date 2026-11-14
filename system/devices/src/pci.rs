@@ -98,6 +98,7 @@ pub trait PciConfigAccess {
 }
 /// Bildet Geraetespeicher in den Kerneladressraum ab.
 pub trait MmioMapper {
+    /// Ergebnis der Abbildung, etwa ein virtueller Zeiger oder eine Kennung.
     type Mapping;
     /// Bildet eine BAR ab und liefert das Ergebnis der Abbildung.
     fn map_device_bar(&self, bar: PciBar) -> Result<Self::Mapping, PciError>;
