@@ -26,12 +26,16 @@ use alloc::vec::Vec;
 /// Konfigurationsraum-Adresse eines Geraets.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub struct PciAddress {
+    /// Busnummer.
     pub bus: u8,
+    /// Geraetenummer auf dem Bus, 0 bis 31.
     pub device: u8,
+    /// Funktionsnummer innerhalb des Geraets, 0 bis 7.
     pub function: u8,
 }
 
 impl PciAddress {
+    /// Adresse aus Bus, Geraet und Funktion.
     pub const fn new(bus: u8, device: u8, function: u8) -> Self {
         Self {
             bus,
@@ -40,6 +44,7 @@ impl PciAddress {
         }
     }
 
+    /// Bus, Geraet und Funktion als eine Zahl in der Form, die der Konfigurationszugriff erwartet.
     pub fn slot(&self) -> u16 {
         ((self.bus as u16) << 8) | ((self.device as u16) << 3) | self.function as u16
     }
@@ -48,10 +53,15 @@ impl PciAddress {
 /// Was ein Geraet ueber sich preisgibt, bevor ein Treiber es anfasst.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct PciDevice {
+    /// Wo das Geraet sitzt.
     pub address: PciAddress,
+    /// Herstellerkennung.
     pub vendor: u16,
+    /// Geraetekennung des Herstellers.
     pub device: u16,
+    /// Grobe Klassennummer.
     pub class: u8,
+    /// Unterklasse innerhalb der Klasse.
     pub subclass: u8,
     /// 0 = einzelne Funktion, 0x80-Bit = Mehrfunktionsgeraet.
     pub header_type: u8,
@@ -67,6 +77,7 @@ impl PciDevice {
         self.class == 0x06 && matches!(self.subclass, 0x04 | 0x07 | 0x09)
     }
 
+    /// True, wenn das hoechste Bit des Kopfzeilentyps gesetzt ist, das Geraet also mehrere Funktionen hat.
     pub fn is_multifunction(&self) -> bool {
         self.header_type & 0x80 != 0
     }
@@ -80,17 +91,26 @@ impl PciDevice {
 /// Gattung nach PCI-Klassencode (Abschnitt 2.3/Anhang D der PCI-Spezifikation).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum DeviceKind {
+    /// Massenspeicher, Klasse 0x01.
     Storage,
+    /// Netzwerk, Klasse 0x02.
     Network,
+    /// Anzeige, Klasse 0x03.
     Display,
+    /// Eingabe, Klasse 0x09.
     Input,
+    /// Ton, Klasse 0x04 mit Unterklasse 0x01.
     Audio,
+    /// USB-Controller, Klasse 0x0C mit Unterklasse 0x03.
     Usb,
+    /// Bruecke, Klasse 0x06.
     Bridge,
+    /// Alles, was keiner der uebrigen Gattungen zugeordnet wird.
     Other,
 }
 
 impl DeviceKind {
+    /// Gattung aus Klasse und Unterklasse. Multimedia ohne Ton wird zu Other, damit ein Video-Eingang nicht als Lautsprecher gilt.
     pub fn from_class(class: u8, subclass: u8) -> Self {
         match class {
             0x01 => DeviceKind::Storage,
@@ -109,6 +129,7 @@ impl DeviceKind {
         }
     }
 
+    /// Kurzform fuer Berichte und Registratur.
     pub fn as_str(self) -> &'static str {
         match self {
             DeviceKind::Storage => "storage",
@@ -126,6 +147,7 @@ impl DeviceKind {
 /// Zugriff auf den Konfigurationsraum. Als Trait, damit der Test ohne Hardware
 /// denselben Code durchlaufen kann wie der Boot.
 pub trait ConfigSpace {
+    /// Liest ein 32-Bit-Wort aus dem Konfigurationsraum.
     fn read_u32(&mut self, address: PciAddress, offset: u8) -> u32;
 }
 
