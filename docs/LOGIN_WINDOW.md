@@ -49,9 +49,45 @@ nach RDX holt; fuer den Compiler sind beide Ausgaenge fluechtig.
 Dazu ein dritter Befund, der beim Bauen auffiel: `.got` war im Linkerskript
 verworfen. Der Compiler loest den `memset`-Aufruf ueber eine Tabellenzelle auf,
 und die zeigte auf Adresse 8 — Seitenfehler beim Lesen. `.got` liegt jetzt im
-geladenen Abschnitt, und das Programm hat bewusst keinen Haufen: die
-Code-Seiten werden genau so gross abgebildet, wie das Segment Bytes hat, ein
-beschreibbarer statischer Wert laege ausserhalb.
+geladenen Abschnitt. Damals galt noch: die Code-Seiten werden genau so gross
+abgebildet, wie das Segment Bytes hat, ein beschreibbarer statischer Wert laege
+ausserhalb — es gab kein nutzbares `.data` und kein `.bss`.
+
+## Datensegment und bss: die Grenze ist gefallen
+
+Vom 14.11.2026 an traegt der Kernel auch das Datensegment. `ElfParser` nimmt
+nicht mehr nur das ausfuehrbare `PT_LOAD`, sondern zusaetzlich das beschreibbare
+und den `.bss`-Anteil (`p_memsz - p_filesz`) als Nullauffuellung
+(`elf_loader::user_binary_from_elf`). Beide Ramdisk-Programme werden so gebaut;
+vorher war die Regel "kein Nutzerprogramm darf Stringliterale, statische
+Tabellen oder null-initialisierte Puffer verwenden" (belegt mit Seitenfehlern
+bei 0x0 und 0x31, `docs/SPAWN-ANNAHME-2026-11-09.md`).
+
+Das Fenster benutzt beides, damit die Grenze nicht nur behauptet ist:
+
+- `static WINDOW_VERSION: [u8; 6] = *b"v0.3.0"` — vorbelegter statischer Wert,
+  erscheint in der Kopfzeile ("GlobusOS v0.3.0").
+- `static mut STARTS: u32 = 1` — beschreibbarer statischer Wert in `.data`,
+  wird beim Start hochgezaehlt ("· Start n").
+- `static mut SCRATCH: [u8; 6144]` mit `#[unsafe(no_mangle)]` — null-
+  initialisierter Puffer in `.bss` ueber einer Seitengrenze. Der Selbsttest
+  schreibt beide Enden (Byte 0 und Byte 6143) und liest sie zurueck; der Wert
+  kommt aus dem Startvertrag, nicht aus einer Konstante, sonst wuerde der
+  Optimierer den Zyklus ausrechnen und den Puffer entfernen.
+
+| Beobachtung (QEMU/BIOS) | Ergebnis |
+|---|---|
+| alter Kernel, neues Programm | `Seitenfehler PID=1003 Adresse=0x1d0180f (Schreiben)` — genau die letzte bss-Seite, die vorher nicht abgebildet war |
+| neuer Kernel | kein Seitenfehler; `Abbild 'init': Code 212 Bytes, Daten 65544 Bytes (inkl. bss)` |
+| Bildschirm (OCR) | `GlobusOS v0.3.0 · Start 2` … Statuszeile endet auf `(bss 6144 B ok)` |
+| nach `Esc` (Dienst-Neustart) | `Start 3` — `.data` ueberlebt das Zuruecksetzen, weil der Kernel den Stapel leert und die Daten nicht neu kopiert |
+| Eingabe nach dem Neustart | `xy` erscheint im Feld, Feld war vorher leer |
+
+Der letzte Punkt ist die ehrliche Grenze des Supervisors: zurueckgesetzt wird der
+Stapel, nicht das Datensegment. Ein Programm, das seinen Zustand in `.data`
+haelt, sieht den alten Zustand wieder. Ein echter Neustart aus dem Abbild
+(`PT_LOAD`-Bytes neu kopieren) braucht den Prozessstart-Syscall und bleibt
+offen.
 
 ## Nachweis (QEMU, BIOS, Software-Emulation)
 
@@ -80,9 +116,10 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1786 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1788 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
 | Diensteverwaltung | 5 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad |
+| ELF-Abbild | 3 Tests: Code+Daten+bss-Nullen, Programm ohne Datensegment, Programm ohne Codesegment |
 | Fenster-Crate | kein Testrahmen (bare metal); Nachweis ueber QEMU |
 | rustfmt/clippy | eigene Aenderungen ohne Befund; die Datei `interrupts.rs` ist im Bestand nicht rustfmt-clean (Importreihenfolge, lange Signaturen) und wurde nicht umformatiert |
 
