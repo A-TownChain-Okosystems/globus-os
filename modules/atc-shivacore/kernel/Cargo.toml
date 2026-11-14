@@ -34,8 +34,18 @@ noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = 
 globus-diagnostics = { path = "../../../system/diagnostics" }
 libshivacore = { path = "../../../system/shivacore-api" }
 
-[profile.dev]
-panic = "abort"
+# Cargo ignoriert [profile.*] in Nicht-Wurzel-Paketen, die Panik-Strategie des
+# Kernel-Builds laesst sich hier also nicht setzen. Der Image-Builder
+# (modules/atc-shivacore/boot) fuehrt kein Profil, dort gilt der Cargo-Standard
+# "unwind". Der Punkt ist offen und im Doku-Befund festgehalten.
 
-[profile.release]
-panic = "abort"
+# Cargo erlaubt `lints.workspace = true` nicht zusammen mit einer Abweichung,
+# deshalb stehen die Workspace-Werte hier ausgeschrieben. Der Kernel greift an
+# definierten Stellen unmittelbar auf Hardware zu; jede dieser Stellen traegt
+# eine Safety-Begruendung, deshalb ist `unsafe_code` hier freigestellt.
+[lints.rust]
+unsafe_code = "allow"
+missing_docs = "warn"
+
+[lints.clippy]
+all = "warn"
