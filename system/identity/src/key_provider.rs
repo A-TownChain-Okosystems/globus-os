@@ -19,6 +19,7 @@ pub struct SecureKeyId(pub u64);
 /// storage. The returned value is zeroizing and must only live for the duration of the crypto
 /// operation that needs it.
 pub trait SecureKeyService {
+    /// Liefert das Schluesselmaterial, nur fuer die Dauer einer Krypto-Operation.
     fn load_identity_key(
         &self,
         key_id: SecureKeyId,
@@ -26,10 +27,15 @@ pub trait SecureKeyService {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des vertrauenswuerdigen Schluesseldienstes.
 pub enum SecureKeyServiceError {
+    /// Der Dienst ist nicht erreichbar.
     Unavailable,
+    /// Der Aufrufer darf diesen Schluessel nicht laden.
     AccessDenied,
+    /// Der Schluessel ist unbrauchbar.
     InvalidKey,
+    /// Das Sicherheitsmodul hat einen Fehler gemeldet.
     HardwareFailure,
 }
 
@@ -44,14 +50,17 @@ pub struct ShivaCoreKeyProvider<S> {
 }
 
 impl<S> ShivaCoreKeyProvider<S> {
+    /// Bindet einen Schluesseldienst und das Handle, das geladen werden darf.
     pub fn new(service: S, key_id: SecureKeyId) -> Self {
         Self { service, key_id }
     }
 
+    /// Handle, das dieser Provider laedt.
     pub fn key_id(&self) -> SecureKeyId {
         self.key_id
     }
 
+    /// Gibt den gekapselten Dienst zurueck.
     pub fn into_service(self) -> S {
         self.service
     }
