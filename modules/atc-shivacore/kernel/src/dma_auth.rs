@@ -57,7 +57,9 @@ pub struct DmaWindow {
     pub iova: u64,
     /// Adresse im physischen Speicher.
     pub physical: u64,
+    /// Laenge des Bereichs in Byte.
     pub length: u64,
+    /// True, wenn das Geraet in den Bereich schreiben darf.
     pub writable: bool,
 }
 
@@ -67,18 +69,26 @@ pub const MAX_WINDOW_BYTES: u64 = 64 * 1024 * 1024;
 /// Eine DMA-Domain: Eigentuemer, Geraet, Bereiche.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DmaDomain {
+    /// Kennung der Domain.
     pub id: u64,
+    /// Prozess, dem die Domain gehoert.
     pub owner: Pid,
+    /// Geraet, das die Domain benutzt.
     pub device: u64,
+    /// Bereiche, die das Geraet ansprechen darf.
     pub windows: Vec<DmaWindow>,
 }
 
 /// Zaehler. Ohne sie waere "abgelehnt" nicht von "nie gefragt" zu trennen.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct DmaStats {
+    /// Freigegebene Zugriffe.
     pub authorized: u64,
+    /// Abgelehnt, weil die Capability ein anderes Geraet nennt.
     pub denied_wrong_device: u64,
+    /// Abgelehnt, weil der Capability das Recht fehlt.
     pub denied_missing_access: u64,
+    /// Abgelehnt, weil die Domain einem anderen Prozess gehoert.
     pub denied_foreign_domain: u64,
 }
 
@@ -92,6 +102,7 @@ pub struct DmaAuthorizer {
 }
 
 impl DmaAuthorizer {
+    /// Autorisierer ohne Domains; Kennungen beginnen bei 1.
     pub fn new() -> Self {
         Self {
             domains: BTreeMap::new(),
@@ -201,14 +212,17 @@ impl DmaAuthorizer {
         Ok(entry.windows.remove(index))
     }
 
+    /// Domain zu einer Kennung; None, wenn es sie nicht gibt.
     pub fn domain(&self, id: u64) -> Option<&DmaDomain> {
         self.domains.get(&id)
     }
 
+    /// Alle Domains eines Prozesses, in der Reihenfolge ihrer Kennung.
     pub fn domains_of(&self, owner: Pid) -> Vec<&DmaDomain> {
         self.domains.values().filter(|d| d.owner == owner).collect()
     }
 
+    /// Momentaufnahme der Zaehler.
     pub fn stats(&self) -> DmaStats {
         self.stats
     }
