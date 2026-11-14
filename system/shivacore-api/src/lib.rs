@@ -7,7 +7,9 @@
 
 extern crate alloc;
 
+/// ACPI-Geraetebeschreibungen, die der Kernel an Treiber weitergibt.
 pub mod acpi_devices;
+/// MADT-Auswertung fuer Interrupt-Controller.
 pub mod madt;
 
 pub use globus_ipc::{Endpoint, Message, MessageHeader};
@@ -21,11 +23,14 @@ pub use globus_ipc::{Endpoint, Message, MessageHeader};
 /// kann nicht wachsen. Der Block traegt seine eigene Groesse, der Kernel liest
 /// nur die Felder, die er kennt.
 pub const ABI_MAJOR: u16 = 2;
+/// Minor-Stand: vorwaertskompatibel, neue Felder werden angehaengt.
 pub const ABI_MINOR: u16 = 0;
+/// Gepackte ABI-Version, Major in den oberen 16 Bit.
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u16)]
+/// Syscalls der stabilen ABI; der numerische Wert ist Teil des Vertrags.
 pub enum Syscall {
     Yield = 0x0001,
     /// Beendet den aufrufenden Prozess. Das Exit-Code-Argument steht in
@@ -40,6 +45,7 @@ pub enum Syscall {
 }
 
 impl Syscall {
+    /// Numerische Syscall-Kennung, wie sie im Argumentblock steht.
     pub const fn id(self) -> u16 {
         self as u16
     }
@@ -47,24 +53,34 @@ impl Syscall {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
+/// Opakes Handle auf eine Capability des aufrufenden Prozesses.
 pub struct CapabilityHandle(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(transparent)]
+/// Opakes Handle auf ein Kernelobjekt.
 pub struct ObjectHandle(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Rechte, die eine Capability tragen kann.
 pub enum CapabilityRight {
+    /// Lesen des Objekts.
     Read,
+    /// Schreiben in das Objekt.
     Write,
+    /// Ausfuehren des Objekts.
     Execute,
+    /// Weitergeben der Capability an andere Prozesse.
     Grant,
+    /// Entzug der Capability.
     Revoke,
+    /// Nur Metadaten lesen, kein Zugriff auf Inhalte.
     Inspect,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u32)]
+/// Fehler, die die ABI zurueckmeldet; die numerischen Werte sind stabil.
 pub enum AbiError {
     InvalidSyscall = 1,
     InvalidHandle = 2,
@@ -76,17 +92,22 @@ pub enum AbiError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Versions-Handshake, den ein neuer Prozess mit dem Kernel fuehrt.
 pub struct AbiHandshake {
+    /// Major-Version, die der Aufrufer spricht.
     pub major: u16,
+    /// Minor-Version, die der Aufrufer spricht.
     pub minor: u16,
 }
 
 impl AbiHandshake {
+    /// Handshake auf die Version, die dieses Crate definiert.
     pub const CURRENT: Self = Self {
         major: ABI_MAJOR,
         minor: ABI_MINOR,
     };
 
+    /// Kompatibel, wenn die Major-Version passt; Minor-Staende sind austauschbar.
     pub const fn compatible(self) -> bool {
         self.major == ABI_MAJOR
     }
@@ -121,13 +142,21 @@ pub const SYSCALL_FLAG_NONE: u16 = 0;
 /// neuer Kernel akzeptiert alte Bloecke, weil `size` klein bleiben darf.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyscallBlock {
+    /// Groesse des Blocks in Bytes; der Kernel liest nur `min(size, bekannt)`.
     pub size: usize,
+    /// Aufgerufener Syscall.
     pub opcode: Syscall,
+    /// Reserviert fuer spaetere Minor-Staende, heute 0.
     pub flags: u16,
+    /// Capability, unter der der Aufruf laeuft; `None` bei Aufrufen ohne.
     pub capability: Option<CapabilityHandle>,
+    /// Erstes Argument, die Bedeutung haengt am Opcode.
     pub arg0: u64,
+    /// Zweites Argument.
     pub arg1: u64,
+    /// Zeiger auf Nutzdaten im Userspace, 0 bedeutet keine.
     pub buffer_ptr: u64,
+    /// Laenge der Nutzdaten in Bytes.
     pub buffer_len: usize,
 }
 
@@ -237,15 +266,22 @@ const fn read8(bytes: &[u8], offset: usize) -> Result<[u8; 8], AbiError> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Request to send one message over an endpoint.
 pub struct IpcSendRequest {
+    /// Endpoint the message goes to.
     pub endpoint: Endpoint,
+    /// Capability authorising the send.
     pub capability: CapabilityHandle,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Request to receive one message from an endpoint.
 pub struct IpcReceiveRequest {
+    /// Endpoint the message is taken from.
     pub endpoint: Endpoint,
+    /// Capability authorising the receive.
     pub capability: CapabilityHandle,
+    /// Upper bound on the payload the caller accepts.
     pub max_payload: u32,
 }
 
@@ -278,17 +314,25 @@ pub fn simple_hash(data: &[u8]) -> Hash32 {
 pub struct CapabilityRights(pub u8);
 
 impl CapabilityRights {
+    /// Keine Rechte.
     pub const NONE: Self = Self(0);
+    /// Recht zum Lesen.
     pub const READ: Self = Self(1);
+    /// Recht zum Schreiben.
     pub const WRITE: Self = Self(2);
+    /// Recht zum Ausfuehren.
     pub const EXECUTE: Self = Self(4);
+    /// Recht zum Weitergeben.
     pub const DELEGATE: Self = Self(8);
+    /// Recht zum Lesen der Metadaten.
     pub const INSPECT: Self = Self(16);
 
+    /// Wahr, wenn alle Bits von `required` gesetzt sind.
     pub const fn contains(self, required: Self) -> bool {
         self.0 & required.0 == required.0
     }
 
+    /// Rohe Bitdarstellung.
     pub const fn bits(self) -> u8 {
         self.0
     }
@@ -308,8 +352,10 @@ pub enum KernelBootPhase {
     Ready = 7,
 }
 
+/// Groesste Nutzlast, die der Kernel in einem Syscall kopiert.
 pub const MAX_SYSCALL_PAYLOAD: usize = 1024 * 1024;
 
+/// Wahr, wenn die gepackte Version die Major-Version dieser ABI traegt.
 pub const fn validate_abi_version(version: u32) -> bool {
     (version >> 16) as u16 == ABI_MAJOR
 }
