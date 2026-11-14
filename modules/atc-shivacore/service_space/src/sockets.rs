@@ -149,9 +149,19 @@ pub enum SocketAddr {
     /// Unix Domain Socket Pfad (max 108 Zeichen wie UNIX_PATH_MAX)
     Unix(String),
     /// IPv4 Adresse + Port
-    Inet { addr: [u8; 4], port: u16 },
+    Inet {
+        /// IPv4-Adresse in vier Bytes.
+        addr: [u8; 4],
+        /// Port in Host-Byte-Reihenfolge.
+        port: u16,
+    },
     /// IPv6 Adresse + Port (16 Bytes)
-    Inet6 { addr: [u8; 16], port: u16 },
+    Inet6 {
+        /// IPv6-Adresse in sechzehn Bytes.
+        addr: [u8; 16],
+        /// Port in Host-Byte-Reihenfolge.
+        port: u16,
+    },
 }
 
 impl SocketAddr {
