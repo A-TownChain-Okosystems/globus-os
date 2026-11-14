@@ -10,27 +10,40 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Byte-Reihenfolge der Pixel im Framebuffer.
 pub enum PixelFormat {
+    /// Rot, Gruen, Blau, unbenutztes Byte.
     Rgbx8888,
+    /// Blau, Gruen, Rot, unbenutztes Byte.
     Bgrx8888,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der Display-Grenze.
 pub enum DisplayError {
+    /// Breite oder Hoehe ist 0.
     ZeroDimensions,
+    /// Der Zeilenabstand ist kleiner als eine Zeile.
     InvalidStride,
+    /// Der Puffer deckt nicht alle Zeilen ab.
     BufferTooSmall,
+    /// Die Groessenrechnung laeuft ueber.
     ArithmeticOverflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Aufloesung und Bildwiederholrate.
 pub struct DisplayMode {
+    /// Breite in Pixel.
     pub width: u32,
+    /// Hoehe in Pixel.
     pub height: u32,
+    /// Bildwiederholrate in Hertz.
     pub refresh_hz: u32,
 }
 
 impl DisplayMode {
+    /// Nimmt nur Werte groesser 0 an.
     pub const fn new(width: u32, height: u32, refresh_hz: u32) -> Option<Self> {
         if width == 0 || height == 0 || refresh_hz == 0 {
             None
@@ -54,6 +67,7 @@ pub struct Framebuffer<'a> {
 }
 
 impl<'a> Framebuffer<'a> {
+    /// Bildet einen Framebuffer auf einen Puffer ab und prueft Groesse und Zeilenabstand.
     pub fn new(
         bytes: &'a mut [u8],
         width: u32,
@@ -88,23 +102,29 @@ impl<'a> Framebuffer<'a> {
         })
     }
 
+    /// Breite in Pixel.
     pub const fn width(&self) -> u32 {
         self.width
     }
+    /// Hoehe in Pixel.
     pub const fn height(&self) -> u32 {
         self.height
     }
+    /// Zeilenabstand in Byte.
     pub const fn stride(&self) -> usize {
         self.stride
     }
+    /// Byte-Reihenfolge der Pixel.
     pub const fn pixel_format(&self) -> PixelFormat {
         self.format
     }
 
+    /// Fuellt den ganzen Puffer mit einer Farbe.
     pub fn clear(&mut self, color: u32) {
         self.fill_rect(0, 0, self.width, self.height, color);
     }
 
+    /// Fuellt ein Rechteck, auf den Bildbereich beschnitten.
     pub fn fill_rect(&mut self, x: i32, y: i32, width: u32, height: u32, color: u32) {
         if width == 0 || height == 0 {
             return;
