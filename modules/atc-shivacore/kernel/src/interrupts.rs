@@ -570,6 +570,106 @@ pub fn self_test_cleanup() -> (usize, usize, usize) {
     (before, revoked, after)
 }
 
+/// Gibt einem Prozess Schreibrecht auf die Systemkonsole und liefert die
+/// Cap-Nummer, die das Programm im Argumentblock einsetzen muss.
+///
+/// Die Konsole ist eine Ressource wie jede andere: ohne diese Cap gibt es kein
+/// Schreibrecht, und der Syscall antwortet mit `PermissionDenied`.
+pub fn grant_console(pid: Pid) -> Option<u64> {
+    let mut guard = SYSCALL_GATE.lock();
+    let gate = guard.get_or_insert_with(SyscallGate::new);
+    let cap = gate.authority().create(
+        pid,
+        shivacore::capability::ResourceType::Console,
+        shivacore::syscall::CONSOLE_RESOURCE_ID,
+        shivacore::capability::Rights::WRITE,
+    );
+    Some(cap.0)
+}
+
+/// Behandelt den Console-Syscall: Rechte, Kopie aus dem Prozessspeicher, Ausgabe.
+///
+/// Der Aufruf liegt hier und nicht im Dispatcher, weil er den Bildschirm und
+/// den Adressraum des Aufrufers braucht. Die Pruefreihenfolge ist bindend:
+/// erst die Capability, dann die Puffergrenze, dann das Prozessabbild, dann die
+/// Kopie, zuletzt die Ausgabe.
+fn handle_console(pid: Pid, request: SyscallRequest) -> shivacore::syscall::SyscallResponse {
+    use libshivacore::{AbiError, CONSOLE_MAX_BYTES, CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE};
+    use shivacore::capability::{CapId, ResourceType, Rights};
+    use shivacore::syscall::SyscallResponse;
+
+    let Some(handle) = request.capability else {
+        return SyscallResponse::err(AbiError::PermissionDenied);
+    };
+    let permitted = {
+        let mut guard = SYSCALL_GATE.lock();
+        let gate = guard.get_or_insert_with(SyscallGate::new);
+        let capabilities = gate.capabilities();
+        capabilities
+            .get(CapId(handle.0))
+            .map(|cap| {
+                cap.owner == pid
+                    && cap.resource_type == ResourceType::Console
+                    && cap.rights.has(Rights::WRITE)
+            })
+            .unwrap_or(false)
+    };
+    if !permitted {
+        shivacore::security::record(
+            "syscall-gate",
+            "console.denied",
+            &alloc::format!("pid={:?} cap={}", pid, handle.0),
+            shivacore::security::AuditResult::Denied,
+        );
+        return SyscallResponse::err(AbiError::PermissionDenied);
+    }
+
+    match request.arg0 {
+        CONSOLE_OP_CLEAR => {
+            if crate::framebuffer::hand_over_to_userspace() {
+                serial_println!(
+                    "ShivaCore: Konsole an Ring 3 uebergeben (PID={}); Kernel schreibt nur noch seriell",
+                    pid.0
+                );
+            }
+            crate::framebuffer::clear_screen();
+            SyscallResponse::ok(0)
+        }
+        CONSOLE_OP_WRITE => {
+            let len = request.buffer_len;
+            if len == 0 || len > CONSOLE_MAX_BYTES {
+                return SyscallResponse::err(AbiError::InvalidPayload);
+            }
+            let space = USER_SCHEDULER
+                .lock()
+                .as_ref()
+                .and_then(|scheduler| scheduler.address_space(pid));
+            let Some(space) = space else {
+                return SyscallResponse::err(AbiError::InvalidPayload);
+            };
+            if !space.range_readable(request.buffer_ptr, len) {
+                return SyscallResponse::err(AbiError::InvalidPayload);
+            }
+            // Der Bereich ist gegen das Prozessabbild geprueft und die Laenge
+            // begrenzt: die Kopie bleibt im Fenster und im Stapelpuffer.
+            let mut bytes = [0u8; CONSOLE_MAX_BYTES];
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    request.buffer_ptr as *const u8,
+                    bytes.as_mut_ptr(),
+                    len,
+                );
+            }
+            // Ungueltiges UTF-8 wird nicht erfunden, sondern leer gelassen:
+            // ein falsches Zeichen auf dem Bildschirm waere eine Behauptung.
+            let text = core::str::from_utf8(&bytes[..len]).unwrap_or("");
+            crate::framebuffer::write_text(text);
+            SyscallResponse::ok(0)
+        }
+        _ => SyscallResponse::err(AbiError::InvalidPayload),
+    }
+}
+
 /// Gibt einem Prozess Leserecht auf den Kernel-Eingabekanal und merkt, dass der Userspace liest.
 pub fn grant_input_read(pid: Pid) -> Option<u64> {
     let mut gate = SYSCALL_GATE.lock();
@@ -1089,13 +1189,18 @@ fn handle_exception(
             // gibt es keinen — CR2 steht dann auf dem letzten Wert und hat mit
             // diesem Fehler nichts zu tun.
             match kind {
+                // RIP und RSP gehoeren in den Bericht: ohne sie sagt die
+                // Adresse nicht, welche Anweisung sie benutzt hat, und die
+                // Fehlersuche beginnt bei Null.
                 shivacore::fault::ExceptionKind::PageFault => serial_println!(
-                    "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus={} [beendet: {}, Kernel: {}]",
+                    "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus={} RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
                     kind.name(),
                     pid,
                     address,
                     report.describe(),
                     report.from_user,
+                    frame.rip,
+                    frame.rsp,
                     recorded.terminated,
                     recorded.kernel_faults
                 ),
@@ -1676,6 +1781,7 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         let raw_opcode = u16::from_le_bytes([block_bytes[8], block_bytes[9]]);
         if raw_opcode != libshivacore::Syscall::Yield.id()
             && raw_opcode != libshivacore::Syscall::IpcReceive.id()
+            && raw_opcode != libshivacore::Syscall::Console.id()
         {
             serial_println!(
                 "ShivaCore: Syscall-Rohopcode aus Ring 3: PID={} Opcode={:#06X} Laenge={}",
@@ -1694,6 +1800,15 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
         }
     };
     let request = SyscallRequest::from_block(&block);
+
+    // Konsole: der Aufruf braucht den Bildschirm und eine Kopie aus dem
+    // Prozessspeicher. Beides kennt der Dispatcher nicht, deshalb wird er hier
+    // behandelt — an derselben Stelle wie `Exit`, aus demselben Grund.
+    if request.syscall_id == libshivacore::Syscall::Console.id() {
+        let response = handle_console(pid, request);
+        reply(frame, response.value, response.error);
+        return;
+    }
 
     // Freiwilliges Prozessende. Vor der Gate-Disposition abgefangen, weil der
     // Gate diesen Opcode nicht kennt: er beendet den Aufrufer, statt ihm zu
