@@ -77,7 +77,7 @@
 | `docs/audits/SHIVACORE_ABI_IMPLEMENTATION_2026-10-11.md` | 35 |
 | `docs/audits/SHIVACORE_SERVICE_SPACE_DRIFT_AUDIT_2026-10-11.md` | 128 |
 | `docs/audits/globusos_microkernel_migration_inventory_2026-10-18.json` | 583 |
-| `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 256 |
+| `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
@@ -275,7 +275,7 @@
 | `modules/atc-shivacore/greeter/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/greeter/Cargo.toml` | 17 |
 | `modules/atc-shivacore/greeter/linker.ld` | 46 |
-| `modules/atc-shivacore/greeter/src/main.rs` | 418 |
+| `modules/atc-shivacore/greeter/src/main.rs` | 459 |
 | `modules/atc-shivacore/init_program/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/init_program/Cargo.toml` | 17 |
 | `modules/atc-shivacore/init_program/linker.ld` | 35 |
@@ -308,7 +308,7 @@
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 232 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 261 |
-| `modules/atc-shivacore/kernel/src/interrupts.rs` | 2197 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 2296 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 384 |
 | `modules/atc-shivacore/kernel/src/ipc.rs` | 736 |
 | `modules/atc-shivacore/kernel/src/ipc_lifecycle.rs` | 991 |
@@ -320,9 +320,9 @@
 | `modules/atc-shivacore/kernel/src/kernel_init.rs` | 377 |
 | `modules/atc-shivacore/kernel/src/key_events.rs` | 157 |
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 420 |
-| `modules/atc-shivacore/kernel/src/lib.rs` | 113 |
+| `modules/atc-shivacore/kernel/src/lib.rs` | 114 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.625 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1988 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1999 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 124 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 937 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 580 |
@@ -336,7 +336,7 @@
 | `modules/atc-shivacore/kernel/src/services.rs` | 334 |
 | `modules/atc-shivacore/kernel/src/spawn.rs` | 292 |
 | `modules/atc-shivacore/kernel/src/spawn_build.rs` | 96 |
-| `modules/atc-shivacore/kernel/src/syscall.rs` | 811 |
+| `modules/atc-shivacore/kernel/src/syscall.rs` | 833 |
 | `modules/atc-shivacore/kernel/src/syscall_gate.rs` | 270 |
 | `modules/atc-shivacore/kernel/src/system.rs` | 1.470 |
 | `modules/atc-shivacore/kernel/src/timer.rs` | 571 |
@@ -524,7 +524,7 @@
 | `system/settings/src/lib.rs` | 189 |
 | `system/shivacore-api/Cargo.toml` | 13 |
 | `system/shivacore-api/src/acpi_devices.rs` | 323 |
-| `system/shivacore-api/src/lib.rs` | 529 |
+| `system/shivacore-api/src/lib.rs` | 639 |
 | `system/shivacore-api/src/madt.rs` | 292 |
 | `system/update/Cargo.toml` | 16 |
 | `system/update/src/boot_state.rs` | 177 |
