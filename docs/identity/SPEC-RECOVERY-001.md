@@ -202,11 +202,11 @@ nicht erst nach 267 ms Argon2id. Die Reihenfolge in Abschnitt 8 folgt daraus.
    v
 Seed, 64 Byte ..................................... nur im Speicher, zeroize
    |
-   +-- HKDF-SHA256, info "GLOBUS-WALLET-KEY-V1" ---> Wallet-Schlüssel (32 Byte) ---> ATC-Adresse
+   +-- HKDF-SHA256, info "GLOBUS-WALLET-KEY-V2" ---> Wallet-Schlüssel (32 Byte) ---> ATC-Adresse
    |                                                                            (atc-wallet)
-   +-- HKDF-SHA256, info "GLOBUS-IDENTITY-KEY-V1" --> Identitätsschlüssel -----> Konto-/Gerätebindung
+   +-- HKDF-SHA256, info "GLOBUS-IDENTITY-KEY-V2" --> Identitätsschlüssel -----> Konto-/Gerätebindung
    |
-   +-- HKDF-SHA256, info "GLOBUS-NODE-KEY-V1" ----> Knotenschlüssel -----------> Aurora-Knoten (neues Gerät)
+   +-- HKDF-SHA256, info "GLOBUS-NODE-KEY-V2" ----> Knotenschlüssel -----------> Aurora-Knoten (neues Gerät)
 ```
 
 **Regeln, die daraus folgen:**
@@ -214,17 +214,26 @@ Seed, 64 Byte ..................................... nur im Speicher, zeroize
 - **Trennung über `info`, nicht über Reihenfolge.** Zwei Labels ergeben zwei
   Schlüssel; niemand kann aus dem Wallet-Schlüssel den Identitätsschlüssel
   rechnen, und keiner der beiden ist der Seed.
-- **Label-Längen sind geprüft, nicht geschätzt:** `GLOBUS-WALLET-KEY-V1` = 20 Byte,
-  `GLOBUS-IDENTITY-KEY-V1` = 22 Byte, `GLOBUS-NODE-KEY-V1` = 18 Byte, `GLBVAULT-KEK-V1`
-  = 15 Byte, `ATID-VERIFIER-V1` = 16 Byte. Jedes Label geht als `info` mit einem
-  abschließenden Nullbyte ein (macht 21, 23, 19, 16, 17 Byte). Die Längen sind
-  Pflichtprüfungen im Code und stehen als Kante im Test (REC-T-30).
-- **Ungültige Skalare.** Ein abgeleiteter 32-Byte-Wert ist erst dann ein
-  Wallet-Schlüssel, wenn er als secp256k1-Skalar gültig ist. Für den
-  praktisch unmöglichen Fall ist die Regel deterministisch:
-  `info = Label || 0x00 || counter` mit `counter` ab 0, erster gültiger Wert
-  gewinnt. Ohne diese Regel gäbe es zwei Programme mit zwei Ergebnissen für
-  denselben Fall.
+- **Das Label-Suffix trägt `key_version`, und zwar immer.** `GLOBUS-WALLET-KEY-V2`
+  = 20 Byte, `GLOBUS-IDENTITY-KEY-V2` = 22 Byte, `GLOBUS-NODE-KEY-V2` = 18 Byte,
+  `GLBVAULT-KEK-V1` = 15 Byte, `ATID-VERIFIER-V1` = 16 Byte. Fassung 2 trägt
+  `-V2` im Label, nicht `-V1`: zwei Versionen in einem Namen sind genau die
+  Verwechslung, die ausgeschlossen werden soll. Ein neuer Wert bekommt neue
+  Labels, kein Label wird wiederverwendet.
+- **Das abschließende Nullbyte ist Teil von `info`, kein String-Terminator.** Jedes
+  Label geht als `info = Label || 0x00` ein (macht 21, 23, 19, 16, 17 Byte). Wer
+  das Nullbyte als „Trenner" wegoptimiert, bekommt einen anderen Schlüssel: die
+  Länge ist Pflichtprüfung im Code und Kante im Test (REC-T-30, REC-T-56).
+- **Ein PRK, drei Domänen.** HKDF-Extract läuft einmal, `PRK = HMAC-SHA256(salt, IKM)`;
+  alle drei Expand-Aufrufe benutzen denselben PRK mit verschiedenem `info`. Das
+  ist die vorgesehene HKDF-Konstruktion und kein Fehler. Der PRK ist ein
+  gemeinsamer, nicht persistierter Zwischenwert (Wortlaut und Grenzen in 15.9).
+- **Ungültige Skalare gelten nur für Fassung 1.** Die Regel
+  `info = Label || 0x00 || counter` mit Zähler ab 0 stammt aus der secp256k1-Idee
+  und ist **v1-only**. Für `key_version = 2` gibt es keine ungültigen Seeds: bei
+  Ed25519 ist jeder 32-Byte-Wert ein gültiger Seed. Wer die Zählerregel auf
+  Fassung 2 anwendet, baut einen zweiten Ableitungspfad für einen Fall, der nicht
+  existiert.
 - **`key_version` ist die Fassung der Ableitung, nicht des Kontos.** Fassung 1
   ist die heute belegte Strecke (`HMAC("A-TownChain")`, F-1). Fassung 2 ist die
   Hierarchie oben. Eine Wiederherstellung muss **beide** rechnen können, weil sie
@@ -645,6 +654,14 @@ Spalte „erwartet“ ist die Zusage.
 | REC-T-51 | Dieselbe Phrase, Wallet- und Identitätslabel | zwei verschiedene 32-Byte-Seeds, keiner aus dem anderen rechnbar |
 | REC-T-52 | Signatur über die Signierbytes aus ATC-STD-600 §5.1, geprüft gegen die DID | verifiziert; eine Änderung an einem Byte scheitert |
 | REC-T-53 | Längen aus 15.4/15.5 nachrechnen | Prüfer Exit 0: 20/32/64/32/86/36 Zeichen und 44/50 Byte Hash-Eingabe |
+| REC-T-54 | HKDF gegen RFC 5869 TC1 bis TC3, eigene Implementierung | drei OKM bytegleich; `salt` leer heißt 32 Nullbytes |
+| REC-T-55 | PRK in Logs, Fehlermeldungen, Diagnoseobjekten, Keystore-Einträgen | kein Treffer; der PRK wird nie ausgegeben oder persistiert |
+| REC-T-56 | `info` ohne abschließendes Nullbyte | anderer OKM als mit; das Nullbyte ist Teil der Eingabe, nicht Terminator |
+| REC-T-57 | Phrase mit falscher Prüfsumme oder falschem Wort | abgewiesen vor der Ableitung; keine Wallet, kein Seed |
+| REC-T-58 | `key_version` in der Bindung gegen Adresspräfix | Abweichung `key_version = 2` mit `ATC`-Adresse (oder umgekehrt) wird abgewiesen |
+| REC-T-59 | Die eingefrorenen Vektoren aus 15.9 | Seeds, Pubkeys, DID, `h`, `c` und Adresse bytegleich |
+| REC-T-60 | Label-Suffix gegen `key_version` | drei Labels auf `-V2`, drei verschiedene OKM; kein Label wiederverwendet |
+| REC-T-61 | v1 gegen v2, dieselbe Phrase | `Wallet-Seed ≠ v1-HMAC`, `Pubkey ≠ v1-"Public Key"`, Adresse 36 gegen 35 Zeichen |
 
 Die Fälle 17, 18, 20, 21, 24 und 27 sind nur mit echter Implementierung prüfbar;
 sie stehen hier als Abnahmebedingung, nicht als erledigt.
@@ -836,8 +853,8 @@ Wahrheit über dieselbe Eigenschaft und könnte vom Versionsfeld abweichen.
 ```
 24-Wort-Phrase (BIP39, Englisch, keine Passphrase)
   -> BIP39-Seed                    64 Byte
-  -> HKDF-SHA256(ikm = Seed, salt = leer,
-                 info = "GLOBUS-WALLET-KEY-V1")   32 Byte
+  -> HKDF-SHA256(ikm = Seed, salt = 32 Nullbytes,
+                 info = "GLOBUS-WALLET-KEY-V2" || 0x00)   32 Byte
   -> Ed25519-SigningKey (Seed = diese 32 Byte, RFC 8032)
   -> VerifyingKey                  32 Byte (Kurvenpunkt)
   -> DID   "did:shivacore:ed25519:" + hex_klein(VerifyingKey)   86 Zeichen
@@ -853,6 +870,13 @@ Wahrheit über dieselbe Eigenschaft und könnte vom Versionsfeld abweichen.
 | Öffentlicher Schlüssel | 32 Byte | Ed25519-Kurvenpunkt, komprimiert |
 | DID | 86 Zeichen | 22 Zeichen Präfix + 64 Hexzeichen |
 | Adresse v2 | 36 Zeichen | 4 Zeichen Präfix + 28 + 4 Hexzeichen |
+
+**Die Phrase wird vor der Ableitung als Mnemonic geprüft, nicht nur als Text.**
+`Mnemonic::parse_in_normalized` prüft Wortliste und Prüfsumme, `word_count() == 24`
+prüft die Länge. PBKDF2 allein nimmt jede Zeichenkette an und würde aus einem
+Tippfehler eine gültige, aber falsche Wallet machen (REC-T-57). Der Code prüft das
+heute schon (`system/identity/src/lib.rs:289`); die Anforderung steht damit als
+Test und nicht als Absicht.
 
 **Wiederverwendung statt Neubau:** Der Ed25519-Pfad existiert bereits.
 `service_space/src/did.rs:169` bietet `Ed25519Signer::from_seed(&[u8; 32])`,
@@ -902,6 +926,14 @@ Vier Regeln, die Verwechslung strukturell ausschließen:
 4. **Beide aus demselben `VerifyingKey`, in eine Richtung.** Adresse und DID
    dürfen aus demselben öffentlichen Schlüssel abgeleitet werden; verboten ist
    nur, den einen Wert aus dem anderen zu berechnen.
+
+5. **`key_version` steht in der Bindung, das Präfix beschreibt nur das Format.**
+   Die Wallet-Bindung enthält `key_version` explizit als Metadaten. `ATC2` ist
+   ein Formatindikator der v2-Adresse und darf zur Plausibilitätsprüfung benutzt
+   werden, aber niemals die gespeicherte Versionsangabe ersetzen. Weichen
+   Bindungsmetadaten und Adressformat voneinander ab, wird die Bindung
+   **abgewiesen** (fail-closed), nicht umgedeutet; sonst bestimmt eine
+   manipulierte oder falsch zugeordnete Adresse die verwendete Ableitungsversion.
 
 **Migration, ohne etwas umzudeuten:** Es gibt heute keinen Zustand auf der Kette,
 der diese Adressen trägt (kein Signiercode, 15.1); eine Kettenmigration ist
@@ -977,8 +1009,11 @@ Faehigkeit. Nach E1.2 bleibt `key_version = 2` die Voraussetzung (15.4).
 | E-6 Version 1 | **bestätigt**: `ADDRESS_ONLY` / `NON_SIGNING` (15.3) | Adresse bleibt reproduzierbar, Signierfähigkeit wird nicht behauptet |
 | E1.1 | `RESOLVED`: keine produktive Schlüsselableitung (15.1) | trägt alle folgenden Punkte |
 | E1.2 | `RESOLVED / NO_SIGNING_IMPLEMENTATION`: kein produktiver Signierpfad (15.1, 15.7) | Signieren ist zu bauen, nicht freizuschalten |
-| E1.3 | `OPEN`: Entwurf in 15.4, Semantik nicht abgeschlossen, nicht implementiert | HKDF-Label, Seed, `VerifyingKey` und DID sind benannt; Code fehlt |
-| E1.4 | `OPEN`: Entwurf in 15.5, nicht implementiert | Adresse v2 36 Zeichen, DID 86 Zeichen, zwei getrennte Identifikatoren |
+| E1.3 | `SPECIFIED`: bytegenau eingefroren in 15.9, **nicht implementiert** | HKDF, Seed, `VerifyingKey`, DID und Vektoren sind fest; Code fehlt |
+| E1.4 | `SPECIFIED`: Adresse v2 und DID eingefroren in 15.5/15.9, **nicht implementiert** | 36 und 86 Zeichen, zwei getrennte Identifikatoren |
+| HKDF nach RFC 5869 | `VECTORS INDEPENDENTLY RECOMPUTED`: TC1/TC3 und alle drei Seeds vom Eigentümer nachgerechnet | kein Build- oder Integrationstestnachweis |
+| `ed25519-dalek`-Integration | `NOT TESTED`: Paket fehlt in `system/identity`, Sandbox ohne Toolchain | Einbau erst nach der Toolchain-Entscheidung |
+| Prüfer und REC-T-Matrix | nachgezogen: Labels auf `-V2`, Vektoren und PRK im Prüfer, REC-T-54..61 | Prüfer belegt Struktur, nicht Kryptografie |
 | E1.5 | `VERIFIED AGAINST STANDARD`: ATC-STD-600 v1.3.0, `approved`, `frozen` (15.2) | die Norm ist gelesen, nicht angenommen |
 | R-1 | `BLOCKED`: Code vorhanden (`system/entropy-core`, `EntropyGate`), **Aufrufer im Image fehlt** (16.4) | ohne geprüfte Quelle entsteht im Image keine Phrase |
 | R-2 | `NOT STARTED`: abhängig von R-1 (13) | Recovery wird gegen echte Krypto geprüft, nicht gegen Attrappen |
@@ -992,6 +1027,100 @@ Zwei Zeilen dieser Matrix sind keine Fortschrittsmeldung, sondern eine Grenze:
 E1.3 und E1.4 sind Text. Solange `key_version = 2` nicht implementiert ist,
 bleibt jedes Konto bei einer Adresse ohne Signatur. Nach E-6 ist das zulässig,
 solange es so benannt wird und keine Oberfläche eine Wallet verspricht.
+
+### 15.9 Eingefrorene Ableitung für `key_version` 2 (bytegenau)
+
+**Eingefroren am 14.11.2026 durch den Eigentümer.** Die Werte sind gerechnet, nicht
+behauptet: PBKDF2 und HKDF mit der Standardbibliothek, die Ed25519-Punkte
+unabhängig über OpenSSL aus demselben 32-Byte-Seed, der Eigentümer hat alles
+zusätzlich nachgerechnet. Der Prüfer rechnet PBKDF2, HKDF und beide Adressformen
+nach; die Kurvenpunkte kann er nicht rechnen und prüft sie deshalb als feste
+Vektoren gegen DID und Adresse.
+
+**Wurzel.**
+
+```
+seed = PBKDF2-HMAC-SHA512(password = UTF-8(NFKD) der 24-Wort-Phrase,
+                          salt = UTF-8("mnemonic"), rounds = 2048, dkLen = 64)
+```
+
+**HKDF-SHA256 (RFC 5869), genau eine Blocklänge.** `L = 32 = HashLen`, deshalb ist
+`T(1)` das Ergebnis: kein Abschneiden, keine zweite Runde, kein `hkdf`-Crate nötig.
+
+```
+salt = 32 Nullbytes                      (RFC 5869 §2.2: leeres Salz = HashLen Nullen)
+IKM  = der 64-Byte-BIP39-Seed
+info = LABEL || 0x00
+PRK  = HMAC-SHA256(salt, IKM)                                     32 Byte
+OKM  = HMAC-SHA256(PRK, info || 0x01)                             32 Byte
+```
+
+**Der PRK ist gemeinsam, die Ausgaben sind getrennt.** Wortlaut, der gilt:
+
+> Die drei Schlüssel werden über getrennte HKDF-Expand-Domänen abgeleitet. Sie
+> besitzen unterschiedliche OKM-Ausgaben und keine gemeinsame
+> Schlüsselrepräsentation. Der interne HKDF-PRK ist ein gemeinsamer, nicht
+> persistierter Zwischenwert. Er darf nicht als Anwendungsschlüssel ausgegeben
+> oder gespeichert werden.
+
+Daraus folgen zwei Verbote: der PRK wird **nicht geloggt** und **nicht** in
+Diagnoseobjekten oder persistenten Keystore-Einträgen abgelegt (REC-T-55). Ein
+Bericht, der „drei unabhängige Zwischenwerte" behauptet, ist falsch; richtig ist
+„ein Extract, drei Expand-Domänen".
+
+| Zweck | `info` | Länge |
+|---|---|---|
+| Wallet | `GLOBUS-WALLET-KEY-V2` ‖ `0x00` | 20 + 1 = 21 Byte |
+| Identität | `GLOBUS-IDENTITY-KEY-V2` ‖ `0x00` | 22 + 1 = 23 Byte |
+| Knoten | `GLOBUS-NODE-KEY-V2` ‖ `0x00` | 18 + 1 = 19 Byte |
+
+**Byte-Form der Ergebnisse.** Wallet-, Identitäts- und Knoten-OKM sind je 32 Byte
+und unmittelbar Ed25519-Seeds (jeder 32-Byte-Wert ist einer, keine Skalarprüfung).
+Public Key: 32 Byte `VerifyingKey::to_bytes()`, komprimiertes y little-endian mit
+Sign-Bit im MSB von Byte 31; kein DER, kein PEM, kein 33-Byte-Präfix. Signatur:
+64 Byte nach RFC 8032, Domäne `ATC-TX-DOMAIN-V2`, ganze Zahlen als `u64`
+big-endian, `chain_id = 658467`. Eine Adresse wird nur für den Wallet-Schlüssel
+gebildet (15.5).
+
+**Testvektoren.** Phrase `abandon` ×23 + `art` (24 Wörter, Prüfsumme gültig,
+keine Passphrase):
+
+```
+BIP39-Seed   408b285c123836004f4b8842c89324c1f01382450c0d439af345ba7fc49acf70
+             5489c6fc77dbd4e3dc1dd8cc6bc9f043db8ada1e243c4a0eafb290d399480840
+Wallet-Seed  8779592f116a7e4a10780ec04e09fbc6fa3263b9d02cc2abf39fbca2c524b190
+Ident-Seed   76bb1b4ae2ff1bf0bb07814d389f06a3c1d33a980d27c07720bb987d6a876513
+Knoten-Seed  7424cb067cc00dedef77720fcacc251adc60ec86a1225bc48beb66ad150c3898
+```
+
+| Größe | Wert |
+|---|---|
+| Wallet-Pubkey | `ce61a516ea04a58b3742ebebd81eeaa135901e7e6cfdd194406d3bb135f3b0a1` |
+| Wallet-DID | `did:shivacore:ed25519:ce61a516ea04a58b3742ebebd81eeaa135901e7e6cfdd194406d3bb135f3b0a1` |
+| `h` | `9cb48dff96feb380fd24f9a44eb4f90ebbc979ccf87fad0783012e56fdf06cc9` |
+| `c` | `2316157bf5b28f4942bba44ca008bbb900c4f8a1756a3c5287d76968a2151ab4` |
+| Adresse v2 | `ATC29CB48DFF96FEB380FD24F9A44EB42316` (36 Zeichen) |
+| Ident-Pubkey | `046f05f8ce25a544d4248ea6db58232a283783e6567f826d94e1e3a55246b8a3` |
+| Knoten-Pubkey | `17549a95b29d3a182e12ff79bb8d0dfe4641347a998fedecca0faca7c1ce6b61` |
+
+**Abgrenzung zu Fassung 1, gleiche Phrase.** Diese drei Werte sind die
+Negativanker und dürfen sich nicht angleichen:
+
+```
+v1 HMAC-Zwischenwert  2650593ba4d3e9576d7998e40c0ba712b61b85fc2f0cadd0d5b40aa9688f61c0
+v1 "Public Key"       453f844224e9b0c1cd4236d4dc00b831b9ea9a923fd9624ebf428a35704f16b9
+v1 Adresse            ATCEA9DF048839BCA9C9C410E8C2ADEBDBA                         (35)
+```
+
+Vier Zusagen daraus: `Wallet-Seed ≠ v1-HMAC`, `Wallet-Pubkey ≠ v1-"Public Key"`,
+`Adresse v2 ≠ Adresse v1` (36 gegen 35 Zeichen, `ATC2` gegen `ATC`), und aus der
+35-Zeichen-Adresse ist keine v2-Adresse rechenbar, weil beide Hashes eines
+Geheimnisses sind.
+
+**Was an diesem Abschnitt nicht verhandelbar ist:** Salt, Labels, Nullbyte,
+Blocklänge, Seed-Länge und die Reihenfolge Wurzel → Extract → Expand. Eine
+Änderung daran ist `key_version = 3` mit neuen Labels und neuen Vektoren, keine
+Korrektur an Fassung 2.
 
 ## 16. Entropiebereitschaft und Wiederherstellungssicherheit (R-1)
 
