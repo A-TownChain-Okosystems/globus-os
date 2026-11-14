@@ -8,6 +8,10 @@ Registrierung, Identity & Wallet Recovery" (§1–§16) gegen den Quellstand
 **Art:** reine Bestandsaufnahme (Phase E0 der Spezifikation). Es wurde nichts
 geändert, nichts implementiert; die einzigen Schreibvorgänge dieses Vorgangs
 betreffen Dokumente.
+**Nachtrag 14.11.2026:** E0 ist mit diesem Dokument als abgeschlossen
+behandelt. Der Punkt E1.5 (ATC-STD-600) ist inzwischen abgeglichen und in
+`SPEC-RECOVERY-001.md` §15.2 festgehalten; die dortige Aussage „von hier aus
+nicht prüfbar" ist damit überholt.
 **Ergebnis in einem Satz:** Die funktionale Architektur trifft zu, ihre
 Bestandsannahmen nicht — zwei der drei in §3.3 genannten Implementierungen
 existieren in diesem Repository nicht, und der P0-Konflikt hat eine andere
@@ -70,7 +74,14 @@ Form oder Lücke · **NEIN** = nicht vorhanden.
 | `sign_transaction` | `WalletService::sign` (`wallet-service/src/lib.rs:91`) über `KeyStore`; in Tests ein Platzhalter, **kein echtes Signaturverfahren** | **TEILS** |
 | `restore_wallet` | `restore_wallet` (`lib.rs:258`), `IdentityService::restore` (`service.rs:106`) | **JA** |
 
-**Befund, der die Spezifikation betrifft:** Es gibt in diesem Repository keine
+**Befund, der die Spezifikation betrifft (verschärft in `SPEC-RECOVERY-001.md`
+§15.1): `derive_public_key` ist `SHA-256` des privaten Werts
+(`system/identity/src/lib.rs:295`), also ein Hash und kein Kurvenpunkt; und
+`create_wallet` verwirft privaten und öffentlichen Wert nach der
+Adressberechnung. Es gibt deshalb heute **kein** Wallet-Schlüsselmaterial, weder
+gespeichert noch im Speicher, und keine prüfbare Signatur.
+
+Und weiter: Es gibt in diesem Repository keine
 Wallet, die einen Schlüssel besitzt. `derive_private_key` erzeugt 32 Byte, die
 *als privater Schlüssel verwendet werden*, ohne dass je ein Signaturverfahren auf
 sie angewendet wird; `WalletService` signiert über eine Schnittstelle, deren
@@ -143,10 +154,16 @@ Signaturverfahren.
 dieses Repositorys hängt von `secp256k1` ab. Die Wallet-Ableitung liegt in
 `system/identity` und benutzt HMAC-SHA256 — ein Schlüssel ohne Signaturverfahren.
 
-**K-3 · „ATC-STD-600 v1.3.0: u64 BE, Ed25519" ist von hier aus nicht prüfbar.**
-`atc-standards` ist ein eigenes Repository; diese Bestandsaufnahme kann dazu
-nichts sagen. Was sie sagen kann: dieses Repository implementiert **weder** die
-eine **noch** die andere Fassung vollständig, weil die Signaturstufe fehlt.
+**K-3 · „ATC-STD-600 v1.3.0: u64 BE, Ed25519" ist inzwischen abgeglichen.**
+Die Norm liegt in `atc-standards/standards/os/ATC-STD-600.md` (Version 1.3.0,
+`status: approved`, `lifecycle: frozen`, Blob `7f08b2f`): kanonische L1-Signatur
+ist **Ed25519** über `ATC-TX-DOMAIN-V2`, Beträge/Gebühr/Grenze/Nonce/Zeit sind
+**u64 big-endian**, `chain_id = 658467`, Sender und Empfänger sind
+**DID-Zeichenketten**. Der Befund bleibt damit nicht „unprüfbar", sondern wird
+schärfer: dieses Repository implementiert **weder** Ed25519-Wallets **noch** die
+Adressform der Norm, und seine Genesis-Serialisierung schreibt u64
+**little-endian** (`service_space/src/genesis.rs:307`). Details und Folgen:
+`SPEC-RECOVERY-001.md` §15.2.
 
 **Folge für den P0-Blocker:** Er bleibt bestehen, aber sein Gegenstand verschiebt
 sich. Die Frage ist nicht „welche von drei Implementierungen hat recht", sondern:
@@ -162,7 +179,7 @@ gemeint sind.
 | Punkt der Spezifikation | Ergebnis dieser Inventur |
 |---|---|
 | E0 Repository-Inventar | **erledigt durch dieses Dokument** |
-| E1 Krypto-Standards bereinigen | **blockiert wie beschrieben**, nun mit zutreffender Begründung (K-1..K-3) |
+| E1 Krypto-Standards bereinigen | **teilweise erledigt**: E1.1 (Key-Typ), E1.2 (Signaturpfad) und E1.5 (Norm) beantwortet in `SPEC-RECOVERY-001.md` §15; E1.3/E1.4/E1.6/E1.7 offen |
 | E2 Wallet-/Identity-Key-Contracts | **kann beginnen**: die Kontrakte müssen festlegen, was heute fehlt (Domänentrennung, Signaturverfahren, `key_version`) |
 | E3 Local Security Layer | **kann beginnen**: Tresor nach `SPEC-RECOVERY-001.md`, KEK/DEK-Trennung, `rewrap` |
 | E4/E5 Registrierung, Login | E5 läuft (Passwortprüfung im Image belegt), E4 blockiert an der Entropiequelle im Image |
