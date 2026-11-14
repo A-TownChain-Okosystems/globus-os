@@ -73,3 +73,21 @@ deshalb eine andere Nummer; die Kollision ist hier festgehalten, damit sie nicht
 spaeter als Ueberraschung auftaucht. Die Entscheidung ueber den Syscall selbst
 ist weiterhin offen (Blocker 2), und Blocker 1 (nur zwei Segmente im Abbild)
 besteht unveraendert.
+
+## 7. Nachtrag 14.11.2026 — Blocker 1 ist geschlossen
+
+`map_user_binary` nimmt weiterhin Code und Daten, aber der Bootpfad fuellt beide
+jetzt aus dem ELF: `elf_loader::user_binary_from_elf` liest das ausfuehrbare
+`PT_LOAD`, das beschreibbare und den `.bss`-Anteil (`p_memsz - p_filesz`) als
+Nullauffuellung. Ein Programm darf damit Stringliterale, statische Tabellen und
+null-initialisierte Puffer benutzen; die Regel aus Abschnitt 2 gilt nicht mehr.
+
+Beleg: das Anmeldefenster haelt einen vorbelegten Wert (`.data`), einen Zaehler
+in `.data` und einen 6 KiB grossen `.bss`-Puffer ueber zwei Seiten und liest
+beide Enden zurueck; mit dem alten Kernel ergab derselbe Code einen Seitenfehler
+bei `0x1d0180f`, mit dem neuen laeuft er (`docs/LOGIN_WINDOW.md`).
+
+Damit bleiben als Voraussetzungen fuer einen echten Prozessstart: der
+Frame-Allokator im Syscall-Pfad (Blocker 3, beim Boot schon als
+`memory::FRAME_ALLOCATOR` veroeffentlicht) und die ABI-Entscheidung (Blocker 2,
+Nummer nicht mehr 0x0050, siehe Abschnitt 6).
