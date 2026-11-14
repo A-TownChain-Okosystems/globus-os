@@ -3,26 +3,34 @@
 use std::collections::VecDeque;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Vorschaubild.
 pub struct Thumbnail {
+    /// Kennung des Vorschaubilds.
     pub id: u64,
+    /// Breite in Pixel.
     pub width: u32,
+    /// Hoehe in Pixel.
     pub height: u32,
+    /// Bilddaten.
     pub data: Vec<u8>,
 }
 
 #[derive(Debug)]
+/// Zwischenspeicher fuer Vorschaubilder mit fester Kapazitaet.
 pub struct ThumbnailCache {
     capacity: usize,
     entries: VecDeque<Thumbnail>,
 }
 
 impl ThumbnailCache {
+    /// Legt den Zwischenspeicher mit dieser Kapazitaet an.
     pub fn new(capacity: usize) -> Self {
         Self {
             capacity,
             entries: VecDeque::new(),
         }
     }
+    /// Anzahl gespeicherter Vorschaubilder.
     pub fn len(&self) -> usize {
         self.entries.len()
     }
@@ -31,12 +39,14 @@ impl ThumbnailCache {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Vorschaubild zu einer Kennung.
     pub fn get(&mut self, id: u64) -> Option<&Thumbnail> {
         let pos = self.entries.iter().position(|x| x.id == id)?;
         let item = self.entries.remove(pos)?;
         self.entries.push_front(item);
         self.entries.front()
     }
+    /// Legt ein Vorschaubild ab und verdraengt bei Bedarf das aelteste.
     pub fn insert(&mut self, thumbnail: Thumbnail) {
         if self.capacity == 0 {
             return;
@@ -47,6 +57,7 @@ impl ThumbnailCache {
             self.entries.pop_back();
         }
     }
+    /// Leert den Zwischenspeicher.
     pub fn clear(&mut self) {
         self.entries.clear();
     }
