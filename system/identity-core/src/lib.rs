@@ -99,7 +99,7 @@ impl KdfParams {
     /// Prueft die Grenzen (fail-closed).
     pub fn validate(&self) -> Result<(), VerifyError> {
         if !(MIN_MEMORY_KIB..=MAX_MEMORY_KIB).contains(&self.memory_kib)
-            || self.memory_kib % 1024 != 0
+            || !self.memory_kib.is_multiple_of(1024)
         {
             return Err(VerifyError::ParamsOutOfRange);
         }
