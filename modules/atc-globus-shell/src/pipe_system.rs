@@ -1,10 +1,13 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // Pipe system — command chaining
+/// Stateless helpers for pipelines of the form `a | b`.
 pub struct PipeSystem;
 impl PipeSystem {
+    /// Splits the input on `|` and trims each part.
     pub fn split_pipes(input: &str) -> Vec<String> {
         input.split('|').map(|s| s.trim().to_string()).collect()
     }
+    /// Feeds the output of each command into the next command.
     pub fn chain(commands: &[String], executor: impl Fn(&str) -> String) -> String {
         let mut output = String::new();
         for cmd in commands {
