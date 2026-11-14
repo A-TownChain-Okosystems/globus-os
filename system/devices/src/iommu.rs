@@ -7,29 +7,46 @@ use super::DeviceId;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// Kennung einer DMA-Domain.
 pub struct DmaDomainId(pub u64);
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Abbildung einer Geraeteadresse auf physischen Speicher.
 pub struct DmaRegion {
+    /// Geraeteseitige Adresse.
     pub iova: u64,
+    /// Physische Zieladresse.
     pub physical: u64,
+    /// Laenge der Abbildung in Byte.
     pub length: u64,
+    /// True, wenn das Geraet schreiben darf.
     pub writable: bool,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der IOMMU.
 pub enum IommuError {
+    /// Die Region ist leer oder laeuft ueber.
     InvalidRegion,
+    /// Die Domain existiert nicht.
     DomainNotFound,
+    /// Die Abbildung ist nicht erlaubt.
     MappingDenied,
+    /// Das Geraet ist bereits einer Domain zugeordnet.
     DeviceAlreadyAssigned,
 }
 
+/// Abbildung von Geraeteadressen auf Speicher.
 pub trait Iommu {
+    /// Legt eine DMA-Domain an.
     fn create_domain(&mut self, domain: DmaDomainId) -> Result<(), IommuError>;
+    /// Ordnet ein Geraet einer Domain zu.
     fn assign_device(&mut self, domain: DmaDomainId, device: DeviceId) -> Result<(), IommuError>;
+    /// Bildet eine Region in einer Domain ab.
     fn map(&mut self, domain: DmaDomainId, region: DmaRegion) -> Result<(), IommuError>;
+    /// Hebt die Abbildung an dieser Adresse auf.
     fn unmap(&mut self, domain: DmaDomainId, iova: u64) -> Result<(), IommuError>;
 }
 
+/// Prueft Laenge und Ueberlauf einer Region.
 pub fn validate_region(region: DmaRegion) -> Result<(), IommuError> {
     if region.length == 0
         || region.iova.checked_add(region.length).is_none()
@@ -41,6 +58,7 @@ pub fn validate_region(region: DmaRegion) -> Result<(), IommuError> {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
+/// IOMMU in Software, fuer Tests und als Vorlage.
 pub struct SoftwareIommu {
     domains: Vec<DomainState>,
 }
@@ -116,6 +134,7 @@ impl Iommu for SoftwareIommu {
 }
 
 impl SoftwareIommu {
+    /// Alle Abbildungen einer Domain.
     pub fn mappings(&self, domain: DmaDomainId) -> Result<&[DmaRegion], IommuError> {
         Ok(&self.domain(domain)?.mappings)
     }
