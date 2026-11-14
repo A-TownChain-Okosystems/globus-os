@@ -125,7 +125,9 @@ impl IoApicRegisters for MappedRegisters {
 /// Registerzugriff auf den IOAPIC. Über ein Trait, damit die Logik ohne
 /// Hardware prüfbar bleibt.
 pub trait IoApicRegisters {
+    /// Liest ein Register des IOAPIC.
     fn read(&self, register: u32) -> u32;
+    /// Schreibt ein Register des IOAPIC.
     fn write(&mut self, register: u32, value: u32);
 }
 
