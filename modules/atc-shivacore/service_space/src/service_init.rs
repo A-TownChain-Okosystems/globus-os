@@ -24,23 +24,33 @@ use crate::vm::VmEngine;
 /// Init-Status pro Service-Subsystem
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServiceInitStatus {
+    /// Noch nicht begonnen.
     NotStarted,
+    /// Laeuft.
     Initializing,
+    /// Abgeschlossen.
     Ready,
+    /// Fehlgeschlagen.
     Failed,
 }
 
 /// Service-Boot-Phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServicePhase {
-    Network,   // P2P-Netz
-    Mempool,   // Transaction Mempool + State-DB
+    /// P2P-Netz.
+    Network, // P2P-Netz
+    /// Transaktionsspeicher mit Zustandstabelle.
+    Mempool, // Transaction Mempool + State-DB
+    /// Vertrags-VM und Ausfuehrer.
     Contracts, // Contract-VM + Executor
-    Ai,        // reserviert: KI laeuft als eigener Dienst (Aurora, L2), nicht im Service Space
+    /// Reserviert; KI laeuft als eigener Dienst ausserhalb des Service Space.
+    Ai, // reserviert: KI laeuft als eigener Dienst (Aurora, L2), nicht im Service Space
+    /// Abschluss der Sequenz.
     Done,
 }
 
 impl ServicePhase {
+    /// Beschriftung der Phase fuer den Startbericht.
     pub fn label(&self) -> &str {
         match self {
             ServicePhase::Network => "P2P Network (ATCNet)",
@@ -55,13 +65,21 @@ impl ServicePhase {
 /// Das vereinigte Service-Space-State-Objekt.
 /// Enthält alle Nicht-TCB-Subsysteme (ursprünglich KernelState L7/L9/L10).
 pub struct ServiceSpaceState {
+    /// P2P-Knoten.
     pub p2p: P2pNode,
+    /// Transaktionsspeicher.
     pub mempool: Arc<MemoryPool>,
+    /// Zustandstabelle.
     pub state_db: Arc<StateDb>,
+    /// Pruefer fuer Transaktionen.
     pub tx_validator: Arc<TxValidator>,
+    /// Nonce-Verwaltung je Konto.
     pub nonces: Arc<NonceTracker>,
+    /// VM-Laufzeit.
     pub vm: Arc<VmEngine>,
+    /// Ausfuehrer fuer Vertraege.
     pub contracts: ContractExecutor,
+    /// Verlauf der Initialisierung je Phase.
     pub init_log: Vec<(ServicePhase, ServiceInitStatus)>,
 }
 
@@ -139,9 +157,13 @@ impl ServiceSpaceState {
 /// Service-Boot-Fehler
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServiceBootError {
+    /// Der Abschnitt Netz ist nicht gestartet.
     NetworkInitFailed,
+    /// Der Abschnitt Transaktionsspeicher ist nicht gestartet.
     MempoolInitFailed,
+    /// Der Abschnitt Vertraege ist nicht gestartet.
     ContractInitFailed,
+    /// Der Abschnitt KI ist nicht gestartet; der Abschnitt ist derzeit reserviert.
     AiInitFailed,
 }
 
