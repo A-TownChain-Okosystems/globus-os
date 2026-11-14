@@ -1,7 +1,8 @@
 [package]
 name = "atc_drivers"
 version = "0.1.0"
-edition = "2021"
+rust-version = "1.100"
+edition = "2024"
 description = "Hardware-Treiber — USB, GPU, Audio, SATA/NVMe, HID, Network"
 authors = ["Michael Wroblewski"]
 license = "Apache-2.0"
