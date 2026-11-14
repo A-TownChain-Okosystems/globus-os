@@ -65,6 +65,7 @@ jeweils 45 Sekunden Laufzeit, ohne KVM (Software-Emulation):
 |---|---|---|---|
 | BIOS | `images/shivacore-bios.img` | 414 | 2627 |
 | UEFI | `images/shivacore-uefi.img` (OVMF) | 389 | 2486 |
+| BIOS, Gegenprobe im Frischklon (30 s) | `images/shivacore-bios.img` | 264 | 1725 |
 
 In beiden Läufen sind alle acht Meilensteine des Skripts erreicht:
 
