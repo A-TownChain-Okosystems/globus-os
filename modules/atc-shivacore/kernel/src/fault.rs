@@ -91,15 +91,51 @@ impl ExceptionKind {
 pub enum FaultAction {
     /// Den fehlerhaften Prozess beenden und weiterlaufen.
     TerminateProcess,
+    /// Einen Dienst an seinen Startzustand zurueckholen.
+    ///
+    /// Ein Dienst soll nicht verschwinden, wenn er scheitert: die Zusage
+    /// "Beenden heisst Neustart" gilt auch fuer einen Absturz, nicht nur fuer
+    /// den Exit-Syscall. Sonst stuende nach einem Fehler im Anmeldefenster ein
+    /// toter Bildschirm.
+    RestartService,
     /// Den Kernel anhalten. Ein Fehler im Ring 0 ist ein Fehler im System.
     PanicKernel,
 }
 
+/// Rolle des laufenden Prozesses fuer die Entscheidung.
+///
+/// Diese Rolle ist eine Eigenschaft der Diensteverwaltung, nicht des Fehlers —
+/// deshalb steht sie als eigener Parameter hier und nicht als Sonderfall im
+/// Ausnahmepfad.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ProcessKind {
+    /// Gewoehnliches Programm: sein Fehler, sein Ende.
+    Plain,
+    /// Eingetragener Dienst: kehrt an seinen Startzustand zurueck.
+    Service,
+}
+
+impl ProcessKind {
+    /// Rolle aus der Frage "ist diese PID ein Dienst?".
+    pub fn from_is_service(is_service: bool) -> Self {
+        if is_service {
+            ProcessKind::Service
+        } else {
+            ProcessKind::Plain
+        }
+    }
+}
+
 /// Die Entscheidung. Bewusst eine reine Funktion ohne Seiteneffekt.
-pub fn decide(_kind: ExceptionKind, origin: Origin) -> FaultAction {
+pub fn decide(_kind: ExceptionKind, origin: Origin, process: ProcessKind) -> FaultAction {
     match origin {
-        Origin::User => FaultAction::TerminateProcess,
+        // Ring 0 kann niemand bezahlen: auch ein Dienst rettet den Kernel
+        // nicht, wenn der Kernel selbst gescheitert ist.
         Origin::Kernel => FaultAction::PanicKernel,
+        Origin::User => match process {
+            ProcessKind::Service => FaultAction::RestartService,
+            ProcessKind::Plain => FaultAction::TerminateProcess,
+        },
     }
 }
 
@@ -156,6 +192,7 @@ pub struct FaultCounters {
     user_faults: u64,
     kernel_faults: u64,
     terminated: u64,
+    service_restarts: u64,
 }
 
 /// Was gezaehlt wurde, nachdem ein Fehler verbucht ist.
@@ -167,6 +204,8 @@ pub struct Recorded {
     pub kernel_faults: u64,
     /// Prozesse, die nach einem Fehler beendet wurden.
     pub terminated: u64,
+    /// Dienste, die nach einem Fehler neu begonnen haben.
+    pub service_restarts: u64,
 }
 
 impl FaultCounters {
@@ -176,6 +215,7 @@ impl FaultCounters {
             user_faults: 0,
             kernel_faults: 0,
             terminated: 0,
+            service_restarts: 0,
         }
     }
 
@@ -188,10 +228,14 @@ impl FaultCounters {
         if action == FaultAction::TerminateProcess {
             self.terminated += 1;
         }
+        if action == FaultAction::RestartService {
+            self.service_restarts += 1;
+        }
         Recorded {
             user_faults: self.user_faults,
             kernel_faults: self.kernel_faults,
             terminated: self.terminated,
+            service_restarts: self.service_restarts,
         }
     }
 
@@ -201,6 +245,7 @@ impl FaultCounters {
             user_faults: self.user_faults,
             kernel_faults: self.kernel_faults,
             terminated: self.terminated,
+            service_restarts: self.service_restarts,
         }
     }
 }
@@ -226,7 +271,7 @@ mod tests {
     #[test]
     fn a_user_fault_costs_the_process_not_the_system() {
         assert_eq!(
-            decide(ExceptionKind::PageFault, Origin::User),
+            decide(ExceptionKind::PageFault, Origin::User, ProcessKind::Plain),
             FaultAction::TerminateProcess
         );
     }
@@ -234,7 +279,7 @@ mod tests {
     #[test]
     fn a_kernel_fault_still_stops_the_kernel() {
         assert_eq!(
-            decide(ExceptionKind::InvalidOpcode, Origin::Kernel),
+            decide(ExceptionKind::InvalidOpcode, Origin::Kernel, ProcessKind::Plain),
             FaultAction::PanicKernel
         );
     }
@@ -249,9 +294,61 @@ mod tests {
             ExceptionKind::GeneralProtection,
             ExceptionKind::InvalidOpcode,
         ] {
-            assert_eq!(decide(kind, Origin::User), FaultAction::TerminateProcess);
-            assert_eq!(decide(kind, Origin::Kernel), FaultAction::PanicKernel);
+            assert_eq!(
+                decide(kind, Origin::User, ProcessKind::Plain),
+                FaultAction::TerminateProcess
+            );
+            assert_eq!(
+                decide(kind, Origin::User, ProcessKind::Service),
+                FaultAction::RestartService
+            );
+            assert_eq!(
+                decide(kind, Origin::Kernel, ProcessKind::Plain),
+                FaultAction::PanicKernel
+            );
         }
+    }
+
+
+    #[test]
+    fn ein_dienst_stuerzt_nicht_ab_sondern_beginnt_neu() {
+        // Die Rolle entscheidet, nicht der Fehler: dasselbe Programm im
+        // Diensteverzeichnis kommt zurueck, ausserhalb wird es beendet.
+        for kind in [
+            ExceptionKind::PageFault,
+            ExceptionKind::GeneralProtection,
+            ExceptionKind::InvalidOpcode,
+        ] {
+            assert_eq!(
+                decide(kind, Origin::User, ProcessKind::from_is_service(true)),
+                FaultAction::RestartService
+            );
+            assert_eq!(
+                decide(kind, Origin::User, ProcessKind::from_is_service(false)),
+                FaultAction::TerminateProcess
+            );
+        }
+        // Ein Fehler im Ring 0 bleibt ein Systemfehler, auch fuer einen Dienst.
+        assert_eq!(
+            decide(
+                ExceptionKind::PageFault,
+                Origin::Kernel,
+                ProcessKind::from_is_service(true)
+            ),
+            FaultAction::PanicKernel
+        );
+    }
+
+    #[test]
+    fn ein_neustart_zaehlt_nicht_als_beendeter_prozess() {
+        let mut counters = FaultCounters::new();
+        let neu = counters.record(Origin::User, FaultAction::RestartService);
+        assert_eq!(neu.user_faults, 1);
+        assert_eq!(neu.service_restarts, 1);
+        assert_eq!(neu.terminated, 0, "ein Neustart ist kein Ende");
+        let ende = counters.record(Origin::User, FaultAction::TerminateProcess);
+        assert_eq!(ende.terminated, 1);
+        assert_eq!(ende.service_restarts, 1);
     }
 
     #[test]
@@ -325,7 +422,8 @@ mod tests {
             Recorded {
                 user_faults: 2,
                 kernel_faults: 1,
-                terminated: 2
+                terminated: 2,
+                service_restarts: 0
             }
         );
     }
