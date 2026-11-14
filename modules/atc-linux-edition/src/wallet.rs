@@ -5,11 +5,13 @@
 
 use std::collections::HashMap;
 
+/// Wallet-Tab: Guthaben, Senden, Empfangen, Verlauf. Stub.
 pub struct WalletTab {
     // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl WalletTab {
+    /// Legt einen leeren Tab an.
     pub fn new() -> Self {
         Self {}
     }
