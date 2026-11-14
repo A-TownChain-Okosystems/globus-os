@@ -9,10 +9,13 @@
 //!
 //! Was hier steht, ist die Maske: Titel, Benutzerfeld, Passwortfeld mit
 //! Maskierung, Feldwechsel mit Tab, Loeschen mit Backspace, Absenden mit Enter.
-//! Was hier NICHT steht, ist die Pruefung der Anmeldedaten: es gibt im Image
-//! keine Identitaetsablage (kein Dateisystem) und `globus-identity` ist
-//! Host-Code (argon2, bip39). Deshalb nennt der Enter-Zustand diesen Grund im
-//! Klartext, statt einen Erfolg vorzutaeuschen.
+//!
+//! Die Pruefung selbst steht NICHT hier: das Fenster schickt die Eingabe an den
+//! Kernel (`IdentityCheck`, `0x0070`) und zeigt, was zurueckkommt. Der
+//! Anmeldedatensatz liegt in der Ramdisk im Systemnamensraum und ist fuer
+//! Programme nicht vorhanden; gerechnet wird im Kernel, weil nur er ihn lesen
+//! darf. Das Passwort wird nach dem Aufruf im Programm ueberschrieben, und das
+//! Fenster behauptet keinen Erfolg, den es nicht bekommen hat.
 //!
 //! Es gibt keine initialisierten statischen Werte: der Kernel laedt genau ein
 //! ausfuehrbares Segment, ein `.data` kaeme nicht mit. Alle Zustaende liegen auf
@@ -122,6 +125,9 @@ enum Active {
 struct Login {
     user: [u8; MAX_USER_BYTES],
     user_len: usize,
+    /// Die eingegebenen Bytes. Sie werden nur fuer die Pruefung gehalten und
+    /// danach ueberschrieben; angezeigt wird nie ein Byte, nur die Laenge.
+    password: [u8; MAX_PASSWORD_BYTES],
     password_len: usize,
     active: Active,
     status: &'static str,
@@ -132,6 +138,7 @@ impl Login {
         Self {
             user: [0u8; MAX_USER_BYTES],
             user_len: 0,
+            password: [0u8; MAX_PASSWORD_BYTES],
             password_len: 0,
             active: Active::User,
             status: "Bitte Benutzer und Passwort eingeben.",
@@ -149,6 +156,7 @@ impl Login {
             }
             Active::Password => {
                 if self.password_len < MAX_PASSWORD_BYTES {
+                    self.password[self.password_len] = character;
                     self.password_len += 1;
                 }
             }
@@ -163,17 +171,40 @@ impl Login {
             }
             Active::Password => {
                 self.password_len = self.password_len.saturating_sub(1);
+                self.password[self.password_len] = 0;
             }
         }
     }
 
     /// Absenden: hier entscheidet sich, was das Fenster wirklich kann.
-    fn submit(&mut self) {
-        self.status = if self.user_len == 0 || self.password_len == 0 {
-            "Bitte Benutzer und Passwort eingeben."
+    /// Sind beide Felder gefuellt?
+    fn ready(&self) -> bool {
+        self.user_len > 0 && self.password_len > 0
+    }
+
+    /// Pruefen lassen: der Kernel rechnet, das Fenster zeigt das Ergebnis.
+    ///
+    /// Die Rechnung dauert im Image gemessen 267-276 ms (19 MiB, t=2). Damit
+    /// der Bildschirm in dieser Zeit nicht steht, wird VOR dem Aufruf
+    /// gezeichnet; der Aufruf blockiert das Programm, die Anzeige bleibt.
+    fn verify(&mut self, console: u64) {
+        let mut block =
+            SyscallBlock::new(Syscall::IdentityCheck, Some(CapabilityHandle(console)));
+        block.buffer_ptr = self.password.as_ptr() as u64;
+        block.buffer_len = self.password_len;
+        let (value, error) = call(&block);
+        // Das Passwort bleibt nicht im Programm liegen.
+        self.password = [0u8; MAX_PASSWORD_BYTES];
+        self.status = if error != 0 {
+            "Pruefung nicht moeglich (ABI-Ablehnung)."
         } else {
-            // Kein Erfolg, der nicht geprueft wurde: die Ablage fehlt.
-            "Keine Identitaetsablage im Image (kein Dateisystem) - Pruefung nicht moeglich."
+            match value {
+                0 => "Pruefung bestanden - Sitzung folgt.",
+                1 => "Pruefung fehlgeschlagen.",
+                2 => "Kein Anmeldedatensatz vorhanden - keine Anmeldung.",
+                4 => "Pruefung nicht rechenbar (Speicher) - keine Anmeldung.",
+                _ => "Pruefung ohne Ergebnis.",
+            }
         };
     }
 }
@@ -391,7 +422,17 @@ pub extern "C" fn greeter_main(console: u64, input: u64) -> ! {
                     Active::Password => Active::User,
                 };
             }
-            SCAN_ENTER => login.submit(),
+            SCAN_ENTER => {
+                if login.ready() {
+                    // Erst zeichnen, dann pruefen: die Anzeige bleibt waehrend
+                    // der Rechnung im Kernel sichtbar.
+                    login.status = "Pruefung laeuft ...";
+                    render(console, &login);
+                    login.verify(console);
+                } else {
+                    login.status = "Bitte Benutzer und Passwort eingeben.";
+                }
+            }
             // Der Dienst endet hier absichtlich selbst. Der Kernel setzt ihn
             // in seinen Startzustand zurueck; ohne Ruecksetzen waere Escape
             // ein stiller Ausfall des Anmeldefensters.
