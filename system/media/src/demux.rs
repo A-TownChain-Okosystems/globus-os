@@ -105,6 +105,7 @@ pub struct PacketDemuxer {
 }
 
 impl PacketDemuxer {
+    /// Legt den Demultiplexer ueber diesen Paketen an.
     pub fn new(format: ContainerFormat, packets: Vec<DemuxPacket>) -> Self {
         Self {
             format,
