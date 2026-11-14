@@ -77,7 +77,11 @@ impl RuntimeCore {
             // Kernel nimmt Text gegen ein Konsole-Recht entgegen und schreibt
             // ihn auf die Flaeche. Traegt dieser Arm nicht mit, bricht der
             // Build auf Stable mit E0004.
-            | Syscall::Console => true,
+            | Syscall::Console
+            // IdentityCheck (0x0070) gehoert seit IDENT-003 zum Vertrag: das
+            // Anmeldefenster laesst das Passwort vom Kernel pruefen. Ohne
+            // diesen Arm bricht der Build auf Stable mit E0004.
+            | Syscall::IdentityCheck => true,
         }
     }
 
