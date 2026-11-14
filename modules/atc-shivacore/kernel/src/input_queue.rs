@@ -41,27 +41,20 @@ impl InputEvent {
     /// dass ein Feld erfunden werden muss. 0 heisst "nichts anliegend", weil
     /// Scancode 0 in Set 1 nicht vorkommt.
     pub fn packed(&self) -> u64 {
-        let character = match self.character {
-            Some(c) => c as u32 as u64,
-            None => 0,
-        };
-        u64::from(self.scancode) | (character << 16)
+        // Das Layout kommt aus der ABI: Kernel und Userspace lesen dieselbe
+        // Definition, statt sie je einmal nachzubauen.
+        libshivacore::input::pack(self.scancode, self.character)
     }
 
     /// Gegenrichtung zu `packed`, fuer Tests und den Userspace.
     pub fn unpacked(word: u64) -> Option<Self> {
-        let scancode = (word & 0xFF) as u8;
+        let scancode = libshivacore::input::scancode(word);
         if scancode == 0 {
             return None;
         }
-        let character = ((word >> 16) & 0xFF) as u8;
         Some(Self {
             scancode,
-            character: if character == 0 {
-                None
-            } else {
-                Some(character as char)
-            },
+            character: libshivacore::input::character(word),
         })
     }
 }
