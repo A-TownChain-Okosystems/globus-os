@@ -43,27 +43,41 @@ use crate::vfs::Vfs;
 /// Kernel-Init-Status für jedes Subsystem
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InitStatus {
+    /// Noch nicht begonnen.
     NotStarted,
+    /// Laeuft gerade.
     Initializing,
+    /// Erfolgreich abgeschlossen.
     Ready,
+    /// Mit Fehler beendet.
     Failed,
 }
 
 /// Boot-Phase
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootPhase {
-    Heap,         // L0: allocator::init_heap
-    Memory,       // L1: MemorySubsystem
+    /// L0: Kernel-Heap ueber den Allocator.
+    Heap, // L0: allocator::init_heap
+    /// L1: Speicher-Subsystem mit Heap-Bruecke und Regionen.
+    Memory, // L1: MemorySubsystem
+    /// L2: Capability-Tabelle, gefuehrt im Prozessverwalter.
     Capabilities, // L2: CapabilityTable
-    Processes,    // L3: ProcessManager
-    Scheduler,    // L4: DA-HEFT Scheduler
-    Ipc,          // L5: IPC Channels
-    FileSystem,   // L6: ATCFS + VFS
-    Security,     // L7: Security/Audit/MultiSig
+    /// L3: Prozessverwaltung.
+    Processes, // L3: ProcessManager
+    /// L4: DA-HEFT-Planer.
+    Scheduler, // L4: DA-HEFT Scheduler
+    /// L5: IPC-Kanaele.
+    Ipc, // L5: IPC Channels
+    /// L6: ATCFS und VFS.
+    FileSystem, // L6: ATCFS + VFS
+    /// L7: Sicherheit, Audit und Mehrfachsignatur.
+    Security, // L7: Security/Audit/MultiSig
+    /// Alle Phasen durchlaufen.
     Done,
 }
 
 impl BootPhase {
+    /// Anzeigename der Phase fuer das Startprotokoll.
     pub fn label(&self) -> &str {
         match self {
             BootPhase::Heap => "L0 Heap (linked_list_allocator)",
@@ -83,23 +97,31 @@ impl BootPhase {
 /// Wird beim Boot einmal erzeugt und enthält alle Subsysteme.
 pub struct KernelState {
     // L1: Memory
+    /// Speicher-Subsystem (L1).
     pub memory: MemorySubsystem,
     // L2: Capabilities (inside ProcessManager)
     // L3: Process Manager
+    /// Prozessverwaltung (L3).
     pub processes: ProcessManager,
     // L4: Scheduler
+    /// Der Planer (L4).
     pub scheduler: DaHeftScheduler,
     // L5: IPC
+    /// Die IPC-Kanaele (L5).
     pub ipc: IpcSubsystem,
     // L6: Filesystems
+    /// ATC-FS (L6).
     pub fs: AtcFileSystem,
+    /// Die Pfad-Ebene ueber dem Dateisystem (L6).
     pub vfs: Vfs,
     // L7: Security
+    /// Sicherheitsverwaltung (L7).
     pub security: SecurityManager,
     /// Die eine Capability Authority des Kernels. `processes` und `vfs` teilen
     /// sich diese Instanz; die Live-Pfade bekommen denselben Arc.
     pub authority: Arc<CapabilityAuthority>,
     // Boot log
+    /// Protokoll je Phase: sie und ihr Ergebnis.
     pub init_log: Vec<(BootPhase, InitStatus)>,
 }
 
@@ -238,8 +260,11 @@ impl KernelState {
 /// Boot-Fehler
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BootError {
+    /// Die Heap-Konstanten von Allocator und Speicherverwaltung stimmen nicht ueberein.
     HeapConfigMismatch,
+    /// Das Dateisystem liess sich nicht aufsetzen.
     FsInitFailed,
+    /// Der Abschlusstest nach dem Start ist fehlgeschlagen.
     SmokeTestFailed,
 }
 
