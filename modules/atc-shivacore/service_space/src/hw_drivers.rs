@@ -20,14 +20,20 @@ use shivacore::ats1000::Pid;
 /// PCI Device identification
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PciDeviceId {
+    /// Herstellerkennung des Geräts.
     pub vendor_id: u16,
+    /// Gerätekennung des Herstellers.
     pub device_id: u16,
+    /// PCI-Klasse des Geräts.
     pub class_code: u8,
+    /// Unterklasse innerhalb der PCI-Klasse.
     pub subclass: u8,
+    /// Revisionsstand; new() setzt 0.
     pub revision: u8,
 }
 
 impl PciDeviceId {
+    /// Kennung aus Hersteller, Gerät, Klasse und Unterklasse; die Revision bleibt 0.
     pub fn new(vendor: u16, device: u16, class: u8, subclass: u8) -> Self {
         Self {
             vendor_id: vendor,
@@ -42,27 +48,41 @@ impl PciDeviceId {
 /// PCI Base Address (BAR)
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct PciBar {
+    /// Index der BAR von 0 bis 5.
     pub index: u8,
+    /// Basisadresse des Bereichs.
     pub address: u64,
+    /// Größe des Bereichs in Byte.
     pub size: u64,
+    /// True, wenn der Bereich speichergebunden ist.
     pub is_mmio: bool,
+    /// True, wenn der Bereich im Portraum liegt.
     pub is_io: bool,
+    /// True, wenn die Adresse 64 Bit breit ist.
     pub is_64bit: bool,
 }
 
 /// A discovered PCI device
 #[derive(Clone, Debug)]
 pub struct PciDevice {
+    /// Busnummer.
     pub bus: u8,
+    /// Steckplatznummer.
     pub slot: u8,
+    /// Funktionsnummer innerhalb des Steckplatzes.
     pub function: u8,
+    /// Hersteller-, Geräte- und Klassentkennung.
     pub id: PciDeviceId,
+    /// Zugeordnete Basisadressbereiche.
     pub bars: Vec<PciBar>,
+    /// Interrupt-Anschluss am Steckplatz (INTA bis INTD).
     pub irq_pin: u8,
+    /// Zugewiesene Interrupt-Nummer.
     pub irq_line: u8,
 }
 
 impl PciDevice {
+    /// Gerät an Bus, Steckplatz und Funktion, ohne BARs und Interrupts.
     pub fn new(bus: u8, slot: u8, func: u8, id: PciDeviceId) -> Self {
         Self {
             bus,
@@ -75,18 +95,22 @@ impl PciDevice {
         }
     }
 
+    /// Bus, Steckplatz und Funktion als eine Zahl zusammengefasst.
     pub fn bdf(&self) -> u32 {
         ((self.bus as u32) << 16) | ((self.slot as u32) << 11) | ((self.function as u32) << 8)
     }
 
+    /// Trägt einen Basisadressbereich ein.
     pub fn add_bar(&mut self, bar: PciBar) {
         self.bars.push(bar);
     }
 
+    /// Erster speichergebundener Bereich, sofern einer eingetragen ist.
     pub fn find_mmio_bar(&self) -> Option<&PciBar> {
         self.bars.iter().find(|b| b.is_mmio)
     }
 
+    /// True, wenn der Hersteller Red Hat/Qumranet (0x1AF4) ist.
     pub fn is_virtio(&self) -> bool {
         self.id.vendor_id == 0x1AF4 // Red Hat / Qumranet (virtio)
     }
@@ -94,9 +118,13 @@ impl PciDevice {
 
 /// PCI class codes
 pub const PCI_CLASS_STORAGE: u8 = 0x01;
+/// PCI-Klasse der Netzwerkgeräte.
 pub const PCI_CLASS_NETWORK: u8 = 0x02;
+/// PCI-Klasse der Anzeigegeräte.
 pub const PCI_CLASS_DISPLAY: u8 = 0x03;
+/// PCI-Klasse der Brücken.
 pub const PCI_CLASS_BRIDGE: u8 = 0x06;
+/// PCI-Klasse der seriellen Busse, etwa USB.
 pub const PCI_CLASS_SERIAL: u8 = 0x0C; // Serial bus (USB, etc.)
 
 /// PCI Bus Scanner (simulated for testing)
@@ -111,6 +139,7 @@ impl Default for PciBus {
 }
 
 impl PciBus {
+    /// Leerer Bus ohne Geräte.
     pub fn new() -> Self {
         Self {
             devices: Vec::new(),
@@ -222,6 +251,7 @@ pub struct MmioRegion {
 }
 
 impl MmioRegion {
+    /// Bereich ab base mit size Byte, Inhalt auf 0 gesetzt.
     pub fn new(base: u64, size: u64) -> Self {
         let words = (size / 8) as usize;
         Self {
@@ -231,6 +261,7 @@ impl MmioRegion {
         }
     }
 
+    /// Liest das 64-Bit-Wort an offset; außerhalb des Bereichs ergibt 0.
     pub fn read(&self, offset: u64) -> u64 {
         let idx = (offset / 8) as usize;
         if idx < self.data.len() {
@@ -240,6 +271,7 @@ impl MmioRegion {
         }
     }
 
+    /// Schreibt ein 64-Bit-Wort an offset; außerhalb des Bereichs bleibt der Inhalt unverändert.
     pub fn write(&self, offset: u64, value: u64) {
         let idx = (offset / 8) as usize;
         if idx < self.data.len() {
@@ -247,17 +279,21 @@ impl MmioRegion {
         }
     }
 
+    /// Liest Register reg, also das Wort an reg mal 8.
     pub fn read_reg(&self, reg: u32) -> u64 {
         self.read(reg as u64 * 8)
     }
 
+    /// Schreibt Register reg, also das Wort an reg mal 8.
     pub fn write_reg(&self, reg: u32, value: u64) {
         self.write(reg as u64 * 8, value);
     }
 
+    /// Basisadresse des Bereichs.
     pub fn base_address(&self) -> u64 {
         self.base
     }
+    /// Größe des Bereichs in Byte.
     pub fn size(&self) -> u64 {
         self.size
     }
@@ -306,6 +342,7 @@ impl HpetTimer {
         self.mmio.base_address()
     }
 
+    /// Legt den Timer über dem Bereich ab base_addr an, mit 10 MHz Takt und Zähler 0; init() folgt getrennt.
     pub fn new(base_addr: u64) -> Self {
         let mmio = MmioRegion::new(base_addr, 0x400);
 
@@ -353,6 +390,7 @@ impl HpetTimer {
         self.enabled.store(0, Ordering::SeqCst);
     }
 
+    /// True, wenn der Timer nach init() läuft.
     pub fn is_enabled(&self) -> bool {
         self.enabled.load(Ordering::SeqCst) == 1
     }
@@ -418,6 +456,7 @@ impl HpetTimer {
         self.ticks_to_ns(ticks)
     }
 
+    /// Setzt den Zähler auf 0, ohne die Konfiguration zu ändern.
     pub fn reset(&self) {
         self.counter.store(0, Ordering::SeqCst);
         self.mmio.write_reg(HPET_MAIN_COUNTER >> 3, 0);
@@ -458,12 +497,16 @@ pub enum VirtioBlkReqType {
 /// virtio-blk request header
 #[derive(Clone, Copy, Debug)]
 pub struct VirtioBlkHeader {
+    /// Anfrageart: Lesen, Schreiben oder Flush.
     pub req_type: u32,
+    /// Reserviertes Feld, stets 0.
     pub reserved: u32,
+    /// Erster Sektor der Anfrage.
     pub sector: u64,
 }
 
 impl VirtioBlkHeader {
+    /// Kopf einer Leseanfrage.
     pub fn read(sector: u64) -> Self {
         Self {
             req_type: VirtioBlkReqType::Read as u32,
@@ -471,6 +514,7 @@ impl VirtioBlkHeader {
             sector,
         }
     }
+    /// Kopf einer Schreibanfrage.
     pub fn write(sector: u64) -> Self {
         Self {
             req_type: VirtioBlkReqType::Write as u32,
@@ -478,6 +522,7 @@ impl VirtioBlkHeader {
             sector,
         }
     }
+    /// Kopf einer Flush-Anfrage; der Sektor bleibt 0.
     pub fn flush() -> Self {
         Self {
             req_type: VirtioBlkReqType::Flush as u32,
@@ -498,11 +543,17 @@ pub enum VirtioBlkStatus {
 /// virtio-blk configuration
 #[derive(Clone, Debug)]
 pub struct VirtioBlkConfig {
-    pub capacity: u64,   // Number of 512-byte sectors
-    pub size_max: u32,   // Max segment size
-    pub seg_max: u32,    // Max segments per request
-    pub block_size: u32, // Block size (usually 512)
+    /// Anzahl der 512-Byte-Sektoren.
+    pub capacity: u64,
+    /// Größte Segmentgröße einer Anfrage.
+    pub size_max: u32,
+    /// Höchstzahl der Segmente je Anfrage.
+    pub seg_max: u32,
+    /// Blockgröße in Byte, üblicherweise 512.
+    pub block_size: u32,
+    /// True, wenn Schreibzugriffe abgelehnt werden.
     pub read_only: bool,
+    /// True, wenn Schreibzugriffe im Cache gehalten werden.
     pub write_cache: bool,
 }
 
@@ -536,6 +587,7 @@ impl VirtioBlkDevice {
         self.mmio.base_address()
     }
 
+    /// Legt das Gerät über dem Bereich ab base_addr an und reserviert den Speicher als leere Blöcke.
     pub fn new(base_addr: u64, config: VirtioBlkConfig) -> Self {
         let block_size = config.block_size as usize;
         let storage = (0..config.capacity as usize)
@@ -560,28 +612,35 @@ impl VirtioBlkDevice {
         self.initialized.store(1, Ordering::SeqCst);
     }
 
+    /// True, wenn init() die Aushandlung abgeschlossen hat.
     pub fn is_initialized(&self) -> bool {
         self.initialized.load(Ordering::SeqCst) == 1
     }
 
+    /// Konfiguration des Geräts.
     pub fn config(&self) -> &VirtioBlkConfig {
         &self.config
     }
 
+    /// Bisher gelesene Blöcke; gezählt wird je Block, auch über den Vertrags-Leser.
     pub fn read_count(&self) -> u64 {
         self.read_count.load(Ordering::SeqCst)
     }
+    /// Bisher geschriebene Blöcke; gezählt wird je Block, auch über den Vertrags-Schreiber.
     pub fn write_count(&self) -> u64 {
         self.write_count.load(Ordering::SeqCst)
     }
+    /// Bisher ausgeführte Flush-Anfragen.
     pub fn flush_count(&self) -> u64 {
         self.flush_count.load(Ordering::SeqCst)
     }
 
+    /// Gesamtgröße des Geräts in Byte.
     pub fn total_bytes(&self) -> u64 {
         self.config.capacity * self.config.block_size as u64
     }
 
+    /// True, wenn das Gerät nur gelesen werden darf.
     pub fn is_read_only(&self) -> bool {
         self.config.read_only
     }
@@ -598,14 +657,17 @@ impl VirtioBlkDevice {
 }
 
 impl VirtioBlkDevice {
+    /// Blockgröße in Byte.
     pub fn block_size(&self) -> usize {
         self.config.block_size as usize
     }
 
+    /// Anzahl der Blöcke.
     pub fn block_count(&self) -> u64 {
         self.config.capacity
     }
 
+    /// Liest einen 512-Byte-Block; eine LBA außerhalb des Geräts ergibt OutOfRange.
     pub fn read_block(&self, lba: u64) -> Result<[u8; 512], globus_devices::block::BlockError> {
         self.read_count.fetch_add(1, Ordering::SeqCst);
 
@@ -622,6 +684,7 @@ impl VirtioBlkDevice {
         Ok(buf)
     }
 
+    /// Schreibt einen 512-Byte-Block; schreibgeschützte Geräte und fremde LBAs werden abgelehnt.
     pub fn write_block(
         &self,
         lba: u64,
@@ -646,11 +709,13 @@ impl VirtioBlkDevice {
         Ok(())
     }
 
+    /// Zählt einen Flush und meldet Erfolg; ein echter Schreibcache wird nicht geleert.
     pub fn flush(&self) -> Result<(), globus_devices::block::BlockError> {
         self.flush_count.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
 
+    /// Name des Geräts.
     pub fn name(&self) -> &str {
         "virtio-blk"
     }
@@ -726,11 +791,16 @@ impl globus_devices::block::BlockDevice for VirtioBlkDevice {
 /// virtio-net configuration
 #[derive(Clone, Debug)]
 pub struct VirtioNetConfig {
+    /// MAC-Adresse des Geräts.
     pub mac: [u8; 6],
-    pub max_vqs: u16, // Max virtqueues
-    pub mtu: u16,     // Maximum transmission unit
-    pub status: u8,   // Link status
-    pub speed: u32,   // Link speed in Mbps
+    /// Höchstzahl der Virtqueues.
+    pub max_vqs: u16,
+    /// Größte Übertragungseinheit in Byte.
+    pub mtu: u16,
+    /// Verbindungsstatus laut Konfiguration.
+    pub status: u8,
+    /// Verbindungsgeschwindigkeit in Mbit/s.
+    pub speed: u32,
 }
 
 impl Default for VirtioNetConfig {
@@ -763,6 +833,7 @@ impl VirtioNetDevice {
         self.mmio.base_address()
     }
 
+    /// Legt das Gerät über dem Bereich ab base_addr an, mit leerer Sende- und Empfangswarteschlange.
     pub fn new(base_addr: u64, config: VirtioNetConfig) -> Self {
         Self {
             config,
@@ -782,32 +853,40 @@ impl VirtioNetDevice {
         self.initialized.store(1, Ordering::SeqCst);
     }
 
+    /// True, wenn init() die Aushandlung abgeschlossen hat.
     pub fn is_initialized(&self) -> bool {
         self.initialized.load(Ordering::SeqCst) == 1
     }
 
+    /// True, wenn die Verbindung laut Zustand steht.
     pub fn link_is_up(&self) -> bool {
         self.link_up.load(Ordering::SeqCst) == 1
     }
 
+    /// Markiert die Verbindung als getrennt.
     pub fn set_link_down(&self) {
         self.link_up.store(0, Ordering::SeqCst);
     }
 
+    /// Markiert die Verbindung als stehend.
     pub fn set_link_up(&self) {
         self.link_up.store(1, Ordering::SeqCst);
     }
 
+    /// Größte Übertragungseinheit in Byte.
     pub fn mtu(&self) -> u16 {
         self.config.mtu
     }
+    /// Verbindungsgeschwindigkeit in Mbit/s.
     pub fn speed_mbps(&self) -> u32 {
         self.config.speed
     }
 
+    /// Bisher aus der Empfangswarteschlange entnommene Pakete.
     pub fn rx_count(&self) -> u64 {
         self.rx_count.load(Ordering::SeqCst)
     }
+    /// Bisher gesendete Pakete.
     pub fn tx_count(&self) -> u64 {
         self.tx_count.load(Ordering::SeqCst)
     }
@@ -824,12 +903,14 @@ impl VirtioNetDevice {
         self.tx_queue.lock().clone()
     }
 
+    /// Konfiguration des Geräts.
     pub fn config(&self) -> &VirtioNetConfig {
         &self.config
     }
 }
 
 impl VirtioNetDevice {
+    /// MAC-Adresse als Netzwerkadresse des Service Space.
     pub fn mac_address(&self) -> crate::net::MacAddress {
         crate::net::MacAddress::new(
             self.config.mac[0],
@@ -841,6 +922,7 @@ impl VirtioNetDevice {
         )
     }
 
+    /// Reiht ein Paket zum Senden ein; bei getrennter Verbindung ergibt sich DeviceDown.
     pub fn send(&self, data: &[u8]) -> Result<(), crate::net::NetworkError> {
         if !self.link_is_up() {
             return Err(crate::net::NetworkError::DeviceDown);
@@ -850,6 +932,7 @@ impl VirtioNetDevice {
         Ok(())
     }
 
+    /// Entnimmt ein empfangenes Paket; eine leere Warteschlange ergibt NoFrameAvailable.
     pub fn receive(&self) -> Result<Vec<u8>, crate::net::NetworkError> {
         if !self.link_is_up() {
             return Err(crate::net::NetworkError::DeviceDown);
@@ -863,6 +946,7 @@ impl VirtioNetDevice {
         }
     }
 
+    /// True, wenn Pakete zum Abholen bereitliegen.
     pub fn has_packets(&self) -> bool {
         !self.rx_queue.lock().is_empty()
     }
@@ -900,10 +984,15 @@ impl crate::net::NetworkDevice for VirtioNetDevice {
 // Driver Manager (coordinates all hardware drivers)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Bündelt PCI-Bus, Timer und virtio-Geräte und führt ihren Lebenszyklus über den gemeinsamen Supervisor.
 pub struct DriverManager {
+    /// Gefundene PCI-Geräte.
     pub pci_bus: PciBus,
+    /// Hochpräzisionstimer, sofern gefunden.
     pub hpet: Option<HpetTimer>,
+    /// Blockgerät, sofern gefunden.
     pub virtio_blk: Option<VirtioBlkDevice>,
+    /// Netzwerkgerät, sofern gefunden.
     pub virtio_net: Option<VirtioNetDevice>,
     /// Der Lebenszyklus der Treiber liegt NICHT hier, sondern in
     /// `globus_devices::driver_lifecycle` (Registered -> Active -> Faulted/Isolated).
@@ -920,6 +1009,7 @@ impl Default for DriverManager {
 }
 
 impl DriverManager {
+    /// Leerer Manager: keine Geräte, kein Treiber überwacht.
     pub fn new() -> Self {
         Self {
             pci_bus: PciBus::new(),
@@ -1009,6 +1099,7 @@ impl DriverManager {
         self.supervisor.report_fault(device_id, timestamp_ns)
     }
 
+    /// True, nachdem init_all die erkannten Treiber gestartet hat.
     pub fn is_initialized(&self) -> bool {
         self.initialized
     }
