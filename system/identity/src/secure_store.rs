@@ -49,7 +49,12 @@ pub enum SecureStoreError {
     /// Die Generation wurde zwischenzeitlich geaendert.
     Conflict,
     /// Die vorgelegte Generation liegt hinter der gespeicherten.
-    RollbackDetected { stored: u64, incoming: u64 },
+    RollbackDetected {
+        /// Die bereits gespeicherte Generation.
+        stored: u64,
+        /// Die vorgelegte, aeltere Generation.
+        incoming: u64,
+    },
     /// Die Generation laesst sich nicht weiter hochzaehlen.
     GenerationOverflow,
     /// Das Backend ist nicht erreichbar.
