@@ -2,7 +2,7 @@
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
 > **Stand:** 14.11.2026, erzeugt aus `git ls-tree -r origin/main` gegen
-> `5830fca` zuzueglich des Anmeldefensters: 539 Dateien. Die Liste ist vollständig; der vorige Stand
+> `5830fca` zuzueglich des Anmeldefensters: 540 Dateien. Die Liste ist vollständig; der vorige Stand
 > nannte 522 und war um 15 Einträge unvollständig (unter anderem fehlten die
 > neueren Dokumente aus dem Kernel-Strang).
 > **Zeilenzahlen** aus dem committeten Stand, Binärdateien ohne Zahl.
@@ -57,7 +57,7 @@
 | `docs/IDENTITY_WALLET_FLOW.md` | 78 |
 | `docs/IMPLEMENTATION_STATUS.md` | 60 |
 | `docs/KERNEL_IMAGE_BUILD.md` | 100 |
-| `docs/LOGIN_WINDOW.md` | 170 |
+| `docs/LOGIN_WINDOW.md` | 173 |
 | `docs/MEDIA-LICENSING.md` | 60 |
 | `docs/OS_STANDARD_COMPONENTS.md` | 190 |
 | `docs/REPOSITORY_STANDARD.md` | 37 |
@@ -77,6 +77,7 @@
 | `docs/audits/SHIVACORE_ABI_IMPLEMENTATION_2026-10-11.md` | 35 |
 | `docs/audits/SHIVACORE_SERVICE_SPACE_DRIFT_AUDIT_2026-10-11.md` | 128 |
 | `docs/audits/globusos_microkernel_migration_inventory_2026-10-18.json` | 583 |
+| `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 114 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
