@@ -49,6 +49,50 @@ use libshivacore::{
     KERNEL_INPUT_CHANNEL, SYSCALL_BLOCK_MAX_SIZE, Syscall, SyscallBlock,
 };
 
+/// Vorbelegter statischer Wert: liegt im Datensegment, nicht im Codesegment.
+/// Ohne abgebildetes Datensegment waere der erste Zugriff ein Seitenfehler.
+static WINDOW_VERSION: [u8; 6] = *b"v0.3.0";
+/// Null-initialisierter Puffer ueber zwei Seitengrenzen: liegt im .bss.
+/// Er belegt, dass die bss-Nullen des Abbilds ankommen UND dass mehr als eine
+/// Seite abgebildet ist. Waere er nicht abgebildet, faellt das Programm beim
+/// ersten Zugriff aus; waere er nicht genullt, staende Unsinn darin.
+// `#[unsafe(no_mangle)]`: der Puffer ist von aussen sichtbar und darf vom
+// Optimierer nicht wegfallen, nur weil der Selbsttest ihn nur beschreibt.
+#[unsafe(no_mangle)]
+static mut SCRATCH: [u8; 6144] = [0; 6144];
+/// Zaehler der Programmstarts: liegt im .data, also in einem beschreibbaren
+/// statischen Wert mit Vorbelegung. Er ueberlebt ein Zuruecksetzen des Dienstes
+/// (der Kernel leert den Stapel, nicht die Daten) — die Statuszeile zeigt das.
+static mut STARTS: u32 = 1;
+
+/// Schreibt und liest beide Enden des bss-Puffers: zwei Seiten, ein Nachweis.
+///
+/// Der geschriebene Wert kommt aus dem Startvertrag (Cap-Nummer), nicht aus
+/// einer Konstante. Sonst koennte der Optimierer den Schreib-Lese-Zyklus
+/// ausrechnen und den Puffer ganz entfernen — dann saehe das Programm keinen
+/// bss-Puffer und der Nachweis waere wertlos.
+fn scratch_state(seed: u8) -> &'static str {
+    // Der Zugriff ist auf den statischen Puffer beschraenkt; mehr als diese
+    // eine unsafe-Stelle braucht der Nachweis nicht.
+    let bytes: &mut [u8] = unsafe { &mut *core::ptr::addr_of_mut!(SCRATCH) };
+    bytes[0] = seed;
+    bytes[6143] = !seed;
+    if bytes[0] == seed && bytes[6143] == !seed {
+        "bss 6144 B ok"
+    } else {
+        "bss FEHLER"
+    }
+}
+
+/// Zaehlt den Start und liefert ihn. Beim ersten Lauf steht die Vorbelegung
+/// (1), nach einem Neustart des Dienstes 2, 3, ...
+fn bump_start() -> u32 {
+    unsafe {
+        STARTS += 1;
+        STARTS
+    }
+}
+
 /// Scancode der Ruecktaste in Scan-Set 1.
 const SCAN_BACKSPACE: u8 = 0x0E;
 /// Scancode der Tabulatortaste.
@@ -267,7 +311,9 @@ fn render(console: u64, login: &Login) {
     let mut screen = Screen::new();
     let _ = write!(
         screen,
-        "\n  GlobusOS\n  Anmeldung\n\n  {} Benutzer   : ",
+        "\n  GlobusOS {} · Start {}\n  Anmeldung\n\n  {} Benutzer   : ",
+        core::str::from_utf8(&WINDOW_VERSION).unwrap_or("?"),
+        unsafe { STARTS },
         if login.active == Active::User { ">" } else { " " }
     );
     for byte in &login.user[..login.user_len] {
@@ -283,8 +329,9 @@ fn render(console: u64, login: &Login) {
     }
     let _ = write!(
         screen,
-        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {}\n",
-        login.status
+        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {}   ({})\n",
+        login.status,
+        scratch_state(console as u8 | 1)
     );
     // Erst leeren, dann schreiben: die Maske wird als Ganzes gezeichnet, damit
     // kein Rest des vorherigen Zustands stehen bleibt.
@@ -317,6 +364,8 @@ core::arch::global_asm!(
 /// Einstieg in Rust: `console` und `input` sind die beiden Cap-Nummern.
 #[unsafe(no_mangle)]
 pub extern "C" fn greeter_main(console: u64, input: u64) -> ! {
+    // Erst zaelen, dann zeichnen: der Startzaehler steht in der ersten Zeile.
+    let _ = bump_start();
     let mut login = Login::new();
     render(console, &login);
 
