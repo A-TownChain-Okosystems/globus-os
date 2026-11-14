@@ -102,6 +102,22 @@ pub enum FaultAction {
     PanicKernel,
 }
 
+/// Exit-Code, mit dem ein abgestuerzter Prozess im Zombie-Fach steht.
+///
+/// Negativ wie ein Signal, nach der ueblichen Numerierung: eine fehlende oder
+/// geschuetzte Seite ist `SIGSEGV` (-11), ein ungueltiger Opcode ist `SIGILL`
+/// (-4). Vorher stand fuer jede Ausnahme -11 im Fach — wer den Absturz spaeter
+/// nachliest, konnte "Seite gefehlt" nicht von "unmoegliche Anweisung"
+/// unterscheiden, obwohl das Protokoll beide Arten trennt.
+pub fn exit_code(kind: ExceptionKind) -> i32 {
+    match kind {
+        // Seitenfehler und Schutzverletzung sind beide ein Zugriffsfehler.
+        ExceptionKind::PageFault | ExceptionKind::GeneralProtection => -11,
+        // Der Prozessor hat eine Anweisung nicht verstanden.
+        ExceptionKind::InvalidOpcode => -4,
+    }
+}
+
 /// Rolle des laufenden Prozesses fuer die Entscheidung.
 ///
 /// Diese Rolle ist eine Eigenschaft der Diensteverwaltung, nicht des Fehlers —
@@ -349,6 +365,15 @@ mod tests {
         let ende = counters.record(Origin::User, FaultAction::TerminateProcess);
         assert_eq!(ende.terminated, 1);
         assert_eq!(ende.service_restarts, 1);
+    }
+
+
+    #[test]
+    fn der_exit_code_nennt_die_ursache() {
+        // SIGSEGV fuer Zugriffsfehler, SIGILL fuer eine unmoegliche Anweisung.
+        assert_eq!(exit_code(ExceptionKind::PageFault), -11);
+        assert_eq!(exit_code(ExceptionKind::GeneralProtection), -11);
+        assert_eq!(exit_code(ExceptionKind::InvalidOpcode), -4);
     }
 
     #[test]
