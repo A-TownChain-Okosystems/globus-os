@@ -1,7 +1,7 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Stand:** 14.11.2026, gegen `aaa1b3b` nachgezaehlt: 553 Dateien. Der
+> **Stand:** 14.11.2026, gegen `8cab32d` nachgezaehlt: 554 Dateien. Der
 > vorige Kopf nannte 540, waehrend die Tabelle bereits 548 Zeilen hatte; beim
 > Nachzaehlen fehlten drei Kernel-Dateien
 > (`modules/atc-shivacore/kernel/src/identity_check.rs`, `identity_file.rs`,
@@ -88,7 +88,7 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
-| `docs/identity/SPEC-RECOVERY-001.md` | 1021 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 1032 |
 | `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 204 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
@@ -474,15 +474,16 @@
 | `system/identity-core/Cargo.toml` | 11 |
 | `system/identity-core/examples/issue-record.rs` | 51 |
 | `system/identity-core/src/lib.rs` | 374 |
-| `system/identity/Cargo.toml` | 18 |
+| `system/identity/Cargo.toml` | 19 |
 | `system/identity/README.md` | 78 |
 | `system/identity/src/account_lifecycle.rs` | 184 |
 | `system/identity/src/account_registry.rs` | 407 |
+| `system/identity/src/entropy.rs` | 222 |
 | `system/identity/src/file_store.rs` | 206 |
 | `system/identity/src/ipc_key_provider.rs` | 62 |
 | `system/identity/src/key_provider.rs` | 111 |
 | `system/identity/src/keystore.rs` | 114 |
-| `system/identity/src/lib.rs` | 373 |
+| `system/identity/src/lib.rs` | 469 |
 | `system/identity/src/multi_account.rs` | 227 |
 | `system/identity/src/persistence.rs` | 216 |
 | `system/identity/src/secure_store.rs` | 309 |
