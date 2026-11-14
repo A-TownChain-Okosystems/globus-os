@@ -1009,7 +1009,23 @@ Nonce, zwei Speisungen erzeugen also nie denselben Schlüsselstrom. Prüfbar:
 Wallet). `chacha20` ist mit dem Feature `zeroize` gebaut, damit Schlüssel und
 Keystromzustand beim Verwerfen genullt werden (REQ-REC-17).
 
-**EHRLICHE GRENZE.** Damit sind REQ-REC-13 bis REQ-REC-17 im Host-Pfad
+**Die Kernel-Seite (14.11.2026).** `modules/atc-shivacore/kernel/src/entropy_gate.rs`
+hält den einen Kern des Systems (`ENTROPY`), beantwortet `status()` und `ready()`
+(REQ-REC-13), gibt über `fill()` nur im Zustand `Ready` Material heraus,
+speist über `on_resume()` neu (REQ-REC-16) und liefert mit `status_label()` den
+Text für das Fenster (REQ-REC-18). Zwei Quellen sind gebaut, aber nicht belegt:
+`Rdrand` (CPUID-Prüfung, zehn Versuche, danach Ausfall) und `TscJitter`
+(Zeitgeberdifferenzen, vermischt). Geprüft auf dem Host, mit eingespeisten
+Quellen, nicht mit echter Hardware: 7 Tests in `entropy_gate`, Kernel gesamt 822.
+
+**EHRLICHE GRENZE.** Der Auslöser fehlt weiterhin: es gibt keinen ACPI-Pfad für
+S3/S4, der `on_resume()` ruft, und keinen Registrierungsaufruf, der `status()`
+fragt. `Rdrand` und `TscJitter` übersetzen und melden Ausfälle korrekt, ihre
+Güte belegt in dieser Umgebung aber nichts (16.3). Dazu kommt, dass
+`clippy -D warnings` für den Kernel-Crate schon vor dieser Änderung rot war
+(zwölf Befunde in `lkm`, `atcfs`, `ipc_lifecycle`, `memory_manager`, `pci_scan`);
+der neue Baustein selbst erzeugt keinen Befund, die fremden wurden nicht
+mitgeändert. Damit sind REQ-REC-13 bis REQ-REC-17 im Host-Pfad
 umgesetzt, im Image fehlt der **Auslöser**: kein Kernel-Hook, der bei S3/S4
 `invalidate()` und danach `reseed()` aufruft, und kein Registrierungspfad, der
 `status()` abfragt. Ohne diesen Aufrufer bleibt die Neuspeisung eine Fähigkeit,
