@@ -13,10 +13,15 @@ pub struct HardwareKeyHandle(pub u64);
 /// Hardware-backed identity-key failures.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HardwareKeyError {
+    /// Das Handle bezeichnet keinen Schluessel im Schutzbereich.
     InvalidHandle,
+    /// Zu diesem Handle ist kein Schluessel eingerichtet.
     NotProvisioned,
+    /// Der Schutzbereich ist derzeit nicht erreichbar.
     Unavailable,
+    /// Der Aufrufer ist nicht berechtigt.
     AccessDenied,
+    /// Der Schutzbereich meldet einen Fehler.
     HardwareFailure,
 }
 
@@ -25,6 +30,7 @@ pub enum HardwareKeyError {
 /// Implementations must not persist or export the key through ordinary storage or
 /// configuration. The returned bytes are transient and must be zeroized by callers.
 pub trait IdentityKeyHal {
+    /// Laedt einen fluechtigen 256-Bit-Schluessel; die Bytes sind vom Aufrufer zu loeschen.
     fn load_encryption_key(&self, handle: HardwareKeyHandle) -> Result<[u8; 32], HardwareKeyError>;
 }
 
@@ -34,6 +40,7 @@ pub struct HardwareIdentityKeyBackend<H> {
 }
 
 impl<H> HardwareIdentityKeyBackend<H> {
+    /// Haltegrenze um die uebergebene Implementierung.
     pub const fn new(hal: H) -> Self {
         Self { hal }
     }
