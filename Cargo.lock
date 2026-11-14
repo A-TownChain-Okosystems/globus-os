@@ -1654,6 +1654,14 @@ name = "globus-diagnostics"
 version = "0.1.0"
 
 [[package]]
+name = "globus-entropy-core"
+version = "0.1.0"
+dependencies = [
+ "chacha20",
+ "zeroize",
+]
+
+[[package]]
 name = "globus-graphics"
 version = "0.1.0"
 dependencies = [
@@ -1668,6 +1676,7 @@ dependencies = [
  "argon2",
  "bip39",
  "chacha20poly1305",
+ "globus-entropy-core",
  "globus-ipc",
  "hmac",
  "sha2 0.10.9",
@@ -3551,6 +3560,7 @@ version = "0.1.0"
 dependencies = [
  "bootloader_api",
  "globus-diagnostics",
+ "globus-entropy-core",
  "globus-identity-core",
  "lazy_static",
  "libshivacore",
