@@ -12,3 +12,6 @@ path = "src/main.rs"
 [dependencies]
 eframe = "0.37"
 egui = "0.37"
+
+[lints]
+workspace = true
