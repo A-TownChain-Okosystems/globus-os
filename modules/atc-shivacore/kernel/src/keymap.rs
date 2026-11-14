@@ -18,21 +18,37 @@
 pub enum Key {
     /// Bedruckbare Taste mit ihrer Lage auf einer US-Tastatur.
     Character(u8),
+    /// Eingabetaste.
     Enter,
+    /// Escape.
     Escape,
+    /// Ruecktaste.
     Backspace,
+    /// Tabulator.
     Tab,
+    /// Leertaste.
     Space,
+    /// Feststelltaste; sie schaltet beim Druecken um, nicht beim Loslassen.
     CapsLock,
+    /// Linke Umschalttaste.
     ShiftLeft,
+    /// Rechte Umschalttaste.
     ShiftRight,
+    /// Linke Steuerungstaste.
     ControlLeft,
+    /// Rechte Steuerungstaste.
     ControlRight,
+    /// Linke Alt-Taste.
     AltLeft,
+    /// Rechte Alt-Taste.
     AltRight,
+    /// Pfeil nach oben.
     ArrowUp,
+    /// Pfeil nach unten.
     ArrowDown,
+    /// Pfeil nach links.
     ArrowLeft,
+    /// Pfeil nach rechts.
     ArrowRight,
     /// Code ohne Bedeutung in dieser Belegung.
     Unknown(u8),
@@ -41,7 +57,9 @@ pub enum Key {
 /// Zustand, den die Tastatur zwischen zwei Codes haelt.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct ModifierState {
+    /// Umschalttaste ist gedrueckt.
     pub shift: bool,
+    /// Feststelltaste ist eingerastet.
     pub caps_lock: bool,
     /// Das vorige Byte war das Praefix 0xE0.
     pub extended: bool,
@@ -50,6 +68,7 @@ pub struct ModifierState {
 /// Ergebnis eines Scancodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Decoded {
+    /// Die erkannte Taste.
     pub key: Key,
     /// false, wenn die Taste losgelassen wurde.
     pub pressed: bool,
