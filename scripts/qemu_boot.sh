@@ -14,7 +14,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUN_SECONDS="${1:-20}"
 LOG="${2:-/tmp/shivacore-boot.log}"
-KERNEL_ELF="$ROOT/target/x86_64-unknown-none/release/shivacore"
+KERNEL_ELF="$ROOT/target/x86_64-unknown-none/kernel/shivacore"
 IMAGE="$ROOT/images/shivacore-bios.img"
 
 die() { echo "FEHLER: $*" >&2; exit 1; }
