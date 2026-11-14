@@ -9,6 +9,7 @@ use x86_64::{
     PhysAddr, VirtAddr,
 };
 
+/// Abbildet die aktiven Seitentabellen ueber den physischen Speicherabstand und gibt die Offset-Abbildung darauf zurueck.
 pub unsafe fn init(physical_memory_offset: VirtAddr) -> OffsetPageTable<'static> {
     let level_4_table = active_level_4_table(physical_memory_offset);
     OffsetPageTable::new(level_4_table, physical_memory_offset)
@@ -20,6 +21,7 @@ unsafe fn active_level_4_table(physical_memory_offset: VirtAddr) -> &'static mut
     &mut *virt.as_mut_ptr()
 }
 
+/// Vergibt und nimmt physische Frames gemaess den Speicherbereichen aus der Bootinformation.
 pub struct BootInfoFrameAllocator {
     memory_regions: &'static MemoryRegions,
     next: usize,
@@ -31,6 +33,7 @@ pub struct BootInfoFrameAllocator {
 }
 
 impl BootInfoFrameAllocator {
+    /// Allocator ohne vergebene oder freigegebene Frames.
     pub unsafe fn init(memory_regions: &'static MemoryRegions) -> Self {
         Self {
             memory_regions,
@@ -70,14 +73,17 @@ impl BootInfoFrameAllocator {
         true
     }
 
+    /// Bisher freigegebene Frames.
     pub fn freed_total(&self) -> usize {
         self.freed_total
     }
 
+    /// Doppelfreigaben, die abgewiesen wurden, statt die Freiliste zu vergiften.
     pub fn double_free_blocked(&self) -> usize {
         self.double_free_blocked
     }
 
+    /// Frames, die gerade auf der Freiliste liegen.
     pub fn free_list_len(&self) -> usize {
         self.freed.len()
     }
