@@ -19,15 +19,18 @@ use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 /// Dezentrale Identitaet: did:shivacore:<hex-public-key>
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Did {
+    /// Kennung als Text, gebildet nach dem Muster did:shivacore:<Schluessel>.
     pub value: String,
 }
 
 impl Did {
+    /// Identitaet aus dem uebergebenen Text, ohne Pruefung des Musters.
     pub fn new(value: &str) -> Self {
         Self {
             value: value.to_string(),
         }
     }
+    /// Kennung als Text.
     pub fn as_str(&self) -> &str {
         &self.value
     }
@@ -36,8 +39,11 @@ impl Did {
 /// Trait fuer kryptographische Operationen.
 /// Implementierungen: Ed25519Signer (echte Kryptografie), SoftwareSigner (Tests).
 pub trait CryptoProvider {
+    /// Eigene Kennung des Unterzeichners.
     fn did(&self) -> &Did;
+    /// Signiert die Nutzlast und liefert die Signaturbytes.
     fn sign(&self, payload: &[u8]) -> Vec<u8>;
+    /// Prueft eine Signatur gegen die Kennung.
     fn verify(did: &Did, payload: &[u8], signature: &[u8]) -> bool;
 }
 
@@ -45,6 +51,7 @@ pub trait CryptoProvider {
 // SoftwareSigner — deterministische Pseudo-Signatur fuer reproduzierbare Tests
 // =========================================================================
 
+/// Deterministische Pseudosignatur fuer reproduzierbare Tests; keine Kryptografie.
 #[derive(Debug, Clone)]
 pub struct SoftwareSigner {
     did: Did,
@@ -52,6 +59,7 @@ pub struct SoftwareSigner {
 }
 
 impl SoftwareSigner {
+    /// Leitet den Schluessel aus dem Namen ab und bildet die Kennung aus dessen Hexform.
     pub fn new(name: &str) -> Self {
         let private = name.as_bytes().to_vec();
         let public_b64 = hex_encode(&private);
@@ -62,6 +70,7 @@ impl SoftwareSigner {
         }
     }
 
+    /// Nimmt einen vorhandenen Schluessel und bildet die Kennung aus dessen Hexform.
     pub fn with_key(private_key: &[u8]) -> Self {
         let public_b64 = hex_encode(private_key);
         let did = Did::new(&format!("did:shivacore:{}", public_b64));
@@ -120,6 +129,7 @@ impl CryptoProvider for SoftwareSigner {
 /// ED25519-Prefix fuer DIDs, um von SoftwareSigner-DIDs unterscheidbar zu sein
 const ED25519_PREFIX: &str = "did:shivacore:ed25519:";
 
+/// Echte Ed25519-Signaturen; Kennungen tragen den Praefix did:shivacore:ed25519:.
 #[derive(Debug)]
 pub struct Ed25519Signer {
     did: Did,
