@@ -84,13 +84,20 @@ impl std::fmt::Display for ModuleState {
 /// Ladeprioritaet eines Moduls.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ModulePriority {
-    Core = 0,       // Core kernel subsystems (must load first)
-    Driver = 1,     // Hardware drivers
-    FileSystem = 2, // File system modules
-    Network = 3,    // Network protocol modules
-    Security = 4,   // Security modules (SELinux-like)
-    Utility = 5,    // Utility/helper modules
-    Custom = 9,     // User-defined modules
+    /// Core kernel subsystems (must load first).
+    Core = 0,
+    /// Hardware drivers.
+    Driver = 1,
+    /// File system modules.
+    FileSystem = 2,
+    /// Network protocol modules.
+    Network = 3,
+    /// Security modules (SELinux-like).
+    Security = 4,
+    /// Utility/helper modules.
+    Utility = 5,
+    /// User-defined modules.
+    Custom = 9,
 }
 
 impl ModulePriority {
