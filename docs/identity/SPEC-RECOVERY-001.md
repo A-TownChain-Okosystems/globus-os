@@ -630,7 +630,7 @@ Spalte „erwartet“ ist die Zusage.
 | REC-T-27 | Adresse nach dem Öffnen nachgerechnet ≠ gespeicherte Adresse | Integritätsfehler, kein Login |
 | REC-T-28 | Zeroize: Puffer nach `commit` geprüft | Entropie, Seed, Passwort, Klartext sind überschrieben |
 | REC-T-29 | Wiederherstellung auf Gerät mit anderem Konto | neues Profil nur mit Bestätigung, altes unverändert |
-| REC-T-30 | Label-Längen (`GLOBUS-WALLET-KEY-V1` = 20 usw.) | Übersetzungsprüfung schlägt bei Abweichung fehl |
+| REC-T-30 | Label-Längen (`GLOBUS-WALLET-KEY-V2` = 20 usw.) | Übersetzungsprüfung schlägt bei Abweichung fehl |
 | REC-T-31 | zwei Konten, gleiche Anzeigenamen, verschiedene Phrasen | getrennte `user_id`, getrennte Tresore |
 | REC-T-32 | Tresor mit `m_cost_kib` unter 19456 | abgewiesen (keine Absenkung der Parameter) |
 | REC-T-33 | Layout-Prüfer `scripts/check_recovery_spec.py` | Exit 0 gegen das Dokument |
@@ -864,7 +864,7 @@ Wahrheit über dieselbe Eigenschaft und könnte vom Versionsfeld abweichen.
 | Größe | Wert | Begründung |
 |---|---|---|
 | BIP39-Seed | 64 Byte | Standardausgabe von PBKDF2-HMAC-SHA512 |
-| HKDF-Label Wallet | 20 Byte | `GLOBUS-WALLET-KEY-V1`, nachgezählt im Prüfer |
+| HKDF-Label Wallet | 20 Byte | `GLOBUS-WALLET-KEY-V2`, nachgezählt im Prüfer |
 | Wallet-Seed | 32 Byte | Ed25519 verlangt genau 32 Byte Seed |
 | Signatur | 64 Byte | RFC 8032 |
 | Öffentlicher Schlüssel | 32 Byte | Ed25519-Kurvenpunkt, komprimiert |
