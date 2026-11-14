@@ -3,14 +3,20 @@
 use crate::SurfaceId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Rechteck in Bildschirmkoordinaten.
 pub struct Rect {
+    /// Linke Kante.
     pub x: i32,
+    /// Obere Kante.
     pub y: i32,
+    /// Breite in Pixel.
     pub width: u32,
+    /// Hoehe in Pixel.
     pub height: u32,
 }
 
 impl Rect {
+    /// Baut ein Rechteck aus Position und Groesse.
     pub const fn new(x: i32, y: i32, width: u32, height: u32) -> Self {
         Self {
             x,
@@ -20,6 +26,7 @@ impl Rect {
         }
     }
 
+    /// True, wenn der Punkt im Rechteck liegt; rechte und untere Kante zaehlen nicht dazu.
     pub fn contains(self, x: i32, y: i32) -> bool {
         x >= self.x
             && y >= self.y
@@ -33,28 +40,40 @@ impl Rect {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lage einer Oberflaeche im Kompositionsstapel.
 pub struct SurfacePlacement {
+    /// Oberflaeche, die platziert wird.
     pub surface: SurfaceId,
+    /// Rechteck auf dem Bildschirm.
     pub bounds: Rect,
+    /// Stapelreihenfolge; groessere Werte liegen oben.
     pub z: u32,
+    /// True, wenn die Oberflaeche gezeichnet wird.
     pub visible: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des Kompositors.
 pub enum CompositorError {
+    /// Die Oberflaeche ist bereits platziert.
     SurfaceExists,
+    /// Die Oberflaeche ist nicht platziert.
     SurfaceMissing,
+    /// Breite oder Hoehe ist 0.
     InvalidSize,
+    /// Die Obergrenze an Oberflaechen ist erreicht.
     TooManySurfaces,
 }
 
 #[derive(Debug, Default)]
+/// Stapel platzierter Oberflaechen mit Vergabe der Z-Reihenfolge.
 pub struct Compositor {
     surfaces: Vec<SurfacePlacement>,
     next_z: u32,
 }
 
 impl Compositor {
+    /// Leerer Kompositor; die erste Oberflaeche bekommt z = 1.
     pub fn new() -> Self {
         Self {
             surfaces: Vec::new(),
@@ -62,6 +81,7 @@ impl Compositor {
         }
     }
 
+    /// Platziert eine Oberflaeche, vergibt die naechste Z-Stufe und lehnt Doppelungen sowie Groesse 0 ab.
     pub fn create(&mut self, surface: SurfaceId, bounds: Rect) -> Result<(), CompositorError> {
         if bounds.width == 0 || bounds.height == 0 {
             return Err(CompositorError::InvalidSize);
@@ -99,6 +119,7 @@ impl Compositor {
         Ok(())
     }
 
+    /// Entfernt eine platzierte Oberflaeche.
     pub fn remove(&mut self, surface: SurfaceId) -> Result<(), CompositorError> {
         let index = self
             .surfaces
@@ -109,6 +130,7 @@ impl Compositor {
         Ok(())
     }
 
+    /// Hebt eine Oberflaeche auf die oberste Stufe.
     pub fn focus(&mut self, surface: SurfaceId) -> Result<(), CompositorError> {
         let max_z = self.next_z;
         let item = self
@@ -122,6 +144,7 @@ impl Compositor {
         Ok(())
     }
 
+    /// Oberste sichtbare Oberflaeche an diesem Punkt.
     pub fn hit_test(&self, x: i32, y: i32) -> Option<SurfaceId> {
         self.surfaces
             .iter()
@@ -130,6 +153,7 @@ impl Compositor {
             .map(|s| s.surface)
     }
 
+    /// Platzierte Oberflaechen in Einfuegereihenfolge.
     pub fn surfaces(&self) -> &[SurfacePlacement] {
         &self.surfaces
     }
