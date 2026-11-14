@@ -107,3 +107,5 @@ pub mod ramdisk;
 pub mod spawn;
 /// Textausgabe auf dem Bildschirm mit fester Zeichenbreite.
 pub mod screen;
+/// Diensteverwaltung: Beenden heisst fuer einen Dienst Neustart.
+pub mod services;
