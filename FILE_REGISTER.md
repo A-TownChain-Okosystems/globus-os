@@ -6,8 +6,10 @@
 > Nachzaehlen fehlten drei Kernel-Dateien
 > (`modules/atc-shivacore/kernel/src/identity_check.rs`, `identity_file.rs`,
 > `identity_gate.rs`) und die beiden Dateien des Entropiekerns. Sie stehen jetzt
-> Die Zahl 555 ist am 14.11.2026 erneut gegen `git ls-files` gestellt und
-> unveraendert; nachgezogen wurden die Zeilenzahlen der beiden Dokumente, die
+> Die Zahl 557 ist am 14.11.2026 gegen `git ls-files` gestellt (555 + die beiden
+> neuen Toolchain-Dateien `rust-toolchain.toml` und
+> `modules/atc-shivacore/boot/rust-toolchain.toml`) und
+> bestaetigt; nachgezogen wurden die Zeilenzahlen der beiden Dokumente, die
 > seit der E-6-Bestaetigung gewachsen sind (Wiederherstellungsspezifikation
 > 1062 -> 1148 -> 1175 -> 1304), weil der vorige Wert gemessen war und nicht
 > geschaetzt werden darf. Der Pruefer wuchs mit der eingefrorenen Ableitung auf
@@ -32,17 +34,17 @@
 | `.atc/standards.yaml` | 21 |
 | `.cargo/config.toml` | 4 |
 | `.github/dependabot.yml` | 38 |
-| `.github/workflows/auto-format-rust.yml` | 41 |
-| `.github/workflows/cargo-audit.yml` | 37 |
+| `.github/workflows/auto-format-rust.yml` | 44 |
+| `.github/workflows/cargo-audit.yml` | 42 |
 | `.github/workflows/codeql.yml` | 20 |
 | `.github/workflows/dependency-review.yml` | 14 |
 | `.github/workflows/doc-debt.yml` | 37 |
 | `.github/workflows/governance-ci.yml` | 21 |
-| `.github/workflows/rust-ci.yml` | 39 |
-| `.github/workflows/sdk.yml` | 14 |
-| `.github/workflows/shivacore-kernel.yml` | 282 |
-| `.github/workflows/system-ci.yml` | 26 |
-| `.github/workflows/test-suite.yml` | 104 |
+| `.github/workflows/rust-ci.yml` | 42 |
+| `.github/workflows/sdk.yml` | 19 |
+| `.github/workflows/shivacore-kernel.yml` | 290 |
+| `.github/workflows/system-ci.yml` | 29 |
+| `.github/workflows/test-suite.yml` | 107 |
 | `.gitignore` | 12 |
 | `AGENTS.md` | 15 |
 | `AGENT_MANIFEST.md` | 158 |
@@ -52,7 +54,9 @@
 | `CONTRIBUTING.md` | 9 |
 | `Cargo.lock` | 5.390 |
 | `Cargo.toml` | 40 |
-| `FILE_REGISTER.md` | 564 |
+| `modules/atc-shivacore/boot/rust-toolchain.toml` | 11 |
+| `rust-toolchain.toml` | 18 |
+| `FILE_REGISTER.md` | 585 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
