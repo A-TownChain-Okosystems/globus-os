@@ -48,6 +48,18 @@ pub enum Syscall {
     HandleClose = 0x0030,
     /// Liest die monotone Zeit.
     MonotonicTime = 0x0040,
+    /// Schreibt auf die Systemkonsole.
+    ///
+    /// `arg0` waehlt die Operation (`CONSOLE_OP_CLEAR` oder
+    /// `CONSOLE_OP_WRITE`). Bei `CONSOLE_OP_WRITE` steht der Text im Puffer
+    /// (`buffer_ptr`, `buffer_len`, hoechstens `CONSOLE_MAX_BYTES`). Der Aufruf
+    /// verlangt eine Capability des Typs `Console` mit Schreibrecht.
+    ///
+    /// Die Konsole hat genau einen Schreiber. Sobald ein Prozess sie
+    /// uebernimmt, zeichnet der Kernel selbst nichts mehr auf den Bildschirm;
+    /// seine Ausgabe geht weiter auf die serielle Schnittstelle. Zwei
+    /// Schreiber auf dieselbe Flaeche wuerden sich gegenseitig ueberschreiben.
+    Console = 0x0050,
 }
 
 impl Syscall {
@@ -213,6 +225,7 @@ impl SyscallBlock {
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             x if x == Syscall::Exit.id() => Syscall::Exit,
+            x if x == Syscall::Console.id() => Syscall::Console,
             _ => return Err(AbiError::InvalidSyscall),
         };
         if flags != SYSCALL_FLAG_NONE {
@@ -376,6 +389,61 @@ pub enum KernelBootPhase {
 /// Groesste Nutzlast, die der Kernel in einem Syscall kopiert.
 pub const MAX_SYSCALL_PAYLOAD: usize = 1024 * 1024;
 
+/// Konsole: Bildschirm leeren, Cursor nach oben links.
+pub const CONSOLE_OP_CLEAR: u64 = 0;
+/// Konsole: Text an der Cursorposition schreiben; `\n` beginnt eine neue Zeile.
+pub const CONSOLE_OP_WRITE: u64 = 1;
+/// Groesster Text, den ein Aufruf auf die Konsole bringt.
+///
+/// Der Wert ist absichtlich kleiner als `MAX_SYSCALL_PAYLOAD`: eine
+/// Bildschirmzeile braucht keine Megabyte, und die Kopie im Kernel bleibt ein
+/// fester Stapelpuffer.
+pub const CONSOLE_MAX_BYTES: usize = 1024;
+
+// Der Text eines Aufrufs bleibt unter der Nutzlastgrenze der ABI. Geprueft
+// beim Uebersetzen, nicht beim Testen: eine spaetere Aenderung faellt sofort
+// auf, nicht erst im Testlauf.
+const _: () = assert!(CONSOLE_MAX_BYTES <= MAX_SYSCALL_PAYLOAD);
+
+/// Tastenereignis, wie der Kernel es in einem 64-Bit-Wort zustellt.
+///
+/// Das Layout steht hier und nicht in jeder Programmquelle neu: Scancode in den
+/// unteren acht Bits, das gedruckte Zeichen (falls es eines gibt) in Bits 16..24.
+/// Ein Wort 0 heisst "nichts anliegend", weil Scancode 0 in Scan-Set 1 nicht
+/// vorkommt.
+pub mod input {
+    /// Bits, in denen der Scancode liegt.
+    pub const SCANCODE_MASK: u64 = 0xFF;
+    /// Verschiebung, unter der das Zeichen liegt.
+    pub const CHARACTER_SHIFT: u32 = 16;
+
+    /// Scancode aus einem gepackten Ereignis.
+    pub const fn scancode(word: u64) -> u8 {
+        (word & SCANCODE_MASK) as u8
+    }
+
+    /// Gedrucktes Zeichen aus einem gepackten Ereignis, falls eines dabei ist.
+    pub const fn character(word: u64) -> Option<char> {
+        let byte = ((word >> CHARACTER_SHIFT) & 0xFF) as u8;
+        if byte == 0 { None } else { Some(byte as char) }
+    }
+
+    /// Packt Scancode und Zeichen zu einem Wort.
+    pub const fn pack(scancode: u8, character: Option<char>) -> u64 {
+        let ch = match character {
+            Some(c) => (c as u32 as u64) & 0xFF,
+            None => 0,
+        };
+        (scancode as u64) | (ch << CHARACTER_SHIFT)
+    }
+}
+
+/// Kanal, an dem der Kernel Tastenereignisse zustellt.
+///
+/// Der Wert steht hier und nicht zweimal: Kernel und Userspace muessen
+/// denselben Kanal meinen, sonst liest das Programm an einer leeren Stelle.
+pub const KERNEL_INPUT_CHANNEL: u64 = 1;
+
 /// Wahr, wenn die gepackte Version die Major-Version dieser ABI traegt.
 pub const fn validate_abi_version(version: u32) -> bool {
     (version >> 16) as u16 == ABI_MAJOR
@@ -525,5 +593,32 @@ mod tests {
             }
             .compatible()
         );
+    }
+
+    #[test]
+    fn key_event_layout_round_trips() {
+        let word = input::pack(0x1E, Some('a'));
+        assert_eq!(input::scancode(word), 0x1E);
+        assert_eq!(input::character(word), Some('a'));
+        // Steuertasten tragen kein Zeichen: der Scancode bleibt lesbar.
+        let enter = input::pack(0x1C, None);
+        assert_eq!(input::scancode(enter), 0x1C);
+        assert_eq!(input::character(enter), None);
+        // 0 heisst "nichts anliegend", weil Scancode 0 nicht vorkommt.
+        assert_eq!(input::scancode(0), 0);
+    }
+
+    #[test]
+    fn console_opcodes_are_distinct_and_bounded() {
+        assert_ne!(CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE);
+        assert_eq!(CONSOLE_OP_CLEAR, 0);
+        assert_eq!(CONSOLE_OP_WRITE, 1);
+    }
+
+    #[test]
+    fn console_syscall_keeps_its_number() {
+        // 0x0050 ist im Vertrag vergeben; eine stille Umnummerierung wuerde
+        // jedes Programm brechen, das die Konsole benutzt.
+        assert_eq!(Syscall::Console.id(), 0x0050);
     }
 }
