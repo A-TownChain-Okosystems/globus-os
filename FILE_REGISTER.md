@@ -84,7 +84,7 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
-| `docs/identity/SPEC-RECOVERY-001.md` | 875 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 978 |
 | `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 204 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
@@ -409,7 +409,7 @@
 | `modules/atc-windows-edition/src/wallet.rs` | 38 |
 | `scripts/boot_monitor.py` | 270 |
 | `scripts/check_evidence_binding.py` | 156 |
-| `scripts/check_recovery_spec.py` | 318 |
+| `scripts/check_recovery_spec.py` | 462 |
 | `scripts/doc_debt.py` | 157 |
 | `scripts/qemu_boot.sh` | 91 |
 | `sdk/Cargo.toml` | 11 |
