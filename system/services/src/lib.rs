@@ -1,6 +1,7 @@
 //! Deterministic service lifecycle and dependency model.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lifecycle state of a service.
 pub enum ServiceState {
     /// Declared but not started.
     Defined,
