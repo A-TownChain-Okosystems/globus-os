@@ -11,45 +11,67 @@ const MIN_WINDOW_HEIGHT: u32 = 48;
 const REACHABLE_TITLEBAR_HEIGHT: i32 = 24;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand eines Fensters.
 pub enum WindowState {
+    /// Normal gross und sichtbar.
     Normal,
+    /// Minimiert, nicht gezeichnet.
     Minimized,
+    /// Auf den Viewport vergroessert.
     Maximized,
+    /// Bildschirmfuellend.
     Fullscreen,
+    /// Geschlossen.
+    /// Das Fenster ist geschlossen oder minimiert.
     Closed,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Fenster der Fensterverwaltung.
 pub struct Window {
+    /// Flaeche des Fensters.
     pub surface: SurfaceId,
+    /// Titel des Fensters.
     pub title: String,
+    /// Aktuelles Rechteck.
     pub bounds: Rect,
+    /// Zustand des Fensters.
     pub state: WindowState,
+    /// True, wenn das Fenster den Fokus hat.
     pub focused: bool,
+    /// True, wenn die Groesse geaendert werden darf.
     pub resizable: bool,
     restore_bounds: Option<Rect>,
     state_before_minimize: WindowState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der Fensterverwaltung.
 pub enum WindowError {
+    /// Das Fenster existiert bereits.
     Exists,
+    /// Das Fenster existiert nicht.
     Missing,
     Closed,
+    /// Die Groesse unterschreitet das Minimum oder ist leer.
     InvalidSize,
+    /// Das Fenster darf nicht in der Groesse geaendert werden.
     NotResizable,
 }
 
 #[derive(Debug, Default)]
+/// Fenster mit Fokus und Z-Reihenfolge.
 pub struct WindowManager {
     windows: Vec<Window>,
 }
 
 impl WindowManager {
+    /// Leere Fensterverwaltung.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Oeffnet ein Fenster; Groessen unter dem Minimum werden abgelehnt.
     pub fn open(
         &mut self,
         surface: SurfaceId,
@@ -79,6 +101,7 @@ impl WindowManager {
         self.focus(surface)
     }
 
+    /// Setzt den Fokus auf dieses Fenster.
     pub fn focus(&mut self, surface: SurfaceId) -> Result<(), WindowError> {
         let index = self
             .windows
@@ -98,6 +121,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Verschiebt ein Fenster.
     pub fn move_window(
         &mut self,
         surface: SurfaceId,
@@ -127,6 +151,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Aendert die Groesse; nicht veraenderbare Fenster werden abgelehnt.
     pub fn resize_window(
         &mut self,
         surface: SurfaceId,
@@ -167,6 +192,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Maximiert das Fenster auf das Rechteck des Viewports.
     pub fn maximize(&mut self, surface: SurfaceId, viewport: Rect) -> Result<(), WindowError> {
         if viewport.width == 0 || viewport.height == 0 {
             return Err(WindowError::InvalidSize);
@@ -186,6 +212,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Minimiert das Fenster.
     pub fn minimize(&mut self, surface: SurfaceId) -> Result<(), WindowError> {
         let window = self.active_window_mut(surface)?;
         if window.state == WindowState::Minimized {
@@ -197,6 +224,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Stellt ein minimiertes Fenster wieder her.
     pub fn restore(&mut self, surface: SurfaceId) -> Result<(), WindowError> {
         let window = self.active_window_mut(surface)?;
         if window.state == WindowState::Minimized {
@@ -211,6 +239,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Setzt den Zustand direkt.
     pub fn set_state(&mut self, surface: SurfaceId, state: WindowState) -> Result<(), WindowError> {
         let window = self
             .windows
@@ -230,6 +259,7 @@ impl WindowManager {
         Ok(())
     }
 
+    /// Schliesst das Fenster.
     pub fn close(&mut self, surface: SurfaceId) -> Result<(), WindowError> {
         self.set_state(surface, WindowState::Closed)
     }
@@ -246,14 +276,17 @@ impl WindowManager {
         Ok(window)
     }
 
+    /// Fenster mit Fokus.
     pub fn focused(&self) -> Option<&Window> {
         self.windows.iter().find(|w| w.focused)
     }
 
+    /// Alle Fenster.
     pub fn windows(&self) -> &[Window] {
         &self.windows
     }
 
+    /// Sichtbare Fenster als Platzierungen fuer den Kompositor.
     pub fn placements(&self) -> impl Iterator<Item = SurfacePlacement> + '_ {
         self.windows.iter().enumerate().filter_map(|(i, w)| {
             if w.state == WindowState::Closed || w.state == WindowState::Minimized {
