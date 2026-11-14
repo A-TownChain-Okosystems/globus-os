@@ -1,3 +1,84 @@
+# Entscheidung: Identitaetspruefung im Image (14.11.2026)
+
+## Entscheidung des Owners
+
+| Nr. | Entscheidung | Festlegung |
+| --- | --- | --- |
+| 1 | KDF-Parameter | **Uebernehmen** — Argon2id, 19 MiB, t = 2, p = 1, Parameter im Datensatz versioniert |
+| 2 | Herkunft des Datensatzes | **Ramdisk** — eigene Datei, keine einkompilierten Zugangsdaten, strikte Rechte, fail-closed |
+| 3 | Enter bei Erfolg | **Nur bestaetigen** — "Pruefung bestanden - Sitzung folgt.", keine vorgetaeuschte Sitzung, keine PID vor der Prozess-ABI |
+
+Reihenfolge der ABI-Seite (Owner): `0x0060` registrieren, `SPAWN` als Recht auf
+`Process`, PID eindeutig und kollisionsfrei, Start ueber den vorhandenen
+`build_space`-Pfad, Uebergabe an den Scheduler, Tests fuer unberechtigten SPAWN,
+ungueltige PID, fehlgeschlagenen Aufbau und erfolgreichen Start. `0x0050` bleibt
+ausschliesslich der Konsole.
+
+## Was umgesetzt ist: der gemeinsame Pruefkern
+
+`system/identity-core` (`globus-identity-core`) ist `no_std` + `alloc` und wird
+von Host und Image gemeinsam benutzt — ein Verifizierer, kein zweiter. Er baut
+auch fuer `x86_64-unknown-none`, ist also im Image verwendbar.
+
+- Datensatz: 64 Byte, Kennung `ATID`, Fassung 1, Verfahren 1 (Argon2id),
+  Speicher (KiB, u16), Durchgaenge (u32), Parallelitaet, Reserviertfeld,
+  Salz 16 Byte, Hash 32 Byte.
+- `CredentialRecord::parse` ist fail-closed in fester Reihenfolge: Laenge,
+  Kennung, Fassung, Verfahren, Reserviertfeld, Wertebereiche, Geheimnisse.
+  Unbekannte Fassung wird nicht gedeutet, ein abgeschnittener Datensatz ist
+  kein Datensatz, leeres Salz oder Hash wird abgelehnt.
+- `verify` rechnet mit den Parametern **aus dem Datensatz** (nicht aus dem
+  Programm), vergleicht ohne Fruehausstieg und meldet `KdfUnavailable`, wenn die
+  KDF nicht rechnen kann.
+- Grenzen: Speicher 8..32 MiB (Vielfache von 1 MiB), Durchgaenge 1..10,
+  Parallelitaet 1..4. Ein Datensatz, der mehr verlangt, wird abgelehnt statt
+  gerechnet.
+- 9 Tests: richtiges und falsches Passwort, fehlender/abgeschnittener/
+  aufgefuellter Datensatz, fremde Kennung/Fassung/Verfahren, manipulierte
+  Parameter, leeres Salz oder Hash, Salt wirkt, schwaechere erlaubte Parameter.
+
+## Messung im Image (erster Schritt) und was sie blockiert
+
+Der Owner verlangt die Messung im Image, nicht die Uebernahme der Host-Werte.
+Der erste Schritt ist deshalb die Speicherfrage: Argon2id mit 19 MiB braucht
+19 MiB am Stueck.
+
+Gemessen im Kernel-Image (QEMU/BIOS, `-m 256M`):
+
+```
+IDENT-001 Haufen: HEAP_START=0x444444440000 HEAP_SIZE=512 KiB,
+Allokator meldet frei=524288 Byte, Probe-Zeiger=0x0
+IDENT-001 Messung: 19 MiB NICHT verfuegbar (Haufen 512 KiB) —
+die Pruefung wuerde fail-closed ablehnen
+```
+
+Das ist der ehrliche Stand: **die Pruefung kann im Image heute nicht rechnen.**
+Der Kernel-Haufen ist 512 KiB (begruendet aus acht Dienst-Startabbildern zu
+64 KiB); 19 MiB passen nicht hinein, und der Allokator gibt folgerichtig null
+zurueck. Die Anmeldung wuerde fail-closed abweisen, nicht abstuerzen.
+
+Wichtig fuer die Methode: der erste Messwert dieses Schritts meldete
+"19 MiB verfuegbar" und war falsch. Aufgefallen ist es erst, als der freie
+Speicher mitgelesen wurde (512 KiB). Eine Allokation "geglueckt" zu nennen,
+weil ein Zeiger ungleich null zurueckkommt, ist kein Nachweis — der Nachweis
+braucht zwei unabhaengige Werte, deshalb liest die Messung jetzt beides.
+
+Die Zeitmessung im Image ist damit noch nicht moeglich. Sie braucht zuerst
+einen 19-MiB-Bereich fuer die KDF; der naechste Schritt ist ein eigener,
+temporaerer Bereich aus dem Frame-Vorrat (nicht der Haufen), mit Freigabe nach
+der Rechnung. Erst danach ist "19 MiB, t=2 im Image = X ms" eine Tatsache.
+
+## Was ausdruecklich NICHT passiert ist
+
+- Keine Sitzung, keine PID, kein Scheduler-Uebergang in der Anmeldung
+  (Entscheidung 3).
+- Kein einkompiliertes Passwort und kein einkompilierter Hash (Entscheidung 2);
+  der Datensatz ist ein Dateiformat, die Ramdisk-Ablage folgt mit dem Zugriff.
+- Keine Uebernahme der Host-Laufzeit (24,7 ms) als Image-Nachweis.
+
+
+---
+
 # Identitaetspruefung im Image — Entscheidungsvorlage
 
 **Datum:** 14. November 2026
