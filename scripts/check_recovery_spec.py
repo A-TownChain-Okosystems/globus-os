@@ -19,8 +19,11 @@ eine Aufgabe der Implementierungstests (REC-T-xx im Dokument).
 Exit: 0 = alle Zusagen halten, 1 = Widerspruch (mit Stelle im Dokument).
 """
 
+import os
 import struct
 import sys
+
+WURZEL = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 FEHLER = []
 
@@ -215,6 +218,143 @@ ATID_FELDER = [
 ]
 
 
+
+# --------------------------------------------------------------------------
+# Identifikatoren und Laengen (E1.3/E1.4, Abschnitte 15.3 bis 15.5)
+# --------------------------------------------------------------------------
+#
+# Bei Byteangaben ist Schaetzen der teure Fehler: eine um ein Zeichen falsch
+# gezaehlte Domaene ergibt einen anderen Digest und damit eine andere Adresse.
+# Deshalb werden hier alle Laengen aus den Zeichenketten selbst gerechnet und
+# gegen die im Dokument genannten Werte gehalten.
+
+import hashlib
+
+DID_PREFIX = "did:shivacore:ed25519:"
+ADDR_V1_PREFIX = "ATC"
+ADDR_V2_PREFIX = "ATC2"
+DOMAENE_ADRESSE_V2 = "ATC-ADDR-V2"
+DOMAENE_ADRESSE_V2_CHECK = "ATC-ADDR-V2-CHECK"
+LABEL_WALLET = "GLOBUS-WALLET-KEY-V1"
+LABEL_IDENTITAET = "GLOBUS-IDENTITY-KEY-V1"
+LABEL_KNOTEN = "GLOBUS-NODE-KEY-V1"
+
+HEX_PRO_WEITE = 2          # zwei Zeichen je Byte
+ADRESSE_HEX_BYTES = 14     # 14 Byte Hauptteil
+ADRESSE_CHECK_BYTES = 2    # 2 Byte Pruefsumme
+PUBKEY_BYTES = 32
+SEED_BYTES = 32
+SIGNATUR_BYTES = 64
+BIP39_SEED_BYTES = 64
+
+
+def adresse_v2(pubkey: bytes) -> str:
+    """Rechnet die Adresse der Fassung 2 nach Abschnitt 15.5."""
+    h = hashlib.sha256(DOMAENE_ADRESSE_V2.encode() + b"\x00" + pubkey).digest()
+    c = hashlib.sha256(DOMAENE_ADRESSE_V2_CHECK.encode() + b"\x00" + h).digest()
+    return (ADDR_V2_PREFIX
+            + h[:ADRESSE_HEX_BYTES].hex().upper()
+            + c[:ADRESSE_CHECK_BYTES].hex().upper())
+
+
+def adresse_v1(privater_wert: bytes) -> str:
+    """Rechnet die Adresse der Fassung 1 nach system/identity/src/lib.rs:298."""
+    public = hashlib.sha256(privater_wert).digest()
+    step1 = hashlib.sha256(public).digest()
+    step2 = hashlib.sha256(step1).digest()
+    checksum = hashlib.sha256(step2).digest()
+    return (ADDR_V1_PREFIX
+            + step2[:ADRESSE_HEX_BYTES].hex().upper()
+            + checksum[:ADRESSE_CHECK_BYTES].hex().upper())
+
+
+def did(pubkey: bytes) -> str:
+    """Rechnet die DID nach Abschnitt 15.5 (Kleinhex, wie in did.rs)."""
+    return DID_PREFIX + pubkey.hex()
+
+
+def pruefe_identifikatoren() -> None:
+    print("\n== Identifikatoren: Adresse v1, Adresse v2, DID (E1.3/E1.4) ==")
+
+    pruefe(len(DID_PREFIX) == 22,
+           f"DID-Praefix ist 22 Zeichen (war {len(DID_PREFIX)})")
+    pruefe(len(DID_PREFIX) + 2 * PUBKEY_BYTES == 86,
+           "DID ist 86 Zeichen (22 + 64)")
+    pruefe(len(ADDR_V1_PREFIX) + 2 * (ADRESSE_HEX_BYTES + ADRESSE_CHECK_BYTES) == 35,
+           "Adresse v1 ist 35 Zeichen")
+    pruefe(len(ADDR_V2_PREFIX) + 2 * (ADRESSE_HEX_BYTES + ADRESSE_CHECK_BYTES) == 36,
+           "Adresse v2 ist 36 Zeichen")
+    pruefe(len(DOMAENE_ADRESSE_V2) + 1 + PUBKEY_BYTES == 44,
+           f"Hash-Eingabe der Adresse v2 ist 44 Byte (Domaene {len(DOMAENE_ADRESSE_V2)} + 1 + 32)")
+    pruefe(len(DOMAENE_ADRESSE_V2_CHECK) + 1 + PUBKEY_BYTES == 50,
+           f"Hash-Eingabe der Pruefsumme ist 50 Byte (Domaene {len(DOMAENE_ADRESSE_V2_CHECK)} + 1 + 32)")
+    pruefe(len(LABEL_WALLET) == 20, f"HKDF-Label Wallet ist 20 Byte (war {len(LABEL_WALLET)})")
+    pruefe(len(LABEL_IDENTITAET) == 22,
+           f"HKDF-Label Identitaet ist 22 Byte (war {len(LABEL_IDENTITAET)})")
+    pruefe(len(LABEL_KNOTEN) == 18,
+           f"HKDF-Label Knoten ist 18 Byte (war {len(LABEL_KNOTEN)})")
+
+    # Ein Beispielpubkey: keine Kurve, nur 32 Byte mit aufsteigenden Werten.
+    pubkey = bytes(range(PUBKEY_BYTES))
+    a1 = adresse_v1(b"ein-beispielgeheimnis")
+    a2 = adresse_v2(pubkey)
+    d = did(pubkey)
+
+    pruefe(len(a1) == 35, f"Adresse v1 in der Praxis 35 Zeichen (war {len(a1)})")
+    pruefe(len(a2) == 36, f"Adresse v2 in der Praxis 36 Zeichen (war {len(a2)})")
+    pruefe(a2.startswith(ADDR_V2_PREFIX), "Adresse v2 traegt das Praefix ATC2")
+    pruefe(a2[4:] == a2[4:].upper(), "Adresse v2 ist Grosshex")
+    pruefe(len(d) == 86, f"DID in der Praxis 86 Zeichen (war {len(d)})")
+    pruefe(d[22:] == d[22:].lower(), "DID ist Kleinhex")
+    pruefe(len(a1) != len(a2) and not a2.endswith(a1[3:]), 
+           "v1- und v2-Adresse sind nicht ineinander lesbar")
+    pruefe(a2 != d and d not in a2 and a2 not in d,
+           "Adresse und DID sind nicht gleich und nicht ineinander enthalten")
+
+
+
+def pruefe_kreuzbezug(repo_wurzel: str) -> None:
+    """Prueft, dass DID-Praefix und Seed-Konstruktor im Quelltext so existieren."""
+    print("\n== Kreuzbezug zum Quelltext (E1.3/E1.4) ==")
+    pfad = f"{repo_wurzel}/modules/atc-shivacore/service_space/src/did.rs"
+    try:
+        with open(pfad, encoding="utf-8") as f:
+            quelle = f.read()
+    except OSError as fehler:
+        pruefe(False, f"did.rs lesbar ({fehler})")
+        return
+    treffer = [z for z in quelle.splitlines() if "ED25519_PREFIX" in z and "const" in z]
+    if treffer:
+        wert = treffer[0].split('"')[1] if '"' in treffer[0] else ""
+        pruefe(wert == DID_PREFIX,
+               f"did.rs:130 fuehrt ED25519_PREFIX = {wert!r}, Dokument nennt {DID_PREFIX!r}")
+    else:
+        pruefe(False, "did.rs fuehrt eine Konstante ED25519_PREFIX")
+    pruefe("fn from_seed" in quelle,
+           "did.rs bietet Ed25519Signer::from_seed(&[u8; 32])")
+    pruefe("fn verifying_key" in quelle or "verifying_key" in quelle,
+           "did.rs bildet den oeffentlichen Schluessel aus dem SigningKey")
+
+def pruefe_dokument(repo_wurzel: str) -> None:
+    """Prueft, dass das Dokument die Entscheidungen auch traegt."""
+    print("\n== Dokument traegt die Entscheidungen ==")
+    pfad = f"{repo_wurzel}/docs/identity/SPEC-RECOVERY-001.md"
+    try:
+        with open(pfad, encoding="utf-8") as f:
+            text = f.read()
+    except OSError as fehler:
+        pruefe(False, f"Dokument lesbar ({fehler})")
+        return
+    for marke, was in [
+        ("ADDRESS_ONLY", "E-6: ADDRESS_ONLY steht im Dokument"),
+        ("NON_SIGNING", "E-6: NON_SIGNING steht im Dokument"),
+        ("GLOBUS-WALLET-KEY-V1", "E1.3: HKDF-Label Wallet benannt"),
+        (DID_PREFIX, "E1.4: DID-Praefix steht im Dokument"),
+        (DOMAENE_ADRESSE_V2, "E1.4: Domaene der Adresse v2 benannt"),
+    ]:
+        pruefe(marke in text, was)
+
+
 def main():
     print("== Tresor-Container GLBVAULT ==")
     summe = 0
@@ -303,6 +443,10 @@ def main():
     for name, roh, erwartet in inner_faelle:
         _, fehler = inner_parse(roh)
         pruefe(fehler == erwartet, f"{name} -> {erwartet} (war {fehler})")
+
+    pruefe_identifikatoren()
+    pruefe_kreuzbezug(WURZEL)
+    pruefe_dokument(WURZEL)
 
     print()
     if FEHLER:
