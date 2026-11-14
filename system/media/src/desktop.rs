@@ -1,6 +1,7 @@
 //! Desktop media-window state independent of the compositor implementation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Darstellungsmodus eines Medienfensters.
 pub enum MediaWindowMode {
     /// Fenster im normalen Fenstermodus.
     Windowed,
