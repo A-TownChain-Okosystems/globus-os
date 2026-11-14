@@ -80,19 +80,54 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1778 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1786 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
+| Diensteverwaltung | 5 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad |
 | Fenster-Crate | kein Testrahmen (bare metal); Nachweis ueber QEMU |
 | rustfmt/clippy | eigene Aenderungen ohne Befund; die Datei `interrupts.rs` ist im Bestand nicht rustfmt-clean (Importreihenfolge, lange Signaturen) und wurde nicht umformatiert |
+
+## Supervisor: Beenden heisst fuer einen Dienst Neustart
+
+Vorher galt: das Ramdisk-Init endet mit `Exit 0`, danach laeuft niemand mehr, der
+einen Dienst startet oder neu startet. Jetzt ist das Anmeldefenster als Dienst
+eingetragen (`kernel/src/services.rs`, Tabelle mit PID, Einsprung, Stapelgrenze,
+Startvertrag, Versuchszahl, Limit 5).
+
+Der Exit-Pfad fragt **vor** dem Widerruf der Capabilities, ob die PID ein Dienst
+ist. Ist sie es, wird der Prozess an seinen Startzustand zurueckgesetzt: Stapel
+geleert, Startvertrag neu geschrieben, Rahmen auf den Einsprung, allgemeine
+Register auf 0, `rflags = 0x202`. Die Capabilities bleiben — ein Neustart ohne
+Rechte waere ein Dienst, der nichts tun kann.
+
+Bewusst **kein** Prozessstart: es wird kein Adressraum gebaut, kein Programm
+nachgeladen und kein Frame vergeben; der Dienst kehrt in das Abbild zurueck, das
+beim Boot fuer ihn angelegt wurde. Ein echter Neustart aus einem neuen Abbild
+braucht einen Prozessstart-Syscall (`docs/SPAWN-ANNAHME-2026-11-09.md`) und
+bleibt offen. Ein Strukturwaechtertest haelt die Reihenfolge fest: Dienstpruefung
+vor `cleanup_process`, sonst faellt die Zusicherung still.
+
+Ausloeser im Fenster: `Esc` beendet den Dienst absichtlich. Ohne Ruecksetzen
+waere das ein stiller Ausfall; mit Ruecksetzen ist es ein Neustart.
+
+| Beobachtung (QEMU/BIOS) | Ergebnis |
+|---|---|
+| `hello` getippt, dann `Esc` | Log: `Dienst 'greeter' PID=1003 neu gestartet (Versuch 1/5) — Stapel geleert, Startvertrag neu geschrieben, Capabilities bleiben` |
+| zweites `Esc` | `Versuch 2/5`; das Limit zaehlt wirklich hoch |
+| Bild vor dem Neustart | Benutzerzeile bis x=153 (fuenf Zeichen) |
+| Bild nach dem Neustart | Benutzerzeile bis x=118 = leeres Feld, gleiche Maske, kein Rest der alten Eingabe |
+| Eingabe nach dem Neustart | `ab` tippen ergibt x=132 — Tastatur und Kanal funktionieren im neuen Lauf |
 
 ## Offen
 
 1. **Identitaetspruefung.** Braucht eine Ablage im Image (Dateisystem oder
    eingebettete Kontenliste) und eine Entscheidung, wo das Geheimnis liegt.
-2. **Anzeige im Betrieb.** Das Fenster zeichnet ueber den Kernel-Syscall. Ein
+2. **Echter Neustart aus dem Abbild.** Der Supervisor setzt zurueck, er laedt
+   nicht neu. Dafuer fehlen Prozessstart-Syscall und ein erreichbarer
+   Frame-Allokator im Syscall-Pfad.
+3. **Anzeige im Betrieb.** Das Fenster zeichnet ueber den Kernel-Syscall. Ein
    Ring-3-Konsolendienst waere die Alternative; die Entscheidung ist offen, der
    Syscall ist so geschnitten, dass beide Wege darauf aufsetzen koennen.
-3. **CI.** Die Workflows starten seit dem 3.11.2026 nicht (`startup_failure`),
+4. **CI.** Die Workflows starten seit dem 3.11.2026 nicht (`startup_failure`),
    `CI_VERIFIED` ist damit weiterhin nicht vergeben.
-4. **ABI-Dokumentation.** Der RBX-Befund gehoert in den Vertragstext: ein
+5. **ABI-Dokumentation.** Der RBX-Befund gehoert in den Vertragstext: ein
    Programm darf ueber einen Syscall hinweg nichts in RBX halten.
