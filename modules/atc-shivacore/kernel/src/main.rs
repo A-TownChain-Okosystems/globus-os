@@ -306,11 +306,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Programm aus der Ramdisk, falls eine mitgegeben wurde. Es ersetzt weiter
     // unten den eingebauten Platzhalter: dieselben Seiten, derselbe Weg nach
     // Ring 3, nur mit echtem Code von einem Datentraeger.
-    let mut ramdisk_program: Option<(alloc::vec::Vec<u8>, u64)> = None;
+    // Ab hier traegt das Programm Code UND Daten: das Abbild kommt aus dem
+    // ELF (Code-Segment, Datensegment, bss-Nullen), nicht mehr nur aus dem
+    // Code-Segment.
+    let mut ramdisk_program: Option<userspace::UserBinary> = None;
     // Zweites Programm aus demselben Verzeichnis: es bekommt einen eigenen
     // Prozess, damit das Verzeichnis nicht nur Auswahl, sondern auch Vielfalt
     // bedeutet.
-    let mut ramdisk_second: Option<(alloc::string::String, alloc::vec::Vec<u8>, u64)> = None;
+    let mut ramdisk_second: Option<userspace::UserBinary> = None;
 
     // Die Ramdisk traegt das erste echte Userspace-Programm. Ohne sie ist der
     // Kernel ein geschlossenes Ganzes; mit ihr kommt ein Programm von einem
@@ -355,21 +358,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                                     let Some(data) = entry.data(bytes) else {
                                         continue;
                                     };
-                                    let Ok(parser) = shivacore::elf_loader::ElfParser::parse(data)
+                                    let Ok(binary) =
+                                        shivacore::elf_loader::user_binary_from_elf(&entry.name, data)
                                     else {
                                         continue;
                                     };
-                                    let Some(segment) = parser.code_segment() else {
-                                        continue;
-                                    };
-                                    let Ok(code) = parser.segment_data(segment) else {
-                                        continue;
-                                    };
-                                    ramdisk_second = Some((
-                                        entry.name.clone(),
-                                        code.to_vec(),
-                                        parser.entry_point(),
-                                    ));
+                                    ramdisk_second = Some(binary);
                                     break;
                                 }
                             }
@@ -402,10 +396,21 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                             parser.entry_point(),
                             code_len
                         );
-                        if let Some(segment) = parser.code_segment() {
-                            if let Ok(code) = parser.segment_data(segment) {
-                                ramdisk_program = Some((code.to_vec(), parser.entry_point()));
+                        match shivacore::elf_loader::user_binary_from_elf(&name, program_bytes) {
+                            Ok(binary) => {
+                                serial_println!(
+                                    "ShivaCore: Abbild '{}': Code {} Bytes, Daten {} Bytes (inkl. bss)",
+                                    name,
+                                    binary.code.len(),
+                                    binary.data.len()
+                                );
+                                ramdisk_program = Some(binary);
                             }
+                            Err(error) => serial_println!(
+                                "ShivaCore: Programm '{}' nicht abbildbar: {:?}",
+                                name,
+                                error
+                            ),
                         }
                     }
                     Err(error) => {
@@ -877,17 +882,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // ELF auf dem Datentraeger, nicht aus diesem Quelltext. Ohne Ramdisk bleibt
     // der eingebaute Platzhalter, damit ein nacktes Image weiter bootet.
     let (user_binary, user_addr_space, source) = match ramdisk_program.take() {
-        Some((code, entry)) => {
+        Some(binary) => {
             let mut space = userspace::UserAddressSpace::default();
             // Seitenbuendig: der ELF-Einstiegspunkt liegt typischerweise bei
             // 0x400010. Unbuendig uebernommen wies map_user_binary jedes
             // gueltige Ramdisk-Programm als InvalidAddress ab (Boot-Panic).
-            space.code_base = entry & !0xFFF;
-            (
-                userspace::UserBinary::from_bytes("ramdisk-init", code, entry),
-                space,
-                "Ramdisk",
-            )
+            space.code_base = binary.entry_point & !0xFFF;
+            (binary, space, "Ramdisk")
         }
         None => (
             userspace::UserBinary::from_bytes(
@@ -1236,7 +1237,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Vierter Prozess: das zweite Programm aus dem Verzeichnis. Eigener
     // Adressraum, weil ein gemeinsames Codesegment mit dem Init sonst
     // ueberschrieben wuerde; der Code ist lagerelativ, deshalb darf er wandern.
-    let user_ctx_4 = ramdisk_second.map(|(name, code, entry)| {
+    let user_ctx_4 = ramdisk_second.map(|binary| {
         let base: u64 = 0x01C0_0000;
         let space = userspace::UserAddressSpace {
             code_base: base,
@@ -1248,8 +1249,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             heap_base: 0x01E0_0000,
             heap_size: 0x0010_0000,
         };
-        let _ = entry;
-        let binary = userspace::UserBinary::from_bytes(&name, code, base);
+        let name = binary.name.clone();
         let mut process_space = unsafe {
             shivacore::addr_space::AddressSpace::create(
                 phys_mem_offset,
