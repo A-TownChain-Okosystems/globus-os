@@ -1,6 +1,7 @@
 //! Monotonic timer and scheduler-tick contract.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Frequenz des monotonen Zeitgebers.
 pub struct TimerFrequency {
     /// Frequenz in Hertz.
     pub hz: u64,
