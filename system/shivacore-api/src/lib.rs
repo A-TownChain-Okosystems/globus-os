@@ -60,7 +60,21 @@ pub enum Syscall {
     /// seine Ausgabe geht weiter auf die serielle Schnittstelle. Zwei
     /// Schreiber auf dieselbe Flaeche wuerden sich gegenseitig ueberschreiben.
     Console = 0x0050,
+    /// Prueft ein Passwort gegen den Anmeldedatensatz (IDENT-003).
+    ///
+    /// Das Passwort steht im Puffer (`buffer_ptr`, `buffer_len`, hoechstens
+    /// `IDENTITY_MAX_PASSWORD_BYTES`). Berechtigt ist nur der Besitzer der
+    /// Konsole — das Anmeldefenster. Rueckgabe: `0` bestanden, `1` falsch,
+    /// `2` kein Datensatz, `3` nicht berechtigt.
+    ///
+    /// Die Nummer `0x0060` bleibt fuer `SpawnProcess` reserviert (Vorgabe des
+    /// Owners); die Pruefung liegt deshalb auf dem naechsten Schritt der
+    /// Konvention (Vielfache von `0x10`).
+    IdentityCheck = 0x0070,
 }
+
+/// Laengste Passworteingabe, die die Pruefung annimmt.
+pub const IDENTITY_MAX_PASSWORD_BYTES: usize = 64;
 
 impl Syscall {
     /// Numerische Syscall-Kennung, wie sie im Argumentblock steht.
@@ -226,6 +240,7 @@ impl SyscallBlock {
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             x if x == Syscall::Exit.id() => Syscall::Exit,
             x if x == Syscall::Console.id() => Syscall::Console,
+            x if x == Syscall::IdentityCheck.id() => Syscall::IdentityCheck,
             _ => return Err(AbiError::InvalidSyscall),
         };
         if flags != SYSCALL_FLAG_NONE {
