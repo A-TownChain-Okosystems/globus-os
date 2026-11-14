@@ -1,0 +1,18 @@
+# Verbindliche Build-Toolchain fuer den globus-os-Workspace.
+#
+# Zwei Angaben, zwei Aufgaben:
+#   * rust-version = "1.100" in den Manifesten ist die Kompatibilitaets-
+#     untergrenze; cargo weist aeltere Compiler ab (Gegenprobe: rustc 1.99.1
+#     bricht mit "not supported by the following packages" ab).
+#   * channel hier ist die verbindliche, reproduzierbare Build-Version.
+#     rustup waehlt sie in jedem Unterverzeichnis dieses Repos automatisch,
+#     lokal wie auf dem CI-Runner. Die Workflows pruefen die Version
+#     zusaetzlich, damit ein stiller Wechsel auffaellt.
+#
+# Das Boot-Crate modules/atc-shivacore/boot hat eine eigene Datei mit
+# `nightly`: der bootloader-Crate verlangt -Z, und das Crate ist bewusst aus
+# diesem Workspace ausgeschlossen.
+[toolchain]
+channel = "1.100.0"
+components = ["clippy", "rustfmt"]
+profile = "minimal"
