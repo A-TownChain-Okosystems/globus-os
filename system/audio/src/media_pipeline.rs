@@ -5,10 +5,15 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Failures of the playback pipeline.
 pub enum PipelineError {
+    /// The queue has no current track.
     NoTrack,
+    /// The decoder failed.
     Decoder(CodecError),
+    /// The mixer failed.
     Mixer(MixerError),
+    /// The output failed.
     Output(OutputError),
 }
 
@@ -28,7 +33,9 @@ impl From<OutputError> for PipelineError {
     }
 }
 
+/// Player, decoder, mixer and output as one unit.
 pub struct MediaPipeline<D, O> {
+    /// Player owning queue, position and volume.
     pub player: MediaPlayer,
     decoder: D,
     mixer: PcmMixer,
@@ -36,6 +43,7 @@ pub struct MediaPipeline<D, O> {
 }
 
 impl<D: AudioDecoder, O: AudioOutput> MediaPipeline<D, O> {
+    /// Wires the parts together with a fresh mixer.
     pub fn new(player: MediaPlayer, decoder: D, output: O) -> Self {
         Self {
             player,
@@ -45,29 +53,36 @@ impl<D: AudioDecoder, O: AudioOutput> MediaPipeline<D, O> {
         }
     }
 
+    /// Mixer of the pipeline.
     pub fn mixer(&self) -> &PcmMixer {
         &self.mixer
     }
+    /// Mixer of the pipeline, mutable.
     pub fn mixer_mut(&mut self) -> &mut PcmMixer {
         &mut self.mixer
     }
+    /// Output of the pipeline.
     pub fn output(&self) -> &O {
         &self.output
     }
+    /// Output of the pipeline, mutable.
     pub fn output_mut(&mut self) -> &mut O {
         &mut self.output
     }
 
+    /// Opens the output with the decoder spec.
     pub fn open(&mut self) -> Result<(), PipelineError> {
         self.output.open(self.decoder.spec())?;
         Ok(())
     }
 
+    /// Starts the output and the player.
     pub fn start(&mut self) -> Result<(), PipelineError> {
         self.output.start()?;
         self.player.play().map_err(|_| PipelineError::NoTrack)
     }
 
+    /// Decodes, mixes and writes at most `max_frames` frames.
     pub fn pump(&mut self, max_frames: usize) -> Result<usize, PipelineError> {
         if self.player.queue().current().is_none() {
             return Err(PipelineError::NoTrack);
@@ -82,6 +97,7 @@ impl<D: AudioDecoder, O: AudioOutput> MediaPipeline<D, O> {
         Ok(frames)
     }
 
+    /// Stops the output and the player.
     pub fn stop(&mut self) -> Result<(), PipelineError> {
         self.output.stop()?;
         self.player.stop();
