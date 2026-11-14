@@ -35,15 +35,20 @@ pub enum MadtError {
 /// IOAPIC-Eintrag aus der MADT.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IoApic {
+    /// APIC-ID des IOAPIC.
     pub id: u8,
+    /// Physikalische Basisadresse der IOAPIC-Register.
     pub address: u32,
+    /// Erste globale System-Interrupt-Nummer dieses IOAPIC.
     pub gsi_base: u32,
 }
 
 /// Interrupt-Source-Override: verschiebt einen ISA-IRQ auf eine andere GSI.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct IrqOverride {
+    /// ISA-Interrupt, der umgelenkt wird.
     pub source_irq: u8,
+    /// Global System Interrupt, auf den der Quell-IRQ zeigt.
     pub gsi: u32,
 }
 
