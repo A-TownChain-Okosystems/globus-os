@@ -55,6 +55,9 @@ const SCAN_BACKSPACE: u8 = 0x0E;
 const SCAN_TAB: u8 = 0x0F;
 /// Scancode der Eingabetaste.
 const SCAN_ENTER: u8 = 0x1C;
+/// Scancode der Escape-Taste. Sie beendet den Dienst; der Kernel setzt ihn
+/// an seinen Startzustand zurueck (Neustart, siehe kernel/src/services.rs).
+const SCAN_ESCAPE: u8 = 0x01;
 
 /// Laengste Benutzername-Eingabe in Bytes.
 const MAX_USER_BYTES: usize = 32;
@@ -215,6 +218,20 @@ fn call(block: &SyscallBlock) -> (u64, u64) {
     (packed as u64, (packed >> 64) as u64)
 }
 
+/// Beendet den Dienst. Der Kernel entscheidet, was daraus wird: ein
+/// eingetragener Dienst wird zurueckgesetzt, alles andere endet.
+fn finish() -> ! {
+    let mut block = SyscallBlock::new(Syscall::Exit, None);
+    block.arg0 = 0;
+    let _ = call(&block);
+    // Kein Rueckweg: der Exit-Syscall antwortet nicht. Erreicht der Aufruf
+    // diese Zeile, ist die ABI nicht die erwartete — dann haelt das Programm
+    // an, statt weiterzulaufen, als waere nichts geschehen.
+    loop {
+        yield_cpu();
+    }
+}
+
 /// Bildschirm leeren.
 fn clear(console: u64) {
     let mut block = SyscallBlock::new(Syscall::Console, Some(CapabilityHandle(console)));
@@ -266,7 +283,7 @@ fn render(console: u64, login: &Login) {
     }
     let _ = write!(
         screen,
-        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen\n\n  {}\n",
+        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {}\n",
         login.status
     );
     // Erst leeren, dann schreiben: die Maske wird als Ganzes gezeichnet, damit
@@ -326,6 +343,10 @@ pub extern "C" fn greeter_main(console: u64, input: u64) -> ! {
                 };
             }
             SCAN_ENTER => login.submit(),
+            // Der Dienst endet hier absichtlich selbst. Der Kernel setzt ihn
+            // in seinen Startzustand zurueck; ohne Ruecksetzen waere Escape
+            // ein stiller Ausfall des Anmeldefensters.
+            SCAN_ESCAPE => finish(),
             _ => {
                 if let Some(character) = libshivacore::input::character(word) {
                     if character.is_ascii_graphic() || character == ' ' {
