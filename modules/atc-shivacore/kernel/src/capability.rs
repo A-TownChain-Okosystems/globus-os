@@ -21,10 +21,15 @@ use core::ops::{BitAnd, BitOr};
 /// Ressourcen-Typen im Kernel
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ResourceType {
+    /// Speicherbereich.
     Memory,
+    /// IPC-Kanal.
     IpcChannel,
+    /// Beschleuniger.
     Accelerator,
+    /// Dateisystem oder eine Datei darin.
     FileSystem,
+    /// Netzwerkverbindung.
     Network,
     /// SC-006 REQ-SC006-01: Interrupt-Line, Zugriff nur ueber IRQ-Cap {SUBSCRIBE, ACK}.
     Irq,
@@ -60,10 +65,15 @@ impl ResourceType {
 pub struct Rights(pub u16);
 
 impl Rights {
+    /// Kein Recht.
     pub const NONE: Rights = Rights(0);
+    /// Lesen.
     pub const READ: Rights = Rights(1);
+    /// Schreiben.
     pub const WRITE: Rights = Rights(2);
+    /// Ausfuehren.
     pub const EXEC: Rights = Rights(4);
+    /// Weitergeben an einen anderen Prozess.
     pub const DELEGATE: Rights = Rights(8);
     /// Observing capability/metadata without mutating (query, list, inspect).
     pub const INSPECT: Rights = Rights(16);
@@ -75,17 +85,22 @@ impl Rights {
     pub const SET_DEADLINE: Rights = Rights(128);
     /// SC-006: Zugriff auf genau ein Geraet (MMIO/DMA).
     pub const ACCESS: Rights = Rights(256);
+    /// Alle neun Rechte, die der Standard kennt.
     pub const ALL: Rights = Rights(1 | 2 | 4 | 8 | 16 | 32 | 64 | 128 | 256);
 
+    /// True, wenn dieser Satz alle Rechte des anderen enthaelt.
     pub fn has(self, other: Rights) -> bool {
         (self.0 & other.0) == other.0
     }
+    /// Setzt unbekannte Bits auf null, statt sie zu behalten.
     pub fn from_bits_truncate(bits: u16) -> Rights {
         Rights(bits & Self::ALL.bits())
     }
+    /// Der Satz als Zahl.
     pub fn bits(self) -> u16 {
         self.0
     }
+    /// True, wenn kein Recht gesetzt ist.
     pub const fn is_empty(self) -> bool {
         self.0 == 0
     }
@@ -115,10 +130,15 @@ pub use crate::ats1000::Pid;
 /// Eine Capability — das Herzstueck des Sicherheitsmodells
 #[derive(Debug, Clone)]
 pub struct Capability {
+    /// Kennung der Capability.
     pub id: CapId,
+    /// Art der Ressource.
     pub resource_type: ResourceType,
+    /// Kennung der Ressource; ihre Bedeutung haengt an der Art.
     pub resource_id: u64,
+    /// Rechte, die diese Capability verleiht.
     pub rights: Rights,
+    /// Prozess, dem die Capability gehoert.
     pub owner: Pid,
     /// Eltern-Capability, falls delegiert. None = vom Kernel direkt erzeugt.
     pub parent: Option<CapId>,
@@ -127,9 +147,13 @@ pub struct Capability {
 /// Fehler bei Capability-Operationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CapabilityError {
+    /// Keine Capability mit dieser Kennung.
     NotFound,
+    /// Die Capability gehoert einem anderen Prozess.
     NotOwner,
+    /// Zum Weitergeben fehlt das Recht.
     NoDelegateRight,
+    /// Die angefragten Rechte gehen ueber den zugelassenen Satz hinaus.
     RightsExceeded,
 }
 
@@ -148,6 +172,7 @@ impl Default for CapabilityTable {
 }
 
 impl CapabilityTable {
+    /// Leere Tabelle; Kennungen beginnen bei 1.
     pub const fn new() -> Self {
         Self {
             caps: BTreeMap::new(),
@@ -276,6 +301,7 @@ impl CapabilityTable {
         Ok(self.create(owner, resource_type, resource_id, required))
     }
 
+    /// Die Capability zu einer Kennung.
     pub fn get(&self, id: CapId) -> Option<&Capability> {
         self.caps.get(&id)
     }
@@ -338,6 +364,7 @@ impl CapabilityTable {
         self.by_pid.get(&pid).map(|c| c.len()).unwrap_or(0)
     }
 
+    /// Alle Capabilities eines Prozesses.
     pub fn list_for(&self, pid: Pid) -> Vec<&Capability> {
         self.by_pid
             .get(&pid)
@@ -345,6 +372,7 @@ impl CapabilityTable {
             .unwrap_or_default()
     }
 
+    /// Anzahl der Capabilities in der Tabelle.
     pub fn count(&self) -> usize {
         self.caps.len()
     }
