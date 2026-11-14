@@ -1234,7 +1234,7 @@ fn handle_exception(
     // Die Rolle kommt aus der Diensteverwaltung. Sie wird VOR der Entscheidung
     // gelesen, damit die Entscheidung eine reine Funktion bleibt.
     let role = shivacore::fault::ProcessKind::from_is_service(
-        pid.and_then(|pid| crate::services::get(u64::from(pid.0))).is_some(),
+        pid.is_some_and(|pid| crate::services::is_service(u64::from(pid.0))),
     );
     let mut action = shivacore::fault::decide(kind, origin, role);
     let report = shivacore::fault::FaultReport::from_error_code(error_code);
@@ -1253,16 +1253,30 @@ fn handle_exception(
         match restarted {
             Some(service) => {
                 reset_service_process(frame, &service);
-                serial_println!(
-                    "ShivaCore: Dienst '{}' PID={} nach {} bei Adresse {:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
-                    service.name,
-                    pid.map(|pid| pid.0).unwrap_or_default(),
-                    kind.name(),
-                    address,
-                    report.describe(),
-                    service.attempts,
-                    service.limit
-                );
+                // Der Fehlercode bedeutet je Vektor etwas anderes; beim
+                // ungueltigen Opcode gibt es keinen, und CR2 steht dann auf dem
+                // letzten Wert. Eine Adresse waere dort eine falsche Aussage.
+                if kind.has_error_code() {
+                    serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} bei Adresse {:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                        service.name,
+                        pid.map(|pid| pid.0).unwrap_or_default(),
+                        kind.name(),
+                        address,
+                        report.describe(),
+                        service.attempts,
+                        service.limit
+                    );
+                } else {
+                    serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} (ohne Fehlercode) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                        service.name,
+                        pid.map(|pid| pid.0).unwrap_or_default(),
+                        kind.name(),
+                        service.attempts,
+                        service.limit
+                    );
+                }
                 let recorded =
                     FAULT_COUNTERS
                         .lock()
@@ -1374,9 +1388,9 @@ fn handle_exception(
                 let scheduler = guard.as_mut();
                 match (scheduler, pid) {
                     (Some(scheduler), Some(pid)) => {
-                        // Negativer Exit-Code wie ein Signal: -11 steht fuer
-                        // einen Seitenfehler und ist im Zombie-Fach nachlesbar.
-                        scheduler.exit_process(pid, -11, None)
+                        // Negativer Exit-Code wie ein Signal, aus der
+                        // Fehlerart abgeleitet und im Zombie-Fach nachlesbar.
+                        scheduler.exit_process(pid, shivacore::fault::exit_code(kind), None)
                     }
                     _ => None,
                 }
@@ -1415,7 +1429,7 @@ fn handle_exception(
         // statt an derselben Anweisung erneut zu scheitern.
         shivacore::fault::FaultAction::RestartService => {
             if let Some(pid) = pid {
-                exit_current_process(frame, pid, -11);
+                exit_current_process(frame, pid, shivacore::fault::exit_code(kind));
             }
         }
         shivacore::fault::FaultAction::PanicKernel => {
@@ -1477,9 +1491,9 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
 
     // P1-3: Zombies einsammeln. Vorher rief im Live-Pfad niemand
     // `reap_zombies`; beendete Prozesse blieben als Eintraege stehen. Die
-    // Seitentabellen-Frames gibt das noch nicht frei (der Frame-Allocator ist
-    // im Interrupt-Kontext nicht erreichbar) — der Eintrag und seine
-    // Scheduler-Referenz verschwinden aber, statt sich zu stapeln.
+    // Seitentabellen-Frames gehen ueber die Reclaim-Warteschlange zurueck (der
+    // Frame-Allocator ist im Interrupt-Kontext ueber `try_lock` erreichbar; ist
+    // er belegt, bleibt der Auftrag fuer den naechsten Tick liegen).
     let reaped = scheduler.reap_zombies();
     if !reaped.is_empty() {
         for (pid, exit_code) in &reaped {
@@ -1488,6 +1502,13 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
                 "process.reap",
                 &alloc::format!("pid={:?} exit={}", pid, exit_code),
                 shivacore::security::AuditResult::Allowed,
+            );
+        }
+        for (pid, exit_code) in &reaped {
+            serial_println!(
+                "ShivaCore: Zombie-Reaping: PID={:?} exit={} (Ursache aus der Fehlerart)",
+                pid,
+                exit_code
             );
         }
         serial_println!(
