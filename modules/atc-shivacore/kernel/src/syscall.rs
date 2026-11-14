@@ -30,12 +30,18 @@ fn live_ipc_error(error: crate::ipc_lifecycle::LiveIpcError) -> AbiError {
     }
 }
 
+/// Anfrage eines Prozesses an den Kernel.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyscallRequest {
+    /// Version der Aufrufschnittstelle, gegen die der Userspace gebaut wurde.
     pub abi_version: u32,
+    /// Welcher Aufruf gemeint ist.
     pub syscall_id: u16,
+    /// Vorgelegte Capability, falls der Aufruf eine braucht.
     pub capability: Option<CapabilityHandle>,
+    /// Erstes Argumentwort.
     pub arg0: u64,
+    /// Zweites Argumentwort.
     pub arg1: u64,
     /// Zeiger auf die Nutzdaten im Userspace-Speicher (0 = keine).
     pub buffer_ptr: u64,
@@ -60,9 +66,12 @@ impl SyscallRequest {
     }
 }
 
+/// Antwort an den Prozess.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyscallResponse {
+    /// Ablehnungsgrund; None bedeutet Erfolg.
     pub error: Option<AbiError>,
+    /// Rueckgabewert des Aufrufs; bei einer Ablehnung 0.
     pub value: u64,
 }
 
@@ -78,8 +87,10 @@ impl SyscallResponse {
     }
 }
 
+/// Fehler der Auslieferung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DispatchError {
+    /// Der Fehler kommt aus der Aufrufschnittstelle.
     Abi(AbiError),
 }
 
@@ -104,6 +115,7 @@ pub fn monotonic_ticks() -> u64 {
     MONOTONIC_TICKS.load(Ordering::Relaxed)
 }
 
+/// Stellt Aufrufe zu und haelt selbst keinen Zustand.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SyscallDispatcher {}
 
@@ -114,6 +126,7 @@ impl Default for SyscallDispatcher {
 }
 
 impl SyscallDispatcher {
+    /// Neuer Zusteller ohne eigenen Zustand.
     pub const fn new() -> Self {
         Self {}
     }
@@ -129,6 +142,7 @@ impl SyscallDispatcher {
         monotonic_ticks()
     }
 
+    /// Prueft Version und Rechte und fuehrt den Aufruf aus. Jede Ablehnung kommt als Antwort mit Fehler zurueck, nicht als Abbruch.
     pub fn dispatch(
         &mut self,
         pid: Pid,
