@@ -10,6 +10,7 @@ mod multi_account;
 mod persistence;
 mod secure_store;
 mod service;
+/// Journal fuer mehrstufige Identitaets-Transaktionen.
 pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
@@ -41,8 +42,11 @@ use zeroize::{Zeroize, Zeroizing};
 type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Stabiler Benutzerbezeichner mit 1 bis 128 Zeichen.
 pub struct UserId(String);
 impl UserId {
+    /// Nimmt einen nicht leeren Bezeichner mit hoechstens 128 Zeichen an.
+    /// Prueft Anzeigename und verlangt, dass die Bindung zum Benutzer passt.
     pub fn new(value: impl Into<String>) -> Result<Self, IdentityError> {
         let value = value.into();
         if value.is_empty() || value.len() > 128 {
@@ -50,30 +54,44 @@ impl UserId {
         }
         Ok(Self(value))
     }
+    /// Bezeichner als Text.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Adresse des Wallets auf der Zielkette.
 pub struct WalletAddress(String);
 impl WalletAddress {
+    /// Adresse als Text.
     pub fn as_str(&self) -> &str {
         &self.0
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Bindung einer Wallet an Benutzer, Kette und Netzwerk.
 pub struct IdentityBinding {
+    /// Benutzer, dem die Wallet gehoert.
     pub user_id: UserId,
+    /// Adresse der Wallet.
     pub wallet_address: WalletAddress,
+    /// Kette, auf der die Wallet gilt.
     pub chain_id: u64,
+    /// Netzwerkname, etwa mainnet oder devnet; darf nicht leer sein.
     pub network: String,
+    /// Version des abgeleiteten Schluessels.
     pub key_version: u16,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Profil eines Kontos, ohne jedes Geheimnis.
 pub struct AccountProfile {
+    /// Benutzer des Profils.
     pub user_id: UserId,
+    /// Anzeigename mit 1 bis 128 Zeichen.
     pub display_name: String,
+    /// Adresse aus der Bindung.
     pub wallet_address: WalletAddress,
+    /// Bindung, aus der das Profil abgeleitet ist.
     pub binding: IdentityBinding,
 }
 impl AccountProfile {
@@ -98,33 +116,48 @@ impl AccountProfile {
     }
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Anmeldezustand einer Sitzung.
 pub enum LoginState {
+    /// Keine Sitzung offen.
     LoggedOut,
+    /// Anmeldung laeuft.
     Authenticating,
+    /// Sitzung ist gueltig.
     Authenticated,
+    /// Sitzung gesperrt, erneute Anmeldung noetig.
     Locked,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Sitzung eines angemeldeten Benutzers.
 pub struct IdentitySession {
+    /// Angemeldeter Benutzer.
     pub user_id: UserId,
+    /// Wallet der Sitzung.
     pub wallet_address: WalletAddress,
+    /// Aktueller Anmeldezustand.
     pub state: LoginState,
+    /// Zeitpunkt der Ausstellung in Unix-Sekunden.
     pub issued_at_unix: u64,
+    /// Ablaufzeitpunkt in Unix-Sekunden.
     pub expires_at_unix: u64,
 }
 impl IdentitySession {
+    /// True, solange die Sitzung angemeldet ist und `now_unix` vor dem Ablauf liegt.
     pub fn is_active(&self, now_unix: u64) -> bool {
         self.state == LoginState::Authenticated && now_unix < self.expires_at_unix
     }
+    /// Sperrt die Sitzung.
     pub fn lock(&mut self) {
         self.state = LoginState::Locked;
     }
 }
 #[derive(Debug)]
+/// Seed-Material fuer die Wiederherstellung; wird beim Drop genullt.
 pub struct RecoveryMaterial {
     seed: Zeroizing<Vec<u8>>,
 }
 impl RecoveryMaterial {
+    /// Nimmt einen Seed mit mindestens 32 Byte an.
     pub fn from_seed(seed: Vec<u8>) -> Result<Self, IdentityError> {
         if seed.len() < 32 {
             return Err(IdentityError::WeakSeed);
@@ -133,6 +166,7 @@ impl RecoveryMaterial {
             seed: Zeroizing::new(seed),
         })
     }
+    /// Laenge des Seeds in Byte.
     pub fn seed_len(&self) -> usize {
         self.seed.len()
     }
@@ -142,36 +176,54 @@ impl Drop for RecoveryMaterial {
         self.seed.zeroize();
     }
 }
+/// 24-Wort-Wiederherstellungsphrase; der Text wird beim Drop genullt.
 pub struct RecoveryPhrase(Zeroizing<String>);
 impl RecoveryPhrase {
+    /// Gibt die Phrase im Klartext zurueck, nur fuer die Anzeige an den Nutzer.
     pub fn expose(&self) -> &str {
         &self.0
     }
+    /// Anzahl der Woerter in der Phrase.
     pub fn word_count(&self) -> usize {
         self.0.split_whitespace().count()
     }
 }
+/// Ergebnis der Wallet-Erzeugung.
 pub struct WalletCreation {
+    /// Phrase, die der Nutzer sichern muss.
     pub recovery_phrase: RecoveryPhrase,
+    /// Abgeleitete Wallet-Adresse.
     pub wallet_address: WalletAddress,
+    /// Bindung aus Benutzer, Kette und Netzwerk.
     pub binding: IdentityBinding,
 }
 impl WalletCreation {
+    /// Phrase als Text.
     pub fn recovery_phrase(&self) -> &str {
         self.recovery_phrase.expose()
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler der Identitaets- und Wallet-Grenze.
 pub enum IdentityError {
+    /// Der Benutzerbezeichner ist leer oder zu lang.
     InvalidUserId,
+    /// Der Anzeigename ist leer oder zu lang.
     InvalidDisplayName,
+    /// Die Bindung gehoert zu einem anderen Benutzer.
     BindingMismatch,
+    /// Der Seed hat weniger als 32 Byte.
     WeakSeed,
+    /// Die Adresse ist unbrauchbar.
     InvalidWalletAddress,
+    /// Der Netzwerkname ist leer.
     EmptyNetwork,
+    /// Die Phrase ist keine gueltige BIP-39-Phrase.
     InvalidMnemonic,
+    /// Die Ableitung von Schluessel oder Adresse ist fehlgeschlagen.
     WalletDerivationFailed,
 }
+/// Erzeugt eine 24-Wort-Phrase und leitet daraus die Wallet-Adresse ab.
 pub fn create_wallet(
     user_id: UserId,
     chain_id: u64,
@@ -202,6 +254,7 @@ pub fn create_wallet(
         binding,
     })
 }
+/// Leitet aus einer vorhandenen Phrase dieselbe Bindung ab.
 pub fn restore_wallet(
     user_id: UserId,
     phrase: &str,
