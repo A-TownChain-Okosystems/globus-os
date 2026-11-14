@@ -415,17 +415,28 @@ impl core::fmt::Display for ElfLoadError {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[repr(u32)]
 pub enum Signal {
-    SigHup = 1,   // Hangup
-    SigInt = 2,   // Interrupt (Ctrl+C)
-    SigKill = 9,  // Kill (unblockable)
-    SigTerm = 15, // Termination
-    SigStop = 19, // Stop (unblockable)
-    SigCont = 18, // Continue
-    SigSegv = 11, // Segmentation fault
-    SigAlrm = 14, // Alarm clock
-    SigUsr1 = 10, // User-defined 1
-    SigUsr2 = 12, // User-defined 2
-    SigChld = 17, // Child process stopped/terminated
+    /// Hangup.
+    SigHup = 1,
+    /// Interrupt from the terminal (Ctrl+C).
+    SigInt = 2,
+    /// Kill; cannot be caught, blocked or ignored.
+    SigKill = 9,
+    /// Termination request.
+    SigTerm = 15,
+    /// Stop the process; cannot be caught, blocked or ignored.
+    SigStop = 19,
+    /// Continue a stopped process.
+    SigCont = 18,
+    /// Invalid memory access.
+    SigSegv = 11,
+    /// Alarm clock expired.
+    SigAlrm = 14,
+    /// Application-defined signal 1.
+    SigUsr1 = 10,
+    /// Application-defined signal 2.
+    SigUsr2 = 12,
+    /// A child process stopped or terminated.
+    SigChld = 17,
 }
 
 impl Signal {
@@ -484,7 +495,10 @@ pub enum SignalDisposition {
     /// Ignore the signal
     Ignore,
     /// Catch the signal (invoke a handler in user space)
-    Catch { handler_addr: u64 },
+    Catch {
+        /// Address of the user-space handler.
+        handler_addr: u64,
+    },
 }
 
 /// Default action for a signal
