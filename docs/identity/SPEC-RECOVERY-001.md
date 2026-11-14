@@ -629,6 +629,14 @@ Spalte „erwartet“ ist die Zusage.
 | REC-T-43 | Selbsttest mit konstanter Ausgabe | `Failed`, keine Phrase |
 | REC-T-44 | Zwei aufeinanderfolgende Blöcke gleich | `Failed` (Quelle wiederholt sich) |
 | REC-T-45 | Nach Neuspeisung und bestandenem Test, danach Verwerfen der Entropie | `Ready`, Puffer genullt |
+| REC-T-46 | Dieselbe Phrase unter v1 und v2 | zwei verschiedene Kennungen, 35 und 36 Zeichen, keine gemeinsame Teilfolge |
+| REC-T-47 | Adresse v2 aus einem `VerifyingKey` | 36 Zeichen, Präfix `ATC2`, Großhex, Prüfsumme stimmt |
+| REC-T-48 | DID aus demselben `VerifyingKey` | 86 Zeichen, Präfix `did:shivacore:ed25519:`, Rest 64 Kleinhexzeichen |
+| REC-T-49 | Adresse und DID nebeneinander | weder Gleichheit noch Ableitung der einen aus der anderen; Strukturprüfung |
+| REC-T-50 | `key_version` 1 anfordern, Schlüssel erwartet | `NON_SIGNING`, kein Wert, kein `VerifyingKey` |
+| REC-T-51 | Dieselbe Phrase, Wallet- und Identitätslabel | zwei verschiedene 32-Byte-Seeds, keiner aus dem anderen rechnbar |
+| REC-T-52 | Signatur über die Signierbytes aus ATC-STD-600 §5.1, geprüft gegen die DID | verifiziert; eine Änderung an einem Byte scheitert |
+| REC-T-53 | Längen aus 15.4/15.5 nachrechnen | Prüfer Exit 0: 20/32/64/32/86/36 Zeichen und 44/50 Byte Hash-Eingabe |
 
 Die Fälle 17, 18, 20, 21, 24 und 27 sind nur mit echter Implementierung prüfbar;
 sie stehen hier als Abnahmebedingung, nicht als erledigt.
@@ -636,6 +644,13 @@ sie stehen hier als Abnahmebedingung, nicht als erledigt.
 ---
 
 ## 13. Reihenfolge der Umsetzung
+
+**Kritische Reihenfolge nach der E1-Untersuchung (Owner, 14.11.2026):**
+E-6 dokumentieren (15.3, erledigt) → E1.3/E1.4 abschließen (15.4/15.5, erledigt)
+→ R-1 implementieren und nachweisen (16) → R-2 erst danach. Grund: eine
+Wiederherstellung lässt sich nur gegen tatsächlich vorhandene Kryptografie
+prüfen; R-1 vor R-2, weil ohne geprüfte Entropiequelle im Image keine Phrase
+entstehen darf.
 
 Jede Stufe hat ein Tor; ohne Tor keine nächste Stufe. Nichts davon ist heute
 umgesetzt.
@@ -662,7 +677,7 @@ vor der E1-Untersuchung), ihre Position ist die erste.
 | ~~**E-1**~~ | Phrase stellt nur Identität und Wallet her, oder auch Nutzdaten? | **ENTSCHIEDEN 14.11.2026:** nur Identität und Wallet; Nutzdaten eigener Mechanismus (§7.3/§7.4 der Architektur-Spezifikation) | — |
 | **E-2** | Wortliste Englisch (BIP39-Standard) oder zusätzlich Deutsch? | Englisch; eine zweite Wortliste ist eine zweite Fassung und braucht `inner_version` 2 | R-2 |
 | ~~**E-3**~~ | `key_version` für neue Konten | **ENTSCHIEDEN 14.11.2026:** 2 (getrennte Pfade), Fassung 1 bleibt lesbar | — |
-| **E-6** | Wird `key_version` 1 ausdrücklich als **nicht signierfähig** gekennzeichnet (Adresse ja, Wallet nein)? | ja; ohne diese Kennzeichnung wird eine Adresse als Wallet ausgegeben, die nicht zahlen kann (Abschnitt 15.3) | E2, R-4 |
+| ~~**E-6**~~ | `key_version` 1 als `ADDRESS_ONLY` / `NON_SIGNING` kennzeichnen | **ENTSCHIEDEN 14.11.2026**, Wortlaut in 15.3 | — |
 | **E-4** | Wo liegt der Tresor, solange das Image keinen dauerhaften Speicher hat? | bis zum Vorhandensein: Ramdisk und ausdrücklich „nicht dauerhaft“ in der Oberfläche; kein Versprechen, das die Technik nicht hält | R-2, R-5 |
 | **E-5** | Darf die Wiederherstellung eine Schlüsselrotation anbieten? | nein, getrennter Vorgang nach der Bindungsspezifikation §6 | REQ-REC-10 |
 
@@ -739,29 +754,117 @@ Recovery-Regeln. Für die Betriebssystemseite gibt es damit keine Norm, die dies
 Spezifikation überstimmt — und auch keine, die sie deckt. Sie bleibt Vorschlag
 mit Eigentümer GlobusOS.
 
-### 15.3 Mindestvertrag für `key_version` 2 (E1.3)
+### 15.3 E-6: `key_version` 1 ist `ADDRESS_ONLY` / `NON_SIGNING`
 
-Bevor eine Ableitung als „Wallet" gelten darf, müssen diese acht Punkte
-festgelegt und geprüft sein. Ohne sie ist jede Signatur unbelegt.
+Normativer Wortlaut, Owner-Entscheidung vom 14.11.2026:
+
+> `key_version = 1` ist ausschließlich für die historische Adressableitung
+> zugelassen (`ADDRESS_ONLY`). Diese Version ist ausdrücklich nicht signierfähig
+> (`NON_SIGNING`) und darf nicht als funktionsfähige Wallet-Implementierung
+> ausgewiesen werden. Eine Wiederherstellung einer Adresse aus Version 1
+> begründet weder den Besitz eines privaten Schlüssels noch die Fähigkeit,
+> Transaktionen zu signieren. Signierfähigkeit setzt eine separat spezifizierte
+> und implementierte Schlüsselableitung gemäß `key_version = 2` voraus.
+
+Vier prüfbare Folgen:
+
+| Folge | Was geprüft wird |
+|---|---|
+| Die Adresse bleibt reproduzierbar | dieselbe Phrase erzeugt dieselbe 35-Zeichen-Adresse wie heute (`ATC`+28+4, `lib.rs:298`); keine Änderung an der bestehenden Ableitung |
+| Kein Schlüsselmaterial | für `key_version` 1 existiert **kein** privater und **kein** öffentlicher Signaturschlüssel; eine Anforderung „signierfähiger Schlüssel" endet mit `NON_SIGNING`, nicht mit einem Wert (REC-T-37, REC-T-50) |
+| Kein normkonformer öffentlicher Schlüssel | der heutige Wert ist `SHA-256` eines Geheimnisses und kein Kurvenpunkt (15.1); er darf nie als `VerifyingKey` ausgegeben werden (REC-T-35) |
+| Keine Krypto-Autorisierung | keine Transaktion, keine Challenge, keine Capability darf sich auf eine v1-Adresse stützen; sie ist Kennung, nicht Berechtigung |
+
+**Sprachregelung, weil sie in Berichten und Oberflächen wirkt:** Für Version 1
+heißt es „Adresse abgeleitet", nicht „Wallet erstellt"; nicht „Schlüssel
+gesichert", nicht „Public Key"; nicht „Wallet wiederhergestellt", sondern
+„Adresse reproduziert". Wo eine Oberfläche eine Kennung braucht, ist die
+35-Zeichen-Adresse zulässig; wo sie eine Wallet verspricht, ist sie es nicht.
+
+**Die Signierfähigkeit wird aus `key_version` abgeleitet, nicht als eigenes Feld
+gespeichert.** Ein zweites Feld (`signing_capable: bool`) wäre eine zweite
+Wahrheit über dieselbe Eigenschaft und könnte vom Versionsfeld abweichen.
+
+### 15.4 Schlüsselmaterial und öffentliche Schlüssel für `key_version` 2 (E1.3)
+
+```
+24-Wort-Phrase (BIP39, Englisch, keine Passphrase)
+  -> BIP39-Seed                    64 Byte
+  -> HKDF-SHA256(ikm = Seed, salt = leer,
+                 info = "GLOBUS-WALLET-KEY-V1")   32 Byte
+  -> Ed25519-SigningKey (Seed = diese 32 Byte, RFC 8032)
+  -> VerifyingKey                  32 Byte (Kurvenpunkt)
+  -> DID   "did:shivacore:ed25519:" + hex_klein(VerifyingKey)   86 Zeichen
+  -> Adresse v2                    eigene Regel, siehe 15.5      36 Zeichen
+```
+
+| Größe | Wert | Begründung |
+|---|---|---|
+| BIP39-Seed | 64 Byte | Standardausgabe von PBKDF2-HMAC-SHA512 |
+| HKDF-Label Wallet | 20 Byte | `GLOBUS-WALLET-KEY-V1`, nachgezählt im Prüfer |
+| Wallet-Seed | 32 Byte | Ed25519 verlangt genau 32 Byte Seed |
+| Signatur | 64 Byte | RFC 8032 |
+| Öffentlicher Schlüssel | 32 Byte | Ed25519-Kurvenpunkt, komprimiert |
+| DID | 86 Zeichen | 22 Zeichen Präfix + 64 Hexzeichen |
+| Adresse v2 | 36 Zeichen | 4 Zeichen Präfix + 28 + 4 Hexzeichen |
+
+**Wiederverwendung statt Neubau:** Der Ed25519-Pfad existiert bereits.
+`service_space/src/did.rs:169` bietet `Ed25519Signer::from_seed(&[u8; 32])`,
+`did.rs:130` führt `ED25519_PREFIX = "did:shivacore:ed25519:"`, und
+`ed25519-dalek` liegt im Repository (Pakete, Updates, DIDs). GlobusOS **erzeugt
+keine zweite DID-Form**, sondern übernimmt diese. Definiert `atc-standards`
+später eine andere Methodenzeichenkette, ändert sich genau eine Stelle: der
+Adapter, der DID-Texte bildet.
+
+Acht Punkte, die vor dem ersten Signieren festgelegt und geprüft sein müssen:
 
 | Eigenschaft | Anforderung |
 |---|---|
-| Algorithmus | Ed25519 (Norm), nicht „irgendeine Kurve" |
-| Privates Format | 32-Byte-Seed; Quelle: HKDF-Label `GLOBUS-WALLET-KEY-V1` (Abschnitt 5) |
-| Öffentliches Format | 32 Byte, `SigningKey::verifying_key()`, niemals ein Hash |
+| Algorithmus | Ed25519 (ATC-STD-600 §5.2), nicht „irgendeine Kurve" |
+| Privates Format | 32-Byte-Seed aus dem HKDF-Label oben, nie der HMAC-Wert aus v1 |
+| Öffentliches Format | 32 Byte aus `SigningKey::verifying_key()`, niemals ein Hash |
 | Signaturformat | 64 Byte, RFC 8032 |
-| Nachrichtenkodierung | die Signierbytes aus `ATC-STD-600` §5.1, byteweise identisch |
-| Verifikation | unabhängig reproduzierbar, mit `ed25519-dalek` (schon im Repo) |
-| Testvektoren | RFC 8032 Vektor 1 bis 3 plus ein Vektor aus der Norm |
-| Adressbildung | eigene, benannte Regel; ausdrücklich **nicht** die DID der Norm |
+| Nachrichtenkodierung | die Signierbytes aus `ATC-STD-600` §5.1, byteweise identisch, big-endian |
+| Verifikation | unabhängig reproduzierbar mit `ed25519-dalek` gegen den `VerifyingKey` aus der DID |
+| Testvektoren | RFC 8032 Vektor 1 bis 3 plus ein eigener Vektor aus der Norm |
+| Adressbildung | eigene, benannte Regel (15.5); ausdrücklich **nicht** die DID |
 
-**Und eine Absage, die dazugehört:** `key_version` 1 ist ab dann
-**nicht-signierfähig**. Sie bleibt lesbar, damit bestehende Devnet-Adressen
-reproduzierbar sind, aber sie darf nie als Wallet im Sinne von Zahlungsfähigkeit
-ausgegeben werden. Wer das anders will, muss eine Signatur mit einem Hash als
-öffentlichem Schlüssel vorlegen — und das geht nicht.
+### 15.5 Zwei Identifikatoren: Konto-Adresse und Ketten-DID (E1.4)
 
-### 15.4 Domänentrennung mit Ed25519 (E1.4)
+Die 35-Zeichen-Adresse ist **kein Ersatz** für die normierte Sender-DID. Beide
+bleiben getrennt, dauerhaft:
+
+| Identifikator | Zweck | Regel | Länge |
+|---|---|---|---|
+| Adresse v1 | historische Kennung, `ADDRESS_ONLY` | `"ATC"` + `hex(h[..14])` + `hex(c[..2])`; `h`/`c` wie in `lib.rs:298` | 35 |
+| Adresse v2 | Kennung des Kontos in Fassung 2 | `h = SHA-256("ATC-ADDR-V2" ‖ 0x00 ‖ VerifyingKey)`, `c = SHA-256("ATC-ADDR-V2-CHECK" ‖ 0x00 ‖ h)`, Ausgabe `"ATC2"` + `hex(h[..14])` + `hex(c[..2])` | 36 |
+| Ketten-DID | Sender und Empfänger im L1-Signierstrom | `"did:shivacore:ed25519:"` + `hex_klein(VerifyingKey)` | 86 |
+
+Vier Regeln, die Verwechslung strukturell ausschließen:
+
+1. **Keine Gleichsetzung.** Eine Adresse ist keine DID und eine DID keine
+   Adresse; keine Funktion gibt die eine als die andere aus, keine speichert
+   eine Adresse in einem DID-Feld.
+2. **Einweg.** Aus einer v1-Adresse lässt sich keine v2-Adresse rechnen (beides
+   sind Hashes eines Geheimnisses). Eine Migration braucht die Phrase, nie die
+   Adresse.
+3. **Eigene Domäne je Fassung.** Das Präfix `ATC-ADDR-V2` im Hash sorgt dafür,
+   dass derselbe öffentliche Schlüssel in beiden Fassungen verschiedene Digests
+   ergibt; das Präfix `ATC2` macht die Fassung beim Lesen sichtbar. `hex` ist
+   hier **groß** geschrieben, wie in v1; die DID bleibt **klein**, weil sie Hex
+   einer Kennung ist und keine Adresse.
+4. **Beide aus demselben `VerifyingKey`, in eine Richtung.** Adresse und DID
+   dürfen aus demselben öffentlichen Schlüssel abgeleitet werden; verboten ist
+   nur, den einen Wert aus dem anderen zu berechnen.
+
+**Migration, ohne etwas umzudeuten:** Es gibt heute keinen Zustand auf der Kette,
+der diese Adressen trägt (kein Signiercode, 15.1); eine Kettenmigration ist
+deshalb nicht nötig. Konten, die unter v1 angelegt wurden, bleiben unter v1 und
+werden als `ADDRESS_ONLY` geführt; neue Konten beginnen mit v2. Ein stilles
+Hochziehen bestehender Zeilen ist untersagt, weil es eine Adresse zu einer Wallet
+erklären würde, die nie existierte.
+
+### 15.6 Domänentrennung mit Ed25519
 
 BIP32 ist für Ed25519 nicht anwendbar; wer es trotzdem benutzt, bekommt je nach
 Implementierung verschiedene Schlüssel. Diese Spezifikation benutzt deshalb die
