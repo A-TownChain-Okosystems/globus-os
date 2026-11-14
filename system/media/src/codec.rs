@@ -87,6 +87,7 @@ pub struct TimedVideoFrame {
 
 /// Ein Fotodekoder.
 pub trait PhotoCodecDecoder {
+    /// Codec, den der Dekoder versteht.
     fn codec(&self) -> crate::photo::PhotoCodec;
     /// Dekodiert schrittweise, damit grosse Bilder den Speicher nicht sprengen.
     fn decode_incremental(
