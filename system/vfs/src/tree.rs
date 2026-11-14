@@ -6,20 +6,32 @@ use std::collections::BTreeMap;
 use crate::{FileError, FileMode, FileType, Inode, InodeId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler des Verzeichnisbaums.
 pub enum FsError {
+    /// Der Pfad ist unbrauchbar.
     InvalidPath,
+    /// Der Pfad existiert nicht.
     NotFound,
+    /// Der Pfad existiert bereits.
     AlreadyExists,
+    /// Der Pfad ist kein Verzeichnis.
     NotDirectory,
+    /// Das Verzeichnis ist nicht leer.
     NotEmpty,
+    /// Die Rechte decken die Operation nicht.
     PermissionDenied,
+    /// Die Rechnung laeuft ueber den Wertebereich hinaus.
     Overflow,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Eintrag in einem Verzeichnis.
 pub struct DirectoryEntry {
+    /// Name des Eintrags.
     pub name: String,
+    /// Inode des Ziels.
     pub inode: InodeId,
+    /// Art des Eintrags.
     pub file_type: FileType,
 }
 
@@ -31,6 +43,7 @@ struct Node {
 }
 
 #[derive(Debug, Clone)]
+/// Verzeichnisbaum im Speicher.
 pub struct InodeTree {
     next_inode: u64,
     nodes: BTreeMap<InodeId, Node>,
@@ -43,6 +56,7 @@ impl Default for InodeTree {
 }
 
 impl InodeTree {
+    /// Baum mit einem Wurzelverzeichnis, Inode 1.
     pub fn new() -> Self {
         let root = Inode {
             id: InodeId(1),
@@ -69,6 +83,7 @@ impl InodeTree {
         }
     }
 
+    /// Inode des Wurzelverzeichnisses.
     pub fn root(&self) -> InodeId {
         InodeId(1)
     }
@@ -107,6 +122,7 @@ impl InodeTree {
         Ok((self.lookup(parent)?, name))
     }
 
+    /// Inode zu einem Pfad.
     pub fn stat(&self, path: &str) -> Result<Inode, FsError> {
         Ok(self
             .nodes
@@ -116,6 +132,7 @@ impl InodeTree {
             .clone())
     }
 
+    /// Legt Datei, Verzeichnis oder Verweis an und lehnt vorhandene Pfade ab.
     pub fn create(
         &mut self,
         path: &str,
@@ -151,6 +168,7 @@ impl InodeTree {
         Ok(id)
     }
 
+    /// Eintraege eines Verzeichnisses.
     pub fn list(&self, path: &str) -> Result<Vec<DirectoryEntry>, FsError> {
         let id = self.lookup(path)?;
         let node = self.nodes.get(&id).ok_or(FsError::NotFound)?;
@@ -170,6 +188,7 @@ impl InodeTree {
             .collect())
     }
 
+    /// Liest aus einer regulaeren Datei.
     pub fn read(&self, id: InodeId, offset: u64, out: &mut [u8]) -> Result<usize, FileError> {
         let node = self.nodes.get(&id).ok_or(FileError::NotFound)?;
         if node.inode.file_type != FileType::Regular {
@@ -184,6 +203,7 @@ impl InodeTree {
         Ok(count)
     }
 
+    /// Schreibt in eine regulaere Datei.
     pub fn write(&mut self, id: InodeId, offset: u64, input: &[u8]) -> Result<usize, FileError> {
         let node = self.nodes.get_mut(&id).ok_or(FileError::NotFound)?;
         if node.inode.file_type != FileType::Regular {
