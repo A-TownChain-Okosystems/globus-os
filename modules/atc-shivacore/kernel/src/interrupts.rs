@@ -828,7 +828,7 @@ impl UserTrapFrame {
     }
 }
 
-extern "C" {
+unsafe extern "C" {
     fn shivacore_timer_trampoline();
     fn shivacore_syscall_gate();
 }
@@ -1034,7 +1034,7 @@ shivacore_fault_trampoline_nocode:
 /// `kind` kommt als Zahl aus dem Assembly (0/1/2). Der Weg ueber eine Zahl ist
 /// kein Schoenheitsfehler: die drei Einsprünge teilen sich einen Rumpf, damit
 /// eine Korrektur nicht nur an einer Haelfte ankommt.
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn exception_trap_rust(frame: &mut UserTrapFrame, error_code: u64, kind: u32) {
     handle_exception(
         frame,
@@ -1182,7 +1182,7 @@ fn handle_exception(
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
     TIMER_TICKS.fetch_add(1, Ordering::Relaxed);
     // SC-006 REQ-02/03 im echten Pfad: die Line wird gesperrt, bevor der
@@ -1548,7 +1548,7 @@ fn fault_trampoline_nocode_addr() -> VirtAddr {
     VirtAddr::new(shivacore_fault_trampoline_nocode as usize as u64)
 }
 
-extern "C" {
+unsafe extern "C" {
     fn shivacore_fault_trampoline();
     fn shivacore_gp_trampoline();
     fn shivacore_fault_trampoline_nocode();
@@ -1616,7 +1616,7 @@ mod first_syscall_tests {
     }
 }
 
-#[no_mangle]
+#[unsafe(no_mangle)]
 extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
     // ABI 2.0.0: RDI = Zeiger auf den Argumentblock, RSI = Blocklaenge,
     // RDX = ABI-Version. Reihenfolge ist bindend: erst die Version, dann die
