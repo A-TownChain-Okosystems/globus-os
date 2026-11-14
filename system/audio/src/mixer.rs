@@ -3,9 +3,13 @@
 use crate::codec::{AudioSpec, CodecError, PcmFrame};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Failures of the mixer.
 pub enum MixerError {
+    /// An input does not match the output spec.
     SpecMismatch,
+    /// Gain is not finite or lies outside 0.0 to 4.0.
     InvalidGain,
+    /// Building the PCM frame failed.
     Codec(CodecError),
 }
 
@@ -16,6 +20,7 @@ impl From<CodecError> for MixerError {
 }
 
 #[derive(Debug, Clone, Copy)]
+/// Sums PCM inputs with one gain and clips to -1.0 to 1.0.
 pub struct PcmMixer {
     gain: f32,
     muted: bool,
@@ -31,10 +36,12 @@ impl Default for PcmMixer {
 }
 
 impl PcmMixer {
+    /// Gain 1.0, not muted.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Accepts finite gains from 0.0 to 4.0.
     pub fn set_gain(&mut self, gain: f32) -> Result<(), MixerError> {
         if !gain.is_finite() || !(0.0..=4.0).contains(&gain) {
             return Err(MixerError::InvalidGain);
@@ -43,16 +50,20 @@ impl PcmMixer {
         Ok(())
     }
 
+    /// Current gain.
     pub fn gain(&self) -> f32 {
         self.gain
     }
+    /// Mutes or unmutes; a muted mixer outputs silence.
     pub fn set_muted(&mut self, muted: bool) {
         self.muted = muted;
     }
+    /// True when muted.
     pub fn muted(&self) -> bool {
         self.muted
     }
 
+    /// Sums the inputs, applies the gain, clips and returns one PCM frame.
     pub fn mix(&self, spec: AudioSpec, inputs: &[PcmFrame]) -> Result<PcmFrame, MixerError> {
         spec.validate()?;
         if inputs.iter().any(|frame| frame.spec != spec) {
