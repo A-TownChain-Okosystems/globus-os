@@ -5,10 +5,15 @@ use globus_devices::block::{BlockDevice, BlockRequest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum FileStoreError {
+    /// Das Geraet hat einen IO-Fehler gemeldet.
     Io,
+    /// Puffer oder Geometrie sind unbrauchbar.
     Buffer,
+    /// Die Offset-Rechnung laeuft ueber.
     Overflow,
+    /// Die Extent-Abbildung ist fehlgeschlagen.
     Extent(ExtentError),
+    /// Der Zugriff liegt ausserhalb der abgebildeten Bereiche.
     OutOfRange,
 }
 impl From<ExtentError> for FileStoreError {
@@ -17,12 +22,14 @@ impl From<ExtentError> for FileStoreError {
     }
 }
 
+/// Datei-IO ueber Extents auf einem Blockgeraet.
 pub struct FileStore<D> {
     device: D,
     block_size: u64,
 }
 
 impl<D: BlockDevice> FileStore<D> {
+    /// Nimmt die Blockgroesse aus der Geometrie des Geraets.
     pub fn new(device: D) -> Result<Self, FileStoreError> {
         let g = device.geometry();
         if !g.valid() || g.block_size == 0 {
@@ -33,12 +40,15 @@ impl<D: BlockDevice> FileStore<D> {
             block_size: u64::from(g.block_size),
         })
     }
+    /// Blockgroesse in Byte.
     pub fn block_size(&self) -> u64 {
         self.block_size
     }
+    /// Gibt das Geraet zurueck.
     pub fn into_device(self) -> D {
         self.device
     }
+    /// Liest `out.len()` Byte ab `offset` ueber die Extents.
     pub fn read_at(
         &mut self,
         extents: &ExtentMap,
@@ -76,6 +86,7 @@ impl<D: BlockDevice> FileStore<D> {
         }
         Ok(copied)
     }
+    /// Schreibt `data` ab `offset` ueber die Extents.
     pub fn write_at(
         &mut self,
         extents: &ExtentMap,
