@@ -1,55 +1,83 @@
 //! Deterministic media-player state machine and queue.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Playback state of the player.
 pub enum PlaybackState {
+    /// Not playing; the position is 0.
     Stopped,
+    /// Advancing through the current track.
     Playing,
+    /// Held at a position, resumable.
     Paused,
+    /// Position change in progress.
     Seeking,
+    /// Reserved for a failed playback path.
     Error,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// How the queue wraps at the end of a track.
 pub enum RepeatMode {
+    /// Stop at the end of the queue.
     Off,
+    /// Repeat the current track.
     One,
+    /// Wrap around to the first track.
     All,
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// One track in the queue.
 pub struct MediaTrack {
+    /// Identifier of the track.
     pub id: u64,
+    /// Where the track is read from.
     pub uri: String,
+    /// Title shown to the user.
     pub title: String,
+    /// Artist shown to the user.
     pub artist: String,
+    /// Album shown to the user.
     pub album: String,
+    /// Length in milliseconds; seek positions are bounded by it.
     pub duration_ms: u64,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Failures of queue and playback control.
 pub enum MediaPlayerError {
+    /// The queue holds no current track.
     EmptyQueue,
+    /// The index lies outside the queue.
     InvalidIndex,
+    /// The position lies beyond the track duration.
     InvalidPosition,
+    /// Advancing the position would overflow.
     PositionOverflow,
+    /// Playback is already running.
     AlreadyPlaying,
 }
 #[derive(Debug, Default)]
+/// Track list with a current index.
 pub struct MediaQueue {
     tracks: Vec<MediaTrack>,
     current: Option<usize>,
 }
 impl MediaQueue {
+    /// Empty queue without a current track.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Appends a track; the first one becomes current.
     pub fn push(&mut self, t: MediaTrack) {
         self.tracks.push(t);
         if self.current.is_none() {
             self.current = Some(0);
         }
     }
+    /// Removes all tracks and the current index.
     pub fn clear(&mut self) {
         self.tracks.clear();
         self.current = None;
     }
+    /// Number of tracks.
     pub fn len(&self) -> usize {
         self.tracks.len()
     }
@@ -58,9 +86,11 @@ impl MediaQueue {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
+    /// Current track, if any.
     pub fn current(&self) -> Option<&MediaTrack> {
         self.current.and_then(|i| self.tracks.get(i))
     }
+    /// Makes the track at `i` current.
     pub fn select(&mut self, i: usize) -> Result<(), MediaPlayerError> {
         if i >= self.tracks.len() {
             return Err(MediaPlayerError::InvalidIndex);
@@ -68,6 +98,7 @@ impl MediaQueue {
         self.current = Some(i);
         Ok(())
     }
+    /// Moves to the next track, honouring the repeat mode.
     pub fn next(&mut self, r: RepeatMode) -> Result<&MediaTrack, MediaPlayerError> {
         if self.tracks.is_empty() {
             return Err(MediaPlayerError::EmptyQueue);
@@ -85,6 +116,7 @@ impl MediaQueue {
         self.current = Some(n);
         Ok(&self.tracks[n])
     }
+    /// Moves to the previous track, honouring the repeat mode.
     pub fn previous(&mut self, r: RepeatMode) -> Result<&MediaTrack, MediaPlayerError> {
         if self.tracks.is_empty() {
             return Err(MediaPlayerError::EmptyQueue);
@@ -102,6 +134,7 @@ impl MediaQueue {
         Ok(&self.tracks[n])
     }
 }
+/// Player state: queue, position, volume and repeat mode.
 pub struct MediaPlayer {
     queue: MediaQueue,
     state: PlaybackState,
@@ -111,6 +144,7 @@ pub struct MediaPlayer {
     muted: bool,
 }
 impl MediaPlayer {
+    /// Stopped, volume 100, repeat off, empty queue.
     pub fn new() -> Self {
         Self {
             queue: MediaQueue::new(),
@@ -121,36 +155,47 @@ impl MediaPlayer {
             muted: false,
         }
     }
+    /// Queue of the player.
     pub fn queue(&self) -> &MediaQueue {
         &self.queue
     }
+    /// Queue of the player, mutable.
     pub fn queue_mut(&mut self) -> &mut MediaQueue {
         &mut self.queue
     }
+    /// Current playback state.
     pub fn state(&self) -> PlaybackState {
         self.state
     }
+    /// Current repeat mode.
     pub fn repeat(&self) -> RepeatMode {
         self.repeat
     }
+    /// Position within the current track.
     pub fn position_ms(&self) -> u64 {
         self.position_ms
     }
+    /// Volume from 0 to 100.
     pub fn volume(&self) -> u8 {
         self.volume
     }
+    /// True when muted.
     pub fn muted(&self) -> bool {
         self.muted
     }
+    /// Sets the repeat mode.
     pub fn set_repeat(&mut self, r: RepeatMode) {
         self.repeat = r
     }
+    /// Sets the volume, clamped to 100.
     pub fn set_volume(&mut self, v: u8) {
         self.volume = v.min(100)
     }
+    /// Mutes or unmutes.
     pub fn set_muted(&mut self, v: bool) {
         self.muted = v
     }
+    /// Starts playback; fails on an empty queue or when already playing.
     pub fn play(&mut self) -> Result<(), MediaPlayerError> {
         if self.queue.current().is_none() {
             return Err(MediaPlayerError::EmptyQueue);
@@ -161,15 +206,18 @@ impl MediaPlayer {
         self.state = PlaybackState::Playing;
         Ok(())
     }
+    /// Pauses when playing, otherwise no change.
     pub fn pause(&mut self) {
         if self.state == PlaybackState::Playing {
             self.state = PlaybackState::Paused
         }
     }
+    /// Stops and resets the position to 0.
     pub fn stop(&mut self) {
         self.state = PlaybackState::Stopped;
         self.position_ms = 0
     }
+    /// Sets the position within the track and leaves the player paused.
     pub fn seek_ms(&mut self, p: u64) -> Result<(), MediaPlayerError> {
         let t = self.queue.current().ok_or(MediaPlayerError::EmptyQueue)?;
         if p > t.duration_ms {
@@ -180,6 +228,7 @@ impl MediaPlayer {
         self.state = PlaybackState::Paused;
         Ok(())
     }
+    /// Advances the position; wraps or stops at the end per repeat mode.
     pub fn advance_ms(&mut self, d: u64) -> Result<(), MediaPlayerError> {
         let n = self
             .position_ms
@@ -211,12 +260,14 @@ impl MediaPlayer {
         }
         Ok(())
     }
+    /// Skips to the next track and starts playing.
     pub fn next_track(&mut self) -> Result<(), MediaPlayerError> {
         self.queue.next(self.repeat)?;
         self.position_ms = 0;
         self.state = PlaybackState::Playing;
         Ok(())
     }
+    /// Goes back one track and starts playing.
     pub fn previous(&mut self) -> Result<(), MediaPlayerError> {
         self.queue.previous(self.repeat)?;
         self.position_ms = 0;
