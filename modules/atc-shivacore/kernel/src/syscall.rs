@@ -420,6 +420,8 @@ mod tests {
 
     #[test]
     fn ipc_requires_matching_capability_and_right() {
+        let _kanal = crate::ipc_lifecycle::CHANNELS_TEST_LOCK.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         let mut table = CapabilityTable::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::WRITE);
         crate::ipc_lifecycle::CHANNELS.lock().open(42, pid(1));
@@ -488,6 +490,8 @@ mod tests {
 
     #[test]
     fn ipc_send_without_payload_is_a_truthful_signal() {
+        let _kanal = crate::ipc_lifecycle::CHANNELS_TEST_LOCK.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         let mut table = CapabilityTable::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 9, Rights::WRITE);
         crate::ipc_lifecycle::CHANNELS.lock().open(9, pid(1));
@@ -562,6 +566,7 @@ mod tests {
     #[test]
     fn kernel_input_channel_hands_out_the_next_event() {
         let _serial = KANAL_EINS.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         use crate::input_queue::InputEvent;
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
@@ -604,6 +609,7 @@ mod tests {
     #[test]
     fn empty_kernel_input_channel_reports_nothing() {
         let _serial = KANAL_EINS.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
         let cap = table.create(
@@ -634,6 +640,7 @@ mod tests {
     #[test]
     fn receive_checks_the_right_before_handing_out_events() {
         let _serial = KANAL_EINS.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         use crate::input_queue::InputEvent;
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
