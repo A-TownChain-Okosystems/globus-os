@@ -7,6 +7,7 @@ use spin::Mutex;
 use uart_16550::{backend::PioBackend, Config, Uart16550Tty};
 
 lazy_static! {
+    /// COM1 als serielle Debug-Konsole; die Sperre macht die Ausgabe aus mehreren Kontexten vertraeglich.
     pub static ref SERIAL1: Mutex<Uart16550Tty<PioBackend>> = {
         // SAFETY: COM1 (0x3F8) is the standard x86 PC serial port and is exclusively
         // owned by the kernel while this device instance is alive.
@@ -18,6 +19,7 @@ lazy_static! {
     };
 }
 
+/// Gibt Text auf COM1 aus und sperrt dafuer kurz die Unterbrechungen.
 #[doc(hidden)]
 pub fn _print(args: ::core::fmt::Arguments) {
     use core::fmt::Write;
