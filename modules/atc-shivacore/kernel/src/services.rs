@@ -161,6 +161,15 @@ pub fn register(
     }
 }
 
+/// Ist diese PID ein Dienst?
+///
+/// Fragt nur nach, statt den Eintrag zu klonen. Im Ausnahmepfad zaehlt das:
+/// eine Ausnahme ist kein Ort fuer eine Speicheranforderung, und die Antwort
+/// braucht kein Programm und keinen Startvertrag.
+pub fn is_service(pid: u64) -> bool {
+    SERVICES.lock().iter().any(|service| service.pid == pid)
+}
+
 /// Liefert den Eintrag einer PID, falls sie ein Dienst ist.
 pub fn get(pid: u64) -> Option<Service> {
     SERVICES
@@ -291,6 +300,14 @@ mod tests {
         assert!(restart(1003).is_none(), "Limit ueberschritten");
         // Der Eintrag bleibt stehen: der Dienst ist bekannt, nur erschoepft.
         assert_eq!(get(1003).unwrap().attempts, 2);
+    }
+
+
+    #[test]
+    fn is_service_antwortet_ohne_klon() {
+        eintragen(7_001, 3);
+        assert!(is_service(7_001));
+        assert!(!is_service(7_002));
     }
 
     #[test]
