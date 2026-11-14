@@ -42,17 +42,24 @@ echo "== 2/5 Boot-Image-Builder bauen =="
 # und wird deshalb in seinem Verzeichnis gebaut, nicht im Root-Workspace.
 (cd "$ROOT/modules/atc-shivacore/boot" && RUSTUP_TOOLCHAIN=nightly cargo +nightly build --release)
 
-echo "== 3/5 Init-Programm bauen (Ramdisk-Nutzlast) =="
+echo "== 3/5 Init- und Anmelde-Programm bauen (Ramdisk-Nutzlast) =="
 # WICHTIG: ohne RUSTFLAGS. Die Crate-Konfiguration setzt -Tlinker.ld (feste
-# Ladeadresse 0x400000) und relocation-model=static; eine RUSTFLAGS-Variable
-# wuerde genau diese Einstellungen ersetzen und das ELF nach 0x2011c0 legen,
-# wo der Kernel es nicht abbilden kann.
+# Ladeadresse 0x400000 fuer Init, 0x1C00000 fuer das Anmeldefenster) und
+# relocation-model=static; eine RUSTFLAGS-Variable wuerde genau diese
+# Einstellungen ersetzen und das ELF an eine Stelle legen, wo der Kernel es
+# nicht abbildet.
 ( cd "$ROOT/modules/atc-shivacore/init_program" && env -u RUSTFLAGS cargo +nightly build --release )
+( cd "$ROOT/modules/atc-shivacore/greeter" && env -u RUSTFLAGS cargo +nightly build --release )
 INIT_ELF="$ROOT/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init"
+GREETER_ELF="$ROOT/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter"
 [ -f "$INIT_ELF" ] || die "Init-ELF fehlt: $INIT_ELF"
+[ -f "$GREETER_ELF" ] || die "Anmelde-ELF fehlt: $GREETER_ELF"
 
 echo "== 4/5 Disk-Image erzeugen =="
-"$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images" "init=$INIT_ELF"
+# Zwei Eintraege: das Init bleibt Prozess 1 (Messprogramm), das Anmeldefenster
+# wird der vierte Prozess. Der Kernel waehlt nach Namen, nicht nach Reihenfolge.
+"$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images" \
+  "init=$INIT_ELF" "greeter=$GREETER_ELF"
 
 echo "== 5/5 QEMU $RUN_SECONDS s (Log: $LOG) =="
 set +e
