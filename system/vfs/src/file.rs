@@ -1,6 +1,7 @@
 //! Capability-neutral VFS file and inode primitives.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// Identitaet einer Inode innerhalb eines Dateisystems.
 pub struct InodeId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
