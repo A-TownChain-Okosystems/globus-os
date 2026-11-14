@@ -32,7 +32,9 @@ pub struct PageFault {
 pub enum FaultAction {
     /// Adresse auf den angegebenen Frame abbilden.
     Map {
+        /// Ziel-Frame, auf den abgebildet wird.
         physical: PhysicalAddress,
+        /// Rechte der neuen Abbildung.
         flags: PageFlags,
     },
     /// Zugriff verweigern.
