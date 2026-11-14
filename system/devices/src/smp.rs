@@ -2,38 +2,54 @@
 
 use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kennung einer CPU.
 pub struct CpuId(pub u32);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand einer CPU.
 pub enum CpuState {
+    /// Nicht gestartet.
     Offline,
+    /// Startet gerade.
     Starting,
+    /// Laeuft und nimmt Arbeit an.
     Online,
+    /// Angehalten.
     Halted,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand einer CPU in der Topologie.
 pub struct CpuInfo {
+    /// Kennung der CPU.
     pub id: CpuId,
+    /// Aktueller Zustand.
     pub state: CpuState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der CPU-Topologie.
 pub enum SmpError {
+    /// Die Kennung ist ungueltig.
     InvalidCpu,
+    /// Die CPU ist bereits eingetragen.
     DuplicateCpu,
+    /// Der Zustandswechsel ist nicht erlaubt.
     InvalidTransition,
 }
 
 #[derive(Debug, Default)]
+/// Eingetragene CPUs und ihre Zustaende.
 pub struct CpuTopology {
     cpus: Vec<CpuInfo>,
 }
 
 impl CpuTopology {
+    /// Leere Topologie.
     pub fn new() -> Self {
         Self::default()
     }
+    /// Traegt eine CPU als offline ein und lehnt Doppelungen ab.
     pub fn register(&mut self, id: CpuId) -> Result<(), SmpError> {
         if id.0 == u32::MAX {
             return Err(SmpError::InvalidCpu);
@@ -48,6 +64,7 @@ impl CpuTopology {
         self.cpus.sort_by_key(|c| c.id.0);
         Ok(())
     }
+    /// Startet eine CPU; nur aus Offline oder Halted.
     pub fn start(&mut self, id: CpuId) -> Result<(), SmpError> {
         let cpu = self
             .cpus
@@ -61,6 +78,7 @@ impl CpuTopology {
         cpu.state = CpuState::Online;
         Ok(())
     }
+    /// Haelt eine laufende CPU an.
     pub fn halt(&mut self, id: CpuId) -> Result<(), SmpError> {
         let cpu = self
             .cpus
@@ -73,9 +91,11 @@ impl CpuTopology {
         cpu.state = CpuState::Halted;
         Ok(())
     }
+    /// Zustand einer CPU.
     pub fn get(&self, id: CpuId) -> Option<CpuInfo> {
         self.cpus.iter().find(|c| c.id == id).copied()
     }
+    /// Alle CPUs in Einfuegereihenfolge.
     pub fn cpus(&self) -> &[CpuInfo] {
         &self.cpus
     }
