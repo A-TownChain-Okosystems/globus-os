@@ -271,7 +271,7 @@
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
 | `modules/atc-shivacore/docs/SC-006_EVENT_KANAL_ENTWURF.md` | 74 |
 | `modules/atc-shivacore/docs/SC-ABI-002-ARGUMENTBLOCK.md` | 106 |
-| `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 111 |
+| `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 147 |
 | `modules/atc-shivacore/greeter/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/greeter/Cargo.toml` | 17 |
 | `modules/atc-shivacore/greeter/linker.ld` | 46 |
@@ -322,7 +322,7 @@
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 420 |
 | `modules/atc-shivacore/kernel/src/lib.rs` | 112 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.625 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1812 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1858 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 124 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 937 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 580 |
@@ -334,7 +334,8 @@
 | `modules/atc-shivacore/kernel/src/security.rs` | 1.322 |
 | `modules/atc-shivacore/kernel/src/serial.rs` | 58 |
 | `modules/atc-shivacore/kernel/src/services.rs` | 334 |
-| `modules/atc-shivacore/kernel/src/spawn.rs` | 210 |
+| `modules/atc-shivacore/kernel/src/spawn.rs` | 292 |
+| `modules/atc-shivacore/kernel/src/spawn_build.rs` | 96 |
 | `modules/atc-shivacore/kernel/src/syscall.rs` | 811 |
 | `modules/atc-shivacore/kernel/src/syscall_gate.rs` | 270 |
 | `modules/atc-shivacore/kernel/src/system.rs` | 1.470 |
