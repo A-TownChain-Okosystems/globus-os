@@ -16,26 +16,32 @@ use spin::Mutex;
 
 // ─── MAC-Adresse ────────────────────────────────────────────────────────────
 
+/// MAC-Adresse als sechs Byte; die Anzeige schreibt sie in Hex mit Doppelpunkten.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct MacAddress(pub [u8; 6]);
 
 impl MacAddress {
+    /// Adresse aus sechs Byte in Übertragungsreihenfolge.
     pub fn new(a: u8, b: u8, c: u8, d: u8, e: u8, f: u8) -> Self {
         MacAddress([a, b, c, d, e, f])
     }
 
+    /// Rundrufadresse FF:FF:FF:FF:FF:FF.
     pub fn broadcast() -> Self {
         MacAddress([0xFF; 6])
     }
 
+    /// Nulladresse; sie steht für eine noch unbekannte Adresse.
     pub fn zero() -> Self {
         MacAddress([0; 6])
     }
 
+    /// True, wenn alle sechs Byte gesetzt sind.
     pub fn is_broadcast(&self) -> bool {
         self.0 == [0xFF; 6]
     }
 
+    /// True, wenn alle sechs Byte 0 sind.
     pub fn is_zero(&self) -> bool {
         self.0 == [0; 6]
     }
@@ -53,24 +59,30 @@ impl core::fmt::Display for MacAddress {
 
 // ─── IPv4-Adresse ───────────────────────────────────────────────────────────
 
+/// IPv4-Adresse als vier Byte; die Anzeige schreibt sie in Punktnotation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Ipv4Address(pub [u8; 4]);
 
 impl Ipv4Address {
+    /// Adresse aus vier Byte in Netzwerkreihenfolge.
     pub fn new(a: u8, b: u8, c: u8, d: u8) -> Self {
         Ipv4Address([a, b, c, d])
     }
 
+    /// Nulladresse 0.0.0.0; sie steht für eine noch unbekannte Adresse.
     pub fn zero() -> Self {
         Ipv4Address([0; 4])
     }
+    /// Rundrufadresse 255.255.255.255.
     pub fn broadcast() -> Self {
         Ipv4Address([0xFF; 4])
     }
 
+    /// True, wenn alle vier Byte gesetzt sind.
     pub fn is_broadcast(&self) -> bool {
         self.0 == [0xFF; 4]
     }
+    /// True, wenn alle vier Byte 0 sind.
     pub fn is_zero(&self) -> bool {
         self.0 == [0; 4]
     }
@@ -84,18 +96,26 @@ impl core::fmt::Display for Ipv4Address {
 
 // ─── Ethernet-Frame ────────────────────────────────────────────────────────
 
+/// Ethertyp der ARP-Nutzlast.
 pub const ETH_TYPE_ARP: u16 = 0x0806;
+/// Ethertyp der IPv4-Nutzlast.
 pub const ETH_TYPE_IPV4: u16 = 0x0800;
 
+/// Ethernet-Rahmen mit Ziel, Quelle, Typ und Nutzlast.
 #[derive(Clone, Debug, PartialEq)]
 pub struct EthernetFrame {
+    /// Zieladresse des Rahmens.
     pub dst_mac: MacAddress,
+    /// Quelladresse des Rahmens.
     pub src_mac: MacAddress,
+    /// Typ der Nutzlast.
     pub ethertype: u16,
+    /// Nutzlast des Rahmens.
     pub payload: Vec<u8>,
 }
 
 impl EthernetFrame {
+    /// Rahmen aus Ziel, Quelle, Typ und Nutzlast.
     pub fn new(dst: MacAddress, src: MacAddress, ethertype: u16, payload: Vec<u8>) -> Self {
         EthernetFrame {
             dst_mac: dst,
@@ -138,20 +158,27 @@ impl EthernetFrame {
 
 // ─── ARP (Address Resolution Protocol) ──────────────────────────────────────
 
+/// Eintrag der ARP-Tabelle zu einer IP-Adresse.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArpEntry {
+    /// IP-Adresse, zu der der Eintrag gehört.
     pub ip: Ipv4Address,
+    /// Zugehörige MAC-Adresse.
     pub mac: MacAddress,
+    /// Zeitpunkt der Aufnahme; 0 bei dauerhaften Einträgen.
     pub timestamp: u64,
+    /// True, wenn der Eintrag nicht abläuft.
     pub permanent: bool,
 }
 
+/// Zuordnung von IP-Adressen zu MAC-Adressen mit Ablaufzeit.
 pub struct ArpTable {
     entries: Mutex<BTreeMap<Ipv4Address, ArpEntry>>,
     timeout_ns: u64,
 }
 
 impl ArpTable {
+    /// Leere Tabelle mit Ablaufzeit in Nanosekunden.
     pub fn new(timeout_ns: u64) -> Self {
         ArpTable {
             entries: Mutex::new(BTreeMap::new()),
@@ -159,11 +186,13 @@ impl ArpTable {
         }
     }
 
+    /// MAC-Adresse zu einer IP; None, wenn kein Eintrag vorliegt. Die Ablaufzeit prüft erst purge_expired.
     pub fn lookup(&self, ip: Ipv4Address) -> Option<MacAddress> {
         let entries = self.entries.lock();
         entries.get(&ip).map(|e| e.mac)
     }
 
+    /// Trägt einen Eintrag mit Zeitstempel ein und überschreibt einen vorhandenen.
     pub fn insert(&self, ip: Ipv4Address, mac: MacAddress, timestamp: u64) {
         let mut entries = self.entries.lock();
         entries.insert(
@@ -177,6 +206,7 @@ impl ArpTable {
         );
     }
 
+    /// Trägt einen dauerhaften Eintrag ein, der nicht abläuft.
     pub fn insert_permanent(&self, ip: Ipv4Address, mac: MacAddress) {
         let mut entries = self.entries.lock();
         entries.insert(
@@ -190,6 +220,7 @@ impl ArpTable {
         );
     }
 
+    /// Entfernt einen Eintrag; true, wenn einer vorhanden war.
     pub fn remove(&self, ip: Ipv4Address) -> bool {
         self.entries.lock().remove(&ip).is_some()
     }
@@ -209,10 +240,12 @@ impl ArpTable {
         expired.len()
     }
 
+    /// Anzahl der Einträge, dauerhafte eingeschlossen.
     pub fn entry_count(&self) -> usize {
         self.entries.lock().len()
     }
 
+    /// Entfernt alle Einträge, auch dauerhafte.
     pub fn clear(&self) {
         self.entries.lock().clear();
     }
@@ -220,24 +253,38 @@ impl ArpTable {
 
 // ─── ARP-Packet ────────────────────────────────────────────────────────────
 
+/// Hardwaretyp Ethernet im ARP-Kopf.
 pub const ARP_HW_ETHERNET: u16 = 1;
+/// Operationscode einer Anfrage.
 pub const ARP_OP_REQUEST: u16 = 1;
+/// Operationscode einer Antwort.
 pub const ARP_OP_REPLY: u16 = 2;
 
+/// ARP-Paket zur Auflösung einer IPv4-Adresse in eine MAC-Adresse.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ArpPacket {
+    /// Hardwaretyp; für Ethernet 1.
     pub hw_type: u16,
+    /// Protokolltyp der aufzulösenden Adresse.
     pub proto_type: u16,
+    /// Länge der Hardwareadresse in Byte; für Ethernet 6.
     pub hw_size: u8,
+    /// Länge der Protokolladresse in Byte; für IPv4 4.
     pub proto_size: u8,
+    /// Anfrage oder Antwort.
     pub opcode: u16,
+    /// MAC-Adresse des Absenders.
     pub sender_mac: MacAddress,
+    /// IP-Adresse des Absenders.
     pub sender_ip: Ipv4Address,
+    /// MAC-Adresse des Ziels; bei einer Anfrage die Nulladresse.
     pub target_mac: MacAddress,
+    /// IP-Adresse des Ziels.
     pub target_ip: Ipv4Address,
 }
 
 impl ArpPacket {
+    /// Anfrage für eine Ziel-IP; die Ziel-MAC bleibt Null.
     pub fn request(sender_mac: MacAddress, sender_ip: Ipv4Address, target_ip: Ipv4Address) -> Self {
         ArpPacket {
             hw_type: ARP_HW_ETHERNET,
@@ -252,6 +299,7 @@ impl ArpPacket {
         }
     }
 
+    /// Antwort mit beiden Adresspaaren.
     pub fn reply(
         sender_mac: MacAddress,
         sender_ip: Ipv4Address,
@@ -271,6 +319,7 @@ impl ArpPacket {
         }
     }
 
+    /// Paket als 28 Byte in Netzwerkreihenfolge.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(28);
         buf.extend_from_slice(&self.hw_type.to_be_bytes());
@@ -285,6 +334,7 @@ impl ArpPacket {
         buf
     }
 
+    /// Liest ein Paket aus mindestens 28 Byte; kürzere Eingaben ergeben PacketTooShort.
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
         if data.len() < 28 {
             return Err(NetworkError::PacketTooShort);
@@ -320,6 +370,7 @@ impl ArpPacket {
 
 // ─── NetworkDevice Trait ────────────────────────────────────────────────────
 
+/// Vertrag eines Netzgeräts: Rahmen senden und empfangen, dazu MAC, MTU und Zustand.
 pub trait NetworkDevice: Send + Sync {
     /// Sendet ein Ethernet-Frame.
     fn send_frame(&self, frame: &[u8]) -> Result<(), NetworkError>;
@@ -348,6 +399,7 @@ pub trait NetworkDevice: Send + Sync {
 
 // ─── LoopbackDevice (für Tests) ─────────────────────────────────────────────
 
+/// Gerät, das gesendete Rahmen in die eigene Empfangswarteschlange legt.
 pub struct LoopbackDevice {
     mac: MacAddress,
     queue: Mutex<Vec<Vec<u8>>>,
@@ -355,6 +407,7 @@ pub struct LoopbackDevice {
 }
 
 impl LoopbackDevice {
+    /// Gerät mit der festen MAC 02:00:00:00:00:01 und leerer Warteschlange.
     pub fn new(name: &str) -> Self {
         LoopbackDevice {
             mac: MacAddress::new(0x02, 0x00, 0x00, 0x00, 0x00, 0x01),
@@ -363,6 +416,7 @@ impl LoopbackDevice {
         }
     }
 
+    /// Anzahl der wartenden Rahmen.
     pub fn queue_len(&self) -> usize {
         self.queue.lock().len()
     }
@@ -390,28 +444,41 @@ impl NetworkDevice for LoopbackDevice {
 
 // ─── NetworkError ──────────────────────────────────────────────────────────
 
+/// Fehler der Netzschicht.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum NetworkError {
+    /// Die Bytefolge ist kürzer als ein Ethernet-Rahmen.
     FrameTooShort,
+    /// Die Bytefolge ist kürzer als das erwartete Paket.
     PacketTooShort,
+    /// Die Prüfsumme stimmt nicht.
     InvalidChecksum,
+    /// Es liegt kein Rahmen zum Abholen bereit.
     NoFrameAvailable,
+    /// Das Gerät ist nicht verbunden.
     DeviceDown,
+    /// Das Senden ist gescheitert; der Text nennt den Grund.
     SendFailed(String),
+    /// Das Empfangen ist gescheitert; der Text nennt den Grund.
     RecvFailed(String),
+    /// Die Adresse ließ sich nicht auflösen.
     ArpResolutionFailed,
+    /// Das Protokoll wird nicht unterstützt.
     UnsupportedProtocol,
 }
 
 // ─── NetworkStack (Höchste Ebene — verbindet Device + ARP) ──────────────────
 
+/// Verbindet ein Gerät mit der ARP-Tabelle und der eigenen Adresse.
 pub struct NetworkStack {
+    /// Gerät, über das gesendet und empfangen wird.
     pub device: Arc<dyn NetworkDevice>,
     arp: ArpTable,
     our_ip: Ipv4Address,
 }
 
 impl NetworkStack {
+    /// Stack über einem Gerät, mit 30 Sekunden Ablaufzeit für ARP-Einträge.
     pub fn new(device: Arc<dyn NetworkDevice>, our_ip: Ipv4Address) -> Self {
         NetworkStack {
             device,
