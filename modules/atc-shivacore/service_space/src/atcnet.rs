@@ -56,6 +56,7 @@ pub enum MessageType {
 }
 
 impl MessageType {
+    /// Nachrichtentyp zum Zahlenwert; unbekannte Werte ergeben None.
     pub fn from_byte(b: u8) -> Option<Self> {
         match b {
             0x01 => Some(Self::Handshake),
@@ -89,14 +90,23 @@ pub enum ConnState {
 /// Verbindung zu einem Peer
 #[derive(Debug, Clone)]
 pub struct PeerConnection {
+    /// Kennung der Verbindung, vom Handler fortlaufend vergeben.
     pub conn_id: u64,
+    /// Peer-ID des Gegenuebers.
     pub peer_id: PeerId,
+    /// DID des Gegenuebers, sobald der Handshake sie geliefert hat.
     pub peer_did: String,
+    /// Zustand der Verbindung.
     pub state: ConnState,
+    /// Chain-ID, die der Gegenueber im Handshake genannt hat.
     pub chain_id: u32,
+    /// Protokollfassung, die der Gegenueber genannt hat.
     pub protocol_version: u8,
+    /// Zeitpunkt der letzten Lebensmeldung.
     pub last_seen: u64,
+    /// Bisher gesendete Byte.
     pub bytes_sent: u64,
+    /// Bisher empfangene Byte.
     pub bytes_recv: u64,
 }
 
@@ -130,73 +140,100 @@ pub enum AtcNetError {
 /// Handshake-Nachricht
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct HandshakeMsg {
+    /// Eigene Protokollfassung im Handshake.
     pub protocol_version: u8,
+    /// Eigene Chain-ID im Handshake.
     pub chain_id: u32,
+    /// Eigene Peer-ID.
     pub peer_id: PeerId,
+    /// Eigene DID.
     pub peer_did: String,
+    /// Port, auf dem der Absender lauscht.
     pub listen_port: u16,
+    /// Hoehe, die der Absender erreicht hat.
     pub current_height: u64,
 }
 
 /// Block-Ankündigung
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockAnnMsg {
+    /// Kennung des angekuendigten Blocks.
     pub block_hash: [u8; 32],
+    /// Hoehe des angekuendigten Blocks.
     pub block_height: u64,
+    /// Kennung des Vorgaengers.
     pub prev_hash: [u8; 32],
 }
 
 /// Transaktions-Broadcast
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TxBroadcastMsg {
+    /// Kennung der weitergeleiteten Transaktion.
     pub tx_hash: [u8; 32],
+    /// Rohdaten der Transaktion.
     pub tx_data: Vec<u8>,
 }
 
 /// Ping-Nachricht
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PingMsg {
+    /// Zeitpunkt der Anfrage.
     pub timestamp: u64,
+    /// Zufallswert zur Unterscheidung gleicher Zeitpunkte.
     pub nonce: u64,
 }
 
 /// Pong-Nachricht
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PongMsg {
+    /// Zeitpunkt der Antwort.
     pub timestamp: u64,
+    /// Zufallswert zur Zuordnung zur Anfrage.
     pub nonce: u64,
 }
 
 /// Block-Anforderung
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GetBlocksMsg {
+    /// Erste angeforderte Hoehe.
     pub from_height: u64,
+    /// Hoechstzahl der angeforderten Bloecke.
     pub max_count: u16,
 }
 
 /// Block-Antwort
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlocksMsg {
+    /// Gelieferte Bloecke.
     pub blocks: Vec<BlockData>,
 }
 
+/// Ein Block in der Antwort.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BlockData {
+    /// Hoehe des Blocks.
     pub height: u64,
+    /// Kennung des Blocks.
     pub hash: [u8; 32],
+    /// Rohdaten des Blocks.
     pub data: Vec<u8>,
 }
 
 /// Peer-Liste
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerListMsg {
+    /// Gemeldete Peers.
     pub peers: Vec<PeerEntry>,
 }
 
+/// Ein Peer in der Liste.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PeerEntry {
+    /// Peer-ID.
     pub peer_id: PeerId,
+    /// Adresse als Text.
     pub address: String,
+    /// Port.
     pub port: u16,
 }
 
@@ -418,6 +455,7 @@ pub struct AtcNetHandler {
 }
 
 impl AtcNetHandler {
+    /// Handler ohne Verbindungen und bekannte Peers, mit Kennungszaehler 1 und Hoehe 0.
     pub fn new(self_peer_id: PeerId, self_did: String) -> Self {
         Self {
             connections: BTreeMap::new(),
@@ -757,11 +795,17 @@ impl AtcNetHandler {
 /// ATCNet Statistik
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AtcNetStats {
+    /// Anzahl der Eintraege im Verbindungsverzeichnis, auch nicht verbundener.
     pub total_connections: usize,
+    /// Anzahl der Verbindungen im Zustand Connected.
     pub connected: usize,
+    /// Anzahl der bekannten Peers.
     pub known_peers: usize,
+    /// Bisher gesendete Nachrichten.
     pub messages_sent: u64,
+    /// Bisher empfangene Nachrichten.
     pub messages_recv: u64,
+    /// Zuletzt gesetzte eigene Blockhoehe.
     pub current_height: u64,
 }
 
