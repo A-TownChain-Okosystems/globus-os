@@ -156,8 +156,11 @@ waere das ein stiller Ausfall; mit Ruecksetzen ist es ein Neustart.
 
 ## Offen
 
-1. **Identitaetspruefung.** Braucht eine Ablage im Image (Dateisystem oder
-   eingebettete Kontenliste) und eine Entscheidung, wo das Geheimnis liegt.
+1. **Identitaetspruefung.** Braucht eine Ablage im Image und eine Entscheidung,
+   wo geprueft wird. Drei Wege, Messwerte und Abnahmekriterien stehen in
+   [`docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md`](decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md);
+   empfohlen ist die Pruefung im Fenster ueber einen gemeinsamen Kern
+   (no_std) mit dem Host. Ohne Owner-Entscheid kein Code.
 2. **Echter Neustart aus dem Abbild.** Der Supervisor setzt zurueck, er laedt
    nicht neu. Dafuer fehlen Prozessstart-Syscall und ein erreichbarer
    Frame-Allokator im Syscall-Pfad.
