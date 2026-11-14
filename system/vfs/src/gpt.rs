@@ -2,20 +2,32 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct GptHeader {
+    /// Erste nutzbare LBA.
     pub first_usable_lba: u64,
+    /// Letzte nutzbare LBA.
     pub last_usable_lba: u64,
+    /// LBA, an der die Partitionstabelle beginnt.
     pub partition_entry_lba: u64,
+    /// Anzahl moeglicher Partitionseintraege.
     pub partition_count: u32,
+    /// Groesse eines Eintrags in Byte.
     pub partition_size: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler beim Auswerten des GPT.
 pub enum GptError {
+    /// Der Sektor ist kuerzer als ein GPT-Kopf.
     TooSmall,
+    /// Die Signatur ist nicht "EFI PART".
     BadSignature,
+    /// Die Kopfgraesse passt nicht zur Version.
     BadHeaderSize,
+    /// Die CRC-Pruefsumme passt nicht.
     BadCrc,
+    /// Der nutzbare Bereich ist ungueltig.
     InvalidRange,
+    /// Die Partitionstabelle ist ungueltig.
     InvalidEntries,
 }
 
@@ -42,6 +54,7 @@ fn read_u64(sector: &[u8], start: usize) -> u64 {
     u64::from_le_bytes(bytes)
 }
 
+/// Liest und prueft den GPT-Kopf aus einem Sektor.
 pub fn parse_header(sector: &[u8]) -> Result<GptHeader, GptError> {
     if sector.len() < 92 {
         return Err(GptError::TooSmall);
