@@ -6,16 +6,23 @@
 
 use crate::AccountProfile;
 
+/// Aktuelle Version des Identitaetsdatensatzes.
 pub const IDENTITY_RECORD_VERSION: u16 = 1;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Passwort-Verifier ohne Klartext.
 pub struct CredentialRecord {
+    /// Schema des Verifiers, heute nur argon2id.
     pub scheme: &'static str,
+    /// Version des Schemas.
+    /// Version des Datensatzes.
     pub version: u16,
+    /// PHC-String des Hashes.
     pub phc_hash: String,
 }
 
 impl CredentialRecord {
+    /// Baut einen argon2id-Verifier aus einem PHC-String.
     pub fn argon2id(phc_hash: impl Into<String>) -> Self {
         Self {
             scheme: "argon2id",
@@ -24,19 +31,25 @@ impl CredentialRecord {
         }
     }
 
+    /// True, wenn Schema, Version und Hash gesetzt und bekannt sind.
     pub fn is_supported(&self) -> bool {
         self.scheme == "argon2id" && self.version == 1 && !self.phc_hash.is_empty()
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Persistierter Identitaetsdatensatz aus Profil und Verifier.
 pub struct IdentityRecord {
     pub version: u16,
+    /// Profil des Kontos.
     pub profile: AccountProfile,
+    /// Verifier fuer die Anmeldung.
     pub credential: CredentialRecord,
 }
 
 impl IdentityRecord {
+    /// Legt einen Datensatz in der aktuellen Version an.
+    /// Leerer Speicher.
     pub fn new(profile: AccountProfile, credential: CredentialRecord) -> Self {
         Self {
             version: IDENTITY_RECORD_VERSION,
@@ -45,6 +58,7 @@ impl IdentityRecord {
         }
     }
 
+    /// Prueft Version, Verifier und die Uebereinstimmung von Profil und Bindung.
     pub fn validate(&self) -> Result<(), PersistenceError> {
         if self.version != IDENTITY_RECORD_VERSION {
             return Err(PersistenceError::UnsupportedVersion(self.version));
@@ -62,21 +76,33 @@ impl IdentityRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler der Identitaets-Ablage.
 pub enum PersistenceError {
+    /// Es ist kein Datensatz gespeichert.
     NotFound,
+    /// Der Datensatz wurde zwischenzeitlich geaendert.
     Conflict,
+    /// Der Datensatz ist inhaltlich inkonsistent.
     Corrupt,
+    /// Die Datensatzversion wird nicht unterstuetzt.
     UnsupportedVersion(u16),
+    /// Das Verifier-Schema wird nicht unterstuetzt.
     UnsupportedCredentialScheme,
+    /// Das Speicher-Backend ist nicht erreichbar.
     BackendUnavailable,
+    /// Die Integritaetspruefung ist fehlgeschlagen.
     IntegrityFailure,
+    /// Dateisystemfehler.
     Io,
 }
 
 /// Durable identity storage. Implementations must provide atomic writes.
 pub trait IdentityStore {
+    /// Laedt den Datensatz, falls einer existiert.
     fn load(&self) -> Result<Option<IdentityRecord>, PersistenceError>;
+    /// Schreibt den Datensatz atomar.
     fn save(&mut self, record: &IdentityRecord) -> Result<(), PersistenceError>;
+    /// Loescht den Datensatz.
     fn delete(&mut self) -> Result<(), PersistenceError>;
 }
 
@@ -92,6 +118,7 @@ impl InMemoryIdentityStore {
         Self::default()
     }
 
+    /// True, solange nichts gespeichert ist.
     pub fn is_empty(&self) -> bool {
         self.committed.is_none()
     }
