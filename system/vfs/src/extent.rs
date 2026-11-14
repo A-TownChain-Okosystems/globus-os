@@ -1,6 +1,7 @@
 //! Deterministic file extent mapping for persistent storage.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler bei der Abbildung von Dateibereichen auf Bloecke.
 pub enum ExtentError {
     /// Laenge 0 oder eine unbrauchbare Angabe.
     Invalid,
