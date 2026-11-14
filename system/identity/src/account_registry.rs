@@ -22,29 +22,42 @@ const MAX_ENTRIES: usize = 1_000_000;
 const MAX_FIELD: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler des Benutzernamen-Verzeichnisses.
 pub enum AccountDirectoryError {
+    /// Der Benutzername ist bereits vergeben.
     AlreadyExists,
+    /// Der Benutzername ist nicht eingetragen.
     NotFound,
+    /// Die Lock-Datei gehoert einem anderen Schreiber.
     Busy,
+    /// Der Index ist beschaedigt.
     Corrupt,
+    /// Benutzername oder Benutzer-ID ist unbrauchbar.
     InvalidAccountId,
+    /// Dateisystemfehler.
     Io,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Eintrag: Benutzername und zugehoerige Benutzer-ID.
 pub struct AccountDirectoryEntry {
+    /// Kanonischer Benutzername.
     pub username: AccountUsername,
+    /// Benutzer-ID, die zu diesem Namen gehoert.
     pub user_id: UserId,
 }
 
 /// A durable directory backend. Implementations must make insert_if_absent atomic and durable.
 pub trait AccountDirectoryStore {
+    /// Fuegt atomar ein und schlaegt fehl, wenn der Name schon existiert.
     fn insert_if_absent(
         &mut self,
         username: AccountUsername,
         user_id: UserId,
     ) -> Result<(), AccountDirectoryError>;
+    /// Liefert die Benutzer-ID zu einem Namen.
     fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError>;
+    /// Alle Eintraege des Verzeichnisses.
     fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError>;
 }
 
@@ -55,6 +68,7 @@ pub struct FileAccountDirectory {
 }
 
 impl FileAccountDirectory {
+    /// Bindet das Verzeichnis an einen Pfad und leitet den Lock-Pfad daraus ab.
     pub fn open(path: impl Into<PathBuf>) -> Self {
         let path = path.into();
         let mut lock_name = path.as_os_str().to_os_string();
@@ -65,6 +79,7 @@ impl FileAccountDirectory {
         }
     }
 
+    /// Pfad der Indexdatei.
     pub fn path(&self) -> &Path {
         &self.path
     }
