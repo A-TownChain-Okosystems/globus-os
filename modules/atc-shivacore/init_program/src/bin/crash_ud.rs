@@ -15,6 +15,8 @@ use core::panic::PanicInfo;
 #[path = "../allocator.rs"]
 mod allocator;
 
+/// Einsprungpunkt, der `ud2` ausfuehrt und damit absichtlich eine
+/// Undefined-Instruction-Exception ausloest.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     unsafe {
