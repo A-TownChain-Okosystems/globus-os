@@ -1227,7 +1227,16 @@ fn handle_exception(
     use x86_64::registers::control::Cr2;
 
     let origin = shivacore::fault::Origin::from_cs(frame.cs);
-    let action = shivacore::fault::decide(kind, origin);
+    let pid = USER_SCHEDULER
+        .lock()
+        .as_ref()
+        .and_then(|scheduler| scheduler.current_pid());
+    // Die Rolle kommt aus der Diensteverwaltung. Sie wird VOR der Entscheidung
+    // gelesen, damit die Entscheidung eine reine Funktion bleibt.
+    let role = shivacore::fault::ProcessKind::from_is_service(
+        pid.and_then(|pid| crate::services::get(u64::from(pid.0))).is_some(),
+    );
+    let mut action = shivacore::fault::decide(kind, origin, role);
     let report = shivacore::fault::FaultReport::from_error_code(error_code);
     // Cr2::read liefert in dieser Fassung ein Result; die Zahl ist das, was im
     // Log steht, nicht die Debug-Form.
@@ -1235,6 +1244,53 @@ fn handle_exception(
         Ok(addr) => addr.as_u64(),
         Err(_) => 0,
     };
+    // Ein Dienst kehrt an seinen Startzustand zurueck, BEVOR Capabilities
+    // widerrufen werden — wie beim Exit-Syscall. Danach haette der neue Lauf
+    // keine Rechte mehr, und ein Neustart ohne Rechte waere ein Dienst, der
+    // nichts tun kann. Ist das Neustart-Limit erreicht, bleibt es beim Ende.
+    if action == shivacore::fault::FaultAction::RestartService {
+        let restarted = pid.and_then(|pid| crate::services::restart(u64::from(pid.0)));
+        match restarted {
+            Some(service) => {
+                reset_service_process(frame, &service);
+                serial_println!(
+                    "ShivaCore: Dienst '{}' PID={} nach {} bei Adresse {:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                    service.name,
+                    pid.map(|pid| pid.0).unwrap_or_default(),
+                    kind.name(),
+                    address,
+                    report.describe(),
+                    service.attempts,
+                    service.limit
+                );
+                let recorded =
+                    FAULT_COUNTERS
+                        .lock()
+                        .record(origin, shivacore::fault::FaultAction::RestartService);
+                shivacore::security::record(
+                    "kernel",
+                    "fault.service_restart",
+                    &alloc::format!(
+                        "kind={} addr={:#x} attempts={}/{} restarts={}",
+                        kind.name(),
+                        address,
+                        service.attempts,
+                        service.limit,
+                        recorded.service_restarts
+                    ),
+                    shivacore::security::AuditResult::Allowed,
+                );
+                return;
+            }
+            None => {
+                serial_println!(
+                    "ShivaCore: Dienst PID={:?} Neustart-Limit erreicht — der Fehler beendet ihn",
+                    pid
+                );
+                action = shivacore::fault::FaultAction::TerminateProcess;
+            }
+        }
+    }
     let recorded = FAULT_COUNTERS.lock().record(origin, action);
 
     // Audit fuer Seitenfehler (und die beiden anderen Ausnahmen): Vektor,
@@ -1244,11 +1300,12 @@ fn handle_exception(
         "kernel",
         "fault.exception",
         &alloc::format!(
-            "kind={} addr={:#x} user={} terminated={} kernel_faults={}",
+            "kind={} addr={:#x} user={} terminated={} restarts={} kernel_faults={}",
             kind.name(),
             address,
             report.from_user,
             recorded.terminated,
+            recorded.service_restarts,
             recorded.kernel_faults
         ),
         shivacore::security::AuditResult::Error,
@@ -1350,6 +1407,15 @@ fn handle_exception(
                         x86_64::instructions::hlt();
                     }
                 }
+            }
+        }
+        // Wird oben behandelt. Erreichbar bleibt der Zweig nur, wenn der
+        // Prozess zwischen Entscheidung und Neustart aus der Verwaltung
+        // verschwunden ist; dann gilt er als abgestuerzt und wird beendet,
+        // statt an derselben Anweisung erneut zu scheitern.
+        shivacore::fault::FaultAction::RestartService => {
+            if let Some(pid) = pid {
+                exit_current_process(frame, pid, -11);
             }
         }
         shivacore::fault::FaultAction::PanicKernel => {
