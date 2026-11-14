@@ -4,9 +4,10 @@
 # CLAIMED != PASS · DOCUMENTED != IMPLEMENTED · IMPLEMENTED != VERIFIED
 schema_version: "1.0.0"
 repository: globus-os
-generated: "2026-11-06"
-generated_by: "Aurora (Audit-Welle 06.11.) — Evidenz auf verifizierten Stand nachgezogen"
-bound_commit: c2b935ec805ca3b93e2e127e5ae438cebec76040
+generated: "2026-11-15"
+generated_by: "Aurora (Toolchain-Block 14./15.11.) — Evidenz an die fixierte Toolchain gebunden; frueherer Datensatz als RESIDUAL erhalten"
+bound_commit: 4315a94e561c3cf4a865c2dad87b38c4d2ab5b4e
+tree_sha: f4b0ccc6ff67a78cc08fe4ee9f0f13a236b2f02c
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -14,7 +15,10 @@ implementation:
   summary: "UEFI→ShivaCore→globus-init→Userspace; M5 = CLAIMED, Evidence incomplete (ehrlich)"
 tests:
   status: pass_with_evidence       # pass_with_evidence|not_run|not_applicable
-  evidence: "lokale Verifikation auf bound_commit (siehe verification); CI-Lauf weiterhin blockiert"
+  evidence: >-
+    lokale Verifikation auf bound_commit: Gate 2 (cargo test -p globus-identity) 60/60 gruen,
+    Gate 3 (cargo check --workspace --all-targets) Exit 0. Gate 4 (fmt, clippy) ist ROT und
+    vorbestehend (251 Diffs, 32 Befunde) - daraus folgt kein VERIFIED. CI-Lauf weiterhin blockiert.
   # WICHTIG: Die fruehere Fassung band einen CI-PASS an 7f50c9cb (Oktober). Dieser
   # Claim war zum Zeitpunkt dieser Aenderung nicht mehr gueltig: main ist seither
   # weitergelaufen und kein CI-Lauf kann derzeit starten (startup_failure, siehe
@@ -35,12 +39,65 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: c2b935ec805ca3b93e2e127e5ae438cebec76040
-  timestamp: 2026-11-07T10:20:00+00:00
+  commit: 4315a94e561c3cf4a865c2dad87b38c4d2ab5b4e
+  timestamp: 2026-11-15T00:55:00+00:00
   result: PASS
   runner: local-sandbox
+# ---------------------------------------------------------------------------
+# AKTUELLE VERIFIKATION. Der fruehere Datensatz steht ab hier darunter unter
+# `verification_residual_c2b935e`: er bleibt historisch erhalten und ist fuer
+# diesen Workspace UNGUELTIG, weil rustc 1.99.1 unter rust-version 1.100 liegt.
+# ---------------------------------------------------------------------------
+toolchain:
+  policy: "rust-version = 1.100 ist die Kompatibilitaetsuntergrenze; channel = 1.100.0 ist die verbindliche Build-Version"
+  pinned_in: "rust-toolchain.toml (Root: 1.100.0, clippy+rustfmt); modules/atc-shivacore/boot/rust-toolchain.toml (nightly, x86_64-unknown-none)"
+  rustc: "rustc 1.100.0 (0ef1bc386 2026-11-09)"
+  cargo: "cargo 1.100.0 (3acc79c0c 2026-11-05)"
+  rustc_vv:
+    binary: rustc
+    commit-hash: 0ef1bc386059596dada8fb65b50425aab2ea637a
+    commit-date: 2026-11-09
+    host: x86_64-unknown-linux-gnu
+    release: 1.100.0
+    llvm: 23.1.5
+  override_proof: "im Repo meldet rustc -V: 1.100.0 (overridden by 'rust-toolchain.toml')"
 verification:
-  method: "frischer Clone von bound_commit, cargo test + bare-metal build"
+  method: "frischer Clone von bound_commit, Toolchain aus rust-toolchain.toml"
+  head: 4315a94e561c3cf4a865c2dad87b38c4d2ab5b4e
+  tree_sha: f4b0ccc6ff67a78cc08fe4ee9f0f13a236b2f02c
+  commands:
+    - {cmd: "cargo +1.100.0 -V", exit: 0, out: "cargo 1.100.0 (3acc79c0c 2026-11-05)"}
+    - {cmd: "rustc +1.100.0 -Vv", exit: 0, out: "release: 1.100.0, commit-hash 0ef1bc38, host x86_64-unknown-linux-gnu, LLVM 23.1.5"}
+    - {cmd: "rustup show active-toolchain (im Repo)", exit: 0, out: "1.100.0-x86_64-unknown-linux-gnu (overridden by rust-toolchain.toml)"}
+    - {cmd: "cargo test -p globus-identity", exit: 0, passed: 60, failed: 0, note: "die eingefrorenen key_version=2-Vektoren sind NICHT im Rust-Code, sie stehen im Spec-Pruefer"}
+    - {cmd: "cargo check --workspace --all-targets", exit: 0}
+    - {cmd: "cargo fmt --all -- --check", exit: 1, result: FAIL_PREEXISTING, detail: "251 Diffs, vorbestehend; in diesem Block wurde kein Rust-Code geaendert"}
+    - {cmd: "cargo clippy --workspace --all-targets -- -D warnings", exit: 101, result: FAIL_PREEXISTING, detail: "32 Befunde: 24 collapsible if, 4 missing docs, chunks_exact, loop-index"}
+  results:
+    - {suite: "globus-identity (cargo test -p globus-identity)", passed: 60, failed: 0, exit: 0}
+    - {suite: "cargo check --workspace --all-targets", result: PASS, exit: 0}
+    - {suite: "scripts/check_recovery_spec.py (Spezifikationspruefer)", result: PASS, exit: 0, detail: "112 Zusagen"}
+    - {suite: "cargo fmt --all -- --check", result: FAIL_PREEXISTING, exit: 1}
+    - {suite: "cargo clippy --workspace --all-targets -- -D warnings", result: FAIL_PREEXISTING, exit: 101}
+  artifacts: []
+  artifacts_note: "kein Image gebaut; das Boot-Crate braucht Nightly und war nicht Teil dieses Blocks"
+  not_verified:
+    - "Gate 4 (fmt, clippy) rot und vorbestehend; daraus folgt kein VERIFIED und kein RELEASED"
+    - "key_version = 2 ist spezifiziert (Spec-Pruefer Exit 0, 112 Zusagen), aber NICHT in Rust implementiert"
+    - "CI-Lauf: keiner. Committer-Adresse unbetaetigt, push-getriggerte Laeufe enden als startup_failure bei 0 Jobs"
+    - "QEMU-Bootlauf in diesem Block nicht wiederholt"
+  evidence_history:
+    - status: RESIDUAL
+      bound_commit: c2b935ec805ca3b93e2e127e5ae438cebec76040
+      toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
+      reason: "ungueltig fuer diesen Workspace: rustc 1.99.1 liegt unter rust-version 1.100; cargo weist den Build ab (not supported by the following packages)"
+      treatment: "historisch erhalten, nicht ueberschrieben; die alten Zahlen gelten fuer c2b935e unter 1.99.1 und sind fuer 1.100 nicht reproduziert"
+verification_residual_c2b935e:
+  status: RESIDUAL
+  applies_to_commit: c2b935ec805ca3b93e2e127e5ae438cebec76040
+  toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
+  note: "historischer Datensatz, unveraendert; fuer den heutigen Workspace nicht gueltig"
+  legacy_method: "frischer Clone von bound_commit, cargo test + bare-metal build"
   toolchain: "rustc 1.99.1 stable (Tests), rustc 1.101.0-nightly (Ziel x86_64-unknown-none)"
   results:
     - suite: shivacore (kernel, --lib)
