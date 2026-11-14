@@ -11,10 +11,13 @@ license.workspace = true
 # nachgewiesen), im Unterschied zu `sha2`, das fuer dieses Ziel scheitert
 # (Befund 07.11.2026). Der Kern bringt keine eigene Chiffre mit.
 #
+# Feature `zeroize` schaltet `cipher/zeroize` frei: der Schluessel und der
+# Keystromzustand werden beim Verwerfen genullt (REQ-REC-17).
+#
 # 0.9.1 ist bewusst gewaehlt und gepinnt: die Build-Warnung
 # "future-incompatible" betrifft 0.10.2 genauso (am 14.11.2026 gegengeprueft),
 # ein Wechsel bringt also keinen Gewinn, kostet aber das Feature `cipher`.
-chacha20 = { version = "=0.9.1", default-features = false }
+chacha20 = { version = "=0.9.1", default-features = false, features = ["zeroize"] }
 zeroize = { version = "1", default-features = false }
 
 [lints]
