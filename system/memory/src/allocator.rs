@@ -3,18 +3,23 @@
 use crate::VirtualAddress;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ergebnis einer Allokation: Startadresse und Seitenzahl.
 pub struct PageRange {
+    /// Erste Seite des Bereichs.
     pub start: VirtualAddress,
+    /// Anzahl zusammenhaengender Seiten.
     pub pages: u64,
 }
 
 #[derive(Debug)]
+/// Vergibt virtuelle Seiten fortlaufend ab einer Startadresse.
 pub struct PageAllocator {
     next: u64,
     page_size: u64,
 }
 
 impl PageAllocator {
+    /// Nur mit Zweierpotenz als Seitengroesse, sonst `None`.
     pub fn new(start: VirtualAddress, page_size: u64) -> Option<Self> {
         if page_size == 0 || !page_size.is_power_of_two() {
             return None;
@@ -25,6 +30,7 @@ impl PageAllocator {
         })
     }
 
+    /// Vergibt `pages` zusammenhaengende Seiten oder `None`.
     pub fn allocate(&mut self, pages: u64) -> Option<PageRange> {
         if pages == 0 {
             return None;
