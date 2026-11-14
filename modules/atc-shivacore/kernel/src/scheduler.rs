@@ -19,31 +19,48 @@ use crate::capability::Pid;
 /// Beschleuniger-Typ
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AcceleratorType {
+    /// Prozessor als Beschleuniger.
     Cpu,
+    /// Grafikprozessor.
     Gpu,
+    /// Neuronale Recheneinheit.
     Npu,
+    /// Tensor-Prozessor.
     Tpu,
 }
 
 /// Hardware-Abstraktion: jeder Beschleuniger implementiert dieses Trait.
 pub trait Accelerator {
+    /// Eindeutige Kennung des Beschleunigers.
     fn id(&self) -> u64;
+    /// Art des Beschleunigers.
     fn acc_type(&self) -> AcceleratorType;
+    /// Rechenleistung in Gleitkommaoperationen je Sekunde.
     fn flops(&self) -> f64;
+    /// Aktuelle Auslastung; der Planer liest diesen Wert nicht.
     fn current_load(&self) -> f64;
+    /// Temperatur in Grad Celsius; der Planer liest sie nicht, er fragt is_thermal_ok.
     fn temperature(&self) -> f64;
+    /// True, solange die Temperatur unter der Grenze liegt; nur so entscheidet der Planer ueber die Eignung.
     fn is_thermal_ok(&self) -> bool;
+    /// Frei nutzbarer Speicher in MiB; kleinere Werte als der Taskbedarf schliessen den Beschleuniger aus.
     fn available_memory_mb(&self) -> u64;
 }
 
 /// Simulierter Beschleuniger fuer Tests und Software-Validierung
 #[derive(Debug, Clone)]
 pub struct SimulatedAccelerator {
+    /// Kennung des simulierten Beschleunigers.
     pub id: u64,
+    /// Art des Beschleunigers.
     pub acc_type: AcceleratorType,
+    /// Rechenleistung in Gleitkommaoperationen je Sekunde.
     pub flops: f64,
+    /// Auslastung; sie geht nicht in die Rechnung ein.
     pub load: f64,
+    /// Temperatur in Grad Celsius; die Eignung haengt an der Grenze von 85 Grad.
     pub temp: f64,
+    /// Speicher in MiB.
     pub mem_mb: u64,
 }
 
@@ -74,33 +91,51 @@ impl Accelerator for SimulatedAccelerator {
 /// Task-Typ
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TaskKind {
+    /// Ausfuehren eines trainierten Modells.
     Inference,
+    /// Trainieren eines Modells.
     Training,
+    /// Matrizenmultiplikation.
     MatMul,
+    /// Faltung.
     Convolution,
+    /// Datenbewegung ohne Rechenarbeit.
     Transfer,
 }
 
 /// Ein Compute-Task
 #[derive(Debug, Clone)]
 pub struct Task {
+    /// Kennung des Tasks.
     pub id: u64,
+    /// Art der Rechenarbeit.
     pub kind: TaskKind,
+    /// Rechenumfang in Gleitkommaoperationen; geteilt durch die Leistung ergibt die Rechenzeit.
     pub compute_flops: f64,
+    /// Benoetigter Speicher in MiB.
     pub memory_mb: u64,
+    /// Spaetester Abschlusszeitpunkt in derselben Zeiteinheit wie die Rechenzeiten.
     pub deadline: f64,
+    /// Kennungen vorausgehender Tasks; ihr Ende begrenzt den Start, unbekannte Kennungen wirken nicht.
     pub dependencies: Vec<u64>,
+    /// Prozess, der den Task angefordert hat; None fuer kernelseitige Aufgaben.
     pub pid: Option<Pid>,
+    /// Vorgesehene Prioritaet; der Planer wertet sie nicht aus, die Reihenfolge bestimmt allein der Upward-Rank.
     pub priority: u8,
 }
 
 /// Scheduler-Ergebnis fuer einen Task
 #[derive(Debug, Clone)]
 pub struct ScheduleEntry {
+    /// Kennung des eingeplanten Tasks.
     pub task_id: u64,
+    /// Beschleuniger, dem der Task zugeteilt wurde.
     pub accel_id: u64,
+    /// Beginn in der Zeiteinheit des Planers.
     pub start_time: f64,
+    /// Voraussichtliches Ende.
     pub finish_time: f64,
+    /// True, wenn das Ende innerhalb der Frist liegt.
     pub deadline_met: bool,
 }
 
@@ -117,6 +152,7 @@ impl Default for DaHeftScheduler {
 }
 
 impl DaHeftScheduler {
+    /// Leerer Planer ohne Beschleuniger und ohne belegte Zeiten.
     pub fn new() -> Self {
         Self {
             accelerators: Vec::new(),
@@ -124,6 +160,7 @@ impl DaHeftScheduler {
         }
     }
 
+    /// Nimmt einen Beschleuniger auf und setzt seine Frei-Zeit auf null.
     pub fn add_accelerator(&mut self, accel: Box<dyn Accelerator + Send>) {
         let id = accel.id();
         self.accel_free_at.insert(id, 0.0);
@@ -255,10 +292,12 @@ impl DaHeftScheduler {
         schedule_result
     }
 
+    /// Anzahl der Eintraege, deren Frist nicht gehalten wird.
     pub fn deadline_misses(&self, schedule: &[ScheduleEntry]) -> usize {
         schedule.iter().filter(|e| !e.deadline_met).count()
     }
 
+    /// Belegung je Beschleuniger als Anteil der Laufzeit bis zum spaetesten Ende; ohne Eintraege leer.
     pub fn utilization(&self, schedule: &[ScheduleEntry]) -> BTreeMap<u64, f64> {
         let mut util: BTreeMap<u64, f64> = BTreeMap::new();
         if schedule.is_empty() {
@@ -286,6 +325,7 @@ impl DaHeftScheduler {
         util
     }
 
+    /// Anzahl der aufgenommenen Beschleuniger.
     pub fn accelerator_count(&self) -> usize {
         self.accelerators.len()
     }
