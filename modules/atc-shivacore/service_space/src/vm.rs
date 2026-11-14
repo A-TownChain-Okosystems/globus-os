@@ -6,6 +6,7 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
+/// Befehlssatz der Vertragsmaschine, ein Byte je Befehl; Transfer bucht heute nur einen Protokolleintrag und bewegt kein Guthaben.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Opcode {
@@ -41,6 +42,7 @@ pub enum Opcode {
     Halt = 0xFF,
 }
 impl Opcode {
+    /// Befehl zum Zahlenwert; unbekannte Werte ergeben None.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             0x00 => Some(Opcode::Nop),
@@ -76,6 +78,7 @@ impl Opcode {
             _ => None,
         }
     }
+    /// Gaskosten je Befehl; Speichern ist mit 5000 der teuerste, Arithmetik liegt zwischen 3 und 10.
     pub fn gas_cost(&self) -> u64 {
         match self {
             Opcode::Nop => 1,
@@ -98,41 +101,69 @@ impl Opcode {
         }
     }
 }
+/// Ablehnungsgruende der Maschine.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VmError {
+    /// Das Gasbudget ist erschoepft; das restliche Gas gilt als verbraucht.
     OutOfGas,
+    /// Der Stapel hat die Grenze von 1024 Werten erreicht.
     StackOverflow,
+    /// Der Stapel enthaelt zu wenige Werte.
     StackUnderflow,
+    /// Der Befehl ist unbekannt; bei abgeschnittenen Argumenten meldet die Maschine den Wert 0.
     InvalidOpcode(u8),
+    /// Das Sprungziel liegt ausserhalb des Programms.
     InvalidJump(u64),
+    /// Teilung oder Rest durch Null.
     DivisionByZero,
+    /// Der Speicherzugriff ist gescheitert; der Text nennt den Grund.
     StorageError(String),
+    /// Das Programm hat angehalten.
     HaltReached,
 }
+/// Ergebnis eines Aufrufs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ExecResult {
+    /// True, wenn der Aufruf ohne Fehler endete.
     pub success: bool,
+    /// Rueckgabewert des Programms.
     pub return_value: u64,
+    /// Verbrauchtes Gas.
     pub gas_used: u64,
+    /// Nicht verbrauchtes Gas bei Erfolg; bei einem Fehler 0.
     pub gas_refund: u64,
+    /// Protokolleintraege des Aufrufs, auch bei einem Fehler.
     pub logs: Vec<LogEntry>,
+    /// Zustandsaenderungen in Reihenfolge; bei einem Fehler leer, obwohl bereits geschriebene Werte im Speicher stehen bleiben.
     pub storage_changes: Vec<(u64, u64)>,
+    /// Fehler, sofern der Aufruf gescheitert ist.
     pub error: Option<VmError>,
 }
+/// Protokolleintrag eines Aufrufs.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LogEntry {
+    /// Adresse des Vertrags.
     pub contract: String,
+    /// Kennzeichnung des Eintrags.
     pub topic: u64,
+    /// Nutzdaten des Eintrags.
     pub data: Vec<u64>,
 }
+/// Vertrag mit Adresse, Bytecode, Eigentuemer, Guthaben und Zaehler.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Contract {
+    /// Adresse des Vertrags.
     pub address: String,
+    /// Ausfuehrbarer Code.
     pub bytecode: Vec<u8>,
+    /// Eigentuemer als DID.
     pub owner_did: String,
+    /// Guthaben des Vertrags.
     pub balance: u64,
+    /// Zaehler des Vertrags.
     pub nonce: u64,
 }
+/// Speicher der Vertraege, nach Adresse und Schluessel geordnet.
 pub struct ContractStorage {
     data: Mutex<BTreeMap<(String, u64), u64>>,
 }
@@ -143,11 +174,13 @@ impl Default for ContractStorage {
 }
 
 impl ContractStorage {
+    /// Leerer Speicher.
     pub fn new() -> Self {
         ContractStorage {
             data: Mutex::new(BTreeMap::new()),
         }
     }
+    /// Wert zu Adresse und Schluessel; unbekannte Schluessel ergeben 0.
     pub fn load(&self, c: &str, k: u64) -> u64 {
         self.data
             .lock()
@@ -155,14 +188,18 @@ impl ContractStorage {
             .copied()
             .unwrap_or(0)
     }
+    /// Schreibt einen Wert sofort in den Speicher und ueberschreibt einen vorhandenen; eine Ruecknahme bei spaeterem Fehler gibt es hier nicht.
     pub fn store(&self, c: &str, k: u64, v: u64) {
         self.data.lock().insert((c.to_string(), k), v);
     }
+    /// Anzahl belegter Schluessel ueber alle Vertraege.
     pub fn total_entries(&self) -> usize {
         self.data.lock().len()
     }
 }
+/// Verzeichnis der Vertraege.
 pub struct ContractRegistry {
+    /// Vertraege nach Adresse.
     pub contracts: Mutex<BTreeMap<String, Contract>>,
 }
 impl Default for ContractRegistry {
@@ -172,11 +209,13 @@ impl Default for ContractRegistry {
 }
 
 impl ContractRegistry {
+    /// Leeres Verzeichnis.
     pub fn new() -> Self {
         ContractRegistry {
             contracts: Mutex::new(BTreeMap::new()),
         }
     }
+    /// Traegt einen Vertrag ein und ueberschreibt eine belegte Adresse ohne Pruefung; das Guthaben beginnt bei 0.
     pub fn deploy(&self, address: String, bytecode: Vec<u8>, owner_did: String) {
         let addr_clone = address.clone();
         self.contracts.lock().insert(
@@ -190,15 +229,19 @@ impl ContractRegistry {
             },
         );
     }
+    /// Kopie des Vertrags, sofern vorhanden.
     pub fn get(&self, address: &str) -> Option<Contract> {
         self.contracts.lock().get(address).cloned()
     }
+    /// True, wenn die Adresse belegt ist.
     pub fn exists(&self, address: &str) -> bool {
         self.contracts.lock().contains_key(address)
     }
+    /// Anzahl der Vertraege.
     pub fn count(&self) -> usize {
         self.contracts.lock().len()
     }
+    /// Guthaben eines Vertrags; 0, wenn unbekannt.
     pub fn balance(&self, address: &str) -> u64 {
         self.contracts
             .lock()
@@ -206,12 +249,14 @@ impl ContractRegistry {
             .map(|c| c.balance)
             .unwrap_or(0)
     }
+    /// Erhoeht das Guthaben eines Vertrags.
     pub fn deposit(&self, address: &str, amount: u64) {
         if let Some(c) = self.contracts.lock().get_mut(address) {
             c.balance += amount;
         }
     }
 }
+/// Ausfuehrung eines Aufrufs mit eigenem Stapel, Programmschalter und Gasbudget.
 pub struct ShivaVM {
     stack: Vec<u64>,
     pc: usize,
@@ -226,6 +271,7 @@ pub struct ShivaVM {
     halted: bool,
 }
 impl ShivaVM {
+    /// Maschine fuer einen Vertrag mit Aufrufer und Gasbudget; Stapel, Protokoll und Aenderungsliste beginnen leer.
     pub fn new(contract: &Contract, caller_did: String, gas_limit: u64) -> Self {
         ShivaVM {
             stack: Vec::new(),
@@ -269,6 +315,7 @@ impl ShivaVM {
         self.pc += 8;
         Ok(u64::from_be_bytes(b))
     }
+    /// Fuehrt den Bytecode aus, prueft vor jedem Befehl das Gas und liefert Ergebnis, Protokoll und Zustandsaenderungen.
     pub fn execute(
         &mut self,
         storage: &ContractStorage,
@@ -498,12 +545,16 @@ impl ShivaVM {
         }
     }
 }
+/// Verbindet Speicher und Vertragsverzeichnis mit einem Standardbudget.
 pub struct VmEngine {
+    /// Speicher der Vertraege.
     pub storage: Arc<ContractStorage>,
+    /// Verzeichnis der Vertraege.
     pub registry: Arc<ContractRegistry>,
     default_gas: u64,
 }
 impl VmEngine {
+    /// Engine mit leerem Speicher, leerem Verzeichnis und Standardbudget.
     pub fn new(default_gas: u64) -> Self {
         VmEngine {
             storage: Arc::new(ContractStorage::new()),
@@ -511,9 +562,11 @@ impl VmEngine {
             default_gas,
         }
     }
+    /// Traegt einen Vertrag ein.
     pub fn deploy(&self, address: String, bytecode: Vec<u8>, owner_did: String) {
         self.registry.deploy(address, bytecode, owner_did);
     }
+    /// Ruft einen Vertrag auf; ein unbekannter Vertrag ergibt StorageError ohne Gasverbrauch.
     pub fn call(&self, address: &str, caller_did: String, gas_limit: Option<u64>) -> ExecResult {
         let contract = match self.registry.get(address) {
             Some(c) => c,
@@ -533,10 +586,12 @@ impl VmEngine {
         let mut vm = ShivaVM::new(&contract, caller_did, gas);
         vm.execute(&self.storage, &self.registry)
     }
+    /// Anzahl der Vertraege.
     pub fn contract_count(&self) -> usize {
         self.registry.count()
     }
 }
+/// Setzt Befehle und wahlweise Argumente zu Bytecode zusammen.
 pub fn build_bytecode(ops: &[(Opcode, Option<u64>)]) -> Vec<u8> {
     let mut b = Vec::new();
     for (op, arg) in ops {
