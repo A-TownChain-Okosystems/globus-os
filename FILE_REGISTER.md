@@ -1,8 +1,12 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Stand:** 14.11.2026, erzeugt aus `git ls-tree -r origin/main` gegen
-> `5830fca` zuzueglich des Anmeldefensters: 540 Dateien; dazu die
+> **Stand:** 14.11.2026, gegen `aaa1b3b` nachgezaehlt: 553 Dateien. Der
+> vorige Kopf nannte 540, waehrend die Tabelle bereits 548 Zeilen hatte; beim
+> Nachzaehlen fehlten drei Kernel-Dateien
+> (`modules/atc-shivacore/kernel/src/identity_check.rs`, `identity_file.rs`,
+> `identity_gate.rs`) und die beiden Dateien des Entropiekerns. Sie stehen jetzt
+> in der Tabelle, die Zahl ist gemessen und nicht fortgeschrieben. Dazu die
 > Wiederherstellungsspezifikation mit ihrem Layout-Pruefer
 > (`docs/identity/SPEC-RECOVERY-001.md`, `scripts/check_recovery_spec.py`)
 > und die Bestandsaufnahme `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md`.
@@ -84,7 +88,7 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
-| `docs/identity/SPEC-RECOVERY-001.md` | 978 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 1021 |
 | `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 204 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
@@ -313,6 +317,9 @@
 | `modules/atc-shivacore/kernel/src/gdt.rs` | 99 |
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 232 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
+| `modules/atc-shivacore/kernel/src/identity_check.rs` | 127 |
+| `modules/atc-shivacore/kernel/src/identity_file.rs` | 120 |
+| `modules/atc-shivacore/kernel/src/identity_gate.rs` | 31 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 261 |
 | `modules/atc-shivacore/kernel/src/interrupts.rs` | 2296 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 384 |
@@ -452,6 +459,8 @@
 | `system/devices/src/timer.rs` | 95 |
 | `system/diagnostics/Cargo.toml` | 11 |
 | `system/diagnostics/src/lib.rs` | 178 |
+| `system/entropy-core/Cargo.toml` | 21 |
+| `system/entropy-core/src/lib.rs` | 746 |
 | `system/graphics/Cargo.toml` | 13 |
 | `system/graphics/src/compositor.rs` | 190 |
 | `system/graphics/src/desktop.rs` | 449 |
