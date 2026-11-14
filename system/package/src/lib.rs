@@ -9,8 +9,11 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use sha2::{Digest, Sha256};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Package metadata as published by a repository.
 pub struct Package {
+    /// Package name.
     pub name: String,
+    /// Version string, compared numerically by the resolver.
     pub version: String,
     /// SHA-256 digest encoded as `sha256:` followed by 64 lowercase hex digits.
     pub digest: String,
@@ -19,19 +22,30 @@ pub struct Package {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Verification result without error detail.
 pub enum Verification {
+    /// Metadata, digest and signature all check out.
     Trusted,
+    /// At least one check failed.
     Untrusted,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Reason a package was rejected.
 pub enum VerifyError {
+    /// Name or version is empty.
     EmptyMetadata,
+    /// The keyring holds no active key.
     NoTrustedKeys,
+    /// The signing key was revoked.
     RevokedSigningKey,
+    /// The digest is not `sha256:` followed by 64 lowercase hex digits.
     InvalidDigest,
+    /// The artifact digest differs from the declared one.
     DigestMismatch,
+    /// The signature is not a valid Ed25519 signature.
     InvalidSignature,
+    /// The signing key is not trusted by the keyring.
     UntrustedSigningKey,
 }
 
@@ -44,10 +58,12 @@ pub struct TrustedKeyring {
 }
 
 impl TrustedKeyring {
+    /// Creates an empty keyring.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds a key unless it is revoked or already trusted.
     pub fn trust_key(&mut self, key: [u8; 32]) {
         let id = key_id(&key);
         if self.revoked_key_ids.iter().any(|revoked| revoked == &id) {
@@ -58,6 +74,7 @@ impl TrustedKeyring {
         }
     }
 
+    /// Marks a key as revoked; revocation wins over trust.
     pub fn revoke_key(&mut self, key: &[u8; 32]) {
         let id = key_id(key);
         if !self.revoked_key_ids.iter().any(|revoked| revoked == &id) {
@@ -65,6 +82,7 @@ impl TrustedKeyring {
         }
     }
 
+    /// Returns true when the key was revoked.
     pub fn is_revoked(&self, key: &[u8; 32]) -> bool {
         let id = key_id(key);
         self.revoked_key_ids.iter().any(|revoked| revoked == &id)
@@ -89,14 +107,17 @@ pub struct VerifiedArtifact {
 }
 
 impl VerifiedArtifact {
+    /// Metadata of the verified artifact.
     pub fn package(&self) -> &Package {
         &self.package
     }
 
+    /// The artifact bytes that passed verification.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
 
+    /// Consumes the artifact and returns its bytes.
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
     }
@@ -201,6 +222,7 @@ fn verify_with_keyring(
     }
 }
 
+/// Lenient check returning only `Verification`, without error detail.
 pub fn verify_package(pkg: &Package, artifact: &[u8], trusted_keys: &[[u8; 32]]) -> Verification {
     if pkg.name.trim().is_empty() || pkg.version.trim().is_empty() || trusted_keys.is_empty() {
         return Verification::Untrusted;
