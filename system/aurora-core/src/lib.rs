@@ -74,6 +74,7 @@ pub enum RequestStatus {
     Failed,
     /// Vom Aufrufer abgebrochen.
     Cancelled,
+    /// Abgelehnt, keine Ausfuehrung.
     Denied,
     /// Zeitlimit ueberschritten.
     Timeout,
