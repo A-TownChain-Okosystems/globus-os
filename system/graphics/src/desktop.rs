@@ -8,8 +8,11 @@ use crate::{
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Groesse der Desktop-Flaeche.
 pub struct DesktopViewport {
+    /// Breite in Pixel.
     pub width: u32,
+    /// Hoehe in Pixel.
     pub height: u32,
 }
 
@@ -20,17 +23,26 @@ impl DesktopViewport {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand der Desktop-Sitzung.
 pub enum DesktopMode {
+    /// Gesperrt; Eingaben werden abgewiesen.
     Locked,
+    /// Aktiv und bedienbar.
     Active,
+    /// Angehalten; Fenster bleiben erhalten.
     Suspended,
+    /// Heruntergefahren.
     Shutdown,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der Desktop-Sitzung.
 pub enum DesktopError {
+    /// Die Sitzung ist gesperrt.
     Locked,
+    /// Die Sitzung ist heruntergefahren.
     Shutdown,
+    /// Die Fensterverwaltung hat abgelehnt.
     Window(WindowError),
 }
 
@@ -41,6 +53,7 @@ impl From<WindowError> for DesktopError {
 }
 
 #[derive(Debug)]
+/// Sitzung aus Modus, Fensterverwaltung, Kompositor und Eingaberouting.
 pub struct DesktopSession {
     mode: DesktopMode,
     viewport: DesktopViewport,
@@ -51,6 +64,7 @@ pub struct DesktopSession {
 }
 
 impl DesktopSession {
+    /// Startet eine aktive Sitzung mit dieser Viewport-Groesse.
     pub fn new(viewport: DesktopViewport) -> Self {
         Self {
             mode: DesktopMode::Locked,
@@ -62,12 +76,14 @@ impl DesktopSession {
         }
     }
 
+    /// Entsperrt die Sitzung.
     pub fn unlock(&mut self) {
         if self.mode == DesktopMode::Locked {
             self.mode = DesktopMode::Active;
         }
     }
 
+    /// Sperrt die Sitzung.
     pub fn lock(&mut self) {
         if self.mode != DesktopMode::Shutdown {
             self.mode = DesktopMode::Locked;
@@ -76,6 +92,7 @@ impl DesktopSession {
         }
     }
 
+    /// Haelt die Sitzung an.
     pub fn suspend(&mut self) {
         if self.mode == DesktopMode::Active {
             self.mode = DesktopMode::Suspended;
@@ -84,22 +101,26 @@ impl DesktopSession {
         }
     }
 
+    /// Nimmt eine angehaltene Sitzung wieder auf.
     pub fn resume(&mut self) {
         if self.mode == DesktopMode::Suspended {
             self.mode = DesktopMode::Active;
         }
     }
 
+    /// Faehrt die Sitzung herunter.
     pub fn shutdown(&mut self) {
         self.mode = DesktopMode::Shutdown;
         self.input.set_keyboard_focus(None);
         self.input.set_pointer_focus(None);
     }
 
+    /// Aktueller Modus.
     pub fn mode(&self) -> DesktopMode {
         self.mode
     }
 
+    /// Aktuelle Viewport-Groesse.
     pub fn viewport(&self) -> DesktopViewport {
         self.viewport
     }
@@ -133,6 +154,7 @@ impl DesktopSession {
         Ok(())
     }
 
+    /// Oeffnet ein Fenster in der Sitzung.
     pub fn open_window(
         &mut self,
         title: impl Into<String>,
@@ -163,6 +185,7 @@ impl DesktopSession {
         Ok(id)
     }
 
+    /// Setzt den Fokus auf ein Fenster.
     pub fn focus_window(&mut self, surface: SurfaceId) -> Result<(), DesktopError> {
         if self.mode != DesktopMode::Active {
             return Err(DesktopError::Locked);
@@ -173,6 +196,7 @@ impl DesktopSession {
         self.sync_compositor()
     }
 
+    /// Verschiebt ein Fenster auf die angegebene Position.
     pub fn move_window(&mut self, surface: SurfaceId, x: i32, y: i32) -> Result<(), DesktopError> {
         self.require_active()?;
         self.windows
@@ -180,6 +204,7 @@ impl DesktopSession {
         self.sync_compositor()
     }
 
+    /// Aendert die Groesse eines Fensters.
     pub fn resize_window(
         &mut self,
         surface: SurfaceId,
@@ -192,12 +217,14 @@ impl DesktopSession {
         self.sync_compositor()
     }
 
+    /// Maximiert ein Fenster auf den Viewport.
     pub fn maximize_window(&mut self, surface: SurfaceId) -> Result<(), DesktopError> {
         self.require_active()?;
         self.windows.maximize(surface, self.viewport.rect())?;
         self.sync_compositor()
     }
 
+    /// Minimiert ein Fenster.
     pub fn minimize_window(&mut self, surface: SurfaceId) -> Result<(), DesktopError> {
         self.require_active()?;
         self.windows.minimize(surface)?;
@@ -210,6 +237,7 @@ impl DesktopSession {
         self.sync_compositor()
     }
 
+    /// Stellt ein minimiertes oder maximiertes Fenster wieder her.
     pub fn restore_window(&mut self, surface: SurfaceId) -> Result<(), DesktopError> {
         self.require_active()?;
         self.windows.restore(surface)?;
@@ -247,6 +275,7 @@ impl DesktopSession {
         Ok(())
     }
 
+    /// Schliesst ein Fenster.
     pub fn close_window(&mut self, surface: SurfaceId) -> Result<(), DesktopError> {
         if self.mode == DesktopMode::Shutdown {
             return Err(DesktopError::Shutdown);
@@ -264,6 +293,7 @@ impl DesktopSession {
         Ok(())
     }
 
+    /// Setzt den Fensterzustand direkt.
     pub fn set_window_state(
         &mut self,
         surface: SurfaceId,
@@ -284,6 +314,7 @@ impl DesktopSession {
         self.sync_compositor()
     }
 
+    /// Stellt ein Eingabeereignis anhand von Fokus und Treffertest zu.
     pub fn route_input(&mut self, event: InputEvent) -> Result<RoutedEvent, DesktopError> {
         if self.mode != DesktopMode::Active {
             return Err(if self.mode == DesktopMode::Shutdown {
@@ -314,6 +345,7 @@ impl DesktopSession {
         Ok(self.input.route(event))
     }
 
+    /// Oberste sichtbare Oberflaeche an diesem Punkt.
     pub fn hit_test(&self, x: i32, y: i32) -> Option<SurfaceId> {
         if self.mode != DesktopMode::Active {
             return None;
@@ -321,6 +353,7 @@ impl DesktopSession {
         self.compositor.hit_test(x, y)
     }
 
+    /// Alle Fenster der Sitzung.
     pub fn windows(&self) -> &[crate::wm::Window] {
         self.windows.windows()
     }
