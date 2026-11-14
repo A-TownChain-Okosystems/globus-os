@@ -23,17 +23,25 @@ fn next_module_id() -> u64 {
 // MODULE STATE MACHINE
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Zustand eines Moduls im Lade-Lebenszyklus.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum ModuleState {
+    /// Vom System gefunden, aber noch nicht geladen.
     Registered, // Discovered but not loaded
+    /// `init` laeuft; das Modul ist noch nicht nutzbar.
     Loading,    // init() in progress
+    /// `init` war erfolgreich, das Modul arbeitet.
     Active,     // init() succeeded, module running
+    /// `exit` laeuft; das Modul wird abgebaut.
     Unloading,  // exit() in progress
+    /// `init` ist mit Fehler zurueckgekommen.
     Failed,     // init() returned error
+    /// Sauber entladen; ein erneutes Laden ist moeglich.
     Unloaded,   // Successfully unloaded
 }
 
 impl ModuleState {
+    /// Kurzname des Zustands fuer Log und Anzeige.
     pub fn name(&self) -> &'static str {
         match self {
             ModuleState::Registered => "REGISTERED",
@@ -45,15 +53,19 @@ impl ModuleState {
         }
     }
 
+    /// True im Zustand `Active`.
     pub fn is_active(&self) -> bool {
         matches!(self, ModuleState::Active)
     }
+    /// True im Zustand `Loading`.
     pub fn is_loading(&self) -> bool {
         matches!(self, ModuleState::Loading)
     }
+    /// True im Zustand `Unloading`.
     pub fn is_unloading(&self) -> bool {
         matches!(self, ModuleState::Unloading)
     }
+    /// True in einem Endzustand (`Failed` oder `Unloaded`), aus dem kein Wechsel mehr folgt.
     pub fn is_terminal(&self) -> bool {
         matches!(self, ModuleState::Unloaded)
     }
@@ -69,6 +81,7 @@ impl std::fmt::Display for ModuleState {
 // MODULE PRIORITY
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Ladeprioritaet eines Moduls.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
 pub enum ModulePriority {
     Core = 0,       // Core kernel subsystems (must load first)
@@ -81,6 +94,7 @@ pub enum ModulePriority {
 }
 
 impl ModulePriority {
+    /// Kurzname der Prioritaet.
     pub fn name(&self) -> &'static str {
         match self {
             ModulePriority::Core => "core",
@@ -98,16 +112,23 @@ impl ModulePriority {
 // MODULE LICENSE
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Lizenz eines Moduls; entscheidet ueber die Verunreinigung des Kernels.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ModuleLicense {
+    /// GPL-kompatible Lizenz; verunreinigt den Kernel nicht.
     Gpl,         // GPL-compatible
+    /// MIT-Lizenz.
     Mit,         // MIT
+    /// BSD-Lizenz.
     Bsd,         // BSD
+    /// Apache-2.0-Lizenz.
     Apache,      // Apache 2.0
+    /// Proprietaere Lizenz; verunreinigt den Kernel.
     Proprietary, // Proprietary (taints kernel)
 }
 
 impl ModuleLicense {
+    /// Kurzname der Lizenz.
     pub fn name(&self) -> &'static str {
         match self {
             ModuleLicense::Gpl => "GPL",
@@ -118,9 +139,11 @@ impl ModuleLicense {
         }
     }
 
+    /// True fuer alle freien Lizenzen (GPL, MIT, BSD, Apache).
     pub fn is_open_source(&self) -> bool {
         !matches!(self, ModuleLicense::Proprietary)
     }
+    /// True, wenn die Lizenz den Kernel verunreinigt (nur `Proprietary`).
     pub fn taints_kernel(&self) -> bool {
         matches!(self, ModuleLicense::Proprietary)
     }
@@ -130,26 +153,40 @@ impl ModuleLicense {
 // MODULE PARAMETER
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Ein Modulparameter mit Typ, Vorgabe und aktuellem Wert.
 #[derive(Clone, Debug)]
 pub struct ModuleParam {
+    /// Parametername, wie er im Modul erscheint.
     pub name: String,
+    /// Beschreibung fuer Anzeige und Handbuch.
     pub description: String,
+    /// Vorgabewert aus dem Modulmanifest.
     pub default_value: String,
+    /// Aktuell gesetzter Wert.
     pub current_value: String,
+    /// True, wenn der Parameter nach dem Laden nicht mehr aenderbar ist.
     pub read_only: bool,
+    /// Typ des Parameters; bestimmt die Pruefung in `validate`.
     pub param_type: ParamType,
 }
 
+/// Typ eines Modulparameters.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ParamType {
+    /// Wahrheitswert (`0`/`1`, `true`/`false`).
     Bool,
+    /// Vorzeichenbehaftete Ganzzahl.
     Int,
+    /// Ganzzahl ohne Vorzeichen.
     Uint,
+    /// Zeichenkette.
     String,
+    /// Kommagetrennte Liste.
     List,
 }
 
 impl ParamType {
+    /// Kurzname des Typs.
     pub fn name(&self) -> &'static str {
         match self {
             ParamType::Bool => "bool",
@@ -160,6 +197,7 @@ impl ParamType {
         }
     }
 
+    /// Prueft einen Eingabewert gegen den Typ.
     pub fn validate(&self, value: &str) -> bool {
         match self {
             ParamType::Bool => value == "true" || value == "false" || value == "1" || value == "0",
@@ -172,6 +210,7 @@ impl ParamType {
 }
 
 impl ModuleParam {
+    /// Legt einen Parameter mit Vorgabewert an.
     pub fn new(name: &str, ptype: ParamType, default: &str, desc: &str) -> Self {
         ModuleParam {
             name: name.to_string(),
@@ -183,6 +222,7 @@ impl ModuleParam {
         }
     }
 
+    /// Legt einen unveraenderlichen Parameter an.
     pub fn readonly(name: &str, ptype: ParamType, default: &str, desc: &str) -> Self {
         ModuleParam {
             name: name.to_string(),
@@ -194,6 +234,7 @@ impl ModuleParam {
         }
     }
 
+    /// Setzt einen Wert nach Pruefung; unveraenderliche Parameter lehnen ab.
     pub fn set(&mut self, value: &str) -> Result<(), String> {
         if self.read_only {
             return Err(format!("Parameter '{}' is read-only", self.name));
@@ -210,10 +251,12 @@ impl ModuleParam {
         Ok(())
     }
 
+    /// Setzt den Wert auf die Vorgabe zurueck.
     pub fn reset(&mut self) {
         self.current_value = self.default_value.clone();
     }
 
+    /// True, solange der aktuelle Wert der Vorgabe entspricht.
     pub fn is_default(&self) -> bool {
         self.current_value == self.default_value
     }
@@ -223,27 +266,42 @@ impl ModuleParam {
 // EXPORTED SYMBOL
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Ein vom Modul exportiertes Symbol.
 #[derive(Clone, Debug)]
 pub struct ExportedSymbol {
+    /// Symbolname.
     pub name: String,
+    /// ID des exportierenden Moduls.
     pub module_id: u64,
+    /// Name des exportierenden Moduls.
     pub module_name: String,
+    /// Adresse im Kernel-Adressraum.
     pub address: u64,
+    /// Groesse des Symbols in Bytes.
     pub size: usize,
+    /// Anzahl der Referenzen; blockiert das Entladen des Moduls.
     pub ref_count: u64,
+    /// Art des Symbols.
     pub symbol_type: SymbolType,
 }
 
+/// Art eines exportierten Symbols.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SymbolType {
+    /// Funktion.
     Function,
+    /// Variable.
     Variable,
+    /// Konstante.
     Constant,
+    /// Datentyp.
     Struct,
+    /// Trait.
     Trait,
 }
 
 impl SymbolType {
+    /// Kurzname der Symbolart.
     pub fn name(&self) -> &'static str {
         match self {
             SymbolType::Function => "fn",
@@ -256,6 +314,7 @@ impl SymbolType {
 }
 
 impl ExportedSymbol {
+    /// Legt ein Symbol ohne Referenzen an.
     pub fn new(name: &str, module_id: u64, module_name: &str, stype: SymbolType) -> Self {
         ExportedSymbol {
             name: name.to_string(),
@@ -273,18 +332,30 @@ impl ExportedSymbol {
 // MODULE STATISTICS
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Lade- und Laufzeitstatistik eines Moduls.
 #[derive(Clone, Debug, Default)]
 pub struct ModuleStats {
+    /// Anzahl der Ladevorgaenge.
     pub load_count: u64,
+    /// Anzahl der Entladevorgaenge.
     pub unload_count: u64,
+    /// Dauer von `init` in Mikrosekunden.
     pub init_time_us: u64,
+    /// Dauer von `exit` in Mikrosekunden.
     pub exit_time_us: u64,
+    /// Zeitstempel des letzten Ladevorgangs.
     pub last_load_timestamp: u64,
+    /// Zeitstempel des letzten Entladevorgangs.
     pub last_unload_timestamp: u64,
+    /// Anzahl der Fehlschlaege.
     pub error_count: u64,
+    /// Letzte Fehlermeldung, solange das Modul geladen ist.
     pub last_error: Option<String>,
+    /// Belegter Speicher in Bytes.
     pub memory_used: u64,
+    /// Anzahl exportierter Symbole.
     pub symbols_exported: usize,
+    /// Anzahl importierter Symbole.
     pub symbols_imported: usize,
 }
 
@@ -292,31 +363,53 @@ pub struct ModuleStats {
 // MODULE DESCRIPTOR
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Vollstaendige Beschreibung eines Moduls.
 #[derive(Clone, Debug)]
 pub struct ModuleDescriptor {
+    /// Eindeutige Modul-ID, vom Register vergeben.
     pub id: u64,
+    /// Modulname; Schluessel im Register.
     pub name: String,
+    /// Version des Moduls.
     pub version: String,
+    /// Kurzbeschreibung.
     pub description: String,
+    /// Autor oder Hersteller.
     pub author: String,
+    /// Lizenz.
     pub license: ModuleLicense,
+    /// Ladeprioritaet.
     pub priority: ModulePriority,
+    /// Aktueller Zustand.
     pub state: ModuleState,
+    /// Pflichtabhaengigkeiten als Modulnamen.
     pub dependencies: Vec<String>,
+    /// Optionale Abhaengigkeiten.
     pub optional_deps: Vec<String>,
+    /// Module, mit denen dieses Modul nicht zusammen laeuft.
     pub conflicts: Vec<String>,
+    /// Dienste, die dieses Modul bereitstellt.
     pub provides: Vec<String>,
+    /// Parameter des Moduls.
     pub params: Vec<ModuleParam>,
+    /// Exportierte Symbole.
     pub exports: Vec<ExportedSymbol>,
+    /// Importierte Symbole als Namen.
     pub imports: Vec<String>,
+    /// Statistik des Moduls.
     pub stats: ModuleStats,
+    /// Anzahl der Referenzen auf das Modul.
     pub ref_count: u64,
+    /// Position in der Ladereihenfolge.
     pub load_order: u64,
+    /// True, wenn das Modul beim Systemstart automatisch geladen wird.
     pub auto_load: bool,
+    /// Kernelversion, gegen die das Modul gebaut wurde.
     pub kernel_version: String,
 }
 
 impl ModuleDescriptor {
+    /// Legt eine Modulbeschreibung im Zustand `Registered` an.
     pub fn new(name: &str, version: &str) -> Self {
         ModuleDescriptor {
             id: next_module_id(),
@@ -342,77 +435,92 @@ impl ModuleDescriptor {
         }
     }
 
+    /// Setzt die Beschreibung.
     pub fn with_description(mut self, desc: &str) -> Self {
         self.description = desc.to_string();
         self
     }
 
+    /// Setzt den Autor.
     pub fn with_author(mut self, author: &str) -> Self {
         self.author = author.to_string();
         self
     }
 
+    /// Setzt die Lizenz.
     pub fn with_license(mut self, license: ModuleLicense) -> Self {
         self.license = license;
         self
     }
 
+    /// Setzt die Ladeprioritaet.
     pub fn with_priority(mut self, priority: ModulePriority) -> Self {
         self.priority = priority;
         self
     }
 
+    /// Setzt die Pflichtabhaengigkeiten.
     pub fn with_dependencies(mut self, deps: &[&str]) -> Self {
         self.dependencies = deps.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Setzt die optionalen Abhaengigkeiten.
     pub fn with_optional_deps(mut self, deps: &[&str]) -> Self {
         self.optional_deps = deps.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Setzt die Konfliktmodule.
     pub fn with_conflicts(mut self, conflicts: &[&str]) -> Self {
         self.conflicts = conflicts.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Setzt die bereitgestellten Dienste.
     pub fn with_provides(mut self, provides: &[&str]) -> Self {
         self.provides = provides.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Fuegt einen Parameter hinzu.
     pub fn with_param(mut self, param: ModuleParam) -> Self {
         self.params.push(param);
         self
     }
 
+    /// Fuegt ein exportiertes Symbol mit Standardwerten hinzu.
     pub fn with_export(mut self, name: &str, symbol_type: SymbolType) -> Self {
         self.exports
             .push(ExportedSymbol::new(name, self.id, &self.name, symbol_type));
         self
     }
 
+    /// Fuegt ein fertig beschriebenes Symbol hinzu.
     pub fn with_export_symbol(mut self, symbol: ExportedSymbol) -> Self {
         self.exports.push(symbol);
         self
     }
 
+    /// Traegt einen Symbolnamen in die Importliste ein.
     pub fn import_symbol(mut self, name: &str) -> Self {
         self.imports.push(name.to_string());
         self
     }
 
+    /// Setzt das automatische Laden.
     pub fn with_auto_load(mut self, auto: bool) -> Self {
         self.auto_load = auto;
         self
     }
 
+    /// Erhoeht die Referenzzahl um eins und liefert den neuen Stand.
     pub fn add_ref(&mut self) -> u64 {
         self.ref_count += 1;
         self.ref_count
     }
 
+    /// Senkt die Referenzzahl; unter null wird der Aufruf abgelehnt.
     pub fn release_ref(&mut self) -> Result<u64, String> {
         if self.ref_count == 0 {
             return Err(format!("Module {} has no references to release", self.name));
@@ -421,18 +529,22 @@ impl ModuleDescriptor {
         Ok(self.ref_count)
     }
 
+    /// True, wenn kein Aufrufer mehr referenziert und das Modul nicht laeuft.
     pub fn can_unload(&self) -> bool {
         self.state == ModuleState::Active && self.ref_count == 0
     }
 
+    /// Parameter nach Namen, falls vorhanden.
     pub fn get_param(&self, name: &str) -> Option<&ModuleParam> {
         self.params.iter().find(|p| p.name == name)
     }
 
+    /// Parameter nach Namen, veraenderbar.
     pub fn get_param_mut(&mut self, name: &str) -> Option<&mut ModuleParam> {
         self.params.iter_mut().find(|p| p.name == name)
     }
 
+    /// Setzt einen Parameterwert ueber den Modulnamen und prueft ihn vorher.
     pub fn set_param(&mut self, name: &str, value: &str) -> Result<(), String> {
         let module_name = self.name.clone();
         let param = self
@@ -441,12 +553,14 @@ impl ModuleDescriptor {
         param.set(value)
     }
 
+    /// Setzt alle Parameter auf ihre Vorgaben zurueck.
     pub fn reset_params(&mut self) {
         for p in &mut self.params {
             p.reset();
         }
     }
 
+    /// Kurzbericht ueber Zustand, Lizenz, Abhaengigkeiten und Statistik.
     pub fn report(&self) -> String {
         let mut r = String::new();
         r.push_str(&format!("Module: {} v{}\n", self.name, self.version));
@@ -508,37 +622,62 @@ impl ModuleDescriptor {
 // MODULE EVENT / AUDIT
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Ein Ereignis aus dem Modul-Lebenszyklus.
 #[derive(Clone, Debug)]
 pub struct ModuleEvent {
+    /// Laufende Ereignisnummer.
     pub event_id: u64,
+    /// Zeitstempel in Timer-Ticks.
     pub timestamp: u64,
+    /// Art des Ereignisses.
     pub event_type: ModuleEventType,
+    /// Betroffenes Modul.
     pub module_name: String,
+    /// ID des betroffenen Moduls.
     pub module_id: u64,
+    /// Zusatztext, etwa die Fehlermeldung bei einem Fehlschlag.
     pub message: String,
 }
 
+/// Art eines Modulereignisses.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ModuleEventType {
+    /// Modul wurde im Register angemeldet.
     Registered,
+    /// Ladevorgang begonnen.
     LoadStarted,
+    /// Laden erfolgreich; `init` ist durch.
     LoadSucceeded,
+    /// Laden fehlgeschlagen.
     LoadFailed,
+    /// Entladen begonnen.
     UnloadStarted,
+    /// Entladen erfolgreich.
     UnloadSucceeded,
+    /// Entladen fehlgeschlagen.
     UnloadFailed,
+    /// Parameterwert geaendert.
     ParamChanged,
+    /// Symbol aufgeloest.
     SymbolResolved,
+    /// Symbol konnte nicht aufgeloest werden.
     SymbolUnresolved,
+    /// Referenz erworben.
     RefAcquired,
+    /// Referenz freigegeben.
     RefReleased,
+    /// Modul automatisch geladen.
     AutoLoaded,
+    /// Konflikt mit einem anderen Modul erkannt.
     ConflictDetected,
+    /// Eine Pflichtabhaengigkeit fehlt.
     DependencyMissing,
+    /// Zyklus in den Abhaengigkeiten erkannt.
     CircularDependency,
 }
 
 impl ModuleEventType {
+    /// Kurzname des Ereignistyps.
     pub fn name(&self) -> &'static str {
         match self {
             ModuleEventType::Registered => "REGISTERED",
@@ -565,6 +704,7 @@ impl ModuleEventType {
 // DEPENDENCY GRAPH
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Abhaengigkeitsgraph der Module als gerichteter Graph.
 #[derive(Clone, Debug, Default)]
 pub struct DependencyGraph {
     nodes: BTreeSet<String>,
@@ -577,10 +717,12 @@ pub struct DependencyGraph {
 }
 
 impl DependencyGraph {
+    /// Leerer Graph.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Legt einen Knoten an, falls er noch fehlt.
     pub fn add_node(&mut self, name: &str) {
         self.nodes.insert(name.to_string());
         self.declared.insert(name.to_string());
@@ -588,6 +730,7 @@ impl DependencyGraph {
         self.reverse_edges.entry(name.to_string()).or_default();
     }
 
+    /// Kante von `from` nach `to`: `from` braucht `to`.
     pub fn add_edge(&mut self, from: &str, to: &str) {
         self.nodes.insert(from.to_string());
         self.nodes.insert(to.to_string());
@@ -606,6 +749,7 @@ impl DependencyGraph {
         self.reverse_edges.entry(from.to_string()).or_default();
     }
 
+    /// Entfernt einen Knoten samt seiner Kanten.
     pub fn remove_node(&mut self, name: &str) {
         self.nodes.remove(name);
         self.edges.remove(name);
@@ -619,6 +763,7 @@ impl DependencyGraph {
         }
     }
 
+    /// True, wenn der Knoten existiert.
     pub fn has_node(&self, name: &str) -> bool {
         self.nodes.contains(name)
     }
@@ -633,6 +778,7 @@ impl DependencyGraph {
             .unwrap_or_default()
     }
 
+    /// Direkte Abhaengigkeiten eines Moduls.
     pub fn get_dependencies(&self, name: &str) -> Vec<String> {
         self.edges
             .get(name)
@@ -640,6 +786,7 @@ impl DependencyGraph {
             .unwrap_or_default()
     }
 
+    /// Module, die dieses Modul direkt brauchen.
     pub fn get_dependents(&self, name: &str) -> Vec<String> {
         self.reverse_edges
             .get(name)
@@ -647,6 +794,7 @@ impl DependencyGraph {
             .unwrap_or_default()
     }
 
+    /// Sucht einen Zyklus und liefert ihn als Kette, sonst `None`.
     pub fn has_circular(&self) -> Option<Vec<String>> {
         // DFS-based cycle detection
         let mut visited = BTreeSet::new();
@@ -694,6 +842,7 @@ impl DependencyGraph {
         None
     }
 
+    /// Sortiert die Module so, dass Abhaengigkeiten vor ihren Nutzern stehen; bei Zyklus die betroffenen Namen als Fehler.
     pub fn topological_sort(&self) -> Result<Vec<String>, Vec<String>> {
         // Kahn's algorithm with dependency-first edge semantics.
         // edges[module] contains that module's dependencies; reverse_edges
@@ -741,6 +890,7 @@ impl DependencyGraph {
         }
     }
 
+    /// Ladereihenfolge bis einschliesslich `target`, ohne Module, die nicht gebraucht werden.
     pub fn load_order(&self, target: &str) -> Result<Vec<String>, String> {
         // Get the load order for a specific module (all its transitive deps first)
         // Every DIRECT dependency of the requested module must be a declared
@@ -799,9 +949,11 @@ impl DependencyGraph {
         Ok(())
     }
 
+    /// Anzahl der Knoten.
     pub fn node_count(&self) -> usize {
         self.nodes.len()
     }
+    /// Anzahl der Kanten.
     pub fn edge_count(&self) -> usize {
         self.edges.values().map(|s| s.len()).sum()
     }
@@ -811,6 +963,7 @@ impl DependencyGraph {
 // SYMBOL TABLE
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Symboltabelle des Kernels mit Referenzzaehlung je Symbol.
 #[derive(Clone, Debug, Default)]
 pub struct SymbolTable {
     symbols: HashMap<String, ExportedSymbol>,
@@ -818,10 +971,12 @@ pub struct SymbolTable {
 }
 
 impl SymbolTable {
+    /// Leere Tabelle.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Traegt ein Symbol ein; doppelte Namen werden abgelehnt.
     pub fn register(&mut self, symbol: ExportedSymbol) -> Result<(), String> {
         if self.symbols.contains_key(&symbol.name) {
             let existing = self.symbols.get(&symbol.name).unwrap();
@@ -837,6 +992,7 @@ impl SymbolTable {
         Ok(())
     }
 
+    /// Entfernt alle Symbole eines Moduls und liefert die freigegebenen Namen.
     pub fn unregister_module(&mut self, module_id: u64) -> Vec<String> {
         let names = self.by_module.remove(&module_id).unwrap_or_default();
         for name in &names {
@@ -845,18 +1001,22 @@ impl SymbolTable {
         names
     }
 
+    /// Symbol nach Namen, ohne Referenzzaehlung.
     pub fn lookup(&self, name: &str) -> Option<&ExportedSymbol> {
         self.symbols.get(name)
     }
 
+    /// Symbol nach Namen, veraenderbar.
     pub fn lookup_mut(&mut self, name: &str) -> Option<&mut ExportedSymbol> {
         self.symbols.get_mut(name)
     }
 
+    /// True, wenn der Name eingetragen ist.
     pub fn contains(&self, name: &str) -> bool {
         self.symbols.contains_key(name)
     }
 
+    /// Loest einen Namen auf und erhoeht dabei die Referenzzahl.
     pub fn resolve(&mut self, name: &str) -> Result<&ExportedSymbol, String> {
         let symbol = self
             .symbols
@@ -866,6 +1026,7 @@ impl SymbolTable {
         Ok(self.symbols.get(name).unwrap())
     }
 
+    /// Gibt eine Referenz frei; unter null wird abgelehnt.
     pub fn release(&mut self, name: &str) -> Result<u64, String> {
         let symbol = self
             .symbols
@@ -878,18 +1039,22 @@ impl SymbolTable {
         Ok(symbol.ref_count)
     }
 
+    /// Alle Symbole eines Moduls.
     pub fn module_symbols(&self, module_id: u64) -> Vec<String> {
         self.by_module.get(&module_id).cloned().unwrap_or_default()
     }
 
+    /// Anzahl der Symbole.
     pub fn symbol_count(&self) -> usize {
         self.symbols.len()
     }
 
+    /// Alle Symbole als Liste.
     pub fn all_symbols(&self) -> Vec<&ExportedSymbol> {
         self.symbols.values().collect()
     }
 
+    /// Namen aus der Importliste, die in der Tabelle fehlen.
     pub fn unresolved_imports(&self, imports: &[String]) -> Vec<String> {
         imports
             .iter()
@@ -903,6 +1068,7 @@ impl SymbolTable {
 // MODULE REGISTRY
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Register aller Module mit Ereignisprotokoll.
 #[derive(Clone, Debug)]
 pub struct ModuleRegistry {
     modules: HashMap<String, ModuleDescriptor>,
@@ -933,10 +1099,12 @@ impl Default for ModuleRegistry {
 }
 
 impl ModuleRegistry {
+    /// Leeres Register mit Standardgroesse fuer das Ereignisprotokoll.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Setzt die Obergrenze des Ereignisprotokolls.
     pub fn with_max_events(mut self, max: usize) -> Self {
         self.max_events = max;
         self
@@ -966,13 +1134,16 @@ impl ModuleRegistry {
         }
     }
 
+    /// Ereignisprotokoll in zeitlicher Reihenfolge.
     pub fn events(&self) -> &VecDeque<ModuleEvent> {
         &self.events
     }
+    /// Anzahl der Ereignisse im Protokoll.
     pub fn event_count(&self) -> usize {
         self.events.len()
     }
 
+    /// Ereignisse eines Moduls.
     pub fn events_for_module(&self, name: &str) -> Vec<&ModuleEvent> {
         self.events
             .iter()
@@ -980,12 +1151,14 @@ impl ModuleRegistry {
             .collect()
     }
 
+    /// Leert das Ereignisprotokoll.
     pub fn clear_events(&mut self) {
         self.events.clear();
     }
 
     // ── Registration ──
 
+    /// Meldet ein Modul an, prueft Name und Konflikte und liefert die neue ID.
     pub fn register(&mut self, mut module: ModuleDescriptor) -> Result<u64, String> {
         if self.modules.contains_key(&module.name) {
             return Err(format!("Module '{}' already registered", module.name));
@@ -1053,6 +1226,7 @@ impl ModuleRegistry {
         Ok(id)
     }
 
+    /// Meldet ein Modul ab; nur im Endzustand und ohne Referenzen.
     pub fn unregister(&mut self, name: &str) -> Result<(), String> {
         let module = self
             .modules
@@ -1077,6 +1251,7 @@ impl ModuleRegistry {
 
     // ── Loading ──
 
+    /// Laedt ein Modul samt Abhaengigkeiten in Ladereihenfolge.
     pub fn load(&mut self, name: &str) -> Result<u64, String> {
         let (module_id, module_name) = {
             let module = self
@@ -1227,6 +1402,7 @@ impl ModuleRegistry {
         Ok(module_id)
     }
 
+    /// Entlaedt ein Modul, wenn keine Referenzen und keine Nutzer mehr bestehen.
     pub fn unload(&mut self, name: &str) -> Result<(), String> {
         let (module_id, ref_count) = {
             let module = self
@@ -1306,6 +1482,7 @@ impl ModuleRegistry {
         Ok(())
     }
 
+    /// Entlaedt und laedt ein Modul erneut.
     pub fn reload(&mut self, name: &str) -> Result<(), String> {
         self.unload(name)?;
         // Reset state back to Registered so we can load again
@@ -1317,6 +1494,7 @@ impl ModuleRegistry {
 
     // ── Auto-load ──
 
+    /// Laedt alle Module mit automatischem Laden; liefert je Modul das Ergebnis.
     pub fn auto_load_all(&mut self) -> Vec<Result<u64, String>> {
         let auto_modules: Vec<String> = self
             .modules
@@ -1356,6 +1534,7 @@ impl ModuleRegistry {
 
     // ── Reference management ──
 
+    /// Erwirbt eine Referenz auf ein Modul.
     pub fn acquire_ref(&mut self, name: &str) -> Result<u64, String> {
         let (module_id, new_count) = {
             let module = self
@@ -1376,6 +1555,7 @@ impl ModuleRegistry {
         Ok(new_count)
     }
 
+    /// Gibt eine Referenz auf ein Modul frei.
     pub fn release_ref(&mut self, name: &str) -> Result<u64, String> {
         let (module_id, result) = {
             let module = self
@@ -1404,41 +1584,50 @@ impl ModuleRegistry {
 
     // ── Symbol lookup ──
 
+    /// Symbol nach Namen, ohne Referenzzaehlung.
     pub fn lookup_symbol(&self, name: &str) -> Option<&ExportedSymbol> {
         self.symbol_table.lookup(name)
     }
 
+    /// Loest einen Symbolnamen auf und erhoeht die Referenzzahl.
     pub fn resolve_symbol(&mut self, name: &str) -> Result<(), String> {
         self.symbol_table.resolve(name)?;
         Ok(())
     }
 
+    /// Anzahl der Symbole in der Tabelle.
     pub fn symbol_count(&self) -> usize {
         self.symbol_table.symbol_count()
     }
 
     // ── Queries ──
 
+    /// Modul nach Namen.
     pub fn get(&self, name: &str) -> Option<&ModuleDescriptor> {
         self.modules.get(name)
     }
 
+    /// Modul nach Namen, veraenderbar.
     pub fn get_mut(&mut self, name: &str) -> Option<&mut ModuleDescriptor> {
         self.modules.get_mut(name)
     }
 
+    /// Modul nach ID.
     pub fn get_by_id(&self, id: u64) -> Option<&ModuleDescriptor> {
         self.by_id.get(&id).and_then(|name| self.modules.get(name))
     }
 
+    /// True, wenn ein Modul eingetragen ist.
     pub fn contains(&self, name: &str) -> bool {
         self.modules.contains_key(name)
     }
 
+    /// Anzahl eingetragener Module.
     pub fn module_count(&self) -> usize {
         self.modules.len()
     }
 
+    /// Anzahl der Module im Zustand `Active`.
     pub fn active_count(&self) -> usize {
         self.modules
             .values()
@@ -1446,6 +1635,7 @@ impl ModuleRegistry {
             .count()
     }
 
+    /// Anzahl der Module, deren `init` erfolgreich war.
     pub fn loaded_count(&self) -> usize {
         self.modules
             .values()
@@ -1453,16 +1643,19 @@ impl ModuleRegistry {
             .count()
     }
 
+    /// True, wenn mindestens ein Modul den Kernel verunreinigt.
     pub fn is_tainted(&self) -> bool {
         self.kernel_tainted
     }
 
+    /// Alle Module in Anmeldereihenfolge.
     pub fn list_modules(&self) -> Vec<&ModuleDescriptor> {
         let mut mods: Vec<&ModuleDescriptor> = self.modules.values().collect();
         mods.sort_by(|a, b| a.name.cmp(&b.name));
         mods
     }
 
+    /// Alle aktiven Module.
     pub fn list_active(&self) -> Vec<&ModuleDescriptor> {
         let mut mods: Vec<&ModuleDescriptor> = self
             .modules
@@ -1473,6 +1666,7 @@ impl ModuleRegistry {
         mods
     }
 
+    /// Module einer Prioritaet.
     pub fn list_by_priority(&self, priority: ModulePriority) -> Vec<&ModuleDescriptor> {
         self.modules
             .values()
@@ -1480,10 +1674,12 @@ impl ModuleRegistry {
             .collect()
     }
 
+    /// Module in einem Zustand.
     pub fn list_by_state(&self, state: ModuleState) -> Vec<&ModuleDescriptor> {
         self.modules.values().filter(|m| m.state == state).collect()
     }
 
+    /// Setzt einen Parameter ueber Modul- und Parameternamen.
     pub fn set_param(&mut self, module: &str, param: &str, value: &str) -> Result<(), String> {
         let module_id = {
             let mod_desc = self
@@ -1505,6 +1701,7 @@ impl ModuleRegistry {
         Ok(())
     }
 
+    /// Liest einen Parameterwert.
     pub fn get_param(&self, module: &str, param: &str) -> Result<&str, String> {
         let mod_desc = self
             .modules
@@ -1518,15 +1715,18 @@ impl ModuleRegistry {
         Ok(&p.current_value)
     }
 
+    /// Der Abhaengigkeitsgraph.
     pub fn dependency_graph(&self) -> &DependencyGraph {
         &self.dep_graph
     }
+    /// Die Symboltabelle.
     pub fn symbol_table(&self) -> &SymbolTable {
         &self.symbol_table
     }
 
     // ── Reports ──
 
+    /// Kurzbericht ueber alle Module.
     pub fn report(&self) -> String {
         let mut r = String::new();
         r.push_str("=== Module Registry Report ===\n\n");
@@ -1565,6 +1765,7 @@ impl ModuleRegistry {
         r
     }
 
+    /// Bericht ueber den Abhaengigkeitsgraphen.
     pub fn dependency_report(&self) -> String {
         let mut r = String::new();
         r.push_str("=== Dependency Graph ===\n\n");
@@ -1603,6 +1804,7 @@ impl ModuleRegistry {
         r
     }
 
+    /// Bericht ueber die Symboltabelle.
     pub fn symbol_report(&self) -> String {
         let mut r = String::new();
         r.push_str("=== Symbol Table ===\n\n");
@@ -1626,6 +1828,7 @@ impl ModuleRegistry {
         r
     }
 
+    /// Die letzten `n` Ereignisse als Bericht.
     pub fn event_report(&self, last_n: usize) -> String {
         let mut r = String::new();
         r.push_str("=== Module Events ===\n\n");
@@ -1649,57 +1852,68 @@ impl ModuleRegistry {
 // MODULE BUILDER HELPER
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Baut Modulbeschreibungen Schritt fuer Schritt.
 pub struct ModuleBuilder {
     module: ModuleDescriptor,
 }
 
 impl ModuleBuilder {
+    /// Beginnt mit Name und Version.
     pub fn new(name: &str, version: &str) -> Self {
         ModuleBuilder {
             module: ModuleDescriptor::new(name, version),
         }
     }
 
+    /// Setzt die Beschreibung.
     pub fn description(mut self, desc: &str) -> Self {
         self.module.description = desc.to_string();
         self
     }
 
+    /// Setzt den Autor.
     pub fn author(mut self, author: &str) -> Self {
         self.module.author = author.to_string();
         self
     }
 
+    /// Setzt die Lizenz.
     pub fn license(mut self, license: ModuleLicense) -> Self {
         self.module.license = license;
         self
     }
 
+    /// Setzt die Prioritaet.
     pub fn priority(mut self, priority: ModulePriority) -> Self {
         self.module.priority = priority;
         self
     }
 
+    /// Setzt die Pflichtabhaengigkeiten.
     pub fn depends_on(mut self, deps: &[&str]) -> Self {
         self.module.dependencies = deps.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Setzt die optionalen Abhaengigkeiten.
     pub fn optional_depends_on(mut self, deps: &[&str]) -> Self {
         self.module.optional_deps = deps.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Setzt die Konfliktmodule.
     pub fn conflicts_with(mut self, modules: &[&str]) -> Self {
         self.module.conflicts = modules.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Setzt die bereitgestellten Dienste.
     pub fn provides(mut self, services: &[&str]) -> Self {
         self.module.provides = services.iter().map(|s| s.to_string()).collect();
         self
     }
 
+    /// Fuegt einen Parameter hinzu.
     pub fn param(mut self, name: &str, ptype: ParamType, default: &str, desc: &str) -> Self {
         self.module
             .params
@@ -1707,6 +1921,7 @@ impl ModuleBuilder {
         self
     }
 
+    /// Fuegt einen unveraenderlichen Parameter hinzu.
     pub fn readonly_param(
         mut self,
         name: &str,
@@ -1720,22 +1935,26 @@ impl ModuleBuilder {
         self
     }
 
+    /// Fuegt ein exportiertes Symbol hinzu.
     pub fn export(mut self, name: &str, stype: SymbolType) -> Self {
         let symbol = ExportedSymbol::new(name, self.module.id, &self.module.name, stype);
         self.module.exports.push(symbol);
         self
     }
 
+    /// Fuegt einen Import hinzu.
     pub fn import_symbol(mut self, name: &str) -> Self {
         self.module.imports.push(name.to_string());
         self
     }
 
+    /// Markiert das Modul fuer automatisches Laden.
     pub fn auto_load(mut self) -> Self {
         self.module.auto_load = true;
         self
     }
 
+    /// Liefert die fertige Beschreibung.
     pub fn build(self) -> ModuleDescriptor {
         self.module
     }
@@ -1745,6 +1964,7 @@ impl ModuleBuilder {
 // BUILT-IN MODULE DEFINITIONS
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Legt die im Kernel eingebauten Module an.
 pub fn create_builtin_modules() -> Vec<ModuleDescriptor> {
     let mut modules = Vec::with_capacity(16);
 
