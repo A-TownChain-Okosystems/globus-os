@@ -29,18 +29,27 @@ use crate::capability::{CapabilityTable, ResourceType, Rights};
 // allocator.rs: HEAP_START = 0x4444_4444_0000, HEAP_SIZE = 100 * 1024
 // In Kernel-Mode werden diese aus allocator.rs importiert;
 // in Test-Mode (hier) definieren wir sie identisch.
+/// Anfang des Kernel-Heaps; derselbe Wert wie im Allocator.
 pub const HEAP_START: u64 = 0x_4444_4444_0000;
+/// Groesse des Kernel-Heaps, 100 KiB wie im Allocator.
 pub const HEAP_SIZE: u64 = 100 * 1024; // 100 KiB — identisch zu allocator.rs
+/// Ende des Kernel-Heaps, ausschliesslich.
 pub const HEAP_END: u64 = HEAP_START + HEAP_SIZE;
+/// Anfang des simulierten Userspace-Bereichs, getrennt vom Kernel-Heap.
 pub const USERSPACE_BASE: u64 = 0x_5555_5555_0000; // Getrennt vom Kernel-Heap
+/// Groesse des Userspace-Bereichs, 100 MiB.
 pub const USERSPACE_MAX: u64 = 100 * 1024 * 1024; // 100 MiB Userspace-Simulation
 
 /// Verwaltete Speicherregion
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AllocatedRegion {
+    /// Anfangsadresse der Region.
     pub addr: u64,
+    /// Groesse in Byte.
     pub size: u64,
+    /// Prozess, dem die Region gehoert.
     pub owner_pid: Pid,
+    /// Kennung der Region; sie vergibt der Verwalter.
     pub region_id: u64,
     /// Quelle der Allokation
     pub source: AllocSource,
@@ -58,10 +67,15 @@ pub enum AllocSource {
 /// Fehler bei Speicheroperationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum MemError {
+    /// Der angefragte Bereich passt nicht mehr in den verfuegbaren Raum.
     OutOfMemory,
+    /// Die Region ist unbekannt oder gehoert nicht zum Aufrufer.
     InvalidRegion,
+    /// Fuer die Operation fehlt die Capability.
     NoCapability,
+    /// Die Region wurde bereits freigegeben.
     DoubleFree,
+    /// Die Adresse erfuellt die geforderte Ausrichtung nicht.
     InvalidAlignment,
     /// Allokation waere zu gross fuer Kernel-Heap
     HeapOverflow,
@@ -99,6 +113,7 @@ impl Default for KernelMemoryManager {
 }
 
 impl KernelMemoryManager {
+    /// Leerer Verwalter; Regionen beginnen bei Kennung 1, der Bump am Anfang des Bereichs.
     pub fn new() -> Self {
         Self {
             next_addr: AtomicU64::new(USERSPACE_BASE),
@@ -330,13 +345,21 @@ impl KernelMemoryManager {
 /// Memory-Statistik
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MemStats {
+    /// Summe der belegten Bytes ueber alle Regionen.
     pub total_allocated: u64,
+    /// Hoechster Stand von total_allocated.
     pub peak_allocated: u64,
+    /// Anzahl der gerade belegten Regionen.
     pub active_regions: u64,
+    /// Anfang des Kernel-Heaps.
     pub heap_base: u64,
+    /// Groesse des Kernel-Heaps.
     pub heap_size: u64,
+    /// Ende des Kernel-Heaps.
     pub heap_end: u64,
+    /// Anfang des Userspace-Bereichs.
     pub userspace_base: u64,
+    /// Anzahl der gerade laufenden Heap-Allokationen, kein mitlaufender Zaehler.
     pub heap_allocs: u64,
 }
 
@@ -345,7 +368,9 @@ pub struct MemStats {
 /// Das vereinte Speicher-Subsystem: Heap-Bruecke + Prozess-Regionen + Caps.
 /// Dies ist die Haupt-Schnittstelle, die der Kernel im Init benutzt.
 pub struct MemorySubsystem {
+    /// Der eigentliche Regionsverwalter.
     pub manager: KernelMemoryManager,
+    /// Capability-Tabelle, gegen die Zugriffe geprueft werden.
     pub caps: CapabilityTable,
 }
 
