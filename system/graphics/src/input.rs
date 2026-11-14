@@ -58,25 +58,36 @@ pub struct Modifiers {
 pub enum InputEvent {
     /// Der Zeiger hat sich bewegt.
     PointerMove {
+        /// Zeigerposition auf der X-Achse in Pixeln.
         x: i32,
+        /// Zeigerposition auf der Y-Achse in Pixeln.
         y: i32,
     },
     /// Eine Maustaste wurde gedrueckt oder losgelassen.
     PointerButton {
+        /// Die betroffene Maustaste.
         button: Button,
+        /// True beim Druecken, false beim Loslassen.
         pressed: bool,
+        /// Zeigerposition auf der X-Achse in Pixeln.
         x: i32,
+        /// Zeigerposition auf der Y-Achse in Pixeln.
         y: i32,
     },
     /// Eine Taste wurde gedrueckt oder losgelassen.
     Key {
+        /// Die betroffene Taste.
         code: KeyCode,
+        /// True beim Druecken, false beim Loslassen.
         pressed: bool,
+        /// Zusatztasten, die im Moment des Ereignisses gesetzt waren.
         modifiers: Modifiers,
     },
     /// Das Scrollrad wurde bewegt.
     Scroll {
+        /// Verschiebung auf der X-Achse seit dem letzten Ereignis.
         delta_x: i32,
+        /// Verschiebung auf der Y-Achse seit dem letzten Ereignis.
         delta_y: i32,
     },
 }
