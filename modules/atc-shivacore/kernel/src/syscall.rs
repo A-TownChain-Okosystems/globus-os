@@ -177,6 +177,7 @@ impl SyscallDispatcher {
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             x if x == Syscall::Exit.id() => Syscall::Exit,
             x if x == Syscall::Console.id() => Syscall::Console,
+            x if x == Syscall::IdentityCheck.id() => Syscall::IdentityCheck,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
@@ -191,6 +192,9 @@ impl SyscallDispatcher {
             // Trampolin faengt den Aufruf ab, bevor er hier ankommt. Wer bis
             // hierher kommt, bekommt eine Absage statt eines stillen Erfolgs.
             Syscall::Console => SyscallResponse::err(AbiError::InvalidPayload),
+            // Die Anmeldepruefung braucht den Bildschirmbesitz und eine Kopie
+            // aus dem Prozessspeicher; der Trampolin faengt sie ab.
+            Syscall::IdentityCheck => SyscallResponse::err(AbiError::InvalidPayload),
             Syscall::IpcSend => {
                 if !self.check_capability(
                     pid,
