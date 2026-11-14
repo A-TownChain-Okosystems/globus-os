@@ -2,9 +2,13 @@
 // Shell — main command processor
 use crate::CommandRegistry;
 
+/// Interactive command processor over a command registry.
 pub struct Shell {
+    /// Commands the shell can run.
     pub registry: CommandRegistry,
+    /// Whether the shell has been started.
     pub running: bool,
+    /// Current working directory as shown to the user.
     pub cwd: String,
 }
 
@@ -15,6 +19,7 @@ impl Default for Shell {
 }
 
 impl Shell {
+    /// Creates a stopped shell with the built-in commands registered.
     pub fn new() -> Self {
         Self {
             registry: CommandRegistry::new(),
@@ -23,13 +28,16 @@ impl Shell {
         }
     }
 
+    /// Marks the shell as running.
     pub fn start(&mut self) {
         self.running = true;
     }
+    /// Marks the shell as stopped.
     pub fn stop(&mut self) {
         self.running = false;
     }
 
+    /// Executes one input line and returns its output.
     pub fn execute(&mut self, input: &str) -> String {
         let parts: Vec<&str> = input.split_whitespace().collect();
         if parts.is_empty() {
