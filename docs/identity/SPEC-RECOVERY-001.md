@@ -117,6 +117,13 @@ klingt.
 | Wortabfrage zur Bestätigung (3 Zufallspositionen) | **existiert**: `RecoveryConfirmation` | `system/identity/src/account_lifecycle.rs:58` |
 | Verschlüsselter Blobspeicher (XChaCha20-Poly1305) | **existiert** | `system/identity/src/secure_store.rs` |
 | Mehrkonten-Transaktion mit einer Commit-Grenze | **existiert als Modell**, nicht als Dateispeicher | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` |
+| Signaturverfahren im Wallet-Pfad | **fehlt**: nur der Trait `KeyStore::sign`; die einzige Implementierung ist `TestStore` im Test und gibt die Nachricht als „Signatur" zurueck | `system/identity/src/keystore.rs:68`, `system/wallet-service/src/lib.rs:138` |
+| Eigenstaendiges Wallet-Crate | **fehlt** in diesem Repository; der Wallet-Pfad liegt in `system/identity` (Ableitung, Adresse) und `system/wallet-service` (Signiergrenze) | `ls system/` |
+| Betragsformat der Genesis | `u64` in kleinster Einheit | `service_space/src/genesis.rs:93` |
+| Serialisierung der Signierbytes | `to_le_bytes` (Genesis) gegen **big-endian** in `ATC-STD-600` §5.1 — heute latent, weil kein Transaktions-Signiercode existiert | `service_space/src/genesis.rs:307`, §15.2 |
+| Zeitumrechnung TSC | einmalige `u128`-Rechnung, danach `u64` | `kernel/src/entropy_gate.rs`, §16.4 |
+| Adressbildung | `ATC` + 28 + 4 Hexzeichen aus doppeltem `SHA-256`, Laenge 35 geprueft | `system/identity/src/lib.rs:298` |
+| ATC-STD-600 | externes Normdokument, gelesen und zugeordnet, nicht in dieses Repository kopiert | §15.2 |
 | **Tresor-Datei nach dieser Spezifikation** | **fehlt** | — |
 | **Entropiequelle im Image** | **fehlt**: kein `RDRAND`/`RDSEED`, `OsRng` gibt es nur im Host-Build | `grep -r "rdrand"` leer |
 | **Dauerhafter Speicher im Image** (Tresor über Neustart) | **fehlt**: Datensatz liegt auf der Ramdisk, also im Bootabbild | `identity_file.rs` |
@@ -879,6 +886,36 @@ getrennte 32-Byte-Seeds für Wallet, Identität und Knoten. Drei Regeln:
   Absicht und kein Fehler, solange die Labels verschieden sind und bleiben.
 
 ---
+
+### 15.7 Die Pseudo-Signatur im Baum: `SoftwareSigner`
+
+Der einzige zweite „Signierer" neben Ed25519 ist `SoftwareSigner`
+(`service_space/src/did.rs:56`) und ausdruecklich als *deterministische
+Pseudosignatur fuer reproduzierbare Tests* deklariert — keine Kryptografie. Der
+Befund gehoert trotzdem hierher, weil das Muster gefaehrlich ist, sobald es
+kopiert wird:
+
+- `sign` verknuepft die Nachricht byteweise per XOR mit dem privaten Schluessel
+  und **haengt anschliessend den privaten Schluessel hexkodiert an die
+  „Signatur"** (`did.rs:79`). Wer eine solche Ausgabe sieht, hat den Schluessel.
+- `verify` macht das rueckgaengig; eine Pruefung ist damit keine
+  Authentizitaetspruefung, sondern eine Probe auf dasselbe Geheimnis.
+- Die Kennungen sind unterscheidbar: `Ed25519Signer` vergibt
+  `did:shivacore:ed25519:` (`did.rs:130`), `SoftwareSigner` nicht.
+
+Drei Regeln, die daraus folgen und fuer jede kuenftige Signierimplementierung
+gelten:
+
+1. **Test- und Produktionspfad muessen am Typ unterscheidbar sein**, nicht an
+   einem Kommentar. Heute unterscheidet sie der DID-Praefix — das genuegt fuer
+   DIDs, nicht fuer Wallets.
+2. **Ein Signaturwert darf nie Schluesselmaterial enthalten.** Die 64 Byte einer
+   Ed25519-Signatur sind oeffentlich; alles, was darueber hinausgeht, ist ein
+   Leck.
+3. **`WalletService` erbt diese Grenze nicht.** `system/wallet-service` prueft
+   Sitzung, Capability `Right::Sign`, Domaenenlaenge und Nachrichtengroesse und
+   reicht dann an `KeyStore::sign` weiter — die Kryptografie liegt vollstaendig
+   dahinter, und dort steht heute nur `TestStore` (§15.1).
 
 ## 16. Entropiebereitschaft und Wiederherstellungssicherheit (R-1)
 
