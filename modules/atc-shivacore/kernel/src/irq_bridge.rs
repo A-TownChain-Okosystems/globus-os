@@ -44,7 +44,9 @@ use crate::irq::{IrqError, IrqTable};
 
 /// Was die Bruecke von der Maskenebene braucht.
 pub trait IrqMasking {
+    /// Sperrt die Zustellung dieses Vektors.
     fn mask_vector(&mut self, vector: u32) -> Result<(), ApicError>;
+    /// Gibt die Zustellung dieses Vektors wieder frei.
     fn unmask_vector(&mut self, vector: u32) -> Result<(), ApicError>;
 }
 
@@ -61,7 +63,9 @@ impl<M: ApicRegisters> IrqMasking for LocalApic<M> {
 /// Fehler der Bruecke: entweder aus der Tabelle oder vom Maskenregister.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BridgeError {
+    /// Der Fehler kommt aus der Line-Tabelle.
     Irq(IrqError),
+    /// Der Fehler kommt vom Maskenregister.
     Apic(ApicError),
 }
 
@@ -96,18 +100,26 @@ struct PendingAck {
 /// Ergebnis einer verstrichenen Frist, damit der Aufrufer es berichten kann.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct AckTimeout {
+    /// Betroffene Line.
     pub line: u32,
+    /// Prozess, der die Zustellung erwartet.
     pub pid: Pid,
+    /// Verpasste Quittungen bis zu diesem Zeitpunkt.
     pub strikes: u8,
+    /// True, wenn das Abonnement mit dieser Frist ausgesetzt wurde.
     pub suspended: bool,
 }
 
 /// Zaehler der ACK-Politik. Ohne Zaehler waere "hat funktioniert" eine Meinung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct AckStats {
+    /// Zustellungen, die innerhalb der Frist quittiert wurden.
     pub acked_on_receive: u64,
+    /// Fristen, die ohne Quittung verstrichen sind.
     pub timed_out: u64,
+    /// Anzahl der derzeit ausgesetzten Lines.
     pub suspended: usize,
+    /// Zustellungen, die unterdrueckt wurden, weil das Abonnement ausgesetzt ist.
     pub suppressed: u64,
 }
 
@@ -124,6 +136,7 @@ pub struct IrqBridge<M: IrqMasking> {
 }
 
 impl<M: IrqMasking> IrqBridge<M> {
+    /// Bruecke mit leerer Tabelle und ohne ausgesetzte Lines.
     pub fn new(masking: M) -> Self {
         Self {
             table: IrqTable::new(),
@@ -252,6 +265,7 @@ impl<M: IrqMasking> IrqBridge<M> {
         Ok(line)
     }
 
+    /// Momentaufnahme der Quittungszaehler.
     pub fn ack_stats(&self) -> AckStats {
         AckStats {
             acked_on_receive: self.acked_on_receive,
@@ -266,10 +280,12 @@ impl<M: IrqMasking> IrqBridge<M> {
         Ok(self.table.subscribe(cap)?)
     }
 
+    /// Die Line-Tabelle.
     pub fn table(&self) -> &IrqTable {
         &self.table
     }
 
+    /// Die Maskenebene.
     pub fn masking(&self) -> &M {
         &self.masking
     }
