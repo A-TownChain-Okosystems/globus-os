@@ -4,29 +4,42 @@ use crate::paging::PhysicalAddress;
 use crate::{PageFlags, VirtualAddress};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zugriffsart, die den Fehler ausgeloest hat.
 pub enum FaultAccess {
+    /// Lesender Zugriff.
     Read,
+    /// Schreibender Zugriff.
     Write,
+    /// Ausfuehrender Zugriff.
     Execute,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein aufgetretener Seitenfehler.
 pub struct PageFault {
+    /// Adresse, auf die zugegriffen wurde.
     pub address: VirtualAddress,
+    /// Art des Zugriffs.
     pub access: FaultAccess,
+    /// True, wenn die Seite abgebildet war, der Fehler also an den Rechten lag.
     pub present: bool,
+    /// True, wenn der Zugriff aus dem Userspace kam.
     pub user: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Was der Kernel mit dem Fehler tun soll.
 pub enum FaultAction {
+    /// Adresse auf den angegebenen Frame abbilden.
     Map {
         physical: PhysicalAddress,
         flags: PageFlags,
     },
+    /// Zugriff verweigern.
     Deny,
 }
 
+/// Baut den Fehlerdatensatz aus den Trap-Informationen.
 pub fn classify(
     access: FaultAccess,
     present: bool,
@@ -41,6 +54,7 @@ pub fn classify(
     }
 }
 
+/// Fail-closed: nur eine fehlende Abbildung darf nachgeladen werden.
 pub fn authorize_fault(
     fault: PageFault,
     mapping: Option<(PhysicalAddress, PageFlags)>,
