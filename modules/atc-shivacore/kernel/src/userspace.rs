@@ -156,6 +156,27 @@ impl UserAddressSpace {
             || in_region(self.heap_base, self.heap_size)
             || (ptr >= self.stack_base.saturating_sub(self.stack_size) && end <= self.stack_base)
     }
+
+    /// Liegt `[ptr, ptr+len)` vollstaendig in einem Bereich, den der Prozess
+    /// lesen darf?
+    ///
+    /// Anders als `range_writable` schliesst das Codesegment ein: ein Programm
+    /// darf seinen eigenen Code lesen (literale Zeichenketten liegen dort),
+    /// aber nicht schreiben. Fuer jede Kopie aus dem Userspace in den Kernel
+    /// ist das die richtige Frage.
+    pub fn range_readable(&self, ptr: u64, len: usize) -> bool {
+        if len == 0 {
+            return false;
+        }
+        let Some(end) = ptr.checked_add(len as u64) else {
+            return false;
+        };
+        let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
+        in_region(self.code_base, self.code_size)
+            || in_region(self.data_base, self.data_size)
+            || in_region(self.heap_base, self.heap_size)
+            || (ptr >= self.stack_base.saturating_sub(self.stack_size) && end <= self.stack_base)
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
