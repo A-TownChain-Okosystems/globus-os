@@ -35,7 +35,7 @@ Daten" und war bisher in keinem Dokument festgehalten.
 
 ## 3. Blocker 2: Die ABI kennt keinen Prozessstart (Kandidat, nicht beschlossen)
 
-Ein Syscall `SpawnProcess = 0x0050` waere additiv, verlangt aber eine Entscheidung
+Ein Syscall `SpawnProcess` waere additiv, verlangt aber eine Entscheidung
 des Owners, weil er die eingefrorene Syscall-ABI und das Capability-Modell beruehrt
 (SHIVA-SYSCALL-ABI, AD-013). Vorschlag, bewusst nicht implementiert:
 
@@ -63,3 +63,13 @@ Wahrheit.
 3. Erst dann ABI 2.1 mit `SpawnProcess` (Blocker 2) — mit Owner-Entscheidung.
 
 Solange 1 fehlt, ist jeder Spawn-Versuch ein Test der Abbildung, nicht des Spawns.
+
+## 6. Nachtrag 14.11.2026 — die vorgeschlagene Nummer ist vergeben
+
+Der Vorschlag nannte `SpawnProcess = 0x0050`. Diese Nummer ist inzwischen
+belegt: das Anmeldefenster benutzt `Syscall::Console = 0x0050` (Clear/Write auf
+die Flaeche, `docs/LOGIN_WINDOW.md`). Ein Prozessstart, wenn er kommt, braucht
+deshalb eine andere Nummer; die Kollision ist hier festgehalten, damit sie nicht
+spaeter als Ueberraschung auftaucht. Die Entscheidung ueber den Syscall selbst
+ist weiterhin offen (Blocker 2), und Blocker 1 (nur zwei Segmente im Abbild)
+besteht unveraendert.
