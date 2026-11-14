@@ -717,8 +717,18 @@ weder auf der Platte noch im Speicher.
 reproduzierbar eine Adresse, aber niemand kann mit dem zugehörigen Schlüssel
 signieren. Die Adresse ist eine Selbstverpflichtung auf ein Geheimnis, kein
 Wallet. Die drei Fragen aus P0-A und P0-B haben damit dieselbe Antwort: es gibt
-genau **eine** Implementierung, und sie enthält kein Signaturverfahren
-(E1.2 = kein produktiver Pfad für Wallets).
+genau **eine** Implementierung, und sie enthält kein Signaturverfahren.
+
+**Klassifizierung (Owner, 14.11.2026): `E1.2 = RESOLVED / NO_SIGNING_IMPLEMENTATION`.**
+Nicht `OPEN`, nicht `CANDIDATE`, nicht `IMPLEMENTED`: der Punkt ist entschieden, und die
+Entscheidung lautet, dass es keinen produktiven Signierpfad für Wallets gibt. Wer diesen
+Status später ändert, braucht eine Implementierung mit Testvektoren (15.4), nicht eine
+neue Formulierung.
+
+**Zeilenverweise sind Bequemlichkeit, verbindlich ist der Symbolname.** Die Verweise in
+diesem Abschnitt gelten für `system/identity/src/lib.rs`, Blob `3c40167` am Stand
+`1c6c084`. Verschiebt sich der Code, gilt der Symbolname (`derive_private_key`,
+`derive_public_key`, `public_key_to_address`, `create_wallet_with_gate`), nicht die Zeile.
 
 **Der einzige produktive Signaturcode im Repository** ist Ed25519 für Pakete und
 Updates: `system/package` (Prüfen, `ed25519-dalek` 3.0, `verify_package`), Tests
@@ -946,6 +956,18 @@ gelten:
    reicht dann an `KeyStore::sign` weiter — die Kryptografie liegt vollstaendig
    dahinter, und dort steht heute nur `TestStore` (§15.1).
 
+**Drei Anforderungen des Eigentuemers vom 14.11.2026, die dieser Abschnitt abdecken muss:**
+
+| Anforderung | Pruefbar als |
+|---|---|
+| Keine Ausgabe privaten Schluesselmaterials in Signaturen, Logs, Fehlermeldungen oder Diagnoseobjekten | `Debug`, `Display` und die Fehlertypen des Signierers geben weder Schluessel noch Ableitungen aus; ein Negativtest je Typ |
+| Keine produktive Erreichbarkeit des Test-/Pseudosignierers | der Typ ist im Produktionsbuild nicht aufloesbar (`cfg(test)` oder eigenes Test-Crate), nicht bloss "wird nicht aufgerufen" |
+| CI-Test gegen die Aufnahme des Musters in produktive Build-Konfigurationen | ein Pruefschritt schlaegt fehl, sobald `SoftwareSigner` aus einem produktiven Ziel oder Feature erreichbar ist |
+
+**Grenze, die dazugehoert:** Ein abgesicherter oder entfernter Pseudosignierer macht den
+L1-Signierpfad **nicht** funktionsfaehig. Er beseitigt ein Risiko, er schafft keine
+Faehigkeit. Nach E1.2 bleibt `key_version = 2` die Voraussetzung (15.4).
+
 ### 15.8 Entscheidungs- und Arbeitsmatrix (Stand 14.11.2026)
 
 | Punkt | Entscheidung / Stand | Konsequenz |
@@ -953,13 +975,18 @@ gelten:
 | E-1 Kryptoentscheidung | entschieden: Ed25519 nach ATC-STD-600 (15.2) | kein zweiter Kurventyp, keine Eigenkrypto |
 | E-3 Domänentrennung | entschieden: Identität und Wallet getrennt (15.6) | zwei Labels, zwei Seeds, keine Wiederverwendung |
 | E-6 Version 1 | **bestätigt**: `ADDRESS_ONLY` / `NON_SIGNING` (15.3) | Adresse bleibt reproduzierbar, Signierfähigkeit wird nicht behauptet |
-| E1.1 | abgeschlossen: die 32 Byte sind HMAC-Ausgang, kein Schlüssel (15.1) | trägt alle folgenden Punkte |
-| E1.2 | abgeschlossen als Negativbefund: kein L1-Signaturverfahren vorhanden (15.1, 15.7) | Signieren ist zu bauen, nicht freizuschalten |
-| E1.3 | spezifiziert, **nicht implementiert** (15.4) | HKDF-Label, Seed, `VerifyingKey` und DID sind festgelegt; Code fehlt |
-| E1.4 | spezifiziert, **nicht implementiert** (15.5) | Adresse v2 36 Zeichen, DID 86 Zeichen, zwei getrennte Identifikatoren |
-| E1.5 | abgeglichen: ATC-STD-600 v1.3.0, `approved`, `frozen` (15.2) | die Norm ist gelesen, nicht angenommen |
-| R-1 | Code vorhanden (`system/entropy-core`, `EntropyGate`), **Aufrufer im Image fehlt** (16.4) | ohne geprüfte Quelle entsteht im Image keine Phrase |
-| R-2 | blockiert bis R-1 nachgewiesen ist (13) | Recovery wird gegen echte Krypto geprüft, nicht gegen Attrappen |
+| E1.1 | `RESOLVED`: keine produktive Schlüsselableitung (15.1) | trägt alle folgenden Punkte |
+| E1.2 | `RESOLVED / NO_SIGNING_IMPLEMENTATION`: kein produktiver Signierpfad (15.1, 15.7) | Signieren ist zu bauen, nicht freizuschalten |
+| E1.3 | `OPEN`: Entwurf in 15.4, Semantik nicht abgeschlossen, nicht implementiert | HKDF-Label, Seed, `VerifyingKey` und DID sind benannt; Code fehlt |
+| E1.4 | `OPEN`: Entwurf in 15.5, nicht implementiert | Adresse v2 36 Zeichen, DID 86 Zeichen, zwei getrennte Identifikatoren |
+| E1.5 | `VERIFIED AGAINST STANDARD`: ATC-STD-600 v1.3.0, `approved`, `frozen` (15.2) | die Norm ist gelesen, nicht angenommen |
+| R-1 | `BLOCKED`: Code vorhanden (`system/entropy-core`, `EntropyGate`), **Aufrufer im Image fehlt** (16.4) | ohne geprüfte Quelle entsteht im Image keine Phrase |
+| R-2 | `NOT STARTED`: abhängig von R-1 (13) | Recovery wird gegen echte Krypto geprüft, nicht gegen Attrappen |
+| `CI_VERIFIED` | `BLOCKED`: Committer-Adresse unbestätigt, Actions enden als `startup_failure` bei 0 Jobs | kein Nachweis auf Actions-Ebene, unabhängig vom Code |
+
+Die Zahlen dürfen nicht vermischt werden: die **53 Abnahmetests REC-T-01..53** sind der
+Specification-Umfang; ein Workspace-Lauf (`cargo test --workspace --all-targets`) ist ein
+anderer Nachweis und belegt keinen einzigen REC-T-Fall.
 
 Zwei Zeilen dieser Matrix sind keine Fortschrittsmeldung, sondern eine Grenze:
 E1.3 und E1.4 sind Text. Solange `key_version = 2` nicht implementiert ist,
