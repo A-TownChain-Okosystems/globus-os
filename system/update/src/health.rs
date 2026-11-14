@@ -3,20 +3,29 @@
 use crate::Slot;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// In-memory boot health for the fail-closed A/B switch.
 pub struct BootHealth {
+    /// Slot this tracker observes.
     pub slot: Slot,
+    /// Attempts counted so far.
     pub attempts: u32,
+    /// Attempts allowed before a rollback is due.
     pub max_attempts: u32,
+    /// True once the boot was confirmed healthy.
     pub confirmed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Misuse of the health tracker.
 pub enum HealthError {
+    /// `max_attempts` was 0.
     InvalidLimit,
+    /// The boot had already been confirmed.
     AlreadyConfirmed,
 }
 
 impl BootHealth {
+    /// Creates a tracker for a slot with a non-zero attempt limit.
     pub fn new(slot: Slot, max_attempts: u32) -> Result<Self, HealthError> {
         if max_attempts == 0 {
             return Err(HealthError::InvalidLimit);
@@ -29,6 +38,7 @@ impl BootHealth {
         })
     }
 
+    /// Counts an attempt and reports whether a rollback is due.
     pub fn record_attempt(&mut self) -> Result<bool, HealthError> {
         if self.confirmed {
             return Err(HealthError::AlreadyConfirmed);
@@ -37,10 +47,12 @@ impl BootHealth {
         Ok(self.should_rollback())
     }
 
+    /// Marks the boot as healthy.
     pub fn confirm(&mut self) {
         self.confirmed = true;
     }
 
+    /// True when unconfirmed attempts reached the limit.
     pub fn should_rollback(&self) -> bool {
         !self.confirmed && self.attempts >= self.max_attempts
     }
