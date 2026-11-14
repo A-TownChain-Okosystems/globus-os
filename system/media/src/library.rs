@@ -1,6 +1,7 @@
 //! Media-library metadata, collections, search and deterministic ordering.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Reihenfolge, in der die Bibliothek sortiert wird.
 pub enum SortOrder {
     /// Titel aufsteigend.
     TitleAscending,
