@@ -1,21 +1,37 @@
 //! Virtual filesystem namespace, mount policy, and persistent-disk discovery.
 
 pub mod allocator;
+/// Freispeicher-Bitmap ueber Blocknummern.
 pub mod bitmap;
+/// Verzeichnis-Eintraege im Speicher und ihre Kodierung.
 pub mod dir_store;
+/// Aufbau eines einzelnen Verzeichniseintrags.
 pub mod directory;
+/// Abbildung logischer auf physische Bloecke.
 pub mod extent;
+/// Datei-Typen, Rechte, Inodes und Handle.
 pub mod file;
+/// Datei-IO ueber Extents auf einem Blockgeraet.
 pub mod file_store;
+/// Auswertung der GUID-Partitionstabelle.
 pub mod gpt;
+/// Inode in Plattenform und Inode-Allocator.
 pub mod inode;
+/// Journal fuer Block-Schreibvorgaenge.
 pub mod journal;
+/// Lage der Metadatenbereiche auf dem Volume.
 pub mod layout;
+/// Mount-Tabelle und Standard-Einhaengepunkte.
 pub mod mounts;
+/// Normalisierung absoluter Pfade.
 pub mod path;
+/// Persistente Strukturen auf einem Blockgeraet.
 pub mod persistent;
+/// Wiederherstellung nach einem Abbruch.
 pub mod recovery;
+/// Mehrblock-Transaktionen ueber das Journal.
 pub mod transaction;
+/// Verzeichnisbaum ueber Verzeichniseintraegen.
 pub mod tree;
 
 pub use allocator::{AllocationError, BlockAllocator};
@@ -36,12 +52,17 @@ pub use transaction::{PendingWrite, Transaction, TransactionError};
 pub use tree::{DirectoryEntry, FsError, InodeTree};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Einhaengepunkt.
 pub struct Mount {
+    /// Pfad des Einhaengepunkts.
     pub mountpoint: String,
+    /// Dateisystemtyp, etwa efi oder vfs.
     pub filesystem: String,
+    /// True, wenn der Mount nur gelesen wird.
     pub readonly: bool,
 }
 
+/// Die sechs Einhaengepunkte, die ein System mindestens braucht.
 pub fn required_mounts() -> [Mount; 6] {
     [
         Mount {
