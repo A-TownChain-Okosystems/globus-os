@@ -26,6 +26,7 @@ impl Default for KernelCaps {
 }
 
 impl KernelCaps {
+    /// Leere Verwaltung ohne Abonnement.
     pub fn new() -> Self {
         Self {
             table: CapabilityTable::new(),
@@ -67,6 +68,7 @@ impl KernelCaps {
         }
     }
 
+    /// True, solange die Kernel-Capability fuer eine IRQ-Line besteht.
     pub fn has_subscription(&self) -> bool {
         self.subscriber.is_some()
     }
