@@ -319,7 +319,7 @@ impl Capabilities {
         Capabilities(self.0 & other.0)
     }
 
-    /// Serde: Bitmap[4]
+    /// Serde: `Bitmap[4]`
     pub fn to_bytes(&self) -> [u8; 4] {
         self.0.to_be_bytes()
     }
@@ -361,9 +361,9 @@ pub struct Envelope {
 
 impl Envelope {
     /// Kanonische Byte-Serialisierung (§3.1) — Signatur-Grundlage, deterministisch:
-    /// protocol[16] || version[3] || message_type[1] || message_id[32] ||
-    /// timestamp[8] || sender_len[2] || sender || nonce[16] || payload_len[4] ||
-    /// payload || chain_id[4] — Big-Endian, feste Feldreihenfolge.
+    /// `protocol[16] || version[3] || message_type[1] || message_id[32] ||`
+    /// `timestamp[8] || sender_len[2] || sender || nonce[16] || payload_len[4] ||`
+    /// `payload || chain_id[4]` — Big-Endian, feste Feldreihenfolge.
     pub fn canonical_bytes(&self) -> Vec<u8> {
         let sender = self.sender.as_bytes();
         let mut buf = Vec::with_capacity(
@@ -385,7 +385,7 @@ impl Envelope {
         buf
     }
 
-    /// Wire-Format: kanonische Bytes || signature[64].
+    /// Wire-Format: `kanonische Bytes || signature[64]`.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = self.canonical_bytes();
         buf.extend_from_slice(&self.signature);
@@ -783,8 +783,8 @@ impl SecureP2pNode {
         best.ok_or(V1Error::VersionIncompatible)
     }
 
-    /// HELLO-Payload (§8 Phase 1+2): listen_port[2] || versions_count[1] ||
-    /// versions[3*n] || public_key[32].
+    /// HELLO-Payload (§8 Phase 1+2): `listen_port[2] || versions_count[1] ||`
+    /// `versions[3*n] || public_key[32]`.
     pub fn hello_payload(&self, their_side: bool) -> Vec<u8> {
         let _ = their_side;
         let mut p = Vec::new();
@@ -857,7 +857,7 @@ impl SecureP2pNode {
     }
 
     /// Eingehendes CapabilityExchange: Phase 3 abschließen, Phase 4 starten
-    /// (AuthChallenge, Typ 11 — Payload: challenge[32]).
+    /// (AuthChallenge, Typ 11 — Payload: `challenge[32]`).
     pub fn handle_capability_exchange(
         &self,
         peer_id: u64,
@@ -877,7 +877,7 @@ impl SecureP2pNode {
     }
 
     /// Eingehender AuthChallenge: Phase 4 Antwort (AuthResponse, Typ 12 —
-    /// Payload: Ed25519-/HAL-Signatur[64] über DOMAIN_SEP || challenge).
+    /// Payload: `Ed25519-/HAL-Signatur[64]` über DOMAIN_SEP || challenge).
     pub fn handle_auth_challenge(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
         if env.message_type != 11 || env.payload.len() < 32 {
             return Err(V1Error::HandshakeFailed);
@@ -896,7 +896,7 @@ impl SecureP2pNode {
 
     /// Eingehender AuthResponse (Challenger-Seite): Signatur gegen das in der
     /// HELLO-Phase registrierte Public-Key prüfen → Phase 5 (KeyExchange, Typ 13 —
-    /// Payload: public[32] || session_salt[32]).
+    /// Payload: `public[32] || session_salt[32]`).
     pub fn handle_auth_response(&self, peer_id: u64, env: &Envelope) -> Result<Envelope, V1Error> {
         if env.message_type != 12 || env.payload.len() < 64 {
             return Err(V1Error::HandshakeFailed);
