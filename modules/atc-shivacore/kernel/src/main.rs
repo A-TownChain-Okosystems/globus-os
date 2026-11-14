@@ -426,22 +426,66 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 if shivacore::ramdisk::is_container(bytes) {
                     match shivacore::ramdisk::parse(bytes) {
                         Ok(entries) => {
-                            let names: Vec<&str> =
-                                entries.iter().map(|entry| entry.name.as_str()).collect();
+                            // IDENT-002: Der Anmeldedatensatz kommt aus einer
+                            // eigenen Datei im Systemnamensraum, nicht aus dem
+                            // Programm. Fehlt oder passt er nicht, wird das
+                            // gesagt — eine Anmeldung gibt es dann nicht.
+                            match shivacore::identity_file::load(&entries, bytes) {
+                                Ok(record) => serial_println!(
+                                    "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: gelesen ({} Byte, Argon2id {} KiB t={} p={})",
+                                    globus_identity_core::RECORD_LEN,
+                                    record.params.memory_kib,
+                                    record.params.iterations,
+                                    record.params.parallelism
+                                ),
+                                Err(error) => serial_println!(
+                                    "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: {:?} — fail-closed, keine Anmeldung",
+                                    error
+                                ),
+                            }
+                            // Gezaehlt und gezeigt werden nur Eintraege, die
+                            // ein Programm sehen darf: der Anmeldedatensatz
+                            // ist kein Programm und geht Programme nichts an.
+                            let names: Vec<&str> = entries
+                                .iter()
+                                .filter(|entry| {
+                                    shivacore::ramdisk::may_read(
+                                        &entry.name,
+                                        shivacore::ramdisk::Reader::Program,
+                                    )
+                                })
+                                .map(|entry| entry.name.as_str())
+                                .collect();
                             serial_println!(
                                 "ShivaCore: Ramdisk-Verzeichnis: {} Programme ({})",
-                                entries.len(),
+                                names.len(),
                                 names.join(", ")
                             );
-                            let chosen = shivacore::ramdisk::find(&entries, "init")
-                                .or_else(|| entries.first())
-                                .map(|entry| entry.name.clone());
+                            let chosen = shivacore::ramdisk::lookup(
+                                &entries,
+                                "init",
+                                shivacore::ramdisk::Reader::Program,
+                            )
+                            .or_else(|| {
+                                entries.iter().find(|entry| {
+                                    shivacore::ramdisk::may_read(
+                                        &entry.name,
+                                        shivacore::ramdisk::Reader::Program,
+                                    )
+                                })
+                            })
+                            .map(|entry| entry.name.clone());
                             // Das zweite Programm: der erste Eintrag, der nicht
                             // das Init ist. Es bekommt unten einen eigenen
                             // Prozess, damit das Verzeichnis nicht nur Auswahl,
                             // sondern auch Vielfalt bedeutet.
                             if let Some(chosen_name) = &chosen {
-                                for entry in entries.iter().filter(|e| &e.name != chosen_name) {
+                                for entry in entries.iter().filter(|e| &e.name != chosen_name).filter(|e| {
+                                    shivacore::ramdisk::may_read(
+                                        &e.name,
+                                        shivacore::ramdisk::Reader::Program,
+                                    )
+                                }) {
                                     let Some(data) = entry.data(bytes) else {
                                         continue;
                                     };
