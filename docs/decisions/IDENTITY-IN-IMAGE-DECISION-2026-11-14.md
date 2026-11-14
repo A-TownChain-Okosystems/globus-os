@@ -129,6 +129,56 @@ Zweiter Lauf: 276 ms (659542416 TSC bei 2.381.429.640 Hz). Die Groessenordnung
 ist stabil (267 / 276 ms), die Streuung kommt aus der Software-Emulation ohne
 KVM.
 
+## Das Anmeldefenster prueft (IDENT-003)
+
+Das Fenster prueft nicht selbst: es schickt die Eingabe an den Kernel und zeigt,
+was zurueckkommt. Der Datensatz gehoert dem Kernel (er liegt im
+Systemnamensraum `sys.identity` und ist fuer Programme nicht vorhanden), also
+rechnet er auch.
+
+- **Syscall:** `IdentityCheck = 0x0070`. Die Nummer `0x0060` bleibt fuer
+  `SpawnProcess` reserviert (Vorgabe des Owners), `0x0070` ist der naechste
+  Schritt derselben Konvention (Vielfache von `0x10`).
+- **Recht:** nur der Besitzer der Konsolen-Capability mit Schreibrecht — also das
+  Anmeldefenster. Ein anderes Programm bekommt `PermissionDenied`, und die
+  Ablehnung steht im Audit-Log als `identity.denied`.
+- **Grenzen:** Passwort hoechstens 64 Byte; der Puffer wird gegen das
+  Prozessabbild geprueft (`range_readable`) und in den Kernspeicher kopiert,
+  danach wird nur Kernspeicher gelesen. Nach der Pruefung werden die Bytes im
+  Kernel und im Programm ueberschrieben.
+- **Ergebnis:** `0` bestanden, `1` falsch, `2` kein Datensatz, `4` nicht
+  rechenbar. Das Fenster zeigt bei `0` genau „Pruefung bestanden - Sitzung
+  folgt." und sonst den Grund; ein Erfolg wird nie behauptet.
+- **Anzeige waehrend der Rechnung:** das Fenster zeichnet „Pruefung laeuft ..."
+  **vor** dem Aufruf. Der Aufruf blockiert das Programm, die Anzeige bleibt
+  waehrend der gemessenen ~250 ms stehen.
+
+Gemessen und belegt (QEMU/BIOS, Datensatz mit Passwort „ab" in der Ramdisk):
+
+| Fall | Log | Bildschirm |
+| --- | --- | --- |
+| richtig | `Anmeldepruefung: PID=1003 Ergebnis=Ok (589577160 TSC-Zyklen, 2 Byte)` | `Pruefung bestanden - Sitzung folgt.` |
+| falsch | `Ergebnis=WrongPassword (585596448 TSC-Zyklen, 2 Byte)` | `Pruefung fehlgeschlagen.` |
+| kein Datensatz | `Ergebnis=NoRecord (189480 TSC-Zyklen, 1 Byte)` | `Kein Anmeldedatensatz vorhanden - keine Anmeldung.` |
+
+589577160 Zyklen bei 2,386 GHz sind ~247 ms — die Rechnung im Fenster, nicht der
+Boot-Selbsttest.
+
+### Ein Fehler auf dem Weg, der zur ABI gehoert
+
+Der erste Versuch endete mit „Pruefung nicht moeglich (ABI-Ablehnung)", ohne
+dass ein Passwort geprueft wurde: `SyscallBlock::parse` in `libshivacore` fuehrt
+eine eigene Liste bekannter Nummern. Der Dispatcher kannte `0x0070`, der Parser
+nicht — das Ergebnis war `InvalidSyscall`. Dieselbe Nummer muss an **beiden**
+Stellen stehen; eine ABI-Nummer ist erst dann vergeben, wenn Parser und
+Dispatcher sie kennen.
+
+### Was die Anmeldung weiterhin NICHT tut
+
+Keine Sitzung, keine PID, kein Scheduler-Uebergang: der Text sagt „Sitzung
+folgt", und es folgt keine. Der Prozessstart ist die naechste Aufgabe
+(`SpawnProcess`, `0x0060`, Recht `SPAWN` auf `Process`).
+
 ## Was ausdruecklich NICHT passiert ist
 
 - Keine Sitzung, keine PID, kein Scheduler-Uebergang in der Anmeldung
