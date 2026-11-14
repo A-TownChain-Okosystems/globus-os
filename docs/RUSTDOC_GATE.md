@@ -46,12 +46,13 @@ wiederholen. `missing_docs` gilt dort unveraendert.
 
 ## Offene Punkte
 
-- **Panik-Strategie des Kernel-Builds.** Die `[profile.*]`-Abschnitte im
-  Kernel-Manifest wurden von Cargo ignoriert, weil sie in einem
-  Nicht-Wurzel-Paket standen; sie sind entfernt. Der Image-Builder
-  (`modules/atc-shivacore/boot`) fuehrt kein Profil, dort gilt also der
-  Cargo-Standard `unwind`. Eine gewollte `panic = "abort"`-Strategie ist damit
-  nirgends gesetzt. Offen, nicht geaendert.
+- **Panik-Strategie des Kernel-Builds: erledigt.** Die `[profile.*]`-Abschnitte
+  im Kernel-Manifest waren wirkungslos (Nicht-Wurzel-Paket) und sind entfernt.
+  Der Image-Builder kompiliert den Kernel nicht, er nimmt einen fertigen ELF
+  entgegen; die Strategie haengt deshalb am Profil des Kernel-Builds. Sie steht
+  jetzt als `[profile.kernel]` mit `panic = "abort"` im Root-Manifest und
+  `scripts/qemu_boot.sh` baut damit. Nachweis und der dabei gefundene
+  Edition-2024-Buildbruch: `docs/KERNEL_IMAGE_BUILD.md`.
 - **Manifest-Warnungen von Cargo.** `unused field repository` in
   `[workspace.package]`, weil kein Mitglied es erbt, und mehrere ungenutzte
   Abhaengigkeiten. Beides ist Metadaten-Hygiene, kein Doku-Inhalt.
