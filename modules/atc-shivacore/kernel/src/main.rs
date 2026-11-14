@@ -21,6 +21,9 @@ mod hal;
 mod interrupts;
 mod memory;
 mod serial;
+/// Diensteverwaltung: dieselbe Instanz wie in der Bibliothek, hier fuer den
+/// Kernel-Start noetig, weil der Exit-Pfad im Binaerbaum liegt.
+mod services;
 
 use alloc::{boxed::Box, vec::Vec};
 use bootloader_api::{
@@ -1291,6 +1294,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             core::ptr::write_volatile(slot, console_cap);
             core::ptr::write_volatile(slot.add(1), input_cap);
         }
+        // Als Dienst eintragen, BEVOR der Scheduler sichtbar wird: ein Exit
+        // vor dem Eintrag waere ein stiller Verlust, und ein Dienst, den der
+        // Kernel nicht kennt, verschwindet beim ersten Beenden.
+        crate::services::register(
+            u64::from(ats1000::Pid(1003).0),
+            &name,
+            0x01C0_0000,
+            start_rsp,
+            space.stack_base - space.stack_size,
+            [console_cap, input_cap],
+            crate::services::DEFAULT_RESTART_LIMIT,
+        );
         let mut context = userspace::UserContext::new(ats1000::Pid(1003), &binary, space);
         context.rsp = start_rsp;
         context.rbp = start_rsp;
