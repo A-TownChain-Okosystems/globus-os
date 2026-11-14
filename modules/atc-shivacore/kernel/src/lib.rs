@@ -51,6 +51,7 @@ pub mod ioapic;
 /// Interprozesskommunikation mit Nachrichten und Warteschlangen.
 pub mod ipc;
 /// Lebensdauer von Kanaelen und Handles: oeffnen, teilen, schliessen, widerrufen.
+pub mod identity_check;
 pub mod identity_file;
 pub mod ipc_lifecycle;
 /// Keccak-256 in reinem Rust.
