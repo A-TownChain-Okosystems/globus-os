@@ -304,6 +304,36 @@ impl EntropyPool {
         self.produced >= RESEED_INTERVAL_BYTES
     }
 
+    /// Zaehler der Speisungen. Jede Speisung bekommt einen eigenen Nonce, damit
+    /// zwei Speisungen nie denselben Schluesselstrom erzeugen.
+    pub const fn generation(&self) -> u64 {
+        self.generation
+    }
+
+    /// Verwirft alles und faellt auf `Uninitialized` zurueck (REQ-REC-16).
+    ///
+    /// Aufzurufen nach dem Aufwachen aus S3/S4 und nach dem Laden eines Images:
+    /// danach gibt es **kein** Material, bis eine Neuspeisung den Selbsttest
+    /// bestanden hat. Das ist die Stelle, an der eine alte Instanz nicht
+    /// weiterlaeuft, weil ein Zustand "ungefaehr bereit" nicht existiert.
+    pub fn invalidate(&mut self) {
+        self.clear();
+    }
+
+    /// Speist neu und faellt dabei zuerst auf `Uninitialized` zurueck.
+    ///
+    /// Reihenfolge ist bindend: verwerfen, dann Quelle lesen, dann pruefen. Ein
+    /// gescheiterter Lauf hinterlaesst `Failed` und kein Schluesselmaterial —
+    /// niemals den Schluessel der vorigen Speisung.
+    pub fn reseed(
+        &mut self,
+        hardware: &mut impl EntropySource,
+        jitter: &mut impl EntropySource,
+    ) -> EntropyState {
+        self.clear();
+        self.init(hardware, jitter)
+    }
+
     /// Initialisiert den Kern aus zwei unabhaengigen Quellen.
     ///
     /// Beide Quellen werden einzeln dem Selbsttest unterzogen. Erst wenn beide
@@ -593,6 +623,67 @@ mod tests {
         let state = pool.init(&mut short, &mut good(4));
         assert_eq!(state, EntropyState::Failed);
         assert_eq!(pool.fault(), Some(EntropyFault::Source(SourceError::Short)));
+    }
+
+    #[test]
+    fn invalidiert_gibt_es_kein_material() {
+        let mut pool = EntropyPool::new();
+        assert_eq!(pool.init(&mut good(11), &mut good(12)), EntropyState::Ready);
+        let mut out = [0u8; 32];
+        pool.fill(&mut out).unwrap();
+
+        // S3/S4 oder neues Image: alles verworfen, Zustand zurueck auf Anfang.
+        pool.invalidate();
+        assert_eq!(pool.state(), EntropyState::Uninitialized);
+        let mut after = [0x5Au8; 32];
+        assert_eq!(pool.fill(&mut after), Err(EntropyError::NotReady));
+        assert_eq!(after, [0x5Au8; 32], "kein Byte darf geschrieben werden");
+    }
+
+    #[test]
+    fn gescheiterte_neuspeisung_laesst_kein_altes_schluesselmaterial() {
+        let mut pool = EntropyPool::new();
+        assert_eq!(pool.init(&mut good(21), &mut good(22)), EntropyState::Ready);
+        let mut first = [0u8; 32];
+        pool.fill(&mut first).unwrap();
+        let first_generation = pool.generation();
+
+        // Quelle liefert nur noch Nullen: Neuspeisung scheitert, der alte
+        // Schluessel darf nicht weiterlaufen.
+        let mut flat = Fixed::from_bytes(vec![0u8; HEALTH_BYTES]);
+        assert_eq!(pool.reseed(&mut flat, &mut good(23)), EntropyState::Failed);
+        assert_eq!(pool.fill(&mut [0u8; 8]), Err(EntropyError::NotReady));
+        assert!(matches!(pool.fault(), Some(EntropyFault::Health(_))));
+
+        // Mit gesunder Quelle wieder Ready, aber mit anderem Schluesselstrom.
+        assert_eq!(
+            pool.reseed(&mut good(24), &mut good(25)),
+            EntropyState::Ready
+        );
+        assert!(pool.generation() > first_generation);
+        let mut second = [0u8; 32];
+        pool.fill(&mut second).unwrap();
+        assert_ne!(first, second);
+    }
+
+    #[test]
+    fn neuspeisung_ohne_neue_quelle_bleibt_moeglich() {
+        // Zweimal dieselbe Quelle, zwei Speisungen: der Nonce traegt die
+        // Generation, also unterscheiden sich die Ausgaben trotzdem.
+        let mut pool = EntropyPool::new();
+        assert_eq!(
+            pool.reseed(&mut good(31), &mut good(32)),
+            EntropyState::Ready
+        );
+        let mut first = [0u8; 32];
+        pool.fill(&mut first).unwrap();
+        assert_eq!(
+            pool.reseed(&mut good(31), &mut good(32)),
+            EntropyState::Ready
+        );
+        let mut second = [0u8; 32];
+        pool.fill(&mut second).unwrap();
+        assert_ne!(first, second);
     }
 
     #[test]
