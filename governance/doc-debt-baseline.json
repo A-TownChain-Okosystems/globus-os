@@ -3,7 +3,7 @@
   "head": "9472b4c",
   "metric": "v2: Top-Level-Items + oeffentliche Felder + Enum-Varianten + Trait-Items, ohne legacy/ und archive/",
   "note": "Neuanordnung der Messung, kein Regress: v1 (2457 bzw. 3051) war eine Teilmenge. Ab hier gilt nur noch sinkend.",
-  "total": 4997,
+  "total": 4906,
   "per_crate": {
     "modules/atc-shivacore/kernel": 1288,
     "modules/atc-shivacore/service_space": 1493,
@@ -14,9 +14,7 @@
     "system/identity": 211,
     "system/media": 503,
     "system/memory": 59,
-    "system/runtime": 45,
     "system/shivacore-api": 51,
-    "system/update": 46,
     "system/vfs": 274,
     "system/virtualization": 61
   }
