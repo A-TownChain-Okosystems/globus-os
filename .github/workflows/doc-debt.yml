@@ -1,0 +1,37 @@
+name: Rustdoc Debt Ratchet
+
+# E3-Ergaenzung: oeffentliche API-Flaeche darf nicht ohne Dokumentation wachsen.
+# Der Zaehler ist ein Proxy (Top-Level-Items), kein Ersatz fuer den Compiler-Lint
+# RUSTDOCFLAGS="-D missing_docs"; Felder und Enum-Varianten zaehlt er nicht mit.
+# Die Baseline darf nur sinken: jede Erhoehung bricht den Lauf.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**/*.rs"
+      - "governance/doc-debt-baseline.json"
+      - "scripts/doc_debt.py"
+      - ".github/workflows/doc-debt.yml"
+  pull_request:
+    paths:
+      - "**/*.rs"
+      - "governance/doc-debt-baseline.json"
+      - "scripts/doc_debt.py"
+  schedule:
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ratchet:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Rustdoc-Debt gegen Baseline pruefen
+        run: python3 scripts/doc_debt.py --root . --base governance/doc-debt-baseline.json
