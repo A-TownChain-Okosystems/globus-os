@@ -26,16 +26,26 @@ use crate::genesis_bridge::{BridgeBlock, BridgeBlockChain, BridgeChainError, Gen
 
 // === Gossip Error === //
 
+/// Fehler der Bruecke zwischen Genesis-Kette und Netz.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum GossipError {
+    /// Der Netzwerkpfad hat abgelehnt; der Grund steht im inneren Fehler.
     NetworkError(AtcNetError),
+    /// Die Brueckenkette hat abgelehnt; der Grund steht im inneren Fehler.
     ChainError(BridgeChainError),
+    /// Es sind keine Peers zum Senden bekannt.
     NoPeers,
+    /// Die Chain-ID passt nicht zu dieser Kette.
     InvalidChainId,
+    /// Der Block ist weder bekannt noch anforderbar.
     BlockNotFound,
+    /// Die Nachricht ist nicht lesbar oder hat den falschen Typ.
     InvalidMessage,
+    /// Die gemeldete Hoehe passt nicht zum Block.
     HeightMismatch,
+    /// Block oder Nachricht ist bereits bekannt.
     AlreadyKnown,
+    /// Der Peer ist nicht verbunden.
     PeerNotConnected,
 }
 
@@ -53,14 +63,22 @@ impl From<BridgeChainError> for GossipError {
 
 // === Peer State Tracking === //
 
+/// Was die Bruecke ueber einen Peer weiss.
 #[derive(Debug, Clone)]
 pub struct PeerState {
+    /// Kennung der Verbindung im Netz-Handler.
     pub conn_id: u64,
+    /// DID des Peers.
     pub did: String,
+    /// Peer-ID.
     pub peer_id: PeerId,
+    /// Zuletzt gemeldete Hoehe des Peers.
     pub block_height: u64,
+    /// Genesis-Kennung, die der Peer genannt hat.
     pub genesis_hash: [u8; 32],
+    /// Chain-ID des Peers.
     pub chain_id: u32,
+    /// Zeitpunkt der letzten Lebensmeldung.
     pub last_seen: u64,
 }
 
@@ -68,8 +86,11 @@ pub struct PeerState {
 
 /// Verbindet GenesisBridge mit AtcNetHandler
 pub struct GossipBridge {
+    /// Brueckenkette, auf die sich die Weiterleitung bezieht.
     pub bridge: GenesisBridge,
+    /// Netz-Handler, ueber den gesendet und empfangen wird.
     pub net: AtcNetHandler,
+    /// Zustand je Verbindung.
     pub peers: BTreeMap<u64, PeerState>,
     /// Blöcke die wir von Peers gehört haben aber noch nicht haben
     pub pending_announcements: Vec<BlockAnnMsg>,
@@ -557,22 +578,27 @@ impl GossipBridge {
 
     // === Status === //
 
+    /// Hoehe der Brueckenkette.
     pub fn height(&self) -> u64 {
         self.bridge.height()
     }
 
+    /// Chain-ID der Brueckenkette.
     pub fn chain_id(&self) -> u32 {
         self.bridge.chain_id()
     }
 
+    /// Genesis-Kennung der Brueckenkette.
     pub fn genesis_hash(&self) -> [u8; 32] {
         self.bridge.genesis_hash()
     }
 
+    /// Summe der Einsaetze in der Brueckenkette.
     pub fn total_stake(&self) -> u64 {
         self.bridge.total_stake()
     }
 
+    /// Anzahl angekuendigter Bloecke, die noch fehlen.
     pub fn pending_sync_count(&self) -> usize {
         self.pending_announcements.len()
     }
@@ -590,18 +616,26 @@ impl GossipBridge {
     }
 }
 
+/// Momentaufnahme des Brueckenzustands.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GossipStats {
+    /// Hoehe der Kette.
     pub height: u64,
+    /// Anzahl der Peers.
     pub peer_count: usize,
+    /// Anzahl der selbst gehaltenen Bloecke.
     pub known_blocks: usize,
+    /// Anzahl offener Ankuendigungen.
     pub pending_announcements: usize,
+    /// Chain-ID der Kette.
     pub chain_id: u32,
+    /// Summe der Einsaetze.
     pub total_stake: u64,
 }
 
 // === Block Serialization (for network transfer) === //
 
+/// Schreibt einen Brueckenblock mit Chain-ID, Hoehe, Kennungen, Wurzeln, Signatur, Validatorensatz und Zuteilungen als Bytefolge.
 pub fn serialize_bridge_block(block: &BridgeBlock) -> Vec<u8> {
     let mut buf = Vec::new();
     // Chain-ID (4 bytes)
@@ -646,6 +680,7 @@ pub fn serialize_bridge_block(block: &BridgeBlock) -> Vec<u8> {
     buf
 }
 
+/// Liest einen Brueckenblock; None, wenn die Eingabe zu kurz ist oder ein Feld nicht vollstaendig vorliegt.
 pub fn deserialize_bridge_block(data: &[u8]) -> Option<BridgeBlock> {
     if data.len() < 4 + 8 + 32 + 32 + 2 + 8 + 32 + 32 + 32 + 8 + 8 + 64 + 2 {
         return None;
