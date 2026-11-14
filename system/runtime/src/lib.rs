@@ -16,17 +16,23 @@ use shivacore_service_space::genesis::{
 use shivacore_service_space::genesis_bridge::GenesisBridge;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// System and service state as the runtime reports them.
 pub struct RuntimeStatus {
+    /// Kernel-side system state.
     pub system: SystemState,
+    /// Service subsystem state.
     pub services: ServiceState,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Login session of a userspace user.
 pub struct LoginContext {
+    /// The authenticated identity session.
     pub session: IdentitySession,
 }
 
 impl LoginContext {
+    /// Opens an authenticated session that expires after `ttl_seconds`.
     pub fn new(
         user_id: UserId,
         wallet_address: WalletAddress,
@@ -44,29 +50,42 @@ impl LoginContext {
         }
     }
 
+    /// True while the session has not expired.
     pub fn active(&self, now_unix: u64) -> bool {
         self.session.is_active(now_unix)
     }
+    /// Ends the session.
     pub fn lock(&mut self) {
         self.session.lock();
     }
 }
 
+/// Result of a successful userspace boot.
 pub struct BootedRuntime {
+    /// Status the runtime reports after boot.
     pub status: RuntimeStatus,
+    /// Boot plan that was validated during boot.
     pub boot_plan: &'static [BootStep],
+    /// Aurora request state machine of this runtime.
     pub aurora: StateMachine,
+    /// Genesis bridge initialised from the devnet config.
     pub blockchain: GenesisBridge,
+    /// Event log for crash and driver events.
     pub diagnostics: EventLog,
+    /// ABI facade handed to userspace.
     pub core: RuntimeCore,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why userspace boot stopped.
 pub enum RuntimeBootError {
+    /// The boot plan failed validation.
     InvalidBootPlan,
+    /// Genesis initialisation failed.
     Genesis(aurora_core::AuroraError),
 }
 
+/// Deterministic devnet genesis: four validators, fixed allocations and timestamp.
 pub fn devnet_genesis_config() -> GenesisConfig {
     let mut config = GenesisConfig::new(GENESIS_CHAIN_ID, 1_726_358_400);
     for i in 1u8..=4 {
@@ -100,7 +119,9 @@ pub fn devnet_genesis_config() -> GenesisConfig {
 /// A desktop session bound to a platform-validated software framebuffer.
 pub struct DesktopRuntime<'a> {
     display: globus_graphics::display::Framebuffer<'a>,
+    /// Desktop session holding windows and focus.
     pub session: globus_graphics::desktop::DesktopSession,
+    /// Shell that draws the desktop.
     pub shell: globus_graphics::shell::DesktopShell,
 }
 
@@ -111,13 +132,16 @@ impl DesktopRuntime<'_> {
             .render_shell(self.session.windows(), &self.shell);
     }
 
+    /// Current viewport of the desktop.
     pub fn viewport(&self) -> globus_graphics::desktop::DesktopViewport {
         self.session.viewport()
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why the desktop refused to start.
 pub enum DesktopStartError {
+    /// Core services are not Ready yet.
     ServicesUnavailable,
 }
 
@@ -147,6 +171,7 @@ pub fn start_desktop<'a>(
     })
 }
 
+/// Validates the boot plan, initialises genesis and returns the booted runtime.
 pub fn boot_userspace() -> Result<BootedRuntime, RuntimeBootError> {
     if !validate_boot_plan() {
         return Err(RuntimeBootError::InvalidBootPlan);
@@ -167,6 +192,7 @@ pub fn boot_userspace() -> Result<BootedRuntime, RuntimeBootError> {
     })
 }
 
+/// Runs one Aurora request through Queued, Running, Verifying and Completed.
 pub fn aurora_request_lifecycle(request: &AuroraRequest) -> Result<AuroraResponse, AuroraError> {
     if request.principal.trim().is_empty() || request.intent.trim().is_empty() {
         return Err(AuroraError::InvalidRequest);
@@ -184,6 +210,7 @@ pub fn aurora_request_lifecycle(request: &AuroraRequest) -> Result<AuroraRespons
     })
 }
 
+/// Status before boot completes: system booting, services defined.
 pub fn initial_status() -> RuntimeStatus {
     RuntimeStatus {
         system: SystemState::Booting,
