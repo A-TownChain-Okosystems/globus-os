@@ -180,19 +180,8 @@ impl CredentialRecord {
     /// Rechnet mit den Parametern **aus dem Datensatz**. Vergleich ohne
     /// Fruehausstieg, damit die Laufzeit nicht verraet, wie weit man ist.
     pub fn verify(&self, password: &[u8]) -> Result<(), VerifyError> {
-        self.params.validate()?;
-        let params = Params::new(
-            self.params.memory_kib,
-            self.params.iterations,
-            self.params.parallelism,
-            Some(HASH_LEN),
-        )
-        .map_err(|_| VerifyError::ParamsOutOfRange)?;
-        let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, params);
         let mut computed = [0u8; HASH_LEN];
-        argon2
-            .hash_password_into(password, &self.salt, &mut computed)
-            .map_err(|_| VerifyError::KdfUnavailable)?;
+        hash_into(self.params, password, &self.salt, &mut computed)?;
         let mut difference = 0u8;
         for (left, right) in computed.iter().zip(self.hash.iter()) {
             difference |= left ^ right;
@@ -203,6 +192,30 @@ impl CredentialRecord {
             Err(VerifyError::WrongPassword)
         }
     }
+}
+
+/// Rechnet einen Hash mit genau diesen Parametern.
+///
+/// Einziger Ort, an dem die KDF aufgerufen wird: `verify` benutzt sie, und die
+/// Messung im Image benutzt dieselbe Funktion — keine zweite Rechnung.
+pub fn hash_into(
+    params: KdfParams,
+    password: &[u8],
+    salt: &[u8; SALT_LEN],
+    out: &mut [u8; HASH_LEN],
+) -> Result<(), VerifyError> {
+    params.validate()?;
+    let kdf = Params::new(
+        params.memory_kib,
+        params.iterations,
+        params.parallelism,
+        Some(HASH_LEN),
+    )
+    .map_err(|_| VerifyError::ParamsOutOfRange)?;
+    let argon2 = Argon2::new(Algorithm::Argon2id, Version::V0x13, kdf);
+    argon2
+        .hash_password_into(password, salt, out)
+        .map_err(|_| VerifyError::KdfUnavailable)
 }
 
 #[cfg(test)]
