@@ -25,46 +25,72 @@ use shivacore::capability::Rights;
 /// Fehler bei Ticket-Operationen
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TicketError {
+    /// Die Signatur des Ausstellers passt nicht zum Inhalt.
     InvalidSignature,
+    /// Das Ticket ist an eine andere DID adressiert.
     WrongSubject,
+    /// Die Nonce wurde bereits eingeloest.
     Replay,
+    /// Die Frist des Tickets ist abgelaufen.
     Expired,
+    /// Die Einschraenkungen lassen keine Operation zu.
     ConstraintsTooStrict,
+    /// Ein Glied der Kette verweist nicht auf seinen Vorgaenger.
     ChainBroken,
+    /// Ein Glied der Kette erweitert die Rechte.
     ChainRightsExpanded,
+    /// Ein Glied der Kette erlaubt mehr Operationen als sein Vorgaenger.
     ChainOpsExpanded,
+    /// Ein Glied der Kette laeuft laenger als sein Vorgaenger.
     ChainDeadlineExtended,
+    /// Ein Glied der Kette nennt eine andere Ressource als sein Vorgaenger.
     ResourceMismatch,
+    /// Die Kette enthaelt kein Ticket.
     EmptyChain,
+    /// Die Zahl erlaubter Operationen ist erreicht; die Capability wird dabei widerrufen.
     MaxOperationsExceeded,
+    /// Die Capability ist widerrufen.
     CapabilityRevoked,
 }
 
 /// Ressourcen-Deskriktor im Ticket
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ResourceDescriptor {
+    /// Art der Ressource.
     pub resource_type: String,
+    /// Kennung der Ressource.
     pub resource_id: u64,
+    /// Eingeraeumte Rechte als Bitmenge.
     pub rights: Rights,
 }
 
 /// Einschraenkungen fuer ein Ticket
 #[derive(Debug, Clone, PartialEq)]
 pub struct Constraints {
+    /// Hoechstzahl erlaubter Operationen; 0 macht das Ticket unbrauchbar.
     pub max_operations: u32,
+    /// Zeitpunkt, bis zu dem das Ticket gilt, in Sekunden seit der Epoche.
     pub deadline_unix: f64,
+    /// Energiebudget in Mikrojoule, sofern gesetzt.
     pub energy_budget_uj: Option<u64>,
 }
 
 /// Remote-Capability-Ticket — kryptographisch signierte Delegation
 #[derive(Debug, Clone)]
 pub struct RemoteCapabilityTicket {
+    /// Aussteller des Tickets.
     pub issuer_did: Did,
+    /// Empfaenger; nur diese DID kann das Ticket einloesen.
     pub subject_did: Did,
+    /// Ressource samt Rechten.
     pub resource: ResourceDescriptor,
+    /// Einschraenkungen des Tickets.
     pub constraints: Constraints,
+    /// Einmalwert gegen Wiedereinspielung.
     pub nonce: String,
+    /// Signatur des Ausstellers ueber die signierte Nutzlast.
     pub issuer_signature: Vec<u8>,
+    /// Nonce des Vorgaengertickets bei einer Delegationskette.
     pub parent_ticket_nonce: Option<String>,
 }
 
@@ -155,15 +181,22 @@ pub fn issue_ticket<C: CryptoProvider>(
 /// Lokale Capability nach erfolgreicher Ticket-Einloesung
 #[derive(Debug, Clone, PartialEq)]
 pub struct LocalCap {
+    /// Kennung der eingeloesten Capability, aus der Nonce gebildet.
     pub cap_id: String,
+    /// Ressource samt Rechten.
     pub resource: ResourceDescriptor,
+    /// Uebernommene Einschraenkungen.
     pub constraints: Constraints,
+    /// Aussteller, der das Ticket signiert hat.
     pub issuer_did: Did,
+    /// Bisher verbrauchte Operationen.
     pub operations_used: u32,
+    /// True, sobald die Capability widerrufen ist.
     pub revoked: bool,
 }
 
 impl LocalCap {
+    /// Capability ohne verbrauchte Operation, nicht widerrufen.
     pub fn new(
         cap_id: String,
         resource: ResourceDescriptor,
@@ -206,6 +239,7 @@ impl Default for NonceStore {
 }
 
 impl NonceStore {
+    /// Leerer Nonce-Speicher.
     pub fn new() -> Self {
         Self {
             seen: BTreeSet::new(),
@@ -231,6 +265,7 @@ pub struct RemoteCapabilityResolver {
 }
 
 impl RemoteCapabilityResolver {
+    /// Resolver fuer eine eigene DID mit leerem Nonce-Speicher und fester Ausgangszeit 1.000.000.
     pub fn new(own_did: Did) -> Self {
         Self {
             own_did,
@@ -239,6 +274,7 @@ impl RemoteCapabilityResolver {
         }
     }
 
+    /// Setzt die Zeit, gegen die Fristen geprueft werden.
     pub fn set_time(&mut self, t: f64) {
         self.current_time = t;
     }
