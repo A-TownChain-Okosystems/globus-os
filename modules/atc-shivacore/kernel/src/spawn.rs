@@ -20,8 +20,11 @@ use spin::Mutex;
 /// Ergebnis einer Spawn-Annahme.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct SpawnPlan {
+    /// Laenge des angeforderten Namens in Byte.
     pub name_len: usize,
+    /// Laenge des ELF-Abbilds in Byte.
     pub elf_len: usize,
+    /// Einstiegspunkt aus dem ELF-Kopf.
     pub entry: u64,
 }
 
@@ -150,9 +153,13 @@ mod tests {
 /// Was zuletzt beantragt wurde (fuer die Protokollzeile des Kernels).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Attempt {
+    /// Laufende Nummer des Versuchs; sie entscheidet, ob er schon gemeldet wurde.
     pub seq: u64,
+    /// Prozesskennung, zu der der Versuch gehoert.
     pub pid: u64,
+    /// Plan des Versuchs; bei einer Ablehnung der Stand der Pruefung, nicht zwingend ein gueltiger Plan.
     pub plan: SpawnPlan,
+    /// Ablehnungsgrund; None heisst angenommen.
     pub error: Option<SpawnError>,
 }
 
