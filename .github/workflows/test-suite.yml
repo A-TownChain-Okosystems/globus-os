@@ -14,9 +14,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
+      - name: Toolchain aus rust-toolchain.toml (verbindlich 1.100.0)
+        run: |
+          rustup show active-toolchain
+          rustc -vV | grep -qx 'release: 1.100.0'
+          rustc -Vv
+          cargo -V
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
