@@ -25,7 +25,6 @@ pub struct Extent {
 
 impl Extent {
     /// Prueft Laenge und Ueberlauf und baut den Extent.
-    /// Leere Abbildung.
     pub fn new(logical: u64, physical: u64, blocks: u64) -> Result<Self, ExtentError> {
         if blocks == 0 {
             return Err(ExtentError::Invalid);
@@ -61,6 +60,7 @@ pub struct ExtentMap {
 }
 
 impl ExtentMap {
+    /// Leere Abbildung.
     pub fn new() -> Self {
         Self::default()
     }
