@@ -13,7 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: dtolnay/rust-toolchain@stable
+      - name: Toolchain aus rust-toolchain.toml (verbindlich 1.100.0)
+        run: |
+          rustup show active-toolchain
+          rustc -vV | grep -qx 'release: 1.100.0'
+          rustc -Vv
+          cargo -V
       - uses: taiki-e/install-action@v2
         with:
           tool: cargo-audit
