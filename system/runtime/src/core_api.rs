@@ -6,12 +6,15 @@
 use libshivacore::{ABI_VERSION, AbiError, CapabilityHandle, MAX_SYSCALL_PAYLOAD, Syscall};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Identifier of a process created through the Runtime Core.
 pub struct ProcessHandle(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// ABI error the runtime reports to userspace.
 pub struct RuntimeError(pub AbiError);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Stable runtime facade for the ShivaCore ABI; kernel internals stay hidden.
 pub struct RuntimeCore {
     abi_version: u32,
     next_process: u64,
@@ -24,6 +27,7 @@ impl Default for RuntimeCore {
 }
 
 impl RuntimeCore {
+    /// Creates a core bound to the compiled ABI version; process ids start at 1.
     pub const fn new() -> Self {
         Self {
             abi_version: ABI_VERSION,
@@ -31,10 +35,12 @@ impl RuntimeCore {
         }
     }
 
+    /// ABI version this build speaks.
     pub const fn abi_version(&self) -> u32 {
         self.abi_version
     }
 
+    /// Hands out the next process id; fails once the counter is exhausted.
     pub fn spawn(&mut self) -> Result<ProcessHandle, RuntimeError> {
         let id = self.next_process;
         self.next_process = self
@@ -44,6 +50,7 @@ impl RuntimeCore {
         Ok(ProcessHandle(id))
     }
 
+    /// Rejects syscall payloads above `MAX_SYSCALL_PAYLOAD`.
     pub fn validate_payload_len(&self, len: usize) -> Result<(), RuntimeError> {
         if len > MAX_SYSCALL_PAYLOAD {
             Err(RuntimeError(AbiError::InvalidPayload))
@@ -52,6 +59,7 @@ impl RuntimeCore {
         }
     }
 
+    /// True when this runtime build supports the syscall.
     pub const fn syscall_supported(&self, syscall: Syscall) -> bool {
         match syscall {
             Syscall::Yield
@@ -63,6 +71,7 @@ impl RuntimeCore {
         }
     }
 
+    /// Returns the capability handle or fails closed with `InvalidHandle`.
     pub fn require_capability(
         &self,
         capability: Option<CapabilityHandle>,
