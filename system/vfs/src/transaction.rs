@@ -3,9 +3,13 @@
 use crate::journal::{Journal, JournalError, JournalOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler einer Mehrblock-Transaktion.
 pub enum TransactionError {
+    /// Das Journal hat abgelehnt.
     Journal(JournalError),
+    /// Die Transaktion ist nicht mehr offen.
     Inactive,
+    /// Mehr als 64 Schreibvorgaenge in einer Transaktion.
     TooManyWrites,
 }
 impl From<JournalError> for TransactionError {
@@ -15,18 +19,23 @@ impl From<JournalError> for TransactionError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein vorgemerkter Schreibvorgang.
 pub struct PendingWrite {
+    /// Zielblock.
     pub block: u64,
+    /// Pruefsumme des zu schreibenden Blocks.
     pub checksum: u32,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Offene Transaktion ueber mehrere Bloecke.
 pub struct Transaction {
     sequence: u64,
     writes: Vec<PendingWrite>,
     active: bool,
 }
 impl Transaction {
+    /// Startet eine offene Transaktion mit dieser Sequenz.
     pub fn begin(sequence: u64) -> Self {
         Self {
             sequence,
@@ -34,6 +43,7 @@ impl Transaction {
             active: true,
         }
     }
+    /// Merkt einen Schreibvorgang vor; hoechstens 64 je Transaktion.
     pub fn write(&mut self, block: u64, checksum: u32) -> Result<(), TransactionError> {
         if !self.active {
             return Err(TransactionError::Inactive);
@@ -47,6 +57,7 @@ impl Transaction {
         self.writes.push(PendingWrite { block, checksum });
         Ok(())
     }
+    /// Schreibt die vorgemerkten Vorgaenge ins Journal und liefert die Zielsequenz.
     pub fn commit(mut self, journal: &mut Journal) -> Result<u64, TransactionError> {
         if !self.active {
             return Err(TransactionError::Inactive);
@@ -57,6 +68,7 @@ impl Transaction {
         self.active = false;
         Ok(self.sequence)
     }
+    /// Vorgemerkte Schreibvorgaenge.
     pub fn writes(&self) -> &[PendingWrite] {
         &self.writes
     }
