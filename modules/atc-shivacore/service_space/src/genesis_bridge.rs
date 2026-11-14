@@ -31,19 +31,33 @@ use crate::genesis::{
 /// Block-Struktur — kompatibel mit blockchain.rs::Block
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BridgeBlock {
+    /// Kennung des Blocks.
     pub id: [u8; 32],
+    /// Höhe des Blocks; Genesis hat die Höhe 0.
     pub height: u64,
+    /// Hash des Vorgängerblocks; bei Genesis Null.
     pub parent_hash: [u8; 32],
+    /// Vorschlagender Validator; bei Genesis leer.
     pub proposer_did: String,
+    /// Zeitpunkt der Erzeugung.
     pub timestamp: u64,
+    /// Anknüpfung an die Proof-of-History-Kette.
     pub poh_hash: [u8; 32],
+    /// Wurzel über die Transaktionen des Blocks; bei Genesis Null.
     pub tx_root: [u8; 32],
+    /// Wurzel über den Zustand nach diesem Block.
     pub state_root: [u8; 32],
+    /// Verbrauchtes Gas im Block.
     pub gas_used: u64,
+    /// Summe der Gebühren im Block.
     pub total_fees: u64,
+    /// Signatur des Vorschlagenden.
     pub signature: [u8; 64],
+    /// Kennung der Kette.
     pub chain_id: u32,
+    /// Validatoren mit Einsatz zum Zeitpunkt des Blocks.
     pub validator_set: Vec<(String, u64)>,
+    /// Zuteilungen des Genesis-Blocks.
     pub allocations: Vec<(String, u64)>,
 }
 
@@ -68,6 +82,7 @@ impl BridgeBlock {
         }
     }
 
+    /// True, wenn der Block Höhe 0 hat und keinen Vorgänger kennt.
     pub fn is_genesis(&self) -> bool {
         self.height == 0 && self.parent_hash == [0u8; 32]
     }
@@ -82,10 +97,14 @@ pub struct BridgePoh {
     entries: Vec<BridgePohEntry>,
 }
 
+/// Eintrag der Proof-of-History-Kette dieser Brücke.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BridgePohEntry {
+    /// Hash dieses Eintrags.
     pub hash: [u8; 32],
+    /// Zeitpunkt, den der Erzeuger dem Eintrag gibt.
     pub timestamp: u64,
+    /// Laufende Nummer des Eintrags.
     pub tick: u64,
 }
 
@@ -99,6 +118,7 @@ impl BridgePoh {
         }
     }
 
+    /// Erzeugt den nächsten Eintrag aus vorherigem Hash und Tick-Nummer und zählt weiter.
     pub fn tick(&mut self, timestamp: u64) -> BridgePohEntry {
         let mut input = Vec::with_capacity(40);
         input.extend_from_slice(&self.current_hash);
@@ -117,14 +137,17 @@ impl BridgePoh {
         entry
     }
 
+    /// Hash des zuletzt erzeugten Eintrags.
     pub fn current_hash(&self) -> [u8; 32] {
         self.current_hash
     }
 
+    /// Anzahl der erzeugten Einträge.
     pub fn tick_count(&self) -> u64 {
         self.tick
     }
 
+    /// Prüft eine Eintragsfolge ab einem Start-Hash; false beim ersten abweichenden Glied.
     pub fn verify(start_hash: [u8; 32], entries: &[BridgePohEntry]) -> bool {
         let mut expected = start_hash;
         for entry in entries {
@@ -143,17 +166,26 @@ impl BridgePoh {
 
 // === Minimal Validator Registry (compatible mit consensus.rs::ValidatorRegistry) === //
 
+/// Validator dieser Brücke mit Schlüssel und Provision.
 #[derive(Debug, Clone)]
 pub struct BridgeValidator {
+    /// Identität des Validators.
     pub did: String,
+    /// Gebundener Einsatz.
     pub stake: u64,
+    /// True, solange der Validator mitwirkt.
     pub active: bool,
+    /// Öffentlicher Schlüssel in komprimierter Form mit 33 Byte.
     pub pubkey: [u8; 33],
+    /// Provision des Validators.
     pub commission: u16,
+    /// Bisher abgegebene Stimmen.
     pub votes_cast: u64,
+    /// Bisher vorgeschlagene Blöcke.
     pub blocks_proposed: u64,
 }
 
+/// Verzeichnis der Validatoren dieser Brücke mit Einsatzsumme.
 pub struct BridgeValidatorRegistry {
     validators: BTreeMap<String, BridgeValidator>,
     total_stake: u64,
@@ -166,6 +198,7 @@ impl Default for BridgeValidatorRegistry {
 }
 
 impl BridgeValidatorRegistry {
+    /// Leeres Verzeichnis ohne Validatoren.
     pub fn new() -> Self {
         BridgeValidatorRegistry {
             validators: BTreeMap::new(),
@@ -183,6 +216,7 @@ impl BridgeValidatorRegistry {
         Ok(registry)
     }
 
+    /// Trägt einen Validator ein und addiert seinen Einsatz; ein erneuter Eintrag derselben DID addiert den Einsatz ein zweites Mal.
     pub fn register(&mut self, v: GenesisValidator) {
         self.total_stake += v.stake;
         self.validators.insert(
@@ -199,28 +233,34 @@ impl BridgeValidatorRegistry {
         );
     }
 
+    /// Nimmt einen Validator aus der Mitwirkung; sein Einsatz bleibt in der Summe.
     pub fn deactivate(&mut self, did: &str) {
         if let Some(v) = self.validators.get_mut(did) {
             v.active = false;
         }
     }
 
+    /// True, wenn der Validator eingetragen und aktiv ist.
     pub fn is_active(&self, did: &str) -> bool {
         self.validators.get(did).map(|v| v.active).unwrap_or(false)
     }
 
+    /// Einsatz eines Validators; 0, wenn unbekannt.
     pub fn get_stake(&self, did: &str) -> u64 {
         self.validators.get(did).map(|v| v.stake).unwrap_or(0)
     }
 
+    /// Summe der eingetragenen Einsätze.
     pub fn total_stake(&self) -> u64 {
         self.total_stake
     }
 
+    /// Anzahl der eingetragenen Validatoren.
     pub fn validator_count(&self) -> usize {
         self.validators.len()
     }
 
+    /// Anzahl der aktiven Validatoren.
     pub fn active_count(&self) -> usize {
         self.validators.values().filter(|v| v.active).count()
     }
@@ -248,17 +288,26 @@ impl BridgeValidatorRegistry {
 
 // === Minimal BlockChain (compatible mit blockchain.rs::BlockChain) === //
 
+/// Fehler der Brückenkette.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum BridgeChainError {
+    /// Die Chain-ID passt nicht zu dieser Kette.
     InvalidChainId,
+    /// Die Höhe passt nicht zur Kette.
     InvalidHeight,
+    /// Zu dieser Höhe gibt es bereits einen Block.
     BlockExists,
+    /// Dieser Block ist bereits vorhanden.
     DuplicateBlock,
+    /// Es gibt bereits einen Genesis-Block.
     GenesisExists,
+    /// Der Vorgänger ist nicht in der Kette.
     ParentNotFound,
+    /// Die Signatur des Blocks ist ungültig.
     InvalidSignature,
 }
 
+/// Kette dieser Brücke mit Höhen- und Hashindex.
 #[derive(Clone)]
 pub struct BridgeBlockChain {
     blocks: BTreeMap<u64, BridgeBlock>,
@@ -275,6 +324,7 @@ impl Default for BridgeBlockChain {
 }
 
 impl BridgeBlockChain {
+    /// Leere Kette ohne Genesis; die Chain-ID wird erst mit dem Genesis gesetzt.
     pub fn new() -> Self {
         BridgeBlockChain {
             blocks: BTreeMap::new(),
@@ -335,30 +385,37 @@ impl BridgeBlockChain {
         Ok(())
     }
 
+    /// Block zu einer Höhe.
     pub fn get_block(&self, height: u64) -> Option<&BridgeBlock> {
         self.blocks.get(&height)
     }
 
+    /// Block zu einem Hash.
     pub fn get_by_hash(&self, hash: &[u8; 32]) -> Option<&BridgeBlock> {
         self.by_hash.get(hash).and_then(|&h| self.blocks.get(&h))
     }
 
+    /// Höhe des letzten Blocks; 0, solange keine Kette besteht.
     pub fn current_height(&self) -> u64 {
         self.current_height
     }
 
+    /// Anzahl der Blöcke.
     pub fn block_count(&self) -> usize {
         self.blocks.len()
     }
 
+    /// Letzter Block, sofern vorhanden.
     pub fn last_block(&self) -> Option<&BridgeBlock> {
         self.blocks.get(&self.current_height)
     }
 
+    /// Chain-ID der Kette; 0, solange kein Genesis gesetzt ist.
     pub fn chain_id(&self) -> u32 {
         self.chain_id
     }
 
+    /// Hash des Genesis-Blocks, sofern gesetzt.
     pub fn genesis_hash(&self) -> Option<[u8; 32]> {
         self.genesis_hash
     }
@@ -368,10 +425,15 @@ impl BridgeBlockChain {
 
 /// Verbindet GenesisConfig → BlockChain + ValidatorRegistry + PoH
 pub struct GenesisBridge {
+    /// Kette der Blöcke.
     pub chain: BridgeBlockChain,
+    /// Verzeichnis der Validatoren.
     pub validators: BridgeValidatorRegistry,
+    /// Zeitkette der Proof-of-History.
     pub poh: BridgePoh,
+    /// Genesis-Zustand.
     pub state: GenesisState,
+    /// Hash der Konfiguration, aus der die Kette entstand.
     pub config_hash: [u8; 32],
 }
 
