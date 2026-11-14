@@ -25,8 +25,16 @@ pub const HEAP_START: usize = 0x_4444_4444_0000;
 /// Allokationsfehler auf, nicht still.
 pub const HEAP_SIZE: usize = 512 * 1024;
 
+/// Freier Speicher laut Allokator (Byte).
+///
+/// Wird gebraucht, um eine Allokation zu belegen statt ihr zu glauben: ein
+/// Zeiger ungleich null sagt nicht, dass der Speicher auch abgebildet ist.
+pub fn free_bytes() -> usize {
+    ALLOCATOR.lock().free()
+}
+
 #[cfg_attr(all(not(test), feature = "x86-boot"), global_allocator)] // [AD-028] Nur im echten Boot-Binary aktiv — als Abhaengigkeit stellt das Ziel-Binary (std) den Allokator
-static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
+pub static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
 
 /// Bildet den Heap-Bereich ab und macht ihn dem Allokator bekannt.
 #[cfg(feature = "x86-boot")]
