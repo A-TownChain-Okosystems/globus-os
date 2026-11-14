@@ -2,6 +2,7 @@
 
 mod account_lifecycle;
 mod account_registry;
+mod entropy;
 mod file_store;
 mod ipc_key_provider;
 mod key_provider;
@@ -18,6 +19,7 @@ pub use account_registry::{
     AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
 };
 use bip39::{Language, Mnemonic};
+pub use entropy::{EntropyGate, OsEntropy};
 pub use file_store::FileBlobStore;
 use hmac::{Hmac, Mac};
 pub use ipc_key_provider::{IdentityKeyIpcTransport, IpcIdentityKeyService};
@@ -222,9 +224,31 @@ pub enum IdentityError {
     InvalidMnemonic,
     /// Die Ableitung von Schluessel oder Adresse ist fehlgeschlagen.
     WalletDerivationFailed,
+    /// Die Zufallsquelle ist nicht bereit (REQ-REC-13, fail-closed).
+    ///
+    /// Kein Konto, keine Phrase: im Image darf ohne bestandenen Selbsttest
+    /// keine Phrase entstehen.
+    EntropyUnavailable,
 }
 /// Erzeugt eine 24-Wort-Phrase und leitet daraus die Wallet-Adresse ab.
 pub fn create_wallet(
+    user_id: UserId,
+    chain_id: u64,
+    network: impl Into<String>,
+    key_version: u16,
+) -> Result<WalletCreation, IdentityError> {
+    let mut gate = EntropyGate::from_host();
+    create_wallet_with_gate(&mut gate, user_id, chain_id, network, key_version)
+}
+
+/// Erzeugt eine 24-Wort-Phrase aus einem geprueften Entropietor.
+///
+/// Das ist der Durchsetzungspunkt von REQ-REC-13: der Zustand wird **vor** der
+/// Erzeugung geprueft, bei allem ausser `Ready` endet der Aufruf mit
+/// [`IdentityError::EntropyUnavailable`] und ohne Phrase. Die 256 Bit der
+/// Phrase stammen aus dem Tor, nicht aus einer zweiten Zufallsquelle.
+pub fn create_wallet_with_gate(
+    gate: &mut EntropyGate,
     user_id: UserId,
     chain_id: u64,
     network: impl Into<String>,
@@ -234,8 +258,15 @@ pub fn create_wallet(
     if network.is_empty() {
         return Err(IdentityError::EmptyNetwork);
     }
-    let mnemonic = Mnemonic::generate_in(Language::English, 24)
-        .map_err(|_| IdentityError::WalletDerivationFailed)?;
+    if gate.status() != globus_entropy_core::EntropyState::Ready {
+        return Err(IdentityError::EntropyUnavailable);
+    }
+    let mut entropy = [0u8; 32];
+    gate.fill(&mut entropy)?;
+    let mnemonic = Mnemonic::from_entropy_in(Language::English, &entropy)
+        .map_err(|_| IdentityError::WalletDerivationFailed);
+    entropy.zeroize();
+    let mnemonic = mnemonic?;
     let phrase = mnemonic.to_string();
     let seed = mnemonic.to_seed_normalized("");
     let private_key = derive_private_key(&seed)?;
@@ -333,6 +364,71 @@ mod tests {
         assert_eq!(wallet.wallet_address.as_str().len(), 35);
         assert!(wallet.wallet_address.as_str().starts_with("ATC"))
     }
+    #[test]
+    fn uninitialisiertes_tor_verhindert_jede_phrase() {
+        // REC-T-41: ohne bestandenen Selbsttest entsteht keine Phrase und kein
+        // Konto. Geprueft wird der Zustand VOR der Erzeugung.
+        let mut gate = EntropyGate::new();
+        match create_wallet_with_gate(&mut gate, UserId::new("owner").unwrap(), 600, "devnet", 1) {
+            Ok(_) => panic!("ohne Zufallsquelle darf keine Wallet entstehen"),
+            Err(error) => assert_eq!(error, IdentityError::EntropyUnavailable),
+        }
+    }
+
+    #[test]
+    fn erkranktes_tor_verhindert_jede_phrase() {
+        struct Flat;
+        impl globus_entropy_core::EntropySource for Flat {
+            fn fill(&mut self, out: &mut [u8]) -> Result<(), globus_entropy_core::SourceError> {
+                for byte in out.iter_mut() {
+                    *byte = 0x00;
+                }
+                Ok(())
+            }
+        }
+        let mut gate = EntropyGate::new();
+        assert_eq!(
+            gate.initialize(&mut Flat, &mut Flat),
+            globus_entropy_core::EntropyState::Failed
+        );
+        match create_wallet_with_gate(&mut gate, UserId::new("owner").unwrap(), 600, "devnet", 1) {
+            Ok(_) => panic!("eine konstante Quelle ist keine Entropie"),
+            Err(error) => assert_eq!(error, IdentityError::EntropyUnavailable),
+        }
+    }
+
+    #[test]
+    fn phrase_kommt_aus_dem_tor_und_adresse_bleibt_reproduzierbar() {
+        let mut gate = EntropyGate::from_host();
+        let wallet =
+            create_wallet_with_gate(&mut gate, UserId::new("owner").unwrap(), 600, "devnet", 1)
+                .expect("gesundes Tor");
+        assert_eq!(wallet.recovery_phrase().split_whitespace().count(), 24);
+        assert_eq!(wallet.wallet_address.as_str().len(), 35);
+        let restored = restore_wallet(
+            UserId::new("owner").unwrap(),
+            wallet.recovery_phrase(),
+            600,
+            "devnet",
+            1,
+        )
+        .expect("dieselbe Phrase ergibt dieselbe Bindung");
+        assert_eq!(restored.wallet_address, wallet.wallet_address);
+    }
+
+    #[test]
+    fn zwei_phrasen_aus_demselben_tor_sind_verschieden() {
+        let mut gate = EntropyGate::from_host();
+        let first =
+            create_wallet_with_gate(&mut gate, UserId::new("owner").unwrap(), 600, "devnet", 1)
+                .expect("gesundes Tor");
+        let second =
+            create_wallet_with_gate(&mut gate, UserId::new("owner").unwrap(), 600, "devnet", 1)
+                .expect("gesundes Tor");
+        assert_ne!(first.recovery_phrase(), second.recovery_phrase());
+        assert_ne!(first.wallet_address, second.wallet_address);
+    }
+
     #[test]
     fn wallet_restore_reproduces_address() {
         let user = UserId::new("test-user").unwrap();
