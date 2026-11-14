@@ -147,7 +147,9 @@ pub enum ApicError {
 /// Zugriff auf die LAPIC-Register. Ein Test kann das durch ein Array ersetzen,
 /// der Kernel durch ein gemapptes MMIO-Fenster.
 pub trait ApicRegisters {
+    /// Liest ein Register des Registersatzes.
     fn read(&self, offset: u32) -> u32;
+    /// Schreibt ein Register des Registersatzes.
     fn write(&mut self, offset: u32, value: u32);
 }
 
@@ -187,10 +189,12 @@ pub struct LocalApic<M: ApicRegisters> {
 }
 
 impl<M: ApicRegisters> LocalApic<M> {
+    /// Local APIC ueber dem gegebenen Registersatz.
     pub fn new(regs: M) -> Self {
         Self { regs }
     }
 
+    /// Der zugrunde liegende Registersatz.
     pub fn registers(&self) -> &M {
         &self.regs
     }
@@ -215,10 +219,12 @@ impl<M: ApicRegisters> LocalApic<M> {
         self.regs.read(REG_SPURIOUS) & SPURIOUS_ENABLE != 0
     }
 
+    /// Kennung dieses Prozessors aus dem ID-Register.
     pub fn id(&self) -> u8 {
         (self.regs.read(REG_ID) >> 24) as u8
     }
 
+    /// Setzt die Aufgabenprioritaet im Task-Priority-Register.
     pub fn set_task_priority(&mut self, priority: u8) {
         self.regs
             .write(REG_TASK_PRIORITY, u32::from(priority) << 24);
