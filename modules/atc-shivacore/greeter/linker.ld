@@ -8,8 +8,11 @@
  * aufloest (sonst zeigt der Aufruf ins Leere — genau das ist passiert, als
  * .got hier verworfen wurde).
  *
- * Es gibt absichtlich kein .data und kein nutzbares .bss: ein beschreibbarer
- * statischer Wert liegt ausserhalb der abgebildeten Seiten.
+ * Seit 14.11.2026 traegt der Kernel auch das Datensegment mit (.data plus
+ * bss-Nullen), deshalb liegen beschreibbare statische Werte jetzt im zweiten
+ * Segment bei 0x1D00000 — genau der Wert, an den der Kernel das Datensegment
+ * kopiert (main.rs, "vierter Prozess"). Vorher war das verboten, weil nur eine
+ * ausfuehrbare Seite abgebildet wurde.
  */
 ENTRY(_start)
 
@@ -23,6 +26,12 @@ SECTIONS
         *(.rodata .rodata.*)
         *(.data.rel.ro .data.rel.ro.*)
         *(.got .got.*)
+    }
+
+    . = 0x1D00000;
+
+    .data : ALIGN(16) {
+        *(.data .data.*)
     }
 
     .bss : ALIGN(16) {
