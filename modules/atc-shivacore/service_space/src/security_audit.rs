@@ -32,26 +32,36 @@ use crate::genesis_bridge::{
 
 // === Audit Severity === //
 
+/// Einstufung eines Pruefergebnisses.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Severity {
+    /// Ausnutzbare Schwachstelle.
     Critical, // Exploitable vulnerability
-    High,     // Security control bypass
-    Medium,   // Missing validation
-    Low,      // Informational
-    Pass,     // Check passed
+    /// Umgehung einer Sicherheitskontrolle.
+    High, // Security control bypass
+    /// Fehlende Pruefung.
+    Medium, // Missing validation
+    /// Hinweis ohne Sicherheitswirkung.
+    Low, // Informational
+    /// Die Pruefung ist bestanden.
+    Pass, // Check passed
 }
 
 impl Severity {
+    /// True, wenn die Pruefung bestanden ist.
     pub fn is_pass(&self) -> bool {
         matches!(self, Severity::Pass)
     }
+    /// True bei der Stufe Critical.
     pub fn is_critical(&self) -> bool {
         matches!(self, Severity::Critical)
     }
+    /// True bei der Stufe High.
     pub fn is_high(&self) -> bool {
         matches!(self, Severity::Critical | Severity::High)
     }
 
+    /// Kurzform der Stufe fuer Berichte.
     pub fn label(&self) -> &'static str {
         match self {
             Severity::Critical => "CRITICAL",
@@ -65,12 +75,18 @@ impl Severity {
 
 // === Audit Finding === //
 
+/// Ergebnis einer einzelnen Pruefung.
 #[derive(Debug, Clone)]
 pub struct AuditFinding {
+    /// Kennung der Pruefung.
     pub check_id: String,
+    /// Geprueftes Teilsystem.
     pub subsystem: String,
+    /// Einstufung des Ergebnisses.
     pub severity: Severity,
+    /// Was die Pruefung ergeben hat.
     pub description: String,
+    /// Empfohlene Abhilfe; leer bei bestandener Pruefung.
     pub recommendation: String,
 }
 
@@ -98,22 +114,35 @@ impl AuditFinding {
 
 // === Audit Report === //
 
+/// Sammlung aller Pruefergebnisse eines Laufs.
 #[derive(Debug, Clone)]
 pub struct AuditReport {
+    /// Zeitpunkt des Laufs.
     pub timestamp: u64,
+    /// Fassung des Kerns, fest im Bericht eingetragen.
     pub kernel_version: &'static str,
+    /// Chain-ID, gegen die geprueft wurde.
     pub chain_id: u32,
+    /// Anzahl aller Pruefungen.
     pub total_checks: usize,
+    /// Anzahl bestandener Pruefungen.
     pub passed: usize,
+    /// Anzahl nicht bestandener Pruefungen.
     pub failed: usize,
+    /// Anzahl der Befunde der Stufe Critical.
     pub critical_count: usize,
+    /// Anzahl der Befunde der Stufe High.
     pub high_count: usize,
+    /// Anzahl der Befunde der Stufe Medium.
     pub medium_count: usize,
+    /// Anzahl der Befunde der Stufe Low.
     pub low_count: usize,
+    /// Alle Einzelergebnisse in Reihenfolge der Pruefungen.
     pub findings: Vec<AuditFinding>,
 }
 
 impl AuditReport {
+    /// Leerer Bericht mit Zeitpunkt, Chain-ID und fester Kernfassung.
     pub fn new(timestamp: u64, chain_id: u32) -> Self {
         AuditReport {
             timestamp,
@@ -130,6 +159,7 @@ impl AuditReport {
         }
     }
 
+    /// Nimmt ein Ergebnis auf und zaehlt es nach Stufe.
     pub fn add(&mut self, finding: AuditFinding) {
         self.total_checks += 1;
         if finding.severity.is_pass() {
@@ -147,10 +177,12 @@ impl AuditReport {
         self.findings.push(finding);
     }
 
+    /// True, wenn keine Pruefung der Stufe Critical oder High gescheitert ist.
     pub fn is_secure(&self) -> bool {
         self.critical_count == 0 && self.high_count == 0
     }
 
+    /// Einzeilige Zusammenfassung mit Zaehlern und Gesamturteil.
     pub fn summary(&self) -> String {
         format!(
             "Audit: {}/{} checks passed, {} critical, {} high, {} medium, {} low — {}",
@@ -168,6 +200,7 @@ impl AuditReport {
         )
     }
 
+    /// Ergebnisse einer Stufe.
     pub fn findings_by_severity(&self, severity: Severity) -> Vec<&AuditFinding> {
         self.findings
             .iter()
@@ -178,6 +211,7 @@ impl AuditReport {
 
 // === Security Auditor === //
 
+/// Fuehrt die Pruefungen ueber die Brueckenkette aus.
 pub struct SecurityAuditor;
 
 impl SecurityAuditor {
