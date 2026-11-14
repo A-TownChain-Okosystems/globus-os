@@ -1,8 +1,8 @@
 name: Rustdoc Debt Ratchet
 
 # E3-Ergaenzung: oeffentliche API-Flaeche darf nicht ohne Dokumentation wachsen.
-# Der Zaehler ist ein Proxy (Top-Level-Items), kein Ersatz fuer den Compiler-Lint
-# RUSTDOCFLAGS="-D missing_docs"; Felder und Enum-Varianten zaehlt er nicht mit.
+# Der Zaehler deckt Top-Level-Items, oeffentliche Felder, Enum-Varianten und
+# Trait-Items ab; Makro-generierte Items und #[doc(hidden)] wertet er nicht aus.
 # Die Baseline darf nur sinken: jede Erhoehung bricht den Lauf.
 
 on:
