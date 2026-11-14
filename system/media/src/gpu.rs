@@ -46,7 +46,6 @@ pub trait MediaGpuBackend {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Verweis auf einen geteilten Puffer.
 pub struct SharedBufferHandle {
-    /// Kennung des Puffers.
     pub id: u64,
     /// True, wenn nur gelesen werden darf.
     pub read_only: bool,
@@ -81,6 +80,7 @@ pub struct DmaBufDescriptor {
     pub fd: i32,
     /// Groesse in Byte.
     pub size_bytes: u64,
+    /// Zeilenabstand in Byte.
     pub stride: u32,
     /// Versatz des Bildanfangs im Puffer.
     pub offset: u32,
