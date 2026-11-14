@@ -8,41 +8,60 @@
 //! hardware chain; all mutation logic is evidence-tested deterministically.
 #![allow(dead_code)]
 
+/// Groesse einer Seite in Byte.
 pub const PAGE_SIZE: u64 = 4096;
+/// Maske der unteren zwoelf Bit; ihr Komplement ist die Seitengrenze.
 pub const PAGE_MASK: u64 = PAGE_SIZE - 1;
 
 /// User virtual address space is a half-open interval: [BASE, TOP).
 pub const USER_SPACE_BASE: u64 = 0x0000_0000_0001_0000;
+/// Obere Grenze des User-Adressraums, ausschliesslich.
 pub const USER_SPACE_TOP_EXCLUSIVE: u64 = 0x0000_8000_0000_0000;
 
 /// Supervisor-only HHDM window, also half-open: [BASE, END).
 pub const HHDM_BASE: u64 = 0xFFFF_8000_0000_0000;
+/// Obere Grenze des HHDM-Fensters, ausschliesslich.
 pub const HHDM_END: u64 = 0xFFFF_C000_0000_0000;
 
 /// M1.2 physical-address baseline. Future hardware discovery may derive this
 /// from CPUID, but this milestone intentionally freezes a 48-bit baseline.
 pub const MAX_PHYS_ADDR_WIDTH: u64 = 48;
+/// Hoechste darstellbare physische Adresse der 48-Bit-Basis.
 pub const MAX_PHYS_ADDR: u64 = (1u64 << MAX_PHYS_ADDR_WIDTH) - 1;
+/// Maske der Adressbits einer physischen Seitennummer.
 pub const PHYS_ADDR_MASK: u64 = 0x0000_FFFF_FFFF_F000;
 
+/// Ablehnungsgruende der Validierung und der Tabellenmutation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum VmmError {
+    /// Die Adresse ist keine gueltige 48-Bit-Kanonisierung.
     AddressNotCanonical,
+    /// Die physische Adresse liegt oberhalb der Basis oder ist nicht seitenbuendig.
     InvalidPhysicalAddress,
+    /// Die Rechte sind unzulaessig, insbesondere gleichzeitig schreibbar und ausfuehrbar.
     InvalidPageFlags,
+    /// Eine User-Zuordnung liegt ausserhalb des User-Bereichs oder eine HHDM-Zuordnung verliert ihre Schutzrechte.
     PrivilegeViolation,
+    /// Ein Bereich liegt ausserhalb des erlaubten Fensters.
     RangeOutOfBounds,
+    /// Ein Eintrag traegt das Grossseitenbit auf einer Ebene, die es nicht kennt.
     HugePageNotSupported,
+    /// Eine Zwischentabelle konnte nicht beschafft werden.
     FrameAllocationFailed,
+    /// An dieser Adresse ist bereits etwas abgebildet.
     AlreadyMapped,
+    /// An dieser Adresse ist nichts abgebildet.
     NotMapped,
+    /// Die Adresse ist nicht seitenbuendig.
     AddressMisaligned,
 }
 
+/// Virtuelle Adresse; die Konstruktion prueft die Kanonisierung.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct VirtAddr(pub u64);
 
 impl VirtAddr {
+    /// Prueft die 48-Bit-Kanonisierung anhand von Bit 47 und lehnt sonst ab.
     pub const fn new(addr: u64) -> Result<Self, VmmError> {
         let upper = addr >> 48;
         let expected = if ((addr >> 47) & 1) == 0 { 0 } else { 0xFFFF };
@@ -52,27 +71,33 @@ impl VirtAddr {
         Ok(Self(addr))
     }
 
+    /// True innerhalb des User-Adressraums.
     pub const fn is_user(self) -> bool {
         self.0 >= USER_SPACE_BASE && self.0 < USER_SPACE_TOP_EXCLUSIVE
     }
 
+    /// True innerhalb des HHDM-Fensters.
     pub const fn is_hhdm(self) -> bool {
         self.0 >= HHDM_BASE && self.0 < HHDM_END
     }
 
+    /// Versatz innerhalb der Seite.
     pub const fn page_offset(self) -> u64 {
         self.0 & PAGE_MASK
     }
 
+    /// Seitenanfang der Adresse.
     pub const fn page_base(self) -> u64 {
         self.0 & !PAGE_MASK
     }
 }
 
+/// Physische Seitenadresse, immer seitenbuendig.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct PhysFrame(pub u64);
 
 impl PhysFrame {
+    /// Lehnt nicht seitenbuendige und oberhalb der 48-Bit-Basis liegende Adressen ab.
     pub const fn new(addr: u64) -> Result<Self, VmmError> {
         if addr & PAGE_MASK != 0 || addr > (MAX_PHYS_ADDR & !PAGE_MASK) {
             return Err(VmmError::InvalidPhysicalAddress);
@@ -81,16 +106,23 @@ impl PhysFrame {
     }
 }
 
+/// Rechte einer Zuordnung.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct MappingFlags {
+    /// Schreibrecht.
     pub writable: bool,
+    /// Auch aus dem Ring 3 erreichbar.
     pub user_accessible: bool,
+    /// Ausfuehrbar; zusammen mit writable lehnt die Pruefung die Zuordnung ab.
     pub executable: bool,
+    /// Gilt auch nach einem Wechsel der Seitentabelle.
     pub global: bool,
+    /// Schaltet den Zwischenspeicher fuer diese Seite ab.
     pub cache_disable: bool,
 }
 
 impl MappingFlags {
+    /// User, nur lesbar, nicht ausfuehrbar.
     pub const fn user_read_only() -> Self {
         Self {
             writable: false,
@@ -101,6 +133,7 @@ impl MappingFlags {
         }
     }
 
+    /// User, les- und schreibbar, nicht ausfuehrbar.
     pub const fn user_read_write() -> Self {
         Self {
             writable: true,
@@ -111,6 +144,7 @@ impl MappingFlags {
         }
     }
 
+    /// User, ausfuehrbar und lesbar, nicht schreibbar; damit ist die Trennung von Schreiben und Ausfuehren ohne Zusatzpruefung erfuellt.
     pub const fn user_execute_read() -> Self {
         Self {
             writable: false,
@@ -121,6 +155,7 @@ impl MappingFlags {
         }
     }
 
+    /// Nur Ring 0, schreibbar, nicht ausfuehrbar.
     pub const fn kernel_rw_nx() -> Self {
         Self {
             writable: true,
@@ -131,6 +166,7 @@ impl MappingFlags {
         }
     }
 
+    /// Lehnt schreibbar und ausfuehrbar gleichzeitig ab.
     pub const fn validate(self) -> Result<(), VmmError> {
         if self.writable && self.executable {
             Err(VmmError::InvalidPageFlags)
@@ -139,6 +175,7 @@ impl MappingFlags {
         }
     }
 
+    /// Uebersetzt die Rechte in Eintragsbits; nicht ausfuehrbar setzt das NX-Bit, und die Pruefung laeuft vorher.
     pub fn to_x86_flags(self) -> Result<u64, VmmError> {
         self.validate()?;
         let mut flags = 1u64; // Present
@@ -161,13 +198,18 @@ impl MappingFlags {
     }
 }
 
+/// Zugriffsart eines Userspace-Zeigers.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum UserAccess {
+    /// Lesen.
     Read,
+    /// Schreiben.
     Write,
+    /// Ausfuehren.
     Execute,
 }
 
+/// Prueft Anfang, Laenge und Ueberlauf gegen den User-Bereich; Nullzeiger, Nulllaenge und Ueberlauf werden abgelehnt.
 pub const fn validate_user_range(ptr: u64, len: u64) -> Result<(), VmmError> {
     if ptr == 0 || len == 0 || ptr < USER_SPACE_BASE || ptr >= USER_SPACE_TOP_EXCLUSIVE {
         return Err(VmmError::RangeOutOfBounds);
@@ -223,17 +265,23 @@ pub const fn validate_hhdm_entry(
 /// or acceptance of entries based on the wrong architectural semantics.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum PageTableLevel {
+    /// Oberste Ebene.
     Pml4,
+    /// Zweite Ebene; Grossseiten sind hier moeglich.
     Pdpt,
+    /// Dritte Ebene; Grossseiten sind hier moeglich.
     Pd,
+    /// Unterste Ebene; Bit 7 bedeutet hier PAT und nicht Grossseite.
     Pt,
 }
 
 impl PageTableLevel {
+    /// True nur fuer die Ebenen, auf denen Bit 7 das Grossseitenbit ist.
     pub const fn huge_page_bit_is_ps(self) -> bool {
         matches!(self, Self::Pdpt | Self::Pd)
     }
 
+    /// Lehnt einen Eintrag mit Grossseitenbit auf einer Ebene ab, die es nicht kennt; auf der untersten und der obersten Ebene bleibt das Bit ohne diese Bedeutung.
     pub const fn reject_huge_page(self, entry: u64) -> Result<(), VmmError> {
         if self.huge_page_bit_is_ps() && (entry & (1 << 7)) != 0 {
             Err(VmmError::HugePageNotSupported)
@@ -246,12 +294,16 @@ impl PageTableLevel {
 /// Bounded bootstrap mapping used before the full VMM is active.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BootstrapMapping {
+    /// Erste abgedeckte physische Adresse.
     pub phys_base: u64,
+    /// Ende des Bereichs, ausschliesslich.
     pub phys_end: u64,
+    /// Aufschlag von physischer auf virtuelle Adresse.
     pub virt_offset: u64,
 }
 
 impl BootstrapMapping {
+    /// Lehnt leere und nicht seitenbuendige Bereiche ab.
     pub const fn new(phys_base: u64, phys_end: u64, virt_offset: u64) -> Result<Self, VmmError> {
         if phys_base >= phys_end || phys_base & PAGE_MASK != 0 || phys_end & PAGE_MASK != 0 {
             return Err(VmmError::InvalidPhysicalAddress);
@@ -263,6 +315,7 @@ impl BootstrapMapping {
         })
     }
 
+    /// Rechnet eine physische Adresse samt Laenge in die virtuelle um; Nulllaenge, Ueberlauf und Bereiche ausserhalb des Fensters werden abgelehnt.
     pub const fn translate(&self, phys: u64, size: u64) -> Result<u64, VmmError> {
         if size == 0 {
             return Err(VmmError::InvalidPhysicalAddress);
@@ -326,6 +379,7 @@ pub struct HardwareMapper<'a> {
 }
 
 impl<'a> HardwareMapper<'a> {
+    /// Mapper ueber Seitentabelle und Frame-Backend.
     pub fn new(pml4: PhysFrame, backend: &'a mut dyn FrameBackend) -> Self {
         Self { pml4, backend }
     }
@@ -566,6 +620,7 @@ pub struct Vmm {
 }
 
 impl Vmm {
+    /// VMM ueber einer Seitentabelle, ohne registrierte Zuordnungen.
     pub fn new(pml4: PhysFrame) -> Self {
         Self {
             pml4,
@@ -637,6 +692,7 @@ impl Vmm {
         self.registry.len()
     }
 
+    /// Setzt fuer die Abfrage einen Mapper ohne Zustand auf und uebersetzt die Adresse.
     pub fn translate(
         &mut self,
         backend: &mut dyn FrameBackend,
