@@ -1,6 +1,7 @@
 //! Protective GPT parser for persistent-disk discovery.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kopf der GPT, auf die pruefbaren Felder reduziert.
 pub struct GptHeader {
     /// Erste nutzbare LBA.
     pub first_usable_lba: u64,
