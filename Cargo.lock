@@ -3551,6 +3551,7 @@ version = "0.1.0"
 dependencies = [
  "bootloader_api",
  "globus-diagnostics",
+ "globus-identity-core",
  "lazy_static",
  "libshivacore",
  "linked_list_allocator",
