@@ -8,67 +8,104 @@
 use globus_devices::pci::PciId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Hersteller der GPU.
 pub enum GpuVendor {
+    /// AMD.
     Amd,
+    /// Intel.
     Intel,
+    /// NVIDIA.
     Nvidia,
+    /// Anderer Hersteller mit dieser PCI-Kennung.
     Other(u16),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Modellfamilie, an der der Treiberpfad haengt.
 pub enum GpuFamily {
     /// Vendor known, but the PCI device ID is not in the curated family table.
     Unclassified,
+    /// Integrierte AMD-Grafik.
     AmdIntegrated,
+    /// AMD Radeon RX 5000.
     AmdRadeonRx5000,
+    /// AMD Radeon RX 6000.
     AmdRadeonRx6000,
+    /// AMD Radeon RX 7000.
     AmdRadeonRx7000,
+    /// AMD Radeon RX 9000.
     AmdRadeonRx9000,
+    /// Intel UHD.
     IntelUhd,
+    /// Intel Iris Xe.
     IntelIrisXe,
+    /// Intel Arc A-Serie.
     IntelArcA,
+    /// Intel Arc B-Serie.
     IntelArcB,
+    /// NVIDIA GeForce GTX.
     NvidiaGeForceGtx,
+    /// NVIDIA GeForce RTX.
     NvidiaGeForceRtx,
+    /// NVIDIA Professional.
     NvidiaProfessional,
+    /// NVIDIA Datacenter.
     NvidiaDatacenter,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Treiber, der fuer diese Familie vorgesehen ist.
 pub enum DriverReference {
+    /// amdgpu.
     Amdgpu,
+    /// i915 oder xe.
     IntelI915OrXe,
+    /// nouveau oder der herstellereigene NVIDIA-Treiber.
     NouveauOrVendorNvidia,
+    /// Generischer Display-Treiber ohne 3D.
     GenericDisplay,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand des Treibers.
 pub enum DriverState {
     /// A profile exists, but no compatible GlobusOS driver has been activated.
     ProfileOnly,
+    /// Der Treiber initialisiert noch.
     Initializing,
+    /// Der Treiber laeuft.
     Running,
+    /// Die Initialisierung ist fehlgeschlagen.
     Failed,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ob eine Funktion verfuegbar ist.
 pub enum FeatureState {
+    /// Noch nicht ermittelt.
     Unknown,
+    /// Nicht verfuegbar.
     Unsupported,
+    /// Verfuegbar.
     Supported,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Verfuegbarkeit einzelner Funktionen.
 pub struct GpuCapabilities {
     /// The PCI function is in the display-controller class.
     pub display_controller: bool,
     /// These features must be reported by an initialized driver, not inferred from vendor ID.
     pub vulkan: FeatureState,
+    /// OpenGL.
     pub open_gl: FeatureState,
+    /// Compute.
     pub compute: FeatureState,
+    /// Hardware-Dekodierung und -Kodierung.
     pub media_engine: FeatureState,
     /// None means not measured or not exposed by the driver.
     pub dedicated_vram_bytes: Option<u64>,
+    /// Gemeinsam genutzter Speicher zwischen CPU und GPU.
     pub shared_memory: FeatureState,
 }
 
@@ -87,21 +124,34 @@ impl GpuCapabilities {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Erkannte GPU samt geplantem Treiber.
 pub struct GpuProfile {
+    /// Hersteller.
     pub vendor: GpuVendor,
+    /// Modellfamilie.
     pub family: GpuFamily,
+    /// PCI-Herstellerkennung.
     pub pci_vendor_id: u16,
+    /// PCI-Geraetekennung.
     pub pci_device_id: u16,
+    /// PCI-Revision.
     pub pci_revision_id: u8,
+    /// Vorgesehener Treiber.
     pub driver_reference: DriverReference,
+    /// Erkannte Funktionen.
     pub capabilities: GpuCapabilities,
+    /// Zustand des Treibers.
     pub driver_state: DriverState,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zeichenweg, der auf dieser GPU genutzt wird.
 pub enum GpuBackend {
+    /// Direkt in den Bildpuffer.
     Framebuffer,
+    /// Ueber Vulkan.
     Vulkan,
+    /// Ueber OpenGL.
     OpenGl,
 }
 
