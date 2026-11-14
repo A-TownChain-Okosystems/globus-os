@@ -1,6 +1,6 @@
 {
-  "total": 50,
+  "total": 44,
   "per_crate": {
-    "modules/atc-shivacore/kernel": 50
+    "modules/atc-shivacore/kernel": 44
   }
 }
