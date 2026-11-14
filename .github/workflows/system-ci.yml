@@ -12,10 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: x86_64-unknown-uefi
-          components: rustfmt, clippy
+      - name: Toolchain aus rust-toolchain.toml (verbindlich 1.100.0)
+        run: |
+          rustup target add x86_64-unknown-uefi
+          rustup show active-toolchain
+          rustc -vV | grep -qx 'release: 1.100.0'
+          rustc -Vv
+          cargo -V
       - name: Format
         run: cargo fmt --all -- --check
       - name: Check
