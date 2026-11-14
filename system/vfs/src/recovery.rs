@@ -3,8 +3,11 @@
 use crate::journal::{Journal, JournalError, JournalOp};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der Wiederherstellung.
 pub enum RecoveryError {
+    /// Das Journal hat abgelehnt.
     Journal(JournalError),
+    /// Die Sequenzfolge ist nicht streng steigend.
     InvalidSequence,
 }
 impl From<JournalError> for RecoveryError {
@@ -14,12 +17,17 @@ impl From<JournalError> for RecoveryError {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein beim Replay auszufuehrender Schreibvorgang.
 pub struct ReplayWrite {
+    /// Sequenznummer des Eintrags.
     pub sequence: u64,
+    /// Zielblock.
     pub block: u64,
+    /// Erwartete Pruefsumme des Zielblocks.
     pub checksum: u32,
 }
 
+/// Prueft die offenen Journal-Eintraege und liefert die auszufuehrenden Schreibvorgaenge.
 pub fn replay_pending(journal: &Journal) -> Result<Vec<ReplayWrite>, RecoveryError> {
     let records = journal.pending();
     let mut last = None;
