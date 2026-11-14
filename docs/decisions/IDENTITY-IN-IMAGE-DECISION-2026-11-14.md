@@ -37,36 +37,55 @@ auch fuer `x86_64-unknown-none`, ist also im Image verwendbar.
   aufgefuellter Datensatz, fremde Kennung/Fassung/Verfahren, manipulierte
   Parameter, leeres Salz oder Hash, Salt wirkt, schwaechere erlaubte Parameter.
 
-## Messung im Image (erster Schritt) und was sie blockiert
+## Messung im Image (Owner: messen, nicht schaetzen)
 
-Der Owner verlangt die Messung im Image, nicht die Uebernahme der Host-Werte.
-Der erste Schritt ist deshalb die Speicherfrage: Argon2id mit 19 MiB braucht
-19 MiB am Stueck.
+### Erster Schritt: der Speicher
 
-Gemessen im Kernel-Image (QEMU/BIOS, `-m 256M`):
+Argon2id mit 19 MiB braucht 19 MiB **am Stueck**. Der Kernel-Haufen ist 512 KiB
+(begruendet aus acht Dienst-Startabbildern zu 64 KiB). Messung vor der
+Erweiterung:
 
 ```
 IDENT-001 Haufen: HEAP_START=0x444444440000 HEAP_SIZE=512 KiB,
 Allokator meldet frei=524288 Byte, Probe-Zeiger=0x0
-IDENT-001 Messung: 19 MiB NICHT verfuegbar (Haufen 512 KiB) —
-die Pruefung wuerde fail-closed ablehnen
+IDENT-001 Messung: 19 MiB NICHT verfuegbar — die Pruefung wuerde fail-closed ablehnen
 ```
 
-Das ist der ehrliche Stand: **die Pruefung kann im Image heute nicht rechnen.**
-Der Kernel-Haufen ist 512 KiB (begruendet aus acht Dienst-Startabbildern zu
-64 KiB); 19 MiB passen nicht hinein, und der Allokator gibt folgerichtig null
-zurueck. Die Anmeldung wuerde fail-closed abweisen, nicht abstuerzen.
+Der erste Messwert dieses Schritts meldete "19 MiB verfuegbar" und war falsch.
+Aufgefallen ist es erst, als der freie Speicher mitgelesen wurde. Eine
+Allokation "geglueckt" zu nennen, weil ein Zeiger ungleich null zurueckkommt,
+ist kein Nachweis; der Nachweis braucht zwei unabhaengige Werte.
 
-Wichtig fuer die Methode: der erste Messwert dieses Schritts meldete
-"19 MiB verfuegbar" und war falsch. Aufgefallen ist es erst, als der freie
-Speicher mitgelesen wurde (512 KiB). Eine Allokation "geglueckt" zu nennen,
-weil ein Zeiger ungleich null zurueckkommt, ist kein Nachweis — der Nachweis
-braucht zwei unabhaengige Werte, deshalb liest die Messung jetzt beides.
+### Zweiter Schritt: Haufen erweitert, im Image gemessen
 
-Die Zeitmessung im Image ist damit noch nicht moeglich. Sie braucht zuerst
-einen 19-MiB-Bereich fuer die KDF; der naechste Schritt ist ein eigener,
-temporaerer Bereich aus dem Frame-Vorrat (nicht der Haufen), mit Freigabe nach
-der Rechnung. Erst danach ist "19 MiB, t=2 im Image = X ms" eine Tatsache.
+`allocator::extend_heap` bildet 20 MiB aus dem Frame-Vorrat direkt hinter dem
+Haufen ab und uebergibt sie dem Allokator (ein Vorrat, kein zweiter). Die
+Erweiterung ist einbahnig: danach gehoert der Speicher dem Haufen — ehrlicher
+als "temporaer", weil eine Rueckgabe ein zweites Buch ueber denselben Speicher
+waere. Gemessen im Kernel (QEMU/BIOS, Software-Emulation ohne KVM, `-m 256M`):
+
+```
+IDENT-001 Haufen erweitert um 20480 KiB (frei jetzt 20992 KiB)
+IDENT-001 Messung im Image: Argon2id 19456 KiB t=2 p=1 = 267 ms
+  (638614680 TSC, 2385858240 Hz) — gemessen, nicht geschaetzt
+IDENT-001 Pruefweg im Image: richtig bestaetigt, falsch abgewiesen
+```
+
+**Ergebnis: 267 ms im Image gegen 24,7 ms auf dem Host — Faktor ~11.** Genau
+deshalb war die Host-Zahl kein Nachweis: 267 ms liegen ueber der Grenze, die
+eine Anmeldeoberflaeche als "sofort" vertraegt. Die Entscheidung
+"Parameter uebernehmen" bleibt davon unberuehrt (sie ist gefallen), aber die
+Zahl gehoert in die Bedienung: das Fenster muss waehrend der Pruefung sichtbar
+beschaeftigt sein, nicht stehen. Die TSC-Kalibrierung gegen den PIT ist die
+Zeitbasis (2,386 GHz), keine geschaetzte Frequenz.
+
+Der Pruefweg im Image ist damit vollstaendig belegt: Datensatz im Speicher
+gebaut, fail-closed gelesen, richtiges Passwort bestaetigt, falsches abgewiesen.
+Ohne Sitzung, ohne PID, ohne Scheduler (Entscheidung 3).
+
+Offen fuer die Ramdisk-Ablage (Entscheidung 2): eigene Datei, strikte Rechte,
+und der Weg, auf dem nur der Pruefprozess sie liest. Der Datensatz ist ein
+Dateiformat, die Ablage folgt.
 
 ## Was ausdruecklich NICHT passiert ist
 
