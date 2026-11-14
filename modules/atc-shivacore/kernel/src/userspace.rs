@@ -229,6 +229,18 @@ impl UserBinary {
 // Real user-page installation / CPL3 entry
 // ═══════════════════════════════════════════════════════════════════════════════
 
+impl UserAddressSpace {
+    /// Passt ein Datenanteil dieser Groesse in das Datenfenster?
+    ///
+    /// Reine Rechnung, damit die Grenze ohne Paging pruefbar ist: `data_size`
+    /// ist die Fenstergroesse dieses Prozesses. Die Pruefung steht hier und
+    /// nicht im ELF-Parser, weil sie von der Prozesslayout abhaengt — derselbe
+    /// Datensatz kann fuer den einen Prozess passen und fuer den anderen nicht.
+    pub fn data_fits(&self, bytes: u64) -> bool {
+        bytes <= self.data_size
+    }
+}
+
 #[cfg(feature = "x86-boot")]
 /// Nutzer-Code: waehrend des Ladens schreibbar, danach per update_flags auf
 /// PRESENT|USER_ACCESSIBLE reduziert (lesbar, ausfuehrbar, nicht schreibbar).
@@ -339,6 +351,12 @@ pub unsafe fn map_user_binary(
         code_pages * 0x1000,
         code_flags(),
     )?;
+
+    // Erst pruefen, dann abbilden: ohne diese Grenze waechst ein zu grosser
+    // Datenanteil in Stapel oder Haufen des Prozesses hinein.
+    if !addr_space.data_fits(binary.data.len() as u64) {
+        return Err(UserspaceError::InvalidAddress);
+    }
 
     // Die Datenregion wird immer abgebildet, auch bei leerem Datensegment:
     // sonst waere "Daten ohne NX" im Betrieb nicht messbar, weil die Seite
@@ -964,6 +982,15 @@ mod tests {
         assert_eq!(bin.name, "hello");
         assert_eq!(bin.code_len(), 1);
         assert_eq!(bin.data_len(), 0);
+    }
+
+
+    #[test]
+    fn data_fenster_grenze_wird_eingehalten() {
+        let space = UserAddressSpace::default();
+        assert!(space.data_fits(space.data_size), "Fenster selbst passt");
+        assert!(!space.data_fits(space.data_size + 1), "ein Byte zu viel passt nicht");
+        assert!(space.data_fits(0), "leerer Datenanteil ist zulaessig");
     }
 
     #[test]
