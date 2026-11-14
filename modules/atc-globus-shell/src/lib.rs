@@ -1,9 +1,14 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // atc-globus-shell — Terminal, CLI, Command Processor
+/// Registry of built-in commands and their handlers.
 pub mod cli_commands;
+/// Splitting and chaining of piped commands.
 pub mod pipe_system;
+/// Command processor tying registry, history and completion together.
 pub mod shell;
+/// Prefix completion over the known command names.
 pub mod shell_completion;
+/// Bounded command history.
 pub mod shell_history;
 
 pub use cli_commands::CommandRegistry;
