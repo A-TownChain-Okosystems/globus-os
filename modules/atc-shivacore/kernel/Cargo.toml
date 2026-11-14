@@ -25,6 +25,7 @@ x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259",
 [dependencies]
 bootloader_api = { version = "0.11", optional = true }
 spin = "0.12"
+globus-entropy-core = { path = "../../../system/entropy-core" }
 x86_64 = { version = "0.15", optional = true }
 uart_16550 = { version = "0.8", optional = true }
 pic8259 = { version = "0.11", optional = true }
