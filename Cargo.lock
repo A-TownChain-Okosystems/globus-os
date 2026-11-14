@@ -1675,6 +1675,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "globus-identity-core"
+version = "0.1.0"
+dependencies = [
+ "argon2",
+]
+
+[[package]]
 name = "globus-ipc"
 version = "0.1.0"
 
