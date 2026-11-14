@@ -38,32 +38,46 @@ pub const DEFAULT_CAPACITY: usize = 64;
 /// Alle Varianten sind Ablehnungen: der Aufruf liefert nie "vielleicht".
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LiveIpcError {
+    /// Der Kanal ist nicht bekannt.
     UnknownChannel,
+    /// Der Prozess ist nicht am Kanal beteiligt.
     NotParticipant,
+    /// Der Kanal ist geschlossen.
     Closed,
+    /// Der Kanal nimmt keine weitere Nachricht auf.
     Full,
+    /// Es wartet keine Nachricht.
     Empty,
 }
 
 /// Was fuer ein Objekt ein Handle bezeichnet.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandleKind {
+    /// Handle auf einen Kanal.
     Channel,
+    /// Handle auf einen Prozess.
     Process,
+    /// Handle auf ein Geraet.
     Device,
 }
 
+/// Handle mit Kennung, Art, Ziel und Eigentuemer.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Handle {
+    /// Kennung des Handles.
     pub id: u64,
+    /// Art des bezeichneten Objekts.
     pub kind: HandleKind,
     /// Kanal-ID, PID oder Geraetenummer — je nach `kind`.
     pub target: u64,
+    /// Prozess, dem das Handle gehoert.
     pub owner: Pid,
 }
 
+/// Ablehnungsgruende der Handle-Pruefung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandleError {
+    /// Vorgesehen fuer unbekannte Kennungen; die Pruefung erzeugt diesen Fall nicht, sie meldet ihn wie ein veraltetes Handle.
     Unknown,
     /// Gehoert einem anderen Prozess oder wurde mit dessen Ende widerrufen.
     Stale,
@@ -72,6 +86,7 @@ pub enum HandleError {
 /// Ein Kanal mit seinen Beteiligten.
 #[derive(Debug, Clone)]
 pub struct ChannelState {
+    /// Kennung des Kanals.
     pub id: u64,
     /// Prozesse, die eine gueltige Capability fuer diesen Kanal halten.
     pub participants: Vec<Pid>,
@@ -81,6 +96,7 @@ pub struct ChannelState {
     pub waiters: Vec<Pid>,
     /// Wie viele Nachrichten der Kanal aufnimmt, bevor er `Full` meldet.
     pub capacity: usize,
+    /// True, sobald der Kanal geschlossen ist; ein geschlossener Kanal nimmt nichts mehr an.
     pub closed: bool,
 }
 
@@ -100,10 +116,15 @@ impl ChannelState {
 /// Ergebnis eines Prozessendes fuer die IPC-Seite.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ReleaseReport {
+    /// Anzahl der betrachteten Kanaele.
     pub attempted: usize,
+    /// Anzahl der dabei zerstoerten Kanaele.
     pub destroyed: usize,
+    /// Anzahl der freigegebenen Teilnahmen.
     pub released: usize,
+    /// Anzahl der verworfenen Nachrichten.
     pub messages_discarded: usize,
+    /// Anzahl der abgebrochenen Wartestellungen.
     pub waiters_aborted: usize,
     /// Zweiter Schliessversuch auf einem bereits zerstoerten Kanal.
     pub double_close_blocked: usize,
@@ -120,6 +141,7 @@ pub enum CloseOutcome {
     Rejected,
 }
 
+/// Bestand aller Kanaele mit ihren Zaehlern.
 #[derive(Debug, Default)]
 pub struct ChannelRegistry {
     channels: BTreeMap<u64, ChannelState>,
@@ -130,6 +152,7 @@ pub struct ChannelRegistry {
 }
 
 impl ChannelRegistry {
+    /// Leerer Bestand ohne Kanaele und mit Nullzaehlern.
     pub const fn new() -> Self {
         Self {
             channels: BTreeMap::new(),
@@ -211,10 +234,12 @@ impl ChannelRegistry {
         }
     }
 
+    /// Anzahl der Geraetezustellungen, die ins Leere gingen.
     pub fn device_drops(&self) -> usize {
         self.device_drops
     }
 
+    /// Anzahl der offenen Kanaele.
     pub fn open_channels(&self) -> usize {
         self.channels.len()
     }
@@ -265,26 +290,32 @@ impl ChannelRegistry {
         }
     }
 
+    /// Anzahl wartender Nachrichten; verlangt eine veraenderbare Ausleihe, obwohl sie nur liest.
     pub fn pending_of(&mut self, id: u64) -> Option<usize> {
         self.channels.get(&id).map(|s| s.pending.len())
     }
 
+    /// Anzahl der Beteiligten; None bei unbekanntem Kanal.
     pub fn participants_of(&self, id: u64) -> Option<usize> {
         self.channels.get(&id).map(|s| s.participants.len())
     }
 
+    /// True, wenn der Kanal bekannt ist, auch wenn er geschlossen ist.
     pub fn contains(&self, id: u64) -> bool {
         self.channels.contains_key(&id)
     }
 
+    /// Anzahl der Kanaele im Bestand.
     pub fn count(&self) -> usize {
         self.channels.len()
     }
 
+    /// Summe aller zerstoerten Kanaele.
     pub fn destroyed_total(&self) -> usize {
         self.destroyed_total
     }
 
+    /// Summe aller freigegebenen Teilnahmen.
     pub fn released_total(&self) -> usize {
         self.released_total
     }
@@ -375,6 +406,7 @@ impl ChannelRegistry {
             == self.double_close_blocked // immer wahr; Zaehler ist der Beleg
     }
 
+    /// Anzahl der zweiten Schliessversuche auf bereits zerstoerten Kanaelen.
     pub fn double_close_blocked(&self) -> usize {
         self.double_close_blocked
     }
@@ -403,6 +435,7 @@ pub struct HandleTable {
 }
 
 impl HandleTable {
+    /// Leere Tabelle; Kennungen beginnen bei 1.
     pub const fn new() -> Self {
         Self {
             handles: BTreeMap::new(),
@@ -412,6 +445,7 @@ impl HandleTable {
         }
     }
 
+    /// Legt ein Handle an und liefert seine Kennung.
     pub fn open(&mut self, owner: Pid, kind: HandleKind, target: u64) -> u64 {
         let id = self.next;
         self.next += 1;
@@ -427,6 +461,7 @@ impl HandleTable {
         id
     }
 
+    /// Liefert das Ziel, wenn das Handle dem Prozess gehoert; fremde und unbekannte Kennungen werden beide als veraltet gezaehlt und abgelehnt.
     pub fn validate(&mut self, owner: Pid, id: u64) -> Result<u64, HandleError> {
         match self.handles.get(&id) {
             Some(handle) if handle.owner == owner => Ok(handle.target),
@@ -441,6 +476,7 @@ impl HandleTable {
         }
     }
 
+    /// Anzahl der Handles eines Prozesses.
     pub fn count_for(&self, owner: Pid) -> usize {
         self.handles.values().filter(|h| h.owner == owner).count()
     }
@@ -474,10 +510,12 @@ impl HandleTable {
         (revoked, denied)
     }
 
+    /// Anzahl der abgewiesenen Zugriffe auf fremde oder unbekannte Handles.
     pub fn stale_denied(&self) -> usize {
         self.stale_denied
     }
 
+    /// Summe aller widerrufenen Handles.
     pub fn revoked_total(&self) -> usize {
         self.revoked
     }
@@ -486,8 +524,11 @@ impl HandleTable {
 /// Zaehler der Geraete-Pumpe. Sie belegen, dass ein belegter Kanal nicht
 /// blockiert, sondern im naechsten Tick wieder versucht wird.
 pub static PUMP_ROUNDS: AtomicU64 = AtomicU64::new(0);
+/// Runden, in denen der Kanal belegt war.
 pub static PUMP_BUSY_ROUNDS: AtomicU64 = AtomicU64::new(0);
+/// Zugestellte Ereignisse.
 pub static PUMP_DELIVERED: AtomicU64 = AtomicU64::new(0);
+/// Zurueckgehaltene Ereignisse.
 pub static PUMP_KEPT_BACK: AtomicU64 = AtomicU64::new(0);
 
 /// Ergebnis eines Pumpversuchs.
@@ -581,13 +622,21 @@ pub static HANDLES: Mutex<HandleTable> = Mutex::new(HandleTable::new());
 /// Was ein Prozessende an IPC- und Handle-Ressourcen zurueckgegeben hat.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct ExitResources {
+    /// Betrachtete Kanaele.
     pub channels_attempted: usize,
+    /// Zerstoerte Kanaele.
     pub channels_destroyed: usize,
+    /// Freigegebene Teilnahmen.
     pub channels_released: usize,
+    /// Verworfene Nachrichten.
     pub messages_discarded: usize,
+    /// Abgebrochene Wartestellungen.
     pub waiters_aborted: usize,
+    /// Widerrufene Handles.
     pub handles_revoked: usize,
+    /// Abgewiesene Zugriffe auf widerrufene Handles.
     pub stale_handles_denied: usize,
+    /// Abgewehrte zweite Schliessversuche.
     pub double_close_blocked: usize,
 }
 
