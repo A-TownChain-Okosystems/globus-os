@@ -151,33 +151,89 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         .expect("Heap-Initialisierung fehlgeschlagen");
     serial_println!("ShivaCore: Paging-Mapper + Heap initialisiert (100 KiB).");
 
-    // IDENT-001 Messung (Owner-Entscheidung 14.11.2026): Die Pruefung braucht
-    // 19 MiB am Stueck. Ob das Image sie bereitstellen kann, wird gemessen und
-    // nicht geschaetzt; ohne die 19 MiB lehnt die KDF fail-closed ab.
+    // IDENT-001 im Image (Owner-Entscheidung 14.11.2026): Argon2id mit 19 MiB,
+    // t = 2, p = 1 — gemessen im Kernel, nicht vom Host uebernommen.
+    //
+    // Dafuer wird der Haufen einmalig um 20 MiB aus dem Frame-Vorrat erweitert;
+    // 19 MiB am Stueck passen nicht in die 512 KiB, die der Supervisor braucht.
+    // Geprueft wird der ganze Weg: Datensatz bauen, fail-closed lesen, richtiges
+    // Passwort bestaetigen, falsches ablehnen.
     {
-        use core::alloc::Layout;
-        let need = Layout::from_size_align(19 * 1024 * 1024, 8).expect("Layout 19 MiB");
-        // Safety: nur anfordern und bei Erfolg sofort zurueckgeben.
-        let probe = unsafe { alloc::alloc::alloc(need) };
-        serial_println!(
-            "ShivaCore: IDENT-001 Haufen: HEAP_START={:#x} HEAP_SIZE={} KiB, Allokator meldet frei={} Byte, Probe-Zeiger={:?}",
-            allocator::HEAP_START,
-            allocator::HEAP_SIZE / 1024,
-            allocator::free_bytes(),
-            probe
-        );
-        if probe.is_null() {
-            serial_println!(
-                "ShivaCore: IDENT-001 Messung: 19 MiB NICHT verfuegbar (Haufen {} KiB) — die Pruefung wuerde fail-closed ablehnen",
-                allocator::HEAP_SIZE / 1024
-            );
-        } else {
-            // Safety: derselbe Zeiger, derselbe Layout wie oben.
-            unsafe { alloc::alloc::dealloc(probe, need) };
-            serial_println!(
-                "ShivaCore: IDENT-001 Messung: 19 MiB verfuegbar (Haufen {} KiB) — Messung im Image moeglich",
-                allocator::HEAP_SIZE / 1024
-            );
+        use globus_identity_core as identity;
+
+        match allocator::extend_heap(&mut mapper, &mut frame_allocator, 20 * 1024 * 1024) {
+            Ok(added) => serial_println!(
+                "ShivaCore: IDENT-001 Haufen erweitert um {} KiB (frei jetzt {} KiB)",
+                added / 1024,
+                allocator::free_bytes() / 1024
+            ),
+            Err(_) => serial_println!(
+                "ShivaCore: IDENT-001 Haufen NICHT erweitert ({} KiB frei) — KDF wird fail-closed ablehnen",
+                allocator::free_bytes() / 1024
+            ),
+        }
+
+        let params = identity::KdfParams::OWNER_DEFAULT;
+        let salt = [0x5Au8; identity::SALT_LEN];
+        let mut hash = [0u8; identity::HASH_LEN];
+        let tsc_hz = calibrate_tsc(20);
+        let started = unsafe { core::arch::x86_64::_rdtsc() };
+        let calculated =
+            identity::hash_into(params, b"messung-im-image", &salt, &mut hash);
+        let cycles = unsafe { core::arch::x86_64::_rdtsc() }.saturating_sub(started);
+        match (&calculated, tsc_hz) {
+            (Ok(()), Some(hz)) if hz > 0 => {
+                let ms = (cycles as u128 * 1000 / hz as u128) as u64;
+                serial_println!(
+                    "ShivaCore: IDENT-001 Messung im Image: Argon2id {} KiB t={} p={} = {} ms ({} TSC, {} Hz) — gemessen, nicht geschaetzt",
+                    params.memory_kib,
+                    params.iterations,
+                    params.parallelism,
+                    ms,
+                    cycles,
+                    hz
+                );
+            }
+            (Ok(()), _) => serial_println!(
+                "ShivaCore: IDENT-001 Messung im Image: Argon2id gerechnet, {} TSC-Zyklen; TSC nicht kalibriert, keine ms-Angabe",
+                cycles
+            ),
+            (Err(error), _) => serial_println!(
+                "ShivaCore: IDENT-001 Messung im Image: KDF nicht rechenbar ({:?}) — fail-closed",
+                error
+            ),
+        }
+
+        // Der ganze Pruefweg im Image: Datensatz bauen, fail-closed lesen,
+        // bestaetigen, ablehnen. Ohne Sitzung, ohne PID (Entscheidung 3).
+        let record_bytes = {
+            let mut bytes = [0u8; identity::RECORD_LEN];
+            bytes[0..4].copy_from_slice(&identity::MAGIC);
+            bytes[4] = identity::FORMAT_VERSION;
+            bytes[5] = identity::KDF_ARGON2ID;
+            bytes[6..8].copy_from_slice(&(params.memory_kib as u16).to_le_bytes());
+            bytes[8..12].copy_from_slice(&params.iterations.to_le_bytes());
+            bytes[12] = params.parallelism as u8;
+            bytes[16..32].copy_from_slice(&salt);
+            bytes[32..64].copy_from_slice(&hash);
+            bytes
+        };
+        let verdict = match identity::CredentialRecord::parse(&record_bytes) {
+            Ok(record) => {
+                let good = record.verify(b"messung-im-image");
+                let bad = record.verify(b"falsches-passwort");
+                match (good, bad) {
+                    (Ok(()), Err(identity::VerifyError::WrongPassword)) => {
+                        Ok("richtig bestaetigt, falsch abgewiesen")
+                    }
+                    _ => Err("Pruefweg unerwartet"),
+                }
+            }
+            Err(_) => Err("Datensatz nicht lesbar"),
+        };
+        match verdict {
+            Ok(text) => serial_println!("ShivaCore: IDENT-001 Pruefweg im Image: {}", text),
+            Err(text) => serial_println!("ShivaCore: IDENT-001 Pruefweg im Image: {} — fail-closed", text),
         }
     }
 
