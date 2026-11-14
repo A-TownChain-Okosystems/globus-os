@@ -2,7 +2,7 @@
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
 > **Stand:** 14.11.2026, erzeugt aus `git ls-tree -r origin/main` gegen
-> `5830fca` zuzueglich des Anmeldefensters: 538 Dateien. Die Liste ist vollständig; der vorige Stand
+> `5830fca` zuzueglich des Anmeldefensters: 539 Dateien. Die Liste ist vollständig; der vorige Stand
 > nannte 522 und war um 15 Einträge unvollständig (unter anderem fehlten die
 > neueren Dokumente aus dem Kernel-Strang).
 > **Zeilenzahlen** aus dem committeten Stand, Binärdateien ohne Zahl.
@@ -57,7 +57,7 @@
 | `docs/IDENTITY_WALLET_FLOW.md` | 78 |
 | `docs/IMPLEMENTATION_STATUS.md` | 60 |
 | `docs/KERNEL_IMAGE_BUILD.md` | 100 |
-| `docs/LOGIN_WINDOW.md` | 98 |
+| `docs/LOGIN_WINDOW.md` | 133 |
 | `docs/MEDIA-LICENSING.md` | 60 |
 | `docs/OS_STANDARD_COMPONENTS.md` | 190 |
 | `docs/REPOSITORY_STANDARD.md` | 37 |
@@ -270,11 +270,11 @@
 | `modules/atc-shivacore/docs/SC-006-ACK-ABONNENTEN.md` | 89 |
 | `modules/atc-shivacore/docs/SC-006_EVENT_KANAL_ENTWURF.md` | 74 |
 | `modules/atc-shivacore/docs/SC-ABI-002-ARGUMENTBLOCK.md` | 106 |
-| `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 65 |
+| `modules/atc-shivacore/docs/SPAWN-ANNAHME-2026-11-09.md` | 75 |
 | `modules/atc-shivacore/greeter/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/greeter/Cargo.toml` | 17 |
 | `modules/atc-shivacore/greeter/linker.ld` | 37 |
-| `modules/atc-shivacore/greeter/src/main.rs` | 348 |
+| `modules/atc-shivacore/greeter/src/main.rs` | 369 |
 | `modules/atc-shivacore/init_program/.cargo/config.toml` | 8 |
 | `modules/atc-shivacore/init_program/Cargo.toml` | 17 |
 | `modules/atc-shivacore/init_program/linker.ld` | 35 |
@@ -306,7 +306,7 @@
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 232 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 261 |
-| `modules/atc-shivacore/kernel/src/interrupts.rs` | 1.901 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 2075 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 384 |
 | `modules/atc-shivacore/kernel/src/ipc.rs` | 736 |
 | `modules/atc-shivacore/kernel/src/ipc_lifecycle.rs` | 991 |
@@ -318,9 +318,9 @@
 | `modules/atc-shivacore/kernel/src/kernel_init.rs` | 377 |
 | `modules/atc-shivacore/kernel/src/key_events.rs` | 157 |
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 420 |
-| `modules/atc-shivacore/kernel/src/lib.rs` | 109 |
+| `modules/atc-shivacore/kernel/src/lib.rs` | 111 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.625 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1.747 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1799 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 124 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 937 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 580 |
@@ -331,6 +331,7 @@
 | `modules/atc-shivacore/kernel/src/screen.rs` | 91 |
 | `modules/atc-shivacore/kernel/src/security.rs` | 1.322 |
 | `modules/atc-shivacore/kernel/src/serial.rs` | 58 |
+| `modules/atc-shivacore/kernel/src/services.rs` | 204 |
 | `modules/atc-shivacore/kernel/src/spawn.rs` | 210 |
 | `modules/atc-shivacore/kernel/src/syscall.rs` | 811 |
 | `modules/atc-shivacore/kernel/src/syscall_gate.rs` | 270 |
