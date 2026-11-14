@@ -2,6 +2,7 @@
 // Command registry — built-in commands
 use std::collections::HashMap;
 
+/// Built-in commands, mapped from name to handler.
 pub struct CommandRegistry {
     commands: HashMap<String, fn(&[&str]) -> String>,
 }
@@ -13,6 +14,7 @@ impl Default for CommandRegistry {
 }
 
 impl CommandRegistry {
+    /// Registers the built-ins: echo, help, ls, pwd, whoami, clear, version.
     pub fn new() -> Self {
         let mut reg = Self {
             commands: HashMap::new(),
@@ -27,6 +29,7 @@ impl CommandRegistry {
         reg
     }
 
+    /// Runs the named command; an unknown name yields a message, not an error.
     pub fn run(&self, cmd: &str, args: &[&str]) -> String {
         match self.commands.get(cmd) {
             Some(handler) => handler(args),
