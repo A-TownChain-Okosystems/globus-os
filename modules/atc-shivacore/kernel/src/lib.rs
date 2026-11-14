@@ -17,6 +17,7 @@ extern crate std;
 pub use libshivacore::{acpi_devices, madt};
 
 /// Eigener Adressraum je Prozess mit Seitentabellen und Fenstern.
+pub mod console_owner;
 pub mod addr_space;
 /// Physikalischer Framespeicher; nur im Testbuild eingebunden.
 #[cfg(test)]
