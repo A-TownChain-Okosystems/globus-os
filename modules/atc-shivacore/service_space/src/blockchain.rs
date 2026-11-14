@@ -9,22 +9,36 @@ use alloc::vec;
 use alloc::vec::Vec;
 use libshivacore::simple_hash;
 use spin::Mutex;
+/// Block mit Hoehe, Vorgaenger, Vorschlagendem, Zeitpunkt, PoH-Bezug, Transaktionen, Wurzeln, Gas und Gebuehren.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Block {
+    /// Kennung, aus Hoehe, Vorgaenger, Vorschlagendem, Zeitpunkt, PoH-Hash, Transaktionswurzel und Signatur berechnet.
     pub id: [u8; 32],
+    /// Hoehe des Blocks; Genesis hat 0.
     pub height: u64,
+    /// Hash des Vorgaengers; bei Genesis Null.
     pub parent_hash: [u8; 32],
+    /// Vorschlagender als DID.
     pub proposer_did: String,
+    /// Zeitpunkt der Erzeugung.
     pub timestamp: u64,
+    /// Anknuepfung an die Proof-of-History-Kette.
     pub poh_hash: [u8; 32],
+    /// Transaktionen des Blocks in Aufnahmereihenfolge.
     pub transactions: Vec<Transaction>,
+    /// Wurzel ueber die Kennungen der Transaktionen in Reihenfolge.
     pub tx_root: [u8; 32],
+    /// Wurzel ueber den Zustand nach dem Block; new setzt sie auf Null, und sie geht nicht in die Kennung ein.
     pub state_root: [u8; 32],
+    /// Summe der Gaskosten aller Transaktionen.
     pub gas_used: u64,
+    /// Summe der Hoechstgebuehren aller Transaktionen.
     pub total_fees: u64,
+    /// Signatur des Vorschlagenden; new uebernimmt sie ungeprueft, auch als Nullwert.
     pub signature: [u8; 64],
 }
 impl Block {
+    /// Baut den Block, summiert Gas und Gebuehren und berechnet Transaktionswurzel und Kennung; state_root bleibt Null.
     pub fn new(
         height: u64,
         parent_hash: [u8; 32],
@@ -65,13 +79,16 @@ impl Block {
             signature,
         }
     }
+    /// Anzahl der Transaktionen im Block.
     pub fn tx_count(&self) -> usize {
         self.transactions.len()
     }
+    /// True, wenn der Block keine Transaktion enthaelt.
     pub fn is_empty(&self) -> bool {
         self.transactions.is_empty()
     }
 }
+/// Kette mit Hoehen- und Hashindex.
 pub struct BlockChain {
     blocks: Mutex<BTreeMap<u64, Block>>,
     by_hash: Mutex<BTreeMap<[u8; 32], u64>>,
@@ -85,6 +102,7 @@ impl Default for BlockChain {
 }
 
 impl BlockChain {
+    /// Leere Kette ohne Genesis.
     pub fn new() -> Self {
         BlockChain {
             blocks: Mutex::new(BTreeMap::new()),
@@ -93,6 +111,7 @@ impl BlockChain {
             genesis_hash: Mutex::new(None),
         }
     }
+    /// Setzt den Block der Hoehe 0, sofern noch keiner vorhanden ist.
     pub fn add_genesis(&self, block: Block) -> Result<(), PipelineError> {
         if block.height != 0 {
             return Err(PipelineError::InvalidHeight);
@@ -107,6 +126,7 @@ impl BlockChain {
         *self.current_height.lock() = 0;
         Ok(())
     }
+    /// Nimmt einen Block auf, wenn seine Hoehe direkt auf die letzte folgt und weder Hoehe noch Kennung belegt sind; parent_hash wird dabei nicht mit dem letzten Block verglichen.
     pub fn add_block(&self, block: Block) -> Result<(), PipelineError> {
         let mut b = self.blocks.lock();
         let mut bh = self.by_hash.lock();
@@ -127,25 +147,31 @@ impl BlockChain {
         *h = bh2;
         Ok(())
     }
+    /// Block zu einer Hoehe.
     pub fn get_block(&self, height: u64) -> Option<Block> {
         self.blocks.lock().get(&height).cloned()
     }
+    /// Block zu einer Kennung.
     pub fn get_by_hash(&self, hash: &[u8; 32]) -> Option<Block> {
         let bh = self.by_hash.lock();
         bh.get(hash)
             .and_then(|&h| self.blocks.lock().get(&h).cloned())
     }
+    /// Hoehe des letzten Blocks.
     pub fn current_height(&self) -> u64 {
         *self.current_height.lock()
     }
+    /// Anzahl der Bloecke.
     pub fn block_count(&self) -> usize {
         self.blocks.lock().len()
     }
+    /// Letzter Block, sofern vorhanden.
     pub fn last_block(&self) -> Option<Block> {
         let h = *self.current_height.lock();
         self.blocks.lock().get(&h).cloned()
     }
 }
+/// Verbindet Speicherpool, Pruefer, Konsens und Kette zu einem Blockvorschlag.
 pub struct ProposalPipeline {
     mempool: Arc<crate::mempool::MemoryPool>,
     validator: Arc<crate::mempool::TxValidator>,
@@ -156,6 +182,7 @@ pub struct ProposalPipeline {
     block_height: Mutex<u64>,
 }
 impl ProposalPipeline {
+    /// Pipeline ueber den uebergebenen Bestandteilen, mit Hoehenzaehler 0.
     pub fn new(
         mempool: Arc<crate::mempool::MemoryPool>,
         validator: Arc<crate::mempool::TxValidator>,
@@ -174,6 +201,7 @@ impl ProposalPipeline {
             block_height: Mutex::new(0),
         }
     }
+    /// Erzeugt den Genesis-Block mit einem PoH-Tick und legt ihn in Kette und Ereignisgraph ab.
     pub fn create_genesis(&self, timestamp: u64) -> Result<Block, PipelineError> {
         let pe = self.consensus.poh().tick(timestamp);
         let g = Block::new(
@@ -193,6 +221,7 @@ impl ProposalPipeline {
             .map_err(|_| PipelineError::DagInsertFailed)?;
         Ok(g)
     }
+    /// Nimmt bis zur angegebenen Anzahl wartender Transaktionen, prueft jede einzeln, verwirft ungueltige und baut den Block auf dem letzten; die Gebuehr wird dabei gebucht, ohne einen Fehler zu melden.
     pub fn propose_block(&self, max_txs: usize, timestamp: u64) -> Result<Block, PipelineError> {
         let pending = self.mempool.get_pending_batch(max_txs);
         if pending.is_empty() {
@@ -229,6 +258,7 @@ impl ProposalPipeline {
             .map_err(|_| PipelineError::DagInsertFailed)?;
         Ok(block)
     }
+    /// Gibt eine Stimme an den Konsens weiter.
     pub fn vote_on_block(
         &self,
         block_hash: [u8; 32],
@@ -239,35 +269,51 @@ impl ProposalPipeline {
         self.consensus
             .vote(block_hash, timestamp, approve, signature);
     }
+    /// Raeumt abgelaufene Transaktionen im Speicherpool auf und liefert deren Anzahl.
     pub fn cleanup_mempool(&self, now: u64) -> usize {
         self.mempool.cleanup(now)
     }
+    /// Kette, in die die Pipeline schreibt.
     pub fn chain(&self) -> &Arc<BlockChain> {
         &self.chain
     }
+    /// Speicherpool, aus dem die Transaktionen stammen.
     pub fn mempool(&self) -> &Arc<crate::mempool::MemoryPool> {
         &self.mempool
     }
+    /// Konsens, an den Bloecke und Stimmen gehen.
     pub fn consensus(&self) -> &Arc<ConsensusEngine> {
         &self.consensus
     }
+    /// Zustandsspeicher der Pipeline.
     pub fn state(&self) -> &Arc<crate::mempool::StateDb> {
         &self.state
     }
+    /// Hoehe des zuletzt von dieser Pipeline vorgeschlagenen Blocks.
     pub fn current_height(&self) -> u64 {
         *self.block_height.lock()
     }
 }
+/// Ablehnungsgruende der Pipeline.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PipelineError {
+    /// Es warten keine Transaktionen.
     NoPendingTxs,
+    /// Keine der wartenden Transaktionen war gueltig.
     AllTxsInvalid,
+    /// Es gibt noch keinen Genesis-Block.
     NoGenesis,
+    /// Die Hoehe passt nicht zur Kette.
     InvalidHeight,
+    /// Der Vorgaenger ist nicht in der Kette.
     ParentNotFound,
+    /// Zu dieser Hoehe gibt es bereits einen Block.
     BlockExists,
+    /// Diese Kennung ist bereits vergeben.
     DuplicateBlock,
+    /// Es gibt bereits einen Genesis-Block.
     GenesisExists,
+    /// Der Eintrag in den Ereignisgraph ist gescheitert.
     DagInsertFailed,
 }
 #[cfg(test)]
