@@ -373,10 +373,12 @@ pub fn online_cpus() -> usize {
 /// Setzt einen Dienst auf seinen Startzustand zurueck.
 ///
 /// Der Prozess laeuft in diesem Moment: sein Trap hat uns hierher gebracht,
-/// seine Seitentabelle ist aktiv. Deshalb ist sein Stapel ueber die virtuelle
-/// Adresse erreichbar und muss nicht eigens abgebildet werden. Geleert wird nur
-/// der Stapelbereich, nicht der Haufen und nicht die Daten: der Dienst soll
-/// nichts vom vorigen Lauf sehen, aber seine Capabilities behalten.
+/// seine Seitentabelle ist aktiv. Deshalb sind Stapel und Datensegment ueber
+/// die virtuelle Adresse erreichbar und muessen nicht eigens abgebildet werden.
+/// Zurueckgesetzt werden Stapel, Startvertrag, Register und — seit dem
+/// 14.11.2026 — das Datensegment aus dem hinterlegten Startabbild. Nicht
+/// angefasst wird der Haufen; die Capabilities bleiben, sonst waere der Dienst
+/// nach dem Neustart rechtlos.
 fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::Service) {
     let start = service.start_rsp;
     let end = start.saturating_add(16);
@@ -392,6 +394,21 @@ fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::S
             core::ptr::write_volatile((start as *mut u64).add(1), service.caps[1]);
         }
     }
+    // Datensegment zurueck auf den Startzustand. Der Dienst laeuft in diesem
+    // Trap, seine Seitentabelle ist aktiv, die Seiten sind ueber die virtuelle
+    // Adresse erreichbar; es wird nichts abgebildet und nichts angefordert.
+    match crate::services::restore_image(service.pid) {
+        Some(bytes) => serial_println!(
+            "ShivaCore: Dienst '{}' Daten zurueckgesetzt ({} Bytes aus dem Startabbild)",
+            service.name,
+            bytes
+        ),
+        None => serial_println!(
+            "ShivaCore: Dienst '{}' ohne Datenabbild — Datensegment bleibt stehen",
+            service.name
+        ),
+    }
+
     frame.rax = 0;
     frame.rbx = 0;
     frame.rcx = 0;
