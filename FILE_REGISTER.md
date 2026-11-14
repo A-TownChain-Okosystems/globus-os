@@ -77,7 +77,7 @@
 | `docs/audits/SHIVACORE_ABI_IMPLEMENTATION_2026-10-11.md` | 35 |
 | `docs/audits/SHIVACORE_SERVICE_SPACE_DRIFT_AUDIT_2026-10-11.md` | 128 |
 | `docs/audits/globusos_microkernel_migration_inventory_2026-10-18.json` | 583 |
-| `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 114 |
+| `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 195 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
@@ -290,7 +290,7 @@
 | `modules/atc-shivacore/kernel/.gitignore` | 1 |
 | `modules/atc-shivacore/kernel/Cargo.toml` | 51 |
 | `modules/atc-shivacore/kernel/src/addr_space.rs` | 374 |
-| `modules/atc-shivacore/kernel/src/allocator.rs` | 60 |
+| `modules/atc-shivacore/kernel/src/allocator.rs` | 68 |
 | `modules/atc-shivacore/kernel/src/apic.rs` | 416 |
 | `modules/atc-shivacore/kernel/src/atcfs.rs` | 731 |
 | `modules/atc-shivacore/kernel/src/ats1000.rs` | 119 |
@@ -322,7 +322,7 @@
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 420 |
 | `modules/atc-shivacore/kernel/src/lib.rs` | 112 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.625 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1858 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1888 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 124 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 937 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 580 |
@@ -455,6 +455,8 @@
 | `system/graphics/src/media_surface.rs` | 182 |
 | `system/graphics/src/shell.rs` | 202 |
 | `system/graphics/src/wm.rs` | 377 |
+| `system/identity-core/Cargo.toml` | 11 |
+| `system/identity-core/src/lib.rs` | 361 |
 | `system/identity/Cargo.toml` | 18 |
 | `system/identity/README.md` | 78 |
 | `system/identity/src/account_lifecycle.rs` | 184 |
