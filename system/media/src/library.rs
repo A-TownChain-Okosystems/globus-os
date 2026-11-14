@@ -2,37 +2,60 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SortOrder {
+    /// Titel aufsteigend.
     TitleAscending,
+    /// Titel absteigend.
     TitleDescending,
+    /// Neueste zuerst.
     Newest,
+    /// Aelteste zuerst.
     Oldest,
+    /// Kleinste zuerst.
     SizeAscending,
+    /// Groesste zuerst.
     SizeDescending,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Art einer Mediendatei nach MIME.
 pub enum MimeType {
+    /// Ton.
     Audio,
+    /// Video.
     Video,
+    /// Bild.
     Image,
+    /// Unbekannt.
     Unknown,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Was die Sammlung ueber eine Mediendatei kennt.
 pub struct MediaMetadata {
+    /// Kennung der Datei.
     pub id: u64,
+    /// Pfad oder URI.
     pub uri: String,
+    /// Anzeigetitel.
     pub title: String,
+    /// Art der Datei.
     pub mime: MimeType,
+    /// Groesse in Byte.
     pub size_bytes: u64,
+    /// Aenderungszeitpunkt in Millisekunden seit Epoche.
     pub modified_unix_ms: u64,
+    /// Optionaler Fingerabdruck des Inhalts.
     pub content_hash: Option<[u8; 32]>,
+    /// Dauer in Millisekunden, falls bekannt.
     pub duration_ms: Option<u64>,
+    /// Breite in Pixel, falls bekannt.
     pub width: Option<u32>,
+    /// Hoehe in Pixel, falls bekannt.
     pub height: Option<u32>,
 }
 
 #[derive(Debug, Default)]
+/// Sammlung mit Favoriten, Alben und Suche.
 pub struct MediaCatalog {
     items: Vec<MediaMetadata>,
     favorites: Vec<u64>,
@@ -40,22 +63,27 @@ pub struct MediaCatalog {
 }
 
 impl MediaCatalog {
+    /// Nimmt einen Eintrag auf oder ersetzt ihn anhand der Kennung.
     pub fn upsert(&mut self, item: MediaMetadata) {
         self.items.retain(|x| x.id != item.id);
         self.items.push(item);
     }
+    /// Alle Eintraege.
     pub fn items(&self) -> &[MediaMetadata] {
         &self.items
     }
+    /// Markiert einen Eintrag als Favorit oder hebt die Markierung auf.
     pub fn set_favorite(&mut self, id: u64, favorite: bool) {
         self.favorites.retain(|x| *x != id);
         if favorite && self.items.iter().any(|x| x.id == id) {
             self.favorites.push(id);
         }
     }
+    /// True, wenn der Eintrag als Favorit markiert ist.
     pub fn is_favorite(&self, id: u64) -> bool {
         self.favorites.contains(&id)
     }
+    /// Fuegt einen Eintrag einem Album hinzu.
     pub fn add_to_album(&mut self, name: impl Into<String>, id: u64) {
         let name = name.into();
         if let Some((_, ids)) = self.albums.iter_mut().find(|(n, _)| *n == name) {
@@ -66,6 +94,7 @@ impl MediaCatalog {
             self.albums.push((name, vec![id]));
         }
     }
+    /// Eintraege, deren Titel die Suche enthaelt.
     pub fn search(&self, query: &str) -> Vec<&MediaMetadata> {
         let q = query.to_ascii_lowercase();
         self.items
@@ -75,6 +104,7 @@ impl MediaCatalog {
             })
             .collect()
     }
+    /// Eintraege in der gewuenschten Reihenfolge.
     pub fn sorted(&self, order: SortOrder) -> Vec<&MediaMetadata> {
         let mut out: Vec<_> = self.items.iter().collect();
         match order {
@@ -87,6 +117,7 @@ impl MediaCatalog {
         };
         out
     }
+    /// Gruppen von Eintraegen mit gleichem Inhaltsfingerabdruck.
     pub fn duplicate_ids(&self) -> Vec<Vec<u64>> {
         let mut groups = Vec::new();
         for item in &self.items {
@@ -113,6 +144,7 @@ impl MediaCatalog {
     }
 }
 
+/// Art der Datei anhand der Endung.
 pub fn mime_from_extension(path: &str) -> MimeType {
     match path
         .rsplit('.')
