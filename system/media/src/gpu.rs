@@ -118,9 +118,7 @@ pub trait DisplayOutput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Aufloesung und Bildwiederholrate.
 pub struct DisplayMode {
-    /// Breite in Pixel.
     pub width: u32,
-    /// Hoehe in Pixel.
     pub height: u32,
     /// Bildwiederholrate in Hertz.
     /// Bildwiederholrate in Hertz.
@@ -130,6 +128,7 @@ pub struct DisplayMode {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Zeitraster der Ausgabe.
 pub struct FrameTiming {
+    /// Bildwiederholrate in Hertz.
     pub refresh_hz: u32,
     /// True, wenn auf den Bildaufbau gewartet wird.
     pub vsync_enabled: bool,
