@@ -2,11 +2,15 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum PathError {
+    /// Der Pfad beginnt nicht mit einem Schraegstrich.
     NotAbsolute,
+    /// Ein Pfadteil ist unbrauchbar.
     EmptyComponent,
+    /// Der Pfad verlaesst die Wurzel ueber ..
     TraversalAboveRoot,
 }
 
+/// Normalisiert einen absoluten Pfad und lehnt Flucht ueber die Wurzel ab.
 pub fn normalize(path: &str) -> Result<String, PathError> {
     if !path.starts_with('/') {
         return Err(PathError::NotAbsolute);
