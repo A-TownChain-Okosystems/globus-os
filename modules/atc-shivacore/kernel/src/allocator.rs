@@ -36,6 +36,43 @@ pub fn free_bytes() -> usize {
 #[cfg_attr(all(not(test), feature = "x86-boot"), global_allocator)] // [AD-028] Nur im echten Boot-Binary aktiv — als Abhaengigkeit stellt das Ziel-Binary (std) den Allokator
 pub static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
 
+/// Erweitert den Haufen um `bytes` aus dem Frame-Vorrat.
+///
+/// Grund (IDENT-001): Argon2id mit 19 MiB braucht 19 MiB **am Stueck**. Der
+/// Haufen ist auf 512 KiB begruendet (acht Dienst-Startabbilder); fuer die KDF
+/// wird er einmalig erweitert. Der neue Bereich schliesst direkt an und wird
+/// dem Allokator uebergeben, nicht selbst verwaltet — sonst gaebe es zwei
+/// Vorraete.
+///
+/// Die Erweiterung ist einbahnig: danach gehoert der Speicher dem Haufen. Das
+/// ist ehrlicher als "temporaer", weil eine Rueckgabe an den Frame-Vorrat ein
+/// zweites Buch ueber denselben Speicher waere.
+#[cfg(feature = "x86-boot")]
+pub fn extend_heap(
+    mapper: &mut impl Mapper<Size4KiB>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    bytes: usize,
+) -> Result<usize, MapToError<Size4KiB>> {
+    let pages = bytes.div_ceil(4096) as u64;
+    let start = VirtAddr::new((HEAP_START + HEAP_SIZE) as u64);
+    let first = Page::containing_address(start);
+    let flags = PageTableFlags::PRESENT | PageTableFlags::WRITABLE;
+    for index in 0..pages {
+        let page = first + index as u64;
+        let frame = frame_allocator
+            .allocate_frame()
+            .ok_or(MapToError::FrameAllocationFailed)?;
+        unsafe {
+            mapper.map_to(page, frame, flags, frame_allocator)?.flush();
+        }
+    }
+    let added = (pages * 4096) as usize;
+    // Safety: der Bereich [HEAP_START+HEAP_SIZE, +added) ist oben abgebildet
+    // und gehoert noch niemandem; der Allokator bekommt ihn genau einmal.
+    unsafe { ALLOCATOR.lock().extend(added) };
+    Ok(added)
+}
+
 /// Bildet den Heap-Bereich ab und macht ihn dem Allokator bekannt.
 #[cfg(feature = "x86-boot")]
 pub fn init_heap(
