@@ -12,7 +12,13 @@ use crate::ats1000::Pid;
 /// Kanal-ID des Kernel-Eingabekanals. Der Wert ist ein Default, kein
 /// ABI-Zusatz: `IpcReceive` mit dieser ID und READ-Recht liefert das naechste
 /// Tastenereignis im Rueckgabewert.
-pub const KERNEL_INPUT_CHANNEL: u64 = 1;
+/// Kanal, an dem Tastenereignisse zugestellt werden. Der Wert kommt aus der
+/// ABI, damit Kernel und Userspace nicht getrennt voneinander raten.
+pub const KERNEL_INPUT_CHANNEL: u64 = libshivacore::KERNEL_INPUT_CHANNEL;
+
+/// Kennung der Systemkonsole. Es gibt genau eine; die Kennung unterscheidet
+/// die Console-Cap von jeder anderen Ressource desselben Typs.
+pub const CONSOLE_RESOURCE_ID: u64 = 1;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use libshivacore::{
     validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
@@ -76,10 +82,16 @@ pub struct SyscallResponse {
 }
 
 impl SyscallResponse {
-    const fn ok(value: u64) -> Self {
+    /// Erfolgreiche Antwort mit Rueckgabewert.
+    ///
+    /// Sichtbar fuer den Trampolin: Aufrufe, die Hardware brauchen (Konsole,
+    /// Exit), werden dort behandelt und antworten mit demselben Typ. Es bleibt
+    /// bei einem Antworttyp, nicht bei zwei.
+    pub const fn ok(value: u64) -> Self {
         Self { error: None, value }
     }
-    const fn err(error: AbiError) -> Self {
+    /// Ablehnung mit Grund; der Rueckgabewert ist dann 0.
+    pub const fn err(error: AbiError) -> Self {
         Self {
             error: Some(error),
             value: 0,
@@ -164,6 +176,7 @@ impl SyscallDispatcher {
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             x if x == Syscall::Exit.id() => Syscall::Exit,
+            x if x == Syscall::Console.id() => Syscall::Console,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
@@ -173,6 +186,11 @@ impl SyscallDispatcher {
             // nur, dass die Nummer bekannt ist. Ein Aufruf, der bis hierher
             // kommt, wird nicht als stiller Erfolg gemeldet.
             Syscall::Exit => SyscallResponse::err(AbiError::InvalidPayload),
+            // Konsole braucht Bildschirm und eine Kopie aus dem
+            // Prozessspeicher; beides kennt der Dispatcher nicht. Der
+            // Trampolin faengt den Aufruf ab, bevor er hier ankommt. Wer bis
+            // hierher kommt, bekommt eine Absage statt eines stillen Erfolgs.
+            Syscall::Console => SyscallResponse::err(AbiError::InvalidPayload),
             Syscall::IpcSend => {
                 if !self.check_capability(
                     pid,
