@@ -10,21 +10,34 @@ use globus_ipc::{WalletSignMessage, WalletSignResponse};
 use globus_security::{Authorization, Grant, Right, authorize};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Evidence recorded for every signing attempt, whether it succeeded or not.
 pub struct AuditEvidence {
+    /// Operation name, here the IPC method that was called.
     pub operation: &'static str,
+    /// User the request claimed to act for.
     pub user_id: String,
+    /// Key the request addressed.
     pub key_id: String,
+    /// Domain separation label the signature was bound to.
     pub domain: String,
+    /// SHA-256 digest of the signed message.
     pub message_digest: [u8; 32],
+    /// Whether the capability check passed.
     pub authorized: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Failure modes of the wallet boundary.
 pub enum WalletServiceError {
+    /// No valid session was supplied.
     Unauthenticated,
+    /// The session lacks the signing capability.
     Unauthorized,
+    /// The requested user is not the session user.
     IdentityMismatch,
+    /// The request is malformed, e.g. carries an unusable key id.
     InvalidRequest,
+    /// The keystore rejected the operation.
     Keystore(KeystoreError),
 }
 
@@ -34,11 +47,13 @@ impl From<KeystoreError> for WalletServiceError {
     }
 }
 
+/// Wallet boundary that never sees private keys; signing is delegated to `K`.
 pub struct WalletService<K> {
     keystore: K,
 }
 
 impl<K: KeyStore> WalletService<K> {
+    /// Creates the service over the given keystore.
     pub fn new(keystore: K) -> Self {
         Self { keystore }
     }
