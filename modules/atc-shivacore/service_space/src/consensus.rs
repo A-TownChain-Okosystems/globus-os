@@ -17,13 +17,18 @@ use spin::Mutex;
 // 1. Proof of History (PoH) — sequenzielle Hash-Kette für Zeitordnung
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Eintrag der Proof-of-History-Kette, die Reihenfolge ohne Uhrabgleich belegt.
 #[derive(Clone, Debug)]
 pub struct PohEntry {
+    /// Hash dieses Eintrags.
     pub hash: [u8; 32],
+    /// Zeitpunkt, den der Erzeuger dem Eintrag gibt.
     pub timestamp: u64,
+    /// Laufende Nummer des Eintrags in der Kette.
     pub tick: u64,
 }
 
+/// Fortlaufende Hash-Kette; jeder Schritt hängt vom vorherigen Hash ab.
 pub struct PohSequence {
     current_hash: Mutex<[u8; 32]>,
     tick: Mutex<u64>,
@@ -31,6 +36,7 @@ pub struct PohSequence {
 }
 
 impl PohSequence {
+    /// Kette, die beim übergebenen Genesis-Hash beginnt und bei Tick 0 steht.
     pub fn new(genesis_hash: [u8; 32]) -> Self {
         PohSequence {
             current_hash: Mutex::new(genesis_hash),
@@ -84,12 +90,15 @@ impl PohSequence {
         entry
     }
 
+    /// Hash des zuletzt erzeugten Eintrags.
     pub fn current_hash(&self) -> [u8; 32] {
         *self.current_hash.lock()
     }
+    /// Anzahl der bisher erzeugten Einträge.
     pub fn tick_count(&self) -> u64 {
         *self.tick.lock()
     }
+    /// Kopie aller Einträge in Erzeugungsreihenfolge.
     pub fn entries(&self) -> Vec<PohEntry> {
         self.entries.lock().clone()
     }
@@ -115,28 +124,44 @@ impl PohSequence {
 // 2. DAG-Vertex (Event) — ATC-04
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Art eines Knotens im Ereignisgraphen.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum VertexType {
+    /// Wurzelknoten ohne Vorgänger.
     Genesis,
+    /// Knoten zu einer Transaktion.
     Transaction,
+    /// Knoten, der einen Zustand zusammenfasst.
     Checkpoint,
 }
 
+/// Knoten des gerichteten azyklischen Graphen mit Vorgängern und Bestätigungszustand.
 #[derive(Clone, Debug)]
 pub struct DagVertex {
+    /// Kennung, aus PoH-Hash, Nutzlast-Hash, Vorgängern und Ersteller berechnet.
     pub id: [u8; 32],
+    /// Art des Knotens.
     pub vertex_type: VertexType,
-    pub parents: Vec<[u8; 32]>, // Referenzen auf Vorgänger (DAG!)
+    /// Vorgänger, auf denen der Knoten aufbaut.
+    pub parents: Vec<[u8; 32]>,
+    /// Ersteller als DID.
     pub creator_did: String,
+    /// Zeitpunkt der Erzeugung.
     pub timestamp: u64,
-    pub poh_hash: [u8; 32],     // Proof of History Verknüpfung
-    pub payload_hash: [u8; 32], // Hash der Transaktion/des Events
-    pub signature: [u8; 64],    // Ed25519 Signatur des Creators
+    /// Anknüpfung an die Proof-of-History-Kette.
+    pub poh_hash: [u8; 32],
+    /// Hash der zugehörigen Transaktion oder des Ereignisses.
+    pub payload_hash: [u8; 32],
+    /// Signatur des Erstellers.
+    pub signature: [u8; 64],
+    /// True, sobald der Knoten bestätigt ist.
     pub confirmed: bool,
+    /// Anzahl der Bestätigungen.
     pub confirmation_votes: u32,
 }
 
 impl DagVertex {
+    /// Baut den Knoten und berechnet die Kennung; Zeitpunkt, Art und Signatur gehen nicht in die Kennung ein.
     pub fn new(
         vertex_type: VertexType,
         parents: Vec<[u8; 32]>,
@@ -170,6 +195,7 @@ impl DagVertex {
         }
     }
 
+    /// Genesis-Knoten ohne Vorgänger, mit leerem Nutzlast-Hash und sofort bestätigt.
     pub fn genesis(creator_did: String, timestamp: u64, poh_hash: [u8; 32]) -> Self {
         let payload_hash = [0u8; 32];
         let sig = [0u8; 64];
@@ -191,6 +217,7 @@ impl DagVertex {
 // 3. DAG-Struktur — ATC-04
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Gerichteter azyklischer Graph der Ereignisse mit Spitzen und Genesis-Kennung.
 pub struct Dag {
     vertices: Mutex<BTreeMap<[u8; 32], DagVertex>>,
     tips: Mutex<Vec<[u8; 32]>>, // Unbestätigte Spitzen des DAG
@@ -204,6 +231,7 @@ impl Default for Dag {
 }
 
 impl Dag {
+    /// Leerer Graph ohne Knoten und Spitzen.
     pub fn new() -> Self {
         Dag {
             vertices: Mutex::new(BTreeMap::new()),
@@ -212,6 +240,7 @@ impl Dag {
         }
     }
 
+    /// Nimmt einen Knoten auf, wenn alle Vorgänger bekannt sind; Genesis setzt die Wurzel.
     pub fn add_vertex(&self, vertex: DagVertex) -> Result<(), ConsensusError> {
         let mut vertices = self.vertices.lock();
         let mut tips = self.tips.lock();
@@ -236,6 +265,7 @@ impl Dag {
         Ok(())
     }
 
+    /// Kopie des Knotens, sofern vorhanden.
     pub fn get_vertex(&self, id: &[u8; 32]) -> Option<DagVertex> {
         self.vertices.lock().get(id).cloned()
     }
@@ -327,15 +357,22 @@ impl Dag {
 // 4. Validator-Registry
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Validator mit Einsatz und Zählern.
 #[derive(Clone, Debug)]
 pub struct Validator {
+    /// Identität des Validators.
     pub did: String,
+    /// Gebundener Einsatz.
     pub stake: u64,
+    /// True, solange der Validator mitwirkt.
     pub active: bool,
+    /// Bisher abgegebene Stimmen.
     pub votes_cast: u64,
+    /// Bisher vorgeschlagene Blöcke.
     pub blocks_proposed: u64,
 }
 
+/// Verzeichnis der Validatoren mit aufsummiertem Einsatz.
 pub struct ValidatorRegistry {
     validators: Mutex<BTreeMap<String, Validator>>,
     total_stake: Mutex<u64>,
@@ -348,6 +385,7 @@ impl Default for ValidatorRegistry {
 }
 
 impl ValidatorRegistry {
+    /// Leeres Verzeichnis ohne Validatoren.
     pub fn new() -> Self {
         ValidatorRegistry {
             validators: Mutex::new(BTreeMap::new()),
@@ -355,6 +393,7 @@ impl ValidatorRegistry {
         }
     }
 
+    /// Legt den Validator an und addiert seinen Einsatz; ein erneuter Eintrag derselben DID überschreibt den Eintrag und addiert den Einsatz ein zweites Mal.
     pub fn register(&self, did: String, stake: u64) {
         let mut total = self.total_stake.lock();
         let v = Validator {
@@ -368,6 +407,7 @@ impl ValidatorRegistry {
         self.validators.lock().insert(did, v);
     }
 
+    /// Nimmt einen Validator aus der Mitwirkung; sein Einsatz bleibt in der Summe.
     pub fn deactivate(&self, did: &str) {
         let mut validators = self.validators.lock();
         if let Some(v) = validators.get_mut(did) {
@@ -375,6 +415,7 @@ impl ValidatorRegistry {
         }
     }
 
+    /// True, wenn der Validator eingetragen und aktiv ist.
     pub fn is_active(&self, did: &str) -> bool {
         self.validators
             .lock()
@@ -383,6 +424,7 @@ impl ValidatorRegistry {
             .unwrap_or(false)
     }
 
+    /// Einsatz eines Validators; 0, wenn unbekannt.
     pub fn get_stake(&self, did: &str) -> u64 {
         self.validators
             .lock()
@@ -391,12 +433,15 @@ impl ValidatorRegistry {
             .unwrap_or(0)
     }
 
+    /// Summe der eingetragenen Einsätze.
     pub fn total_stake(&self) -> u64 {
         *self.total_stake.lock()
     }
+    /// Anzahl der eingetragenen Validatoren.
     pub fn validator_count(&self) -> usize {
         self.validators.lock().len()
     }
+    /// Anzahl der aktiven Validatoren.
     pub fn active_count(&self) -> usize {
         self.validators.lock().values().filter(|v| v.active).count()
     }
@@ -426,12 +471,14 @@ impl ValidatorRegistry {
         active.last().map(|v| v.did.clone())
     }
 
+    /// Zählt eine abgegebene Stimme am Validator.
     pub fn record_vote(&self, did: &str) {
         if let Some(v) = self.validators.lock().get_mut(did) {
             v.votes_cast += 1;
         }
     }
 
+    /// Zählt einen Vorschlag am Validator.
     pub fn record_proposal(&self, did: &str) {
         if let Some(v) = self.validators.lock().get_mut(did) {
             v.blocks_proposed += 1;
@@ -443,15 +490,22 @@ impl ValidatorRegistry {
 // 5. Voting & Finality
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Stimme eines Validators zu einem Knoten.
 #[derive(Clone, Debug)]
 pub struct Vote {
+    /// Knoten, über den abgestimmt wird.
     pub vertex_id: [u8; 32],
+    /// Abstimmender Validator.
     pub voter_did: String,
+    /// Zeitpunkt der Stimme.
     pub timestamp: u64,
+    /// True für Zustimmung, false für Ablehnung.
     pub approve: bool,
+    /// Signatur des Abstimmenden.
     pub signature: [u8; 64],
 }
 
+/// Sammelt Stimmen je Knoten und entscheidet über Finalität nach Einsatzanteil.
 pub struct VotePool {
     votes: Mutex<BTreeMap<[u8; 32], Vec<Vote>>>, // vertex_id → votes
     validators: Arc<ValidatorRegistry>,
@@ -459,6 +513,7 @@ pub struct VotePool {
 }
 
 impl VotePool {
+    /// Pool über einem Validatorverzeichnis mit Finalitätsschwelle zwischen 0 und 1.
     pub fn new(validators: Arc<ValidatorRegistry>, threshold: f64) -> Self {
         VotePool {
             votes: Mutex::new(BTreeMap::new()),
@@ -467,6 +522,7 @@ impl VotePool {
         }
     }
 
+    /// Nimmt eine Stimme auf und zählt sie am Validator; die Signatur wird hier nicht geprüft.
     pub fn cast_vote(&self, vote: Vote) {
         self.validators.record_vote(&vote.voter_did);
         self.votes
@@ -541,15 +597,21 @@ impl VotePool {
 // 6. Consensus-Engine (Top-Level)
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Verbindet Zeitkette, Ereignisgraph, Validatoren und Stimmen zu einem Konsens.
 pub struct ConsensusEngine {
+    /// Graph der Ereignisse.
     pub dag: Arc<Dag>,
+    /// Zeitkette der Proof-of-History.
     pub poh: Arc<PohSequence>,
+    /// Verzeichnis der Validatoren.
     pub validators: Arc<ValidatorRegistry>,
+    /// Stimmen und Finalität.
     pub votes: Arc<VotePool>,
     our_did: String,
 }
 
 impl ConsensusEngine {
+    /// Baut die Engine mit leerem Graph, eigener DID und Schwelle zwei Drittel.
     pub fn new(our_did: String, genesis_hash: [u8; 32]) -> Self {
         let dag = Arc::new(Dag::new());
         let poh = Arc::new(PohSequence::new(genesis_hash));
@@ -665,18 +727,23 @@ impl ConsensusEngine {
         path
     }
 
+    /// Eigene Identität in diesem Konsens.
     pub fn our_did(&self) -> &str {
         &self.our_did
     }
+    /// Graph der Ereignisse.
     pub fn dag(&self) -> &Arc<Dag> {
         &self.dag
     }
+    /// Zeitkette der Proof-of-History.
     pub fn poh(&self) -> &Arc<PohSequence> {
         &self.poh
     }
+    /// Verzeichnis der Validatoren.
     pub fn validators(&self) -> &Arc<ValidatorRegistry> {
         &self.validators
     }
+    /// Stimmen und Finalität.
     pub fn votes(&self) -> &Arc<VotePool> {
         &self.votes
     }
@@ -686,12 +753,18 @@ impl ConsensusEngine {
 // Errors
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Ablehnungsgründe des Konsens.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ConsensusError {
+    /// Ein angegebener Vorgänger ist nicht im Graph.
     ParentNotFound([u8; 32]),
+    /// Es gibt bereits einen Genesis-Knoten.
     GenesisAlreadyExists,
+    /// Die Kennung ist bereits im Graph.
     VertexAlreadyExists,
+    /// Kein Validator ist aktiv.
     NoActiveValidators,
+    /// Die Stimme ist ungültig.
     InvalidVote,
 }
 
