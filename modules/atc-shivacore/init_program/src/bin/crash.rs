@@ -17,7 +17,7 @@ mod allocator;
 
 /// Einsprungpunkt, der auf eine unbelegte Adresse schreibt und damit
 /// absichtlich einen Seitenfehler ausloest.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     // 0x0DEAD000 liegt zwischen den belegten Fenstern (Code ab 0x0040_0000,
     // Eingabe ab 0x0080_0000, Heap 0x0700_0000, Init 0x0180_0000, zweites
