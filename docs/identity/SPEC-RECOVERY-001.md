@@ -996,13 +996,27 @@ Zustand selbst führen), die 256 Bit der Phrase stammen aus dem DRBG statt aus
 und `erkranktes_tor_verhindert_jede_phrase` (zu REC-T-41), `phrase_kommt_aus_dem_tor_und_adresse_bleibt_reproduzierbar`
 (zu REC-T-45, Adresse weiterhin 35 Zeichen und aus derselben Phrase reproduzierbar).
 
-**EHRLICHE GRENZE.** Damit ist der Host-Pfad geschlossen, der Image-Pfad nicht:
-der Kernel hat weiterhin **keinen Registrierungspfad**, der `status()` abfragt,
-und REQ-REC-16 (Neuspeisung nach S3/S4 mit Rückfall auf `UNINITIALIZED`) ist
-nicht umgesetzt. Auf dem Host sind beide Quellen zwei Züge aus `OsRng`; die
-Trennung in Hardware und Jitter greift erst im Image. REQ-REC-13 bis REQ-REC-18
-bleiben **teilweise** umgesetzt: Kern ja, Host-Durchsetzung ja, Kernel-Gate und
-Neuspeisung nein.
+**Neuspeisung (14.11.2026, REQ-REC-16).** `EntropyPool::invalidate()` verwirft
+Schlüsselmaterial und fällt auf `UNINITIALIZED` zurück; `reseed()` verwirft
+zuerst, liest dann die Quellen und prüft zuletzt. Ein gescheiterter Lauf
+hinterlässt `Failed` und **kein** Material — der Schlüssel der vorigen Speisung
+läuft nicht weiter. Jede Speisung zählt eine Generation und bekommt daraus ihren
+Nonce, zwei Speisungen erzeugen also nie denselben Schlüsselstrom. Prüfbar:
+`invalidiert_gibt_es_kein_material`, `gescheiterte_neuspeisung_laesst_kein_altes_schluesselmaterial`,
+`neuspeisung_ohne_neue_quelle_bleibt_moeglich` (Kern) und
+`aufwachen_aus_s3_sperrt_bis_zur_bestandenen_neuspeisung`,
+`neuspeisung_haelt_die_erzeugung_an_und_gibt_sie_wieder_frei` (Tor bis zur
+Wallet). `chacha20` ist mit dem Feature `zeroize` gebaut, damit Schlüssel und
+Keystromzustand beim Verwerfen genullt werden (REQ-REC-17).
+
+**EHRLICHE GRENZE.** Damit sind REQ-REC-13 bis REQ-REC-17 im Host-Pfad
+umgesetzt, im Image fehlt der **Auslöser**: kein Kernel-Hook, der bei S3/S4
+`invalidate()` und danach `reseed()` aufruft, und kein Registrierungspfad, der
+`status()` abfragt. Ohne diesen Aufrufer bleibt die Neuspeisung eine Fähigkeit,
+die niemand auslöst. Ebenfalls offen: auf dem Host sind beide Quellen zwei Züge
+aus `OsRng`, die Trennung in Hardware (RDRAND/RDSEED) und Jitter greift erst im
+Image; REQ-REC-18 (Anzeige im Fenster) ist ohne Kernel-Gate nicht belegbar.
+Status: Kern und Host-Durchsetzung ja, Image-Verdrahtung nein.
 
 ---
 
