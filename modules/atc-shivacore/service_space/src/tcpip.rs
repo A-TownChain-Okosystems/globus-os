@@ -20,33 +20,52 @@ use crate::net::{
 
 // ─── Protokoll-Nummern ─────────────────────────────────────────────────────
 
+/// IPPROTO-Wert für ICMP.
 pub const IP_PROTO_ICMP: u8 = 1;
+/// IPPROTO-Wert für TCP.
 pub const IP_PROTO_TCP: u8 = 6;
+/// IPPROTO-Wert für UDP.
 pub const IP_PROTO_UDP: u8 = 17;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // IPv4-Packet
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// IPv4-Paketkopf mit Nutzlast, so wie es auf dem Draht steht.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Ipv4Packet {
+    /// IP-Version, hier stets 4.
     pub version: u8,
+    /// Kopflänge in 32-Bit-Wörtern, mindestens 5.
     pub ihl: u8,
+    /// Differenziertes Dienstdienstfeld (6 Bit).
     pub dscp: u8,
+    /// Explizite Überlastanzeige (2 Bit).
     pub ecn: u8,
+    /// Gesamtlänge von Kopf und Nutzlast in Byte.
     pub total_length: u16,
+    /// Kennung zur Zuordnung von Fragmenten.
     pub identification: u16,
+    /// Drei Flag-Bits: reserviert, Don't Fragment, More Fragments.
     pub flags: u8,
+    /// Versatz des Fragments in 8-Byte-Einheiten.
     pub fragment_offset: u16,
+    /// Verbleibende Hops bis zur Verwerfung.
     pub ttl: u8,
+    /// IPPROTO-Wert des enthaltenen Protokolls.
     pub protocol: u8,
+    /// Prüfsumme über den Kopf, im Paket so übertragen.
     pub header_checksum: u16,
+    /// Quelladresse.
     pub src_ip: Ipv4Address,
+    /// Zieladresse.
     pub dst_ip: Ipv4Address,
+    /// Nutzlast nach dem Kopf.
     pub payload: Vec<u8>,
 }
 
 impl Ipv4Packet {
+    /// Baut ein Paket mit Version 4, Kopflänge 5 und TTL 64; die Prüfsumme bleibt offen.
     pub fn new(src: Ipv4Address, dst: Ipv4Address, protocol: u8, payload: Vec<u8>) -> Self {
         let total_length = (20 + payload.len()) as u16;
         Ipv4Packet {
@@ -67,6 +86,7 @@ impl Ipv4Packet {
         }
     }
 
+    /// Serialisiert Kopf und Nutzlast in Netzwerkbytefolge.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(20 + self.payload.len());
         buf.push((self.version << 4) | self.ihl);
@@ -84,6 +104,7 @@ impl Ipv4Packet {
         buf
     }
 
+    /// Liest ein Paket aus Rohbytes; zu kurze oder fremde Versionen werden abgelehnt.
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
         if data.len() < 20 {
             return Err(NetworkError::PacketTooShort);
@@ -131,6 +152,7 @@ impl Ipv4Packet {
         })
     }
 
+    /// Internet-Prüfsumme über die übergebenen Bytes als Einerkomplement-Summe.
     pub fn calculate_checksum(header: &[u8]) -> u16 {
         let mut sum: u32 = 0;
         let mut i = 0;
@@ -147,6 +169,7 @@ impl Ipv4Packet {
         !(sum as u16)
     }
 
+    /// Setzt die Kopfprüfsumme über die ersten 20 Byte, mit genulltem Prüfsummenfeld.
     pub fn with_checksum(mut self) -> Self {
         let mut header = self.to_bytes();
         header[10] = 0;
@@ -160,16 +183,23 @@ impl Ipv4Packet {
 // UDP-Packet
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// UDP-Datagramm mit Ports, Länge und Nutzlast.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UdpPacket {
+    /// Quellport.
     pub src_port: u16,
+    /// Zielport.
     pub dst_port: u16,
+    /// Länge von Kopf und Nutzlast in Byte.
     pub length: u16,
+    /// Prüfsumme; bleibt bei new() auf 0, es wird keine berechnet.
     pub checksum: u16,
+    /// Nutzlast nach dem Kopf.
     pub payload: Vec<u8>,
 }
 
 impl UdpPacket {
+    /// Baut ein Datagramm mit Länge 8 plus Nutzlast und offener Prüfsumme.
     pub fn new(src_port: u16, dst_port: u16, payload: Vec<u8>) -> Self {
         UdpPacket {
             src_port,
@@ -180,6 +210,7 @@ impl UdpPacket {
         }
     }
 
+    /// Serialisiert Kopf und Nutzlast in Netzwerkbytefolge.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(8 + self.payload.len());
         buf.extend_from_slice(&self.src_port.to_be_bytes());
@@ -190,6 +221,7 @@ impl UdpPacket {
         buf
     }
 
+    /// Liest ein Datagramm aus Rohbytes; weniger als 8 Byte werden abgelehnt.
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
         if data.len() < 8 {
             return Err(NetworkError::PacketTooShort);
@@ -208,28 +240,46 @@ impl UdpPacket {
 // TCP-Segment
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Flag für Verbindungsabbau.
 pub const TCP_FIN: u8 = 0x01;
+/// Flag für Verbindungsaufbau und Sequenzabgleich.
 pub const TCP_SYN: u8 = 0x02;
+/// Flag für sofortigen Abbruch.
 pub const TCP_RST: u8 = 0x04;
+/// Flag für sofortige Weitergabe an die Anwendung.
 pub const TCP_PSH: u8 = 0x08;
+/// Flag für die Bestätigung empfangener Daten.
 pub const TCP_ACK: u8 = 0x10;
+/// Flag für den Zeiger auf dringende Daten.
 pub const TCP_URG: u8 = 0x20;
 
+/// TCP-Segment mit Sequenz-, Bestätigungs- und Fensterfeldern.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TcpSegment {
+    /// Quellport.
     pub src_port: u16,
+    /// Zielport.
     pub dst_port: u16,
+    /// Sequenznummer des ersten Nutzlastbytes.
     pub seq_num: u32,
+    /// Nächste erwartete Sequenznummer der Gegenstelle.
     pub ack_num: u32,
+    /// Kopflänge in 32-Bit-Wörtern, bei new() gleich 5.
     pub data_offset: u8,
+    /// Kombination der TCP_*-Flags.
     pub flags: u8,
+    /// Angebotene Fenstergröße in Byte.
     pub window_size: u16,
+    /// Prüfsumme; bleibt bei new() auf 0, es wird keine berechnet.
     pub checksum: u16,
+    /// Zeiger auf dringende Daten.
     pub urgent_ptr: u16,
+    /// Nutzlast nach dem Kopf.
     pub payload: Vec<u8>,
 }
 
 impl TcpSegment {
+    /// Baut ein Segment mit Kopflänge 5, vollem Fenster und offener Prüfsumme.
     pub fn new(
         src_port: u16,
         dst_port: u16,
@@ -252,6 +302,7 @@ impl TcpSegment {
         }
     }
 
+    /// Serialisiert Kopf und Nutzlast in Netzwerkbytefolge.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut buf = Vec::with_capacity(20 + self.payload.len());
         buf.extend_from_slice(&self.src_port.to_be_bytes());
@@ -267,6 +318,7 @@ impl TcpSegment {
         buf
     }
 
+    /// Liest ein Segment aus Rohbytes; weniger als 20 Byte werden abgelehnt.
     pub fn from_bytes(data: &[u8]) -> Result<Self, NetworkError> {
         if data.len() < 20 {
             return Err(NetworkError::PacketTooShort);
@@ -292,15 +344,19 @@ impl TcpSegment {
         })
     }
 
+    /// True, wenn das SYN-Flag gesetzt ist.
     pub fn is_syn(&self) -> bool {
         self.flags & TCP_SYN != 0
     }
+    /// True, wenn das ACK-Flag gesetzt ist.
     pub fn is_ack(&self) -> bool {
         self.flags & TCP_ACK != 0
     }
+    /// True, wenn das FIN-Flag gesetzt ist.
     pub fn is_fin(&self) -> bool {
         self.flags & TCP_FIN != 0
     }
+    /// True, wenn das RST-Flag gesetzt ist.
     pub fn is_rst(&self) -> bool {
         self.flags & TCP_RST != 0
     }
@@ -310,15 +366,22 @@ impl TcpSegment {
 // Routing-Table
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Eintrag der Routentabelle.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Route {
+    /// Netzadresse der Route.
     pub network: Ipv4Address,
+    /// Präfixlänge in Bit.
     pub prefix_len: u8,
+    /// Nächster Hop; None heißt direkt erreichbar.
     pub gateway: Option<Ipv4Address>,
+    /// Name der Schnittstelle, über die gesendet wird.
     pub interface: String,
+    /// Metrik; kleinere Werte werden zuerst geprüft.
     pub metric: u32,
 }
 
+/// Routentabelle mit Sperre, Einträge nach Metrik sortiert gehalten.
 pub struct RoutingTable {
     routes: Mutex<Vec<Route>>,
 }
@@ -330,18 +393,21 @@ impl Default for RoutingTable {
 }
 
 impl RoutingTable {
+    /// Leere Tabelle.
     pub fn new() -> Self {
         RoutingTable {
             routes: Mutex::new(Vec::new()),
         }
     }
 
+    /// Trägt eine Route ein und sortiert die Tabelle nach Metrik.
     pub fn add(&self, route: Route) {
         let mut routes = self.routes.lock();
         routes.push(route);
         routes.sort_by_key(|r| r.metric);
     }
 
+    /// Sucht die Route mit der längsten passenden Präfixlänge; bei Gleichstand gewinnt der zuletzt geprüfte Eintrag.
     pub fn lookup(&self, dst: Ipv4Address) -> Option<Route> {
         let routes = self.routes.lock();
         let mut best: Option<&Route> = None;
@@ -369,9 +435,11 @@ impl RoutingTable {
         (ip_u32 & mask) == (net_u32 & mask)
     }
 
+    /// Anzahl eingetragener Routen.
     pub fn route_count(&self) -> usize {
         self.routes.lock().len()
     }
+    /// Entfernt alle Routen.
     pub fn clear(&self) {
         self.routes.lock().clear();
     }
@@ -381,42 +449,71 @@ impl RoutingTable {
 // Socket-Abstraktion
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Handle eines Sockets im TCP/IP-Layer.
 pub type SocketId = u64;
 
+/// Verbindungszustand eines TCP-Sockets nach dem Standard-Zustandsmodell.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TcpState {
+    /// Kein Socket oder vollständig geschlossen.
     Closed,
+    /// Wartet auf ein eingehendes SYN.
     Listen,
+    /// SYN gesendet, Antwort steht aus.
     SynSent,
+    /// SYN empfangen und bestätigt, auf ACK wartend.
     SynReceived,
+    /// Verbindung steht, Daten fließen.
     Established,
+    /// Lokales FIN gesendet, auf Bestätigung wartend.
     FinWait1,
+    /// FIN bestätigt, auf FIN der Gegenstelle wartend.
     FinWait2,
+    /// FIN der Gegenstelle empfangen, lokale Seite hat noch nicht geschlossen.
     CloseWait,
+    /// Letztes ACK gesendet, Abschluss steht aus.
     LastAck,
+    /// Wartezustand nach beidseitigem Abschluss.
     TimeWait,
 }
 
+/// UDP-Socket mit lokaler und optionaler Gegenstelle.
 #[derive(Clone, Debug, PartialEq)]
 pub struct UdpSocket {
+    /// Eindeutige Socket-ID.
     pub id: SocketId,
+    /// Lokale Adresse, an die gebunden wurde.
     pub local_ip: Ipv4Address,
+    /// Lokaler Port.
     pub local_port: u16,
+    /// Gegenstelle, sofern verbunden.
     pub remote_ip: Option<Ipv4Address>,
+    /// Zielport der Gegenstelle, sofern verbunden.
     pub remote_port: Option<u16>,
+    /// Empfangene Datagramme, neueste zuerst.
     pub recv_queue: Vec<Vec<u8>>,
 }
 
+/// TCP-Socket mit Verbindungszustand und Sequenznummern.
 #[derive(Clone, Debug, PartialEq)]
 pub struct TcpSocket {
+    /// Eindeutige Socket-ID.
     pub id: SocketId,
+    /// Lokale Adresse, an die gebunden wurde.
     pub local_ip: Ipv4Address,
+    /// Lokaler Port.
     pub local_port: u16,
+    /// Gegenstelle, sofern verbunden.
     pub remote_ip: Option<Ipv4Address>,
+    /// Zielport der Gegenstelle, sofern verbunden.
     pub remote_port: Option<u16>,
+    /// Aktueller Verbindungszustand.
     pub state: TcpState,
+    /// Eigene Sequenznummer; neue Sockets starten bei 1000.
     pub seq_num: u32,
+    /// Zuletzt bestätigte Sequenznummer der Gegenstelle.
     pub ack_num: u32,
+    /// Empfangene Nutzlasten, neueste zuerst.
     pub recv_queue: Vec<Vec<u8>>,
 }
 
@@ -424,6 +521,7 @@ pub struct TcpSocket {
 // Socket-Manager
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Verwaltet die UDP- und TCP-Sockets des IP-Layers mit fortlaufenden IDs.
 pub struct SocketManager {
     udp_sockets: Mutex<BTreeMap<SocketId, UdpSocket>>,
     tcp_sockets: Mutex<BTreeMap<SocketId, TcpSocket>>,
@@ -437,6 +535,7 @@ impl Default for SocketManager {
 }
 
 impl SocketManager {
+    /// Leere Socket-Tabellen mit ID-Vergabe ab 1.
     pub fn new() -> Self {
         SocketManager {
             udp_sockets: Mutex::new(BTreeMap::new()),
@@ -454,6 +553,7 @@ impl SocketManager {
 
     // ── UDP ──────────────────────────────────────────────────────────────
 
+    /// Legt einen UDP-Socket an; auf doppelt belegte Ports wird nicht geprüft.
     pub fn udp_bind(&self, local_ip: Ipv4Address, local_port: u16) -> SocketId {
         let id = self.alloc_id();
         self.udp_sockets.lock().insert(
@@ -470,6 +570,7 @@ impl SocketManager {
         id
     }
 
+    /// Setzt die Gegenstelle eines UDP-Sockets; eine unbekannte ID ergibt ArpResolutionFailed.
     pub fn udp_connect(
         &self,
         id: SocketId,
@@ -485,6 +586,7 @@ impl SocketManager {
         Ok(())
     }
 
+    /// Baut Datagramm und IP-Paket, löst die Ziel-MAC auf und sendet den Rahmen.
     pub fn udp_send(
         &self,
         id: SocketId,
@@ -512,6 +614,7 @@ impl SocketManager {
         stack.device.send_frame(&frame.to_bytes())
     }
 
+    /// Holt das älteste Datagramm aus der Warteschlange; eine leere ergibt NoFrameAvailable.
     pub fn udp_recv(&self, id: SocketId) -> Result<Vec<u8>, NetworkError> {
         let mut sockets = self.udp_sockets.lock();
         let socket = sockets
@@ -523,6 +626,7 @@ impl SocketManager {
             .ok_or(NetworkError::NoFrameAvailable)
     }
 
+    /// Stellt ein eingehendes Datagramm allen Sockets zu, die auf den Zielport lauschen.
     pub fn handle_udp(
         &self,
         _src_ip: Ipv4Address,
@@ -538,12 +642,14 @@ impl SocketManager {
         }
     }
 
+    /// Entfernt einen UDP-Socket.
     pub fn udp_close(&self, id: SocketId) {
         self.udp_sockets.lock().remove(&id);
     }
 
     // ── TCP ──────────────────────────────────────────────────────────────
 
+    /// Legt einen TCP-Socket im Zustand Listen mit Startsequenz 1000 an.
     pub fn tcp_bind(&self, local_ip: Ipv4Address, local_port: u16) -> SocketId {
         let id = self.alloc_id();
         self.tcp_sockets.lock().insert(
@@ -563,6 +669,7 @@ impl SocketManager {
         id
     }
 
+    /// Setzt die Gegenstelle und wechselt nach SynSent; liefert den neuen Zustand.
     pub fn tcp_connect(
         &self,
         id: SocketId,
@@ -579,10 +686,12 @@ impl SocketManager {
         Ok(socket.state)
     }
 
+    /// Aktueller Zustand des Sockets, sofern die ID bekannt ist.
     pub fn tcp_state(&self, id: SocketId) -> Option<TcpState> {
         self.tcp_sockets.lock().get(&id).map(|s| s.state)
     }
 
+    /// Führt den Zustandswechsel für ein eingehendes Segment aus; Antwortsegmente werden nicht erzeugt.
     pub fn handle_tcp(&self, src_ip: Ipv4Address, src_port: u16, dst_port: u16, seg: &TcpSegment) {
         let mut sockets = self.tcp_sockets.lock();
         let matching_id: Option<SocketId> = sockets
@@ -633,6 +742,7 @@ impl SocketManager {
         }
     }
 
+    /// Holt die älteste Nutzlast aus der Warteschlange; eine leere ergibt NoFrameAvailable.
     pub fn tcp_recv(&self, id: SocketId) -> Result<Vec<u8>, NetworkError> {
         let mut sockets = self.tcp_sockets.lock();
         let socket = sockets
@@ -644,6 +754,7 @@ impl SocketManager {
             .ok_or(NetworkError::NoFrameAvailable)
     }
 
+    /// Setzt den Socket auf Closed und entfernt ihn aus der Tabelle.
     pub fn tcp_close(&self, id: SocketId) {
         let mut sockets = self.tcp_sockets.lock();
         if let Some(socket) = sockets.get_mut(&id) {
@@ -652,6 +763,7 @@ impl SocketManager {
         sockets.remove(&id);
     }
 
+    /// Anzahl der UDP- und TCP-Sockets als Paar (udp, tcp).
     pub fn socket_count(&self) -> (usize, usize) {
         (self.udp_sockets.lock().len(), self.tcp_sockets.lock().len())
     }
@@ -661,6 +773,7 @@ impl SocketManager {
 // IpStack — verbindet NetworkStack + Routing + Sockets
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// Verbindet Netzwerkstack, Routentabelle und Sockets zum IP-Layer.
 pub struct IpStack {
     net: Arc<NetworkStack>,
     routing: Arc<RoutingTable>,
@@ -668,6 +781,7 @@ pub struct IpStack {
 }
 
 impl IpStack {
+    /// Legt den Layer über einen bestehenden Netzwerkstack, mit leerer Routentabelle.
     pub fn new(net: Arc<NetworkStack>) -> Self {
         IpStack {
             net,
@@ -676,6 +790,7 @@ impl IpStack {
         }
     }
 
+    /// Nimmt Pakete an die eigene oder die Broadcast-Adresse an und reicht sie an UDP oder TCP weiter.
     pub fn handle_ipv4(&self, packet: &Ipv4Packet) {
         if packet.dst_ip != self.net.our_ip() && !packet.dst_ip.is_broadcast() {
             return;
@@ -697,6 +812,7 @@ impl IpStack {
         }
     }
 
+    /// Wertet einen Ethernet-Rahmen aus: ARP geht an den Netzwerkstack, IPv4 an diesen Layer.
     pub fn handle_frame(&self, data: &[u8], timestamp: u64) -> Result<(), NetworkError> {
         let frame = EthernetFrame::from_bytes(data)?;
         match frame.ethertype {
@@ -710,12 +826,15 @@ impl IpStack {
         }
     }
 
+    /// Routentabelle des Layers.
     pub fn routing(&self) -> &Arc<RoutingTable> {
         &self.routing
     }
+    /// Socket-Verwaltung des Layers.
     pub fn sockets(&self) -> &Arc<SocketManager> {
         &self.sockets
     }
+    /// Zugrundeliegender Netzwerkstack.
     pub fn net(&self) -> &Arc<NetworkStack> {
         &self.net
     }
