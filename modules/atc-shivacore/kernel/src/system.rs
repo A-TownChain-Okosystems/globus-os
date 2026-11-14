@@ -18,6 +18,7 @@ use alloc::collections::BTreeMap;
 // Boot Phases
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Phase des Systemstarts.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BootPhase {
     /// Pre-boot: bootloader hands off to kernel
@@ -45,6 +46,7 @@ pub enum BootPhase {
 }
 
 impl BootPhase {
+    /// Feste Reihenfolge der Phasen.
     pub fn order() -> &'static [BootPhase] {
         &[
             BootPhase::PreBoot,
@@ -60,10 +62,12 @@ impl BootPhase {
         ]
     }
 
+    /// True ab der ersten Nachinitialisierungsphase.
     pub fn is_post_init(&self) -> bool {
         matches!(self, BootPhase::Init | BootPhase::Running)
     }
 
+    /// True, solange der Userspace noch nicht laeuft.
     pub fn is_pre_userspace(&self) -> bool {
         matches!(
             self,
@@ -77,6 +81,7 @@ impl BootPhase {
         )
     }
 
+    /// Kurzname der Phase.
     pub fn name(&self) -> &'static str {
         match self {
             BootPhase::PreBoot => "pre-boot",
@@ -98,6 +103,7 @@ impl BootPhase {
 // Boot Sequence
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Zustand und Verlauf des Systemstarts.
 pub struct BootSequence {
     current_phase: BootPhase,
     completed_phases: Vec<BootPhase>,
@@ -113,6 +119,7 @@ impl Default for BootSequence {
 }
 
 impl BootSequence {
+    /// Startet in der ersten Phase.
     pub fn new() -> Self {
         Self {
             current_phase: BootPhase::PreBoot,
@@ -123,10 +130,12 @@ impl BootSequence {
         }
     }
 
+    /// Aktuelle Phase.
     pub fn current_phase(&self) -> BootPhase {
         self.current_phase
     }
 
+    /// Geht eine Phase weiter und haelt den Zeitstempel fest; ueber die letzte Phase hinaus bleibt der Zustand stehen.
     pub fn advance(&mut self, timestamp_ns: u64) -> BootPhase {
         let phases = BootPhase::order();
         let current_idx = phases
@@ -151,43 +160,53 @@ impl BootSequence {
         self.current_phase
     }
 
+    /// True, wenn der Start abgeschlossen ist.
     pub fn is_running(&self) -> bool {
         self.current_phase == BootPhase::Running
     }
+    /// True, solange der Start laeuft.
     pub fn is_booting(&self) -> bool {
         self.current_phase != BootPhase::Running && self.current_phase != BootPhase::Shutdown
     }
 
+    /// Anzahl abgeschlossener Phasen.
     pub fn completed_count(&self) -> usize {
         self.completed_phases.len()
     }
+    /// Gesamtzahl der Phasen.
     pub fn total_phases(&self) -> usize {
         BootPhase::order().len()
     }
 
+    /// Fortschritt zwischen 0 und 1.
     pub fn boot_progress(&self) -> f32 {
         let completed = self.completed_count() as f32;
         let total = self.total_phases() as f32;
         (completed / total) * 100.0
     }
 
+    /// Haengt eine Meldung an das Startprotokoll.
     pub fn log(&mut self, msg: &str) {
         self.boot_log
             .push(format!("[{}] {}", self.current_phase.name(), msg));
     }
 
+    /// Das Startprotokoll.
     pub fn boot_log(&self) -> &[String] {
         &self.boot_log
     }
 
+    /// Dauer einer Phase, falls sie schon durchlaufen wurde.
     pub fn phase_time(&self, phase: BootPhase) -> Option<u64> {
         self.phase_timestamps.get(&(phase as u8)).copied()
     }
 
+    /// Gesamtdauer des Starts in Nanosekunden.
     pub fn total_boot_time(&self) -> u64 {
         self.boot_time_ns
     }
 
+    /// Schliesst den Start mit Zeitstempel ab.
     pub fn set_boot_complete(&mut self, timestamp_ns: u64) {
         // Close the Init phase and record Running as reached so the boot
         // progress reflects a fully completed phase chain.
@@ -200,6 +219,7 @@ impl BootSequence {
         self.log(&format!("boot complete in {}ns", timestamp_ns));
     }
 
+    /// Faehrt den Startvorgang herunter und beendet ihn.
     pub fn shutdown(&mut self) {
         self.current_phase = BootPhase::Shutdown;
         self.log("system shutdown initiated");
@@ -210,19 +230,28 @@ impl BootSequence {
 // User/Group IDs
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// UID des Systemverwalters.
 pub const ROOT_UID: u32 = 0;
+/// GID des Systemverwalters.
 pub const ROOT_GID: u32 = 0;
+/// PID des Init-Prozesses.
 pub const INIT_PID: u32 = 1;
 
+/// Benutzer- und Gruppenkennung eines Prozesses, mit effektiven Werten.
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct UserGroup {
+    /// Reale Benutzerkennung.
     pub uid: u32,
+    /// Reale Gruppenkennung.
     pub gid: u32,
+    /// Effektive Benutzerkennung; massgeblich fuer Rechtepruefungen.
     pub euid: u32, // Effective UID
+    /// Effektive Gruppenkennung.
     pub egid: u32, // Effective GID
 }
 
 impl UserGroup {
+    /// Kennung des Systemverwalters.
     pub fn root() -> Self {
         Self {
             uid: ROOT_UID,
@@ -232,6 +261,7 @@ impl UserGroup {
         }
     }
 
+    /// Kennung aus Benutzer und Gruppe, effektive Werte gleich.
     pub fn new(uid: u32, gid: u32) -> Self {
         Self {
             uid,
@@ -241,10 +271,12 @@ impl UserGroup {
         }
     }
 
+    /// True, wenn die effektive Benutzerkennung die des Systemverwalters ist.
     pub fn is_root(&self) -> bool {
         self.euid == ROOT_UID || self.uid == ROOT_UID
     }
 
+    /// Setzt reale und effektive Benutzerkennung.
     pub fn setuid(&mut self, uid: u32) {
         // Only root can change UID freely
         if self.is_root() {
@@ -253,12 +285,14 @@ impl UserGroup {
         }
     }
 
+    /// Setzt nur die effektive Benutzerkennung.
     pub fn seteuid(&mut self, euid: u32) {
         if self.is_root() || euid == self.uid {
             self.euid = euid;
         }
     }
 
+    /// Setzt reale und effektive Gruppenkennung.
     pub fn setgid(&mut self, gid: u32) {
         if self.is_root() {
             self.gid = gid;
@@ -271,19 +305,26 @@ impl UserGroup {
 // Process Groups and Sessions
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Kennung einer Prozessgruppe.
 pub type Pgid = u32;
+/// Kennung einer Sitzung.
 pub type Sid = u32;
 
 /// A process group (for job control)
 #[derive(Clone, Debug)]
 pub struct ProcessGroup {
+    /// Kennung der Gruppe.
     pub pgid: Pgid,
+    /// Prozess, der die Gruppe anfuehrt.
     pub leader: Pid,
+    /// Mitglieder der Gruppe.
     pub members: Vec<Pid>,
+    /// Sitzung, zu der die Gruppe gehoert.
     pub session: Sid,
 }
 
 impl ProcessGroup {
+    /// Legt eine Gruppe mit ihrem Anfuhrer an.
     pub fn new(pgid: Pgid, leader: Pid, session: Sid) -> Self {
         Self {
             pgid,
@@ -293,20 +334,24 @@ impl ProcessGroup {
         }
     }
 
+    /// Fuegt ein Mitglied hinzu, sofern es noch fehlt.
     pub fn add_member(&mut self, pid: Pid) {
         if !self.members.contains(&pid) {
             self.members.push(pid);
         }
     }
 
+    /// Entfernt ein Mitglied; liefert false, wenn es nicht eingetragen war.
     pub fn remove_member(&mut self, pid: Pid) -> bool {
         self.members.retain(|p| *p != pid);
         !self.members.is_empty()
     }
 
+    /// Anzahl der Mitglieder.
     pub fn member_count(&self) -> usize {
         self.members.len()
     }
+    /// True, wenn der Prozess Mitglied ist.
     pub fn contains(&self, pid: Pid) -> bool {
         self.members.contains(&pid)
     }
@@ -315,13 +360,18 @@ impl ProcessGroup {
 /// A login session
 #[derive(Clone, Debug)]
 pub struct Session {
+    /// Kennung der Sitzung.
     pub sid: Sid,
+    /// Prozess, der die Sitzung anfuehrt.
     pub leader: Pid,
+    /// Prozessgruppen der Sitzung.
     pub groups: Vec<Pgid>,
+    /// Steuerndes Terminal, falls eines zugewiesen ist.
     pub controlling_tty: Option<u32>,
 }
 
 impl Session {
+    /// Legt eine Sitzung mit ihrem Anfuhrer an.
     pub fn new(sid: Sid, leader: Pid) -> Self {
         Self {
             sid,
@@ -331,16 +381,19 @@ impl Session {
         }
     }
 
+    /// Fuegt eine Prozessgruppe hinzu, sofern sie noch fehlt.
     pub fn add_group(&mut self, pgid: Pgid) {
         if !self.groups.contains(&pgid) {
             self.groups.push(pgid);
         }
     }
 
+    /// Weist der Sitzung ein steuerndes Terminal zu.
     pub fn set_controlling_tty(&mut self, tty: u32) {
         self.controlling_tty = Some(tty);
     }
 
+    /// Anzahl der Prozessgruppen.
     pub fn group_count(&self) -> usize {
         self.groups.len()
     }
@@ -363,6 +416,7 @@ impl Default for ProcessGroupManager {
 }
 
 impl ProcessGroupManager {
+    /// Leere Verwaltung.
     pub fn new() -> Self {
         Self {
             groups: Vec::new(),
@@ -463,9 +517,11 @@ impl ProcessGroupManager {
         self.process_sessions.remove(&pid.0);
     }
 
+    /// Anzahl der Prozessgruppen.
     pub fn group_count(&self) -> usize {
         self.groups.len()
     }
+    /// Anzahl der Sitzungen.
     pub fn session_count(&self) -> usize {
         self.sessions.len()
     }
@@ -498,23 +554,36 @@ impl ProcessGroupManager {
 /// Init process state
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum InitState {
+    /// Noch nicht gestartet.
     NotStarted,
+    /// Start laeuft an.
     Starting,
+    /// Init laeuft.
     Running,
+    /// Init sammelt Zombie-Kinder ein.
     Reaping, // Reaping zombie children
+    /// Init faehrt herunter.
     ShuttingDown,
+    /// Init ist beendet.
     Exited,
 }
 
 /// Init process configuration
 #[derive(Clone, Debug)]
 pub struct InitConfig {
+    /// Pfad des Init-Programms.
     pub binary_path: String,
+    /// Benutzerkennung des Init-Prozesses.
     pub uid: u32,
+    /// Gruppenkennung des Init-Prozesses.
     pub gid: u32,
+    /// Umgebung, die Init erbt.
     pub env: Vec<(String, String)>,
+    /// True, wenn Zombie-Kinder automatisch eingesammelt werden.
     pub auto_reap: bool,   // Auto-reap zombie children
+    /// Obergrenze fuer Neustarts nach einem Absturz.
     pub max_restarts: u32, // Max restarts if init crashes
+    /// Bisherige Neustarts.
     pub restart_count: u32,
 }
 
@@ -538,11 +607,17 @@ impl Default for InitConfig {
 
 /// The init process manager
 pub struct InitProcess {
+    /// Prozesskennung des Init-Prozesses.
     pub pid: Pid,
+    /// Zustand des Init-Prozesses.
     pub state: InitState,
+    /// Konfiguration des Init-Prozesses.
     pub config: InitConfig,
+    /// Kindprozesse von Init.
     pub children: Vec<Pid>,
+    /// Exit-Code, sobald Init beendet ist.
     pub exit_code: Option<ExitCode>,
+    /// Startzeit in Nanosekunden.
     pub start_time_ns: u64,
 }
 
@@ -553,6 +628,7 @@ impl Default for InitProcess {
 }
 
 impl InitProcess {
+    /// Legt Init in seinem Anfangszustand an.
     pub fn new() -> Self {
         Self {
             pid: Pid(INIT_PID),
@@ -564,30 +640,36 @@ impl InitProcess {
         }
     }
 
+    /// Startet Init und setzt die Startzeit.
     pub fn start(&mut self, timestamp_ns: u64) {
         self.state = InitState::Starting;
         self.start_time_ns = timestamp_ns;
         self.state = InitState::Running;
     }
 
+    /// Traegt einen Kindprozess ein.
     pub fn add_child(&mut self, pid: Pid) {
         if !self.children.contains(&pid) {
             self.children.push(pid);
         }
     }
 
+    /// Entfernt einen Kindprozess.
     pub fn remove_child(&mut self, pid: Pid) {
         self.children.retain(|p| *p != pid);
     }
 
+    /// Anzahl der Kindprozesse.
     pub fn child_count(&self) -> usize {
         self.children.len()
     }
 
+    /// True, wenn Init neu gestartet werden darf.
     pub fn should_restart(&self) -> bool {
         self.config.restart_count < self.config.max_restarts
     }
 
+    /// Startet Init neu, solange das Neustartbudget reicht.
     pub fn restart(&mut self) -> bool {
         if !self.should_restart() {
             return false;
@@ -599,22 +681,27 @@ impl InitProcess {
         true
     }
 
+    /// Faehrt Init herunter.
     pub fn shutdown(&mut self) {
         self.state = InitState::ShuttingDown;
     }
 
+    /// Beendet Init mit Exit-Code.
     pub fn exit(&mut self, code: ExitCode) {
         self.exit_code = Some(code);
         self.state = InitState::Exited;
     }
 
+    /// True, wenn Init laeuft.
     pub fn is_running(&self) -> bool {
         self.state == InitState::Running
     }
+    /// True, wenn Init beendet ist.
     pub fn is_exited(&self) -> bool {
         self.state == InitState::Exited
     }
 
+    /// Laufzeit seit dem Start bis `now_ns`.
     pub fn uptime_ns(&self, now_ns: u64) -> u64 {
         now_ns.saturating_sub(self.start_time_ns)
     }
@@ -624,12 +711,19 @@ impl InitProcess {
 // System Manager (top-level integration)
 // ═══════════════════════════════════════════════════════════════════════════════
 
+/// Buendelt Startablauf, Init, Prozessgruppen und Systemkennung.
 pub struct SystemManager {
+    /// Startablauf des Systems.
     pub boot: BootSequence,
+    /// Init-Prozess.
     pub init: InitProcess,
+    /// Prozessgruppen und Sitzungen.
     pub proc_groups: ProcessGroupManager,
+    /// Kennung des Systemverwalters.
     pub system_uid: UserGroup,
+    /// Laufzeit des Systems in Nanosekunden.
     pub uptime_ns: u64,
+    /// True, solange das System laeuft.
     pub running: bool,
 }
 
@@ -640,6 +734,7 @@ impl Default for SystemManager {
 }
 
 impl SystemManager {
+    /// Legt das System im Anfangszustand an.
     pub fn new() -> Self {
         let mut proc_groups = ProcessGroupManager::new();
         // Init gets its own session and group
@@ -712,33 +807,41 @@ impl SystemManager {
         self.boot.current_phase()
     }
 
+    /// Faehrt System und Init herunter.
     pub fn shutdown_system(&mut self) {
         self.boot.shutdown();
         self.init.shutdown();
         self.running = false;
     }
 
+    /// Laufzeit in Nanosekunden.
     pub fn uptime_ns(&self) -> u64 {
         self.uptime_ns
     }
+    /// Laufzeit in Millisekunden.
     pub fn uptime_ms(&self) -> u64 {
         self.uptime_ns / 1_000_000
     }
+    /// Laufzeit in Sekunden.
     pub fn uptime_secs(&self) -> u64 {
         self.uptime_ns / 1_000_000_000
     }
 
+    /// True, solange das System laeuft.
     pub fn is_running(&self) -> bool {
         self.running
     }
 
+    /// Fortschritt des Starts zwischen 0 und 1.
     pub fn boot_progress(&self) -> f32 {
         self.boot.boot_progress()
     }
+    /// Aktuelle Startphase.
     pub fn current_phase(&self) -> BootPhase {
         self.boot.current_phase()
     }
 
+    /// Zaehlt die Laufzeit hoch und schaltet bei Bedarf die Startphase weiter.
     pub fn tick(&mut self, elapsed_ns: u64) {
         if self.running {
             self.uptime_ns += elapsed_ns;
