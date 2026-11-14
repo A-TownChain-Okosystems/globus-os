@@ -27,19 +27,29 @@ pub struct ChannelId(pub u64);
 /// Message-Typ
 #[derive(Debug, Clone, PartialEq)]
 pub struct Message {
+    /// Prozess, der die Nachricht geschickt hat.
     pub sender: Pid,
+    /// Der Inhalt der Nachricht.
     pub data: Vec<u8>,
+    /// Zeitpunkt des Absendens; der Sender setzt ihn derzeit immer auf 0.
     pub timestamp: u64,
 }
 
 /// IPC-Channel — unidirektional (Sender → Empfaenger)
 pub struct Channel {
+    /// Kennung des Kanals.
     pub id: ChannelId,
-    pub owner: Pid,                // Empfaenger-Prozess
+    /// Empfaenger des Kanals und damit sein Eigentuemer.
+    pub owner: Pid, // Empfaenger-Prozess
+    /// Capability, die beim Anlegen fuer Senden erzeugt wurde. Sie wird gespeichert, aber beim Senden nicht gelesen; geprueft wird gegen die Capability-Tabelle.
     pub sender_cap: Option<CapId>, // Cap die Senden erlaubt
-    pub recv_cap: Option<CapId>,   // Cap die Empfangen erlaubt
+    /// Capability, die beim Anlegen fuer Empfangen erzeugt wurde. Sie wird gespeichert, aber beim Empfangen nicht gelesen; geprueft wird gegen die Capability-Tabelle.
+    pub recv_cap: Option<CapId>, // Cap die Empfangen erlaubt
+    /// Nachrichten, die noch nicht abgeholt sind.
     pub buffer: Vec<Message>,
+    /// Hoechstzahl der Nachrichten im Puffer.
     pub capacity: usize,
+    /// True, wenn der Kanal geschlossen ist und nichts mehr annimmt.
     pub closed: bool,
 }
 
@@ -56,6 +66,7 @@ impl Default for IpcSubsystem {
 }
 
 impl IpcSubsystem {
+    /// Leeres Subsystem; Kanaele beginnen bei Kennung 1.
     pub fn new() -> Self {
         Self {
             channels: BTreeMap::new(),
@@ -259,9 +270,11 @@ impl IpcSubsystem {
         caps.delegate(owner, *source_cap, target, rights)
     }
 
+    /// Anzahl der vorhandenen Kanaele.
     pub fn channel_count(&self) -> usize {
         self.channels.len()
     }
+    /// Anzahl der ungeholten Nachrichten; None, wenn es den Kanal nicht gibt.
     pub fn pending_messages(&self, channel_id: ChannelId) -> Option<usize> {
         self.channels.get(&channel_id).map(|c| c.buffer.len())
     }
@@ -270,11 +283,17 @@ impl IpcSubsystem {
 /// IPC-Fehler
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IpcError {
+    /// Kein Kanal mit dieser Kennung.
     ChannelNotFound,
+    /// Der Kanal ist geschlossen.
     ChannelClosed,
+    /// Der Puffer ist voll.
     ChannelFull,
+    /// Es liegt keine Nachricht bereit.
     ChannelEmpty,
+    /// Zum Senden fehlt die Capability.
     NoWriteCapability,
+    /// Zum Empfangen fehlt die Capability.
     NoReadCapability,
 }
 
