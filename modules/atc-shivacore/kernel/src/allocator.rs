@@ -15,7 +15,15 @@ use x86_64::{
 /// Beginn des Heap-Bereichs im virtuellen Speicher.
 pub const HEAP_START: usize = 0x_4444_4444_0000;
 /// Groesse des Heaps in Byte.
-pub const HEAP_SIZE: usize = 100 * 1024; // 100 KiB fuer K-Sprint 2
+/// Groesse des Kernel-Haufens.
+///
+/// 100 KiB reichten fuer den Boot. Seit der Supervisor den Startzustand der
+/// Daten eines Dienstes haelt (Datensegment inklusive bss, beim Anmeldefenster
+/// 6160 Byte), braucht der Haufen mehr Platz: acht Dienste zu je
+/// `MAX_SERVICE_IMAGE_BYTES` (64 KiB) sind 512 KiB. Der Wert ist damit
+/// begruendet und nicht geraten; ein zu kleiner Haufen faellt beim Boot als
+/// Allokationsfehler auf, nicht still.
+pub const HEAP_SIZE: usize = 512 * 1024;
 
 #[cfg_attr(all(not(test), feature = "x86-boot"), global_allocator)] // [AD-028] Nur im echten Boot-Binary aktiv — als Abhaengigkeit stellt das Ziel-Binary (std) den Allokator
 static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
