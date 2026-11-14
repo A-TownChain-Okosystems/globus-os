@@ -35,28 +35,41 @@ pub struct Predicate(pub String);
 /// Objekt-Wert: entweder Entity-Referenz oder Literal
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum ObjectValue {
+    /// Verweis auf eine andere Entity.
     Entity(EntityId),
+    /// Ganze Zahl.
     Integer(i64),
+    /// Text.
     String(String),
+    /// Rohbytes.
     Bytes(Vec<u8>),
+    /// Wahrheitswert.
     Boolean(bool),
 }
 
 /// Ein Triple: (Subject, Predicate, Object)
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Triple {
+    /// Subjekt des Triple.
     pub subject: EntityId,
+    /// Art der Beziehung.
     pub predicate: Predicate,
+    /// Objekt: Entity-Verweis oder Literal.
     pub object: ObjectValue,
 }
 
 /// Entity mit Metadaten
 #[derive(Debug, Clone)]
 pub struct Entity {
+    /// Kennung der Entity.
     pub id: EntityId,
+    /// Anzeigename.
     pub label: String,
+    /// Art der Entity als Text.
     pub entity_type: String,
+    /// Prozess, der die Entity angelegt hat.
     pub created_by: Pid,
+    /// Anzahl der Triple, in denen die Entity als Subjekt steht.
     pub triples_count: u32,
 }
 
@@ -76,19 +89,28 @@ pub struct KnowledgeGraph {
 /// Fehler beim Graph-Zugriff
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KgError {
+    /// Die Entity ist nicht vorhanden.
     EntityNotFound,
+    /// Das Triple ist nicht vorhanden.
     TripleNotFound,
+    /// Dem Aufrufer fehlt das Schreibrecht.
     NoWriteCapability,
+    /// Dem Aufrufer fehlt das Leserecht.
     NoReadCapability,
+    /// Die Capability ist widerrufen.
     CapabilityRevoked,
+    /// Der Objektwert passt nicht zum erwarteten Typ.
     InvalidObjectValue,
 }
 
 /// Query-Pattern: None = Wildcard (Match-All)
 #[derive(Debug, Clone)]
 pub struct QueryPattern {
+    /// Gesuchtes Subjekt; None ist ein Platzhalter fuer alle.
     pub subject: Option<EntityId>,
+    /// Gesuchte Beziehung; None ist ein Platzhalter fuer alle.
     pub predicate: Option<String>,
+    /// Gesuchtes Objekt; None ist ein Platzhalter fuer alle.
     pub object: Option<ObjectValue>,
 }
 
@@ -99,6 +121,7 @@ impl Default for KnowledgeGraph {
 }
 
 impl KnowledgeGraph {
+    /// Leerer Graph mit drei Indizes und Entity-Zaehler 1.
     pub fn new() -> Self {
         Self {
             entities: BTreeMap::new(),
