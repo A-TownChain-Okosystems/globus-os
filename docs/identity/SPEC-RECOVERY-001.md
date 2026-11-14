@@ -5,8 +5,9 @@
 **Stand:** 14.11.2026
 **Eigentümer:** GlobusOS Identity Service
 **Status:** SPEZIFIZIERT — keine Implementierungs- und keine Produktionsbehauptung.
-Geprüft gegen den Quellstand `c25dbb0` (`main`, 14.11.2026); Vorfassung geprüft
-gegen `37bf130`.
+Geprüft gegen den Quellstand `e4cdba6` (`main`, 14.11.2026); Vorfassung geprüft
+gegen `37bf130`. Die Bestätigung von E-6 durch den Eigentümer vom 14.11.2026
+ist in 15.3 eingearbeitet, die Arbeitsmatrix in 15.8.
 **Vorgänger:** `docs/IDENTITY_WALLET_ARCHITECTURE.md`,
 `docs/IDENTITY_WALLET_FLOW.md`, `docs/ACCOUNT_WALLET_AURORA_NODE_BINDING.md`,
 `docs/LOGIN_WINDOW.md`, `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md`,
@@ -138,7 +139,7 @@ klingt.
 
 **F-1 · Die Wallet-Ableitung ist eine einzige Strecke ohne Trennung.**
 `derive_private_key` rechnet `HMAC-SHA256(key = b"A-TownChain", message = seed)`
-(`system/identity/src/lib.rs:286`). Es gibt genau eine Ableitung. Die Vorgabe
+(`system/identity/src/lib.rs:289`). Es gibt genau eine Ableitung. Die Vorgabe
 verlangt getrennte Pfade für Wallet-Schlüssel und Identitätsschlüssel. Mit einer
 Strecke ist jeder Schlüssel, der aus derselben Phrase kommt, derselbe Schlüssel —
 genau das, was die Vorgabe ausschließt. Zusätzlich liegt die Ableitung in
@@ -684,7 +685,7 @@ vor der E1-Untersuchung), ihre Position ist die erste.
 | ~~**E-1**~~ | Phrase stellt nur Identität und Wallet her, oder auch Nutzdaten? | **ENTSCHIEDEN 14.11.2026:** nur Identität und Wallet; Nutzdaten eigener Mechanismus (§7.3/§7.4 der Architektur-Spezifikation) | — |
 | **E-2** | Wortliste Englisch (BIP39-Standard) oder zusätzlich Deutsch? | Englisch; eine zweite Wortliste ist eine zweite Fassung und braucht `inner_version` 2 | R-2 |
 | ~~**E-3**~~ | `key_version` für neue Konten | **ENTSCHIEDEN 14.11.2026:** 2 (getrennte Pfade), Fassung 1 bleibt lesbar | — |
-| ~~**E-6**~~ | `key_version` 1 als `ADDRESS_ONLY` / `NON_SIGNING` kennzeichnen | **ENTSCHIEDEN 14.11.2026**, Wortlaut in 15.3 | — |
+| ~~**E-6**~~ | `key_version` 1 als `ADDRESS_ONLY` / `NON_SIGNING` kennzeichnen | **VOM EIGENTÜMER BESTÄTIGT 14.11.2026**, Wortlaut, fünf Aussagen und Belege in 15.3 | — |
 | **E-4** | Wo liegt der Tresor, solange das Image keinen dauerhaften Speicher hat? | bis zum Vorhandensein: Ramdisk und ausdrücklich „nicht dauerhaft“ in der Oberfläche; kein Versprechen, das die Technik nicht hält | R-2, R-5 |
 | **E-5** | Darf die Wiederherstellung eine Schlüsselrotation anbieten? | nein, getrennter Vorgang nach der Bindungsspezifikation §6 | REQ-REC-10 |
 
@@ -701,9 +702,9 @@ nachgelesen und mit einem Test belegbar:
 |---|---|---|
 | Sind die 32 Byte ein Ed25519-Seed? | **Nein** | kein `ed25519-dalek` in `system/identity` |
 | Sind die 32 Byte ein secp256k1-Skalar? | **Nein** | `secp256k1` kommt im kompilierten Quelltext nicht vor |
-| Werden sie vor Verwendung transformiert? | **Ja, aber nicht in einen Schlüssel** | `derive_public_key` = `SHA-256(privater Wert)` (`system/identity/src/lib.rs:295`) |
+| Werden sie vor Verwendung transformiert? | **Ja, aber nicht in einen Schlüssel** | `derive_public_key` = `SHA-256(privater Wert)` (`system/identity/src/lib.rs:326`) |
 | Gibt es eine Schlüsselvalidierung? | **Nein** | keine Skalar-/Punktprüfung, weil es keinen Punkt gibt |
-| Was erreicht `WalletService`? | **Nichts von beidem** | `create_wallet` verwirft privaten und öffentlichen Wert; `WalletCreation` trägt nur Phrase, Adresse, Bindung (`lib.rs:186`) |
+| Was erreicht `WalletService`? | **Nichts von beidem** | `create_wallet` verwirft privaten und öffentlichen Wert; `WalletCreation` trägt nur Phrase, Adresse, Bindung (`lib.rs:194`) |
 
 Daraus folgt, was der Bestand wirklich ist: Die 32 Byte sind ein
 HMAC-Ausgang, der in eine Hashfunktion geht. Der „öffentliche Schlüssel" ist
@@ -751,7 +752,7 @@ Drei Folgen, die sofort gelten:
    Signierimplementierung nimmt big-endian aus der Norm, nicht little-endian aus
    der Nachbarschaft.
 3. **Die 35-Zeichen-Adresse ist nicht die Adresse der Norm.** `ATC`+28+4
-   Hexzeichen (`lib.rs:298`) ist eine Eigenform dieses Repositorys; die Norm
+   Hexzeichen (`lib.rs:329`) ist eine Eigenform dieses Repositorys; die Norm
    spricht von `sender_did`. Beides darf nebeneinander bestehen (lokale
    Konto-/Wallet-Referenz vs. Ketten-DID), aber nicht füreinander ausgegeben
    werden.
@@ -773,11 +774,39 @@ Normativer Wortlaut, Owner-Entscheidung vom 14.11.2026:
 > Transaktionen zu signieren. Signierfähigkeit setzt eine separat spezifizierte
 > und implementierte Schlüsselableitung gemäß `key_version = 2` voraus.
 
+**Owner-Bestätigung vom 14.11.2026, wörtlich übernommen.** Die Entscheidung
+beruht auf fünf Aussagen, die einzeln prüfbar sind:
+
+1. `key_version = 1` kann die bisherige 35-Zeichen-Adresse reproduzieren.
+2. `key_version = 1` besitzt kein persistentes oder rekonstruierbares
+   Wallet-Schlüsselmaterial.
+3. Es existiert kein zugehöriger privater Signaturschlüssel.
+4. Es existiert kein normkonformer öffentlicher Signaturschlüssel.
+5. Transaktionen können damit nicht signiert oder kryptografisch autorisiert
+   werden.
+
+| Aussage | Beleg im Quellstand | Grenze des Belegs |
+|---|---|---|
+| 1 | `restore_wallet` bildet aus derselben Phrase dieselbe Adresse (`system/identity/src/lib.rs:289`), Adressbildung `public_key_to_address` (`lib.rs:329`) | die Phrase ist nötig; aus der Adresse ist nichts zurückzurechnen |
+| 2 | `create_wallet_with_gate` gibt `WalletCreation` aus, das nur Phrase, Adresse und Bindung trägt (`lib.rs:194`); privater und öffentlicher Wert sind lokale Variablen ohne Feld und ohne Export | keine Persistenz, kein Feldsatz, keine Serialisierung |
+| 3 | weder `ed25519-dalek` noch `secp256k1` in `system/identity` (Manifest und Quelltext geprüft) | es gibt keinen Typ, der signieren könnte |
+| 4 | `derive_public_key` ist `SHA-256` des privaten Werts (`lib.rs:326`), also kein Kurvenpunkt | gegen einen Hash lässt sich keine Signatur prüfen |
+| 5 | `system/wallet-service` reicht an `KeyStore::sign` weiter, dort steht nur `TestStore` (15.7); L1 verlangt Ed25519 nach ATC-STD-600 §5.2 | kein produktiver Signaturpfad vorhanden |
+
+**Präzisierung zu Aussage 2, damit der Satz nicht falsch gelesen wird.** Aus der
+Phrase ist der Zwischenwert `HMAC-SHA256("A-TownChain", seed)` jederzeit
+nachrechenbar (`lib.rs:317`). Genau darum ist er kein Schlüsselmaterial: keine
+Signaturfunktion nimmt ihn an, er entsteht nicht auf einer Kurve, und er wird an
+keiner Stelle gespeichert. „Nicht rekonstruierbar" gilt für
+Wallet-Schlüsselmaterial, nicht für diesen Zwischenwert. Wer den HMAC-Ausgang
+zum Signaturschlüssel erklärt, verletzt Aussage 3 und 4 gleichzeitig und erzeugt
+ein Wallet, das keine Norm prüfen kann.
+
 Vier prüfbare Folgen:
 
 | Folge | Was geprüft wird |
 |---|---|
-| Die Adresse bleibt reproduzierbar | dieselbe Phrase erzeugt dieselbe 35-Zeichen-Adresse wie heute (`ATC`+28+4, `lib.rs:298`); keine Änderung an der bestehenden Ableitung |
+| Die Adresse bleibt reproduzierbar | dieselbe Phrase erzeugt dieselbe 35-Zeichen-Adresse wie heute (`ATC`+28+4, `lib.rs:329`); keine Änderung an der bestehenden Ableitung |
 | Kein Schlüsselmaterial | für `key_version` 1 existiert **kein** privater und **kein** öffentlicher Signaturschlüssel; eine Anforderung „signierfähiger Schlüssel" endet mit `NON_SIGNING`, nicht mit einem Wert (REC-T-37, REC-T-50) |
 | Kein normkonformer öffentlicher Schlüssel | der heutige Wert ist `SHA-256` eines Geheimnisses und kein Kurvenpunkt (15.1); er darf nie als `VerifyingKey` ausgegeben werden (REC-T-35) |
 | Keine Krypto-Autorisierung | keine Transaktion, keine Challenge, keine Capability darf sich auf eine v1-Adresse stützen; sie ist Kennung, nicht Berechtigung |
@@ -843,7 +872,7 @@ bleiben getrennt, dauerhaft:
 
 | Identifikator | Zweck | Regel | Länge |
 |---|---|---|---|
-| Adresse v1 | historische Kennung, `ADDRESS_ONLY` | `"ATC"` + `hex(h[..14])` + `hex(c[..2])`; `h`/`c` wie in `lib.rs:298` | 35 |
+| Adresse v1 | historische Kennung, `ADDRESS_ONLY` | `"ATC"` + `hex(h[..14])` + `hex(c[..2])`; `h`/`c` wie in `lib.rs:329` | 35 |
 | Adresse v2 | Kennung des Kontos in Fassung 2 | `h = SHA-256("ATC-ADDR-V2" ‖ 0x00 ‖ VerifyingKey)`, `c = SHA-256("ATC-ADDR-V2-CHECK" ‖ 0x00 ‖ h)`, Ausgabe `"ATC2"` + `hex(h[..14])` + `hex(c[..2])` | 36 |
 | Ketten-DID | Sender und Empfänger im L1-Signierstrom | `"did:shivacore:ed25519:"` + `hex_klein(VerifyingKey)` | 86 |
 
@@ -916,6 +945,26 @@ gelten:
    Sitzung, Capability `Right::Sign`, Domaenenlaenge und Nachrichtengroesse und
    reicht dann an `KeyStore::sign` weiter — die Kryptografie liegt vollstaendig
    dahinter, und dort steht heute nur `TestStore` (§15.1).
+
+### 15.8 Entscheidungs- und Arbeitsmatrix (Stand 14.11.2026)
+
+| Punkt | Entscheidung / Stand | Konsequenz |
+|---|---|---|
+| E-1 Kryptoentscheidung | entschieden: Ed25519 nach ATC-STD-600 (15.2) | kein zweiter Kurventyp, keine Eigenkrypto |
+| E-3 Domänentrennung | entschieden: Identität und Wallet getrennt (15.6) | zwei Labels, zwei Seeds, keine Wiederverwendung |
+| E-6 Version 1 | **bestätigt**: `ADDRESS_ONLY` / `NON_SIGNING` (15.3) | Adresse bleibt reproduzierbar, Signierfähigkeit wird nicht behauptet |
+| E1.1 | abgeschlossen: die 32 Byte sind HMAC-Ausgang, kein Schlüssel (15.1) | trägt alle folgenden Punkte |
+| E1.2 | abgeschlossen als Negativbefund: kein L1-Signaturverfahren vorhanden (15.1, 15.7) | Signieren ist zu bauen, nicht freizuschalten |
+| E1.3 | spezifiziert, **nicht implementiert** (15.4) | HKDF-Label, Seed, `VerifyingKey` und DID sind festgelegt; Code fehlt |
+| E1.4 | spezifiziert, **nicht implementiert** (15.5) | Adresse v2 36 Zeichen, DID 86 Zeichen, zwei getrennte Identifikatoren |
+| E1.5 | abgeglichen: ATC-STD-600 v1.3.0, `approved`, `frozen` (15.2) | die Norm ist gelesen, nicht angenommen |
+| R-1 | Code vorhanden (`system/entropy-core`, `EntropyGate`), **Aufrufer im Image fehlt** (16.4) | ohne geprüfte Quelle entsteht im Image keine Phrase |
+| R-2 | blockiert bis R-1 nachgewiesen ist (13) | Recovery wird gegen echte Krypto geprüft, nicht gegen Attrappen |
+
+Zwei Zeilen dieser Matrix sind keine Fortschrittsmeldung, sondern eine Grenze:
+E1.3 und E1.4 sind Text. Solange `key_version = 2` nicht implementiert ist,
+bleibt jedes Konto bei einer Adresse ohne Signatur. Nach E-6 ist das zulässig,
+solange es so benannt wird und keine Oberfläche eine Wallet verspricht.
 
 ## 16. Entropiebereitschaft und Wiederherstellungssicherheit (R-1)
 
