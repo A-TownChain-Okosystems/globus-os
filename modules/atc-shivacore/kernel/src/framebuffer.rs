@@ -6,7 +6,7 @@
 
 use bootloader_api::info::{FrameBuffer, FrameBufferInfo, PixelFormat};
 use core::fmt;
-use core::sync::atomic::{AtomicBool, Ordering};
+use core::sync::atomic::Ordering;
 use noto_sans_mono_bitmap::{get_raster, get_raster_width, FontWeight, RasterHeight};
 use spin::Mutex;
 
@@ -157,13 +157,11 @@ impl fmt::Write for FbWriter {
 /// Der eine Schreiber des Kernels; None, solange kein Framebuffer gesetzt ist.
 pub static WRITER: Mutex<Option<FbWriter>> = Mutex::new(None);
 
-/// True, sobald ein Ring-3-Prozess die Konsole uebernommen hat.
+/// Der Inhaber der Bildflaeche (CONSOLE-001, `console_owner`).
 ///
-/// Ab dann schreibt der Kernel nur noch auf die serielle Schnittstelle. Die
-/// Flaeche hat genau einen Schreiber: entweder den Kernel oder den Prozess,
-/// dem die Console-Cap gehoert. Ohne diese Umschaltung wuerde jede
-/// Kernel-Zeile das Anmeldefenster ueberschreiben.
-pub static CONSOLE_OWNED_BY_USERSPACE: AtomicBool = AtomicBool::new(false);
+/// Die Regel steht in einem eigenen Modul, damit sie ohne QEMU pruefbar ist;
+/// hier wird sie nur benutzt.
+pub use shivacore::console_owner::CONSOLE_OWNER;
 
 /// Leert den Bildschirm und setzt den Cursor nach oben links.
 pub fn clear_screen() {
@@ -189,8 +187,13 @@ pub fn write_text(text: &str) {
 }
 
 /// Uebergibt die Flaeche an den Ring 3 und liefert true beim ersten Aufruf.
-pub fn hand_over_to_userspace() -> bool {
-    !CONSOLE_OWNED_BY_USERSPACE.swap(true, Ordering::SeqCst)
+pub fn hand_over_to_userspace(pid: u64) -> bool {
+    CONSOLE_OWNER.claim(pid)
+}
+
+/// Holt die Flaeche zurueck, wenn `pid` sie gehalten hat.
+pub fn take_back_from(pid: u64) -> bool {
+    CONSOLE_OWNER.release(pid)
 }
 
 /// Setzt den Framebuffer und faerbt ihn dunkelgruen, damit sichtbar ist, dass der Kernel laeuft.
@@ -207,7 +210,7 @@ pub fn _print(args: fmt::Arguments) {
     use x86_64::instructions::interrupts;
     // Nach der Uebergabe gehoert die Flaeche dem Ring 3. Der Kernel schreibt
     // dann nur noch seriell; das Fenster bleibt stehen.
-    if CONSOLE_OWNED_BY_USERSPACE.load(Ordering::Relaxed) {
+    if CONSOLE_OWNER.owner() != 0 {
         return;
     }
     interrupts::without_interrupts(|| {
@@ -222,3 +225,4 @@ macro_rules! println {
     () => ($crate::framebuffer::_print(format_args!("\n")));
     ($($arg:tt)*) => ($crate::framebuffer::_print(format_args!("{}\n", format_args!($($arg)*))));
 }
+
