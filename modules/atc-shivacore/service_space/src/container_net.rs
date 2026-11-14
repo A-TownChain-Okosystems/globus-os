@@ -1944,11 +1944,14 @@ impl Default for ContainerNetManager {
 pub enum PacketResult {
     /// Paket wurde im Ziel-Namespace abgeliefert.
     Delivered {
+        /// Anzahl der abgelieferten Bytes.
         bytes: u64,
     },
     /// Paket wurde weitergeleitet.
     Forwarded {
+        /// Ziel, an das das Paket weitergeleitet wurde.
         new_dst: (Ipv4Addr, u16),
+        /// Anzahl der weitergeleiteten Bytes.
         bytes: u64,
     },
     /// Paket wurde verworfen; der Grund steht im Text.
