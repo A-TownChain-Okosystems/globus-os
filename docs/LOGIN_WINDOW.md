@@ -80,7 +80,7 @@ Das Fenster benutzt beides, damit die Grenze nicht nur behauptet ist:
 | alter Kernel, neues Programm | `Seitenfehler PID=1003 Adresse=0x1d0180f (Schreiben)` — genau die letzte bss-Seite, die vorher nicht abgebildet war |
 | neuer Kernel | kein Seitenfehler; `Abbild 'init': Code 212 Bytes, Daten 65544 Bytes (inkl. bss)` |
 | Bildschirm (OCR) | `GlobusOS v0.3.0 · Start 2` … Statuszeile endet auf `(bss 6144 B ok)` |
-| nach `Esc` (Dienst-Neustart) | `Start 3` — `.data` ueberlebt das Zuruecksetzen, weil der Kernel den Stapel leert und die Daten nicht neu kopiert |
+| nach `Esc` (Dienst-Neustart) | `Start 2` — der Zaehler steht wieder auf der Vorbelegung: das Datensegment kommt aus dem Startabbild zurueck |
 | Eingabe nach dem Neustart | `xy` erscheint im Feld, Feld war vorher leer |
 
 Der Datenanteil ist begrenzt: `MAX_IMAGE_DATA_BYTES` = 1 MiB, also genau das
@@ -91,11 +91,23 @@ ist und die bss-Nullen als Puffer angelegt werden; zusaetzlich prueft
 Drei Kantentests: genau an der Grenze zulaessig, ein Byte darueber abgelehnt,
 bss allein ueber der Grenze abgelehnt.
 
-Der letzte Punkt ist die ehrliche Grenze des Supervisors: zurueckgesetzt wird der
-Stapel, nicht das Datensegment. Ein Programm, das seinen Zustand in `.data`
-haelt, sieht den alten Zustand wieder. Ein echter Neustart aus dem Abbild
-(`PT_LOAD`-Bytes neu kopieren) braucht den Prozessstart-Syscall und bleibt
-offen.
+Zum Vergleich der Stand davor: ohne das Zuruecksetzen der Daten stand dort nach
+`Esc` `Start 3`, weil der Kernel nur den Stapel leerte und die Daten des vorigen
+Laufs stehen liess. Der Supervisor haelt dafuer das Datensegment des Dienstes
+(`services::store_image`, hoechstens `MAX_SERVICE_IMAGE_BYTES` = 64 KiB je
+Dienst) und kopiert es beim Neustart ueber die virtuelle Adresse zurueck. Das
+laeuft im Trap des Dienstes, also ohne neue Abbildung und ohne Anforderung.
+Dafuer ist der Kernel-Haufen von 100 KiB auf 512 KiB gewachsen (acht Dienste zu
+64 KiB, siehe `allocator::HEAP_SIZE`); ein zu kleiner Haufen faellt beim Boot als
+Allokationsfehler auf, nicht still — genau das passierte beim ersten Versuch mit
+6160 Byte.
+
+Was offen bleibt: ein echter *Prozessstart*. Zurueckgesetzt wird ein laufender
+Prozess, nicht ein neuer gebaut — dafuer braucht es den Prozessstart-Syscall,
+den Frame-Allokator im Trap-Pfad und eine freie Syscall-Nummer (`0x0050` ist
+durch `Console` belegt). Ein Dienst, dessen Datensegment ueber 64 KiB liegt,
+laeuft weiter, wird beim Neustart aber nicht zurueckgesetzt; das steht dann im
+seriellen Protokoll.
 
 ## Nachweis (QEMU, BIOS, Software-Emulation)
 
@@ -124,9 +136,9 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1792 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1795 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
-| Diensteverwaltung | 5 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad |
+| Diensteverwaltung | 8 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad, Startabbild hinterlegen/ersetzen, leeres Abbild, Grenze 64 KiB |
 | ELF-Abbild | 6 Tests: Code+Daten+bss-Nullen, ohne Datensegment, ohne Codesegment, Grenze (genau/ein Byte darueber/bss allein) |
 | Datenfenster | 1 Test: Fenstergroesse zulaessig, ein Byte darueber nicht |
 | Fenster-Crate | kein Testrahmen (bare metal); Nachweis ueber QEMU |
