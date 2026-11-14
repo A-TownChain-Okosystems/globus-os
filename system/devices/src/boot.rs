@@ -1,6 +1,7 @@
 //! Boot hand-off contracts for UEFI/firmware memory discovery.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Art eines Speicherbereichs, wie die Firmware ihn meldet.
 pub enum MemoryKind {
     /// Frei nutzbar.
     Usable,
