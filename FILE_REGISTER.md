@@ -57,7 +57,7 @@
 | `docs/IDENTITY_WALLET_FLOW.md` | 78 |
 | `docs/IMPLEMENTATION_STATUS.md` | 60 |
 | `docs/KERNEL_IMAGE_BUILD.md` | 100 |
-| `docs/LOGIN_WINDOW.md` | 182 |
+| `docs/LOGIN_WINDOW.md` | 194 |
 | `docs/MEDIA-LICENSING.md` | 60 |
 | `docs/OS_STANDARD_COMPONENTS.md` | 190 |
 | `docs/REPOSITORY_STANDARD.md` | 37 |
@@ -290,7 +290,7 @@
 | `modules/atc-shivacore/kernel/.gitignore` | 1 |
 | `modules/atc-shivacore/kernel/Cargo.toml` | 51 |
 | `modules/atc-shivacore/kernel/src/addr_space.rs` | 374 |
-| `modules/atc-shivacore/kernel/src/allocator.rs` | 52 |
+| `modules/atc-shivacore/kernel/src/allocator.rs` | 60 |
 | `modules/atc-shivacore/kernel/src/apic.rs` | 416 |
 | `modules/atc-shivacore/kernel/src/atcfs.rs` | 731 |
 | `modules/atc-shivacore/kernel/src/ats1000.rs` | 119 |
@@ -307,7 +307,7 @@
 | `modules/atc-shivacore/kernel/src/hal/cpu.rs` | 232 |
 | `modules/atc-shivacore/kernel/src/hal/mod.rs` | 4 |
 | `modules/atc-shivacore/kernel/src/input_queue.rs` | 261 |
-| `modules/atc-shivacore/kernel/src/interrupts.rs` | 2075 |
+| `modules/atc-shivacore/kernel/src/interrupts.rs` | 2092 |
 | `modules/atc-shivacore/kernel/src/ioapic.rs` | 384 |
 | `modules/atc-shivacore/kernel/src/ipc.rs` | 736 |
 | `modules/atc-shivacore/kernel/src/ipc_lifecycle.rs` | 991 |
@@ -321,7 +321,7 @@
 | `modules/atc-shivacore/kernel/src/keymap.rs` | 420 |
 | `modules/atc-shivacore/kernel/src/lib.rs` | 111 |
 | `modules/atc-shivacore/kernel/src/lkm.rs` | 3.625 |
-| `modules/atc-shivacore/kernel/src/main.rs` | 1799 |
+| `modules/atc-shivacore/kernel/src/main.rs` | 1812 |
 | `modules/atc-shivacore/kernel/src/memory.rs` | 124 |
 | `modules/atc-shivacore/kernel/src/memory_manager.rs` | 937 |
 | `modules/atc-shivacore/kernel/src/pci_scan.rs` | 580 |
@@ -332,7 +332,7 @@
 | `modules/atc-shivacore/kernel/src/screen.rs` | 91 |
 | `modules/atc-shivacore/kernel/src/security.rs` | 1.322 |
 | `modules/atc-shivacore/kernel/src/serial.rs` | 58 |
-| `modules/atc-shivacore/kernel/src/services.rs` | 204 |
+| `modules/atc-shivacore/kernel/src/services.rs` | 317 |
 | `modules/atc-shivacore/kernel/src/spawn.rs` | 210 |
 | `modules/atc-shivacore/kernel/src/syscall.rs` | 811 |
 | `modules/atc-shivacore/kernel/src/syscall_gate.rs` | 270 |
