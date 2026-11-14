@@ -1,6 +1,7 @@
 //! Checksummed write-ahead journal records for crash-safe metadata updates.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler beim Schreiben oder Pruefen eines Journal-Eintrags.
 pub enum JournalError {
     /// Der Puffer ist zu klein fuer einen Journal-Eintrag.
     Buffer,
@@ -15,7 +16,9 @@ pub enum JournalError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Art der Journal-Operation.
 pub enum JournalOp {
+    /// Erste Operation (Bytewert 1): der Zielblock wird geschrieben.
     Write = 1,
+    /// Zweite Operation (Bytewert 2): der Zielblock wird freigegeben. Ausgewertet wird die Operation von der Dateisystemschicht; das Journal unterscheidet nur die zwei Bytewerte.
     Clear = 2,
 }
 
