@@ -48,6 +48,8 @@ fn syscall(opcode: u16) {
     }
 }
 
+/// Einsprungpunkt, der eine fremde Adresse volatil liest und ueber den
+/// Syscall-Rueckgabewert meldet, ob der Zugriff den eigenen Adressraum verlaesst.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     // Volatil lesen, damit der Uebersetzer die Messung nicht wegoptimiert.
