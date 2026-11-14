@@ -15,28 +15,44 @@ const FORMAT_VERSION: u8 = 2;
 const NONCE_LEN: usize = 24;
 const HEADER_LEN: usize = 4 + 1 + 8 + NONCE_LEN;
 
+/// Liefert den Schluessel fuer die Verschluesselung der Blobs.
 pub trait IdentityKeyProvider {
+    /// Schluessel mit 32 Byte; das Material wird beim Drop genullt.
     fn load_key(&self) -> Result<Zeroizing<[u8; 32]>, SecureStoreError>;
 }
 
 /// Opaque blob storage with atomic replacement and durable monotonic generations.
 pub trait BlobStore {
+    /// Laedt den gespeicherten Blob, falls einer existiert.
     fn load(&self) -> Result<Option<Vec<u8>>, SecureStoreError>;
+    /// Schreibt den Blob atomar zusammen mit dieser Generation.
     fn replace(&mut self, blob: &[u8], generation: u64) -> Result<(), SecureStoreError>;
+    /// Aktuelle monotone Generation.
     fn generation(&self) -> Result<u64, SecureStoreError>;
+    /// Loescht den Blob.
     fn delete(&mut self) -> Result<(), SecureStoreError>;
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler der verschluesselten Ablage.
 pub enum SecureStoreError {
+    /// Der Schluessel ist nicht verfuegbar.
     KeyUnavailable,
+    /// Die Verschluesselung ist fehlgeschlagen.
     EncryptionFailed,
+    /// Die Entschluesselung ist fehlgeschlagen.
     DecryptionFailed,
+    /// Formatmarker, Laenge oder Kopf sind ungueltig.
     InvalidEnvelope,
+    /// Die Authentifizierung des Chiffrats ist fehlgeschlagen.
     IntegrityFailure,
+    /// Die Generation wurde zwischenzeitlich geaendert.
     Conflict,
+    /// Die vorgelegte Generation liegt hinter der gespeicherten.
     RollbackDetected { stored: u64, incoming: u64 },
+    /// Die Generation laesst sich nicht weiter hochzaehlen.
     GenerationOverflow,
+    /// Das Backend ist nicht erreichbar.
     BackendUnavailable,
 }
 
@@ -50,15 +66,18 @@ pub struct EncryptedBlobStore<B, K> {
 }
 
 impl<B, K> EncryptedBlobStore<B, K> {
+    /// Bindet Backend und Schluesselprovider.
     pub fn new(backend: B, keys: K) -> Self {
         Self { backend, keys }
     }
+    /// Gibt Backend und Provider zurueck.
     pub fn into_parts(self) -> (B, K) {
         (self.backend, self.keys)
     }
 }
 
 impl<B: BlobStore, K: IdentityKeyProvider> EncryptedBlobStore<B, K> {
+    /// Entschluesselt den Blob und prueft dabei Generation und Kopf.
     pub fn load_plaintext(&self) -> Result<Option<Zeroizing<Vec<u8>>>, SecureStoreError> {
         let Some(blob) = self.backend.load()? else {
             return Ok(None);
@@ -67,6 +86,7 @@ impl<B: BlobStore, K: IdentityKeyProvider> EncryptedBlobStore<B, K> {
         decrypt(&blob, &self.keys, current)
     }
 
+    /// Verschluesselt mit der naechsten Generation und schreibt atomar.
     pub fn replace_plaintext(&mut self, plaintext: &[u8]) -> Result<u64, SecureStoreError> {
         let current = self.backend.generation()?;
         let generation = current
@@ -77,6 +97,7 @@ impl<B: BlobStore, K: IdentityKeyProvider> EncryptedBlobStore<B, K> {
         Ok(generation)
     }
 
+    /// Loescht den Blob im Backend.
     pub fn delete(&mut self) -> Result<(), SecureStoreError> {
         self.backend.delete()
     }
@@ -152,6 +173,7 @@ fn decrypt<K: IdentityKeyProvider>(
 }
 
 #[derive(Debug, Default)]
+/// Nur fuer Tests: Blob und Generation im Speicher.
 pub struct InMemoryBlobStore {
     blob: Option<Vec<u8>>,
     generation: u64,
