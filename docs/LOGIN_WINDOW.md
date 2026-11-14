@@ -166,6 +166,39 @@ keinen, und CR2 steht dann auf dem letzten Wert: dort steht jetzt
 "`nach Ungueltiger Opcode (ohne Fehlercode) neu gestartet`" statt einer Adresse,
 die mit dem Fehler nichts zu tun hat.
 
+## Wem die Flaeche gehoert
+
+Die Konsole hat genau einen Schreiber: entweder den Kernel oder den Prozess mit
+der Console-Cap. Das war ein `AtomicBool` — und damit eine Einbahnstrasse. Endete
+der Prozess (Absturz, Ende nach dem Neustart-Limit), blieb "gehoert dem
+Userspace" fuer immer stehen: der Kernel schrieb nur noch seriell, und der
+Bildschirm war tot.
+
+Gespeichert wird jetzt die **PID** (`console_owner::ConsoleOwner`, 0 = Kernel).
+Uebergeben wird einmal (`claim`), zurueckgeben kann nur der Besitzer
+(`release`). Beim Prozessende raeumt `cleanup_process` die Flaeche zurueck,
+leert sie und schreibt eine Zeile, damit man den Wechsel auch sieht.
+
+Beides ist ohne QEMU geprueft (drei Tests im eigenen Modul, weil `framebuffer`
+nur im Kernel-Binary haengt und damit nicht host-testbar war): ein zweiter
+Prozess wird nicht Inhaber, eine fremde PID gibt nichts frei, und ein
+beendeter Dienst kann die Flaeche spaeter wieder uebernehmen.
+
+Nachweis im Lauf (ein Testprogramm, das erst zeichnet und dann `ud2` ausfuehrt,
+nur in `/tmp` gebaut):
+
+```
+Konsole an Ring 3 uebergeben (PID=1003); Kernel schreibt nur noch seriell
+fuenf Neustarts 1/5 .. 5/5
+Dienst PID=Pid(1003) Neustart-Limit erreicht — der Fehler beendet ihn
+Konsole zurueck beim Kernel (PID=Pid(1003) hat sie nicht mehr)
+```
+
+Danach schreibt der Kernel wieder auf die Flaeche (im Bildschirmfoto folgen
+sofort wieder Kernel-Zeilen). Im Normalbetrieb unveraendert: die Uebergabe steht
+einmal im Protokoll, `Esc` setzt die Daten zurueck, vor und nach `Esc` steht
+"Start 2", 0 Seitenfehler.
+
 ## Nachweis (QEMU, BIOS, Software-Emulation)
 
 Alle Laeufe: `scripts/qemu_boot.sh` baut Kernel, Init und Fenster, das Image
@@ -193,8 +226,9 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1799 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1802 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
+| Konsolen-Inhaber | 3 Tests: nur der erste uebernimmt, nur der Besitzer gibt zurueck, ein beendeter Dienst darf wieder uebernehmen |
 | Fehlerentscheidung | 16 Tests, darunter der Exit-Code je Fehlerart (SIGSEGV/SIGILL); Ring entscheidet, Rolle entscheidet (Dienst startet neu, Programm wird beendet), Neustart zaehlt nicht als Ende, Fehlercode-Auswertung |
 | Diensteverwaltung | 8 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad, Startabbild hinterlegen/ersetzen, leeres Abbild, Grenze 64 KiB |
 | ELF-Abbild | 6 Tests: Code+Daten+bss-Nullen, ohne Datensegment, ohne Codesegment, Grenze (genau/ein Byte darueber/bss allein) |
