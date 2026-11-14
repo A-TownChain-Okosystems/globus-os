@@ -3,21 +3,31 @@
 use alloc::string::String;
 use globus_diagnostics::{CrashEvent, EventLog};
 
+/// Zustand eines Treibers aus Sicht der Fehlerbehandlung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DriverState {
+    /// Der Treiber laeuft.
     Active,
+    /// Der Treiber hat einen Absturz gemeldet.
     Faulted,
+    /// Der Treiber ist abgeschaltet, der Kernel laeuft weiter.
     Isolated,
 }
 
+/// Ein gemeldeter Treiberabsturz mit seinem Bearbeitungsstand.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DriverFault {
+    /// Name des Treibers.
     pub driver: String,
+    /// Geraet, an dem der Absturz auftrat.
     pub device_id: u64,
+    /// Bearbeitungsstand dieses Eintrags.
     pub state: DriverState,
+    /// Laufende Nummer des Ereignisses im Ereignisprotokoll; sie bindet den Eintrag an seinen Protokolleintrag.
     pub event_sequence: u64,
 }
 
+/// Sammelt Treiberabstuerze im Ereignisprotokoll.
 pub struct DriverFaultManager {
     events: EventLog,
 }
@@ -29,12 +39,14 @@ impl Default for DriverFaultManager {
 }
 
 impl DriverFaultManager {
+    /// Leeres Protokoll.
     pub const fn new() -> Self {
         Self {
             events: EventLog::new(),
         }
     }
 
+    /// Traegt den Absturz ins Protokoll ein und gibt den Eintrag im Zustand Faulted zurueck.
     pub fn report_crash(&mut self, driver: &str, device_id: u64, timestamp_ns: u64) -> DriverFault {
         let sequence = self
             .events
@@ -59,9 +71,11 @@ impl DriverFaultManager {
         true
     }
 
+    /// Alle Ereignisse in der Reihenfolge, in der sie eingetragen wurden.
     pub fn events(&self) -> &[CrashEvent] {
         self.events.events()
     }
+    /// Juengstes Ereignis; None, solange keines vorliegt.
     pub fn latest(&self) -> Option<&CrashEvent> {
         self.events.latest()
     }
