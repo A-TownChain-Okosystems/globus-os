@@ -25,32 +25,48 @@ use crate::capability::{CapId, Pid, ResourceType, Rights};
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ProcessType {
+    /// Agent-Prozess.
     Agent,
+    /// Dienst-Prozess.
     Service,
+    /// Vertragsprozess.
     Contract,
+    /// Systemprozess.
     System,
+    /// Validierungsprozess.
     Validator,
 }
 
 /// Prozess-Zustand
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ProcessState {
+    /// Startbereit, wartet auf Rechenzeit.
     Ready,
+    /// Laeuft gerade.
     Running,
+    /// Wartet auf ein Ereignis.
     Blocked,
+    /// Beendet, mit dem Rueckgabewert des Prozesses.
     Terminated(ExitCode),
 }
 
+/// Rueckgabewert eines beendeten Prozesses.
 pub type ExitCode = i32;
 
 /// Prozess-Kontrollblock (PCB)
 #[derive(Debug, Clone)]
 pub struct ProcessControlBlock {
+    /// Kennung des Prozesses.
     pub pid: Pid,
+    /// Art des Prozesses.
     pub ptype: ProcessType,
+    /// Vom Aufrufer gesetzte Prioritaet. Der Planer liest sie nicht; die Reihenfolge bestimmt er am Aufstiegsrang.
     pub priority: u8,
+    /// Aktueller Zustand des Prozesses.
     pub state: ProcessState,
+    /// Elternprozess, falls es einen gibt.
     pub parent: Option<Pid>,
+    /// Kennungen der direkten Kinder.
     pub children: Vec<Pid>,
 }
 
@@ -71,6 +87,7 @@ impl Default for ProcessManager {
 }
 
 impl ProcessManager {
+    /// Verwalter mit eigener Capability-Authority.
     pub fn new() -> Self {
         Self::with_authority(CapabilityAuthority::new_shared())
     }
@@ -233,6 +250,7 @@ impl ProcessManager {
         self.authority.cap_ids_for(pid)
     }
 
+    /// True, wenn die zentrale Authority dem Prozess die geforderten Rechte auf der Ressource gibt.
     pub fn check_capability(
         &self,
         pid: Pid,
