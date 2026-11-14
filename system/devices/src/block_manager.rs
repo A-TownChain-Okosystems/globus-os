@@ -4,16 +4,23 @@ use super::block::{BlockDevice, BlockError, BlockGeometry, BlockRequest, validat
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+/// Kennung eines verwalteten Blockgeraets.
 pub struct BlockDeviceId(pub u64);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der Geraeteverwaltung.
 pub enum BlockManagerError {
+    /// Die Kennung ist bereits vergeben.
     Duplicate,
+    /// Die Kennung ist unbekannt.
     Missing,
+    /// Die Geometrie ist unbrauchbar.
     InvalidGeometry,
+    /// Das Geraet hat abgelehnt.
     Io(BlockError),
 }
 
+/// Verwaltete Blockgeraete nach Kennung.
 pub struct BlockDeviceRegistry<D> {
     devices: Vec<(BlockDeviceId, D)>,
 }
@@ -25,12 +32,14 @@ impl<D: BlockDevice> Default for BlockDeviceRegistry<D> {
 }
 
 impl<D: BlockDevice> BlockDeviceRegistry<D> {
+    /// Leere Verwaltung.
     pub fn new() -> Self {
         Self {
             devices: Vec::new(),
         }
     }
 
+    /// Nimmt ein Geraet auf und lehnt doppelte Kennungen ab.
     pub fn register(&mut self, id: BlockDeviceId, device: D) -> Result<(), BlockManagerError> {
         if self.devices.iter().any(|(existing, _)| *existing == id) {
             return Err(BlockManagerError::Duplicate);
@@ -43,6 +52,7 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
         Ok(())
     }
 
+    /// Geometrie eines verwalteten Geraets.
     pub fn geometry(&self, id: BlockDeviceId) -> Result<BlockGeometry, BlockManagerError> {
         self.devices
             .iter()
@@ -51,6 +61,7 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
             .ok_or(BlockManagerError::Missing)
     }
 
+    /// Liest ueber ein verwaltetes Geraet.
     pub fn read(
         &mut self,
         id: BlockDeviceId,
@@ -68,6 +79,7 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
             .map_err(BlockManagerError::Io)
     }
 
+    /// Schreibt ueber ein verwaltetes Geraet.
     pub fn write(
         &mut self,
         id: BlockDeviceId,
@@ -83,6 +95,7 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
         device.write(request, source).map_err(BlockManagerError::Io)
     }
 
+    /// Alle vergebenen Kennungen.
     pub fn ids(&self) -> impl Iterator<Item = BlockDeviceId> + '_ {
         self.devices.iter().map(|(id, _)| *id)
     }
