@@ -6,20 +6,33 @@ use globus_devices::block::{BlockDevice, BlockRequest};
 const MAGIC: &[u8; 8] = b"GLOBFS01";
 const HEADER_SIZE: usize = 40;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kopf des Dateisystems auf Platte.
 pub struct Superblock {
+    /// Blockgroesse in Byte.
     pub block_size: u32,
+    /// Gesamtzahl der Bloecke.
     pub total_blocks: u64,
+    /// Erster Block der Metadaten.
     pub metadata_start: u64,
+    /// Anzahl reservierter Metadatenbloecke.
     pub metadata_blocks: u64,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des persistenten Dateisystems.
 pub enum FsError {
+    /// Das Geraet hat einen IO-Fehler gemeldet.
     Io,
+    /// Geometrie des Geraets ist unbrauchbar.
     InvalidGeometry,
+    /// Superblock, Magic oder Pruefsumme stimmen nicht.
     InvalidSuperblock,
+    /// Der Puffer ist zu klein.
     Buffer,
+    /// Die Rechnung laeuft ueber den Wertebereich hinaus.
     Overflow,
+    /// Die Freispeicher-Bitmap hat abgelehnt.
     Bitmap,
+    /// Die Inode-Operation ist fehlgeschlagen.
     Inode,
 }
 fn checksum(bytes: &[u8]) -> u32 {
@@ -31,6 +44,7 @@ fn checksum(bytes: &[u8]) -> u32 {
     h
 }
 impl Superblock {
+    /// Schreibt den Superblock samt Pruefsumme.
     pub fn encode(&self, out: &mut [u8]) -> Result<(), FsError> {
         if out.len() < HEADER_SIZE {
             return Err(FsError::Buffer);
@@ -45,6 +59,7 @@ impl Superblock {
         out[36..40].copy_from_slice(&digest.to_le_bytes());
         Ok(())
     }
+    /// Liest den Superblock und prueft Magic und Pruefsumme.
     pub fn decode(input: &[u8]) -> Result<Self, FsError> {
         if input.len() < HEADER_SIZE || &input[..8] != MAGIC {
             return Err(FsError::InvalidSuperblock);
@@ -81,6 +96,7 @@ impl Superblock {
     }
 }
 
+/// Dateisystem auf einem Blockgeraet mit Superblock, Bitmap und Layout.
 pub struct PersistentFs<D> {
     device: D,
     superblock: Superblock,
@@ -166,6 +182,7 @@ impl<D: BlockDevice> PersistentFs<D> {
         }
         Ok(())
     }
+    /// Legt Superblock, Layout und Bitmap neu an.
     pub fn format(mut device: D, metadata_blocks: u64) -> Result<Self, FsError> {
         let g = device.geometry();
         if !g.valid() || metadata_blocks == 0 || metadata_blocks >= g.block_count {
@@ -198,6 +215,7 @@ impl<D: BlockDevice> PersistentFs<D> {
             bitmap,
         })
     }
+    /// Liest Superblock und Bitmap von einem vorhandenen Volume.
     pub fn mount(mut device: D) -> Result<Self, FsError> {
         let g = device.geometry();
         if !g.valid() {
@@ -226,20 +244,25 @@ impl<D: BlockDevice> PersistentFs<D> {
             bitmap,
         })
     }
+    /// Kopie des Superblocks.
     pub fn superblock(&self) -> Superblock {
         self.superblock
     }
+    /// Lage der Metadatenbereiche.
     pub fn layout(&self) -> MetadataLayout {
         self.layout
     }
+    /// Geometrie des zugrunde liegenden Geraets.
     pub fn device_geometry(&self) -> globus_devices::block::BlockGeometry {
         self.device.geometry()
     }
+    /// Vergibt Bloecke ab dem Datenbereich und schreibt die Bitmap.
     pub fn allocate_blocks(&mut self, count: u64) -> Result<u64, FsError> {
         let start = self.bitmap.allocate(count).map_err(|_| FsError::Bitmap)?;
         self.persist_bitmap()?;
         Ok(start)
     }
+    /// Gibt Bloecke frei; Bereiche vor dem Datenbereich werden abgelehnt.
     pub fn release_blocks(&mut self, start: u64, count: u64) -> Result<(), FsError> {
         if start < self.layout.data_start {
             return Err(FsError::InvalidSuperblock);
