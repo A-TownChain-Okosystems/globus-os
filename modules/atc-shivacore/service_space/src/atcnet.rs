@@ -43,15 +43,25 @@ pub type PeerId = [u8; 32];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum MessageType {
+    /// Eroeffnet die Verbindung und tauscht die Protokollfassung.
     Handshake = 0x01,
+    /// Uebermittelt bekannte Gegenstellen.
     PeerList = 0x02,
+    /// Kuendigt einen neuen Block an.
     BlockAnn = 0x03,
+    /// Verteilt eine Transaktion an die Gegenstellen.
     TxBroadcast = 0x04,
+    /// Lebenszeichen an die Gegenstelle.
     Ping = 0x05,
+    /// Antwort auf ein Ping.
     Pong = 0x06,
+    /// Fordert Bloecke an.
     GetBlocks = 0x07,
+    /// Liefert die angeforderten Bloecke.
     Blocks = 0x08,
+    /// Fordert den Inhalt des Mempools an.
     GetMempool = 0x09,
+    /// Liefert den Inhalt des Mempools.
     Mempool = 0x0A,
 }
 
