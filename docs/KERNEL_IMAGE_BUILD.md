@@ -55,10 +55,41 @@ Auf dem Nightly-Stand vom 14.11.2026:
   --target x86_64-unknown-none` → sauber
 - `cargo test -p shivacore` auf Stable 1.100.0: 781 Tests grün
 
+## Belegter Lauf: das Image bootet
+
+`scripts/qemu_boot.sh <Sekunden> <Log> bios|uefi` baut alle drei Artefakte und
+startet das Image headless mit serieller Ausgabe. Ergebnis vom 14.11.2026,
+jeweils 45 Sekunden Laufzeit, ohne KVM (Software-Emulation):
+
+| Modus | Image | Kontextwechsel | Logzeilen |
+|---|---|---|---|
+| BIOS | `images/shivacore-bios.img` | 414 | 2627 |
+| UEFI | `images/shivacore-uefi.img` (OVMF) | 389 | 2486 |
+
+In beiden Läufen sind alle acht Meilensteine des Skripts erreicht:
+
+- Kernel-Einstiegspunkt erreicht
+- CPU HAL compatibility check OK
+- ACPI RSDP/root/table checksums validated
+- GDT/IDT/PIC OK
+- Paging-Mapper + Heap initialisiert
+- KernelState::boot() -> Done
+- MADT local_apic=
+- USER-001 entering
+
+Der Lauf endet auf dem Timeout von `timeout` (Exit 124), nicht auf einem
+Fehler: der Kernel läuft weiter und der Scheduler wechselt zwischen PID 1001
+und 1002. Im BIOS-Log steht keine einzige Zeile mit `panic`, `error` oder
+`fault`.
+
+Damit ist die Kette Quelltext → Kernel-ELF → Image → laufendes System belegt,
+auf Emulation. Echte Hardware und ein Lauf mit KVM sind nicht Teil dieses
+Nachweises.
+
 ## Offen
 
 - Der Boot-Builder selbst braucht Nightly (Zwang des `bootloader`-Crates) und
   ist ein eigenes Crate außerhalb des Root-Workspace; er erbt deshalb keine
   Workspace-Lints.
-- Ein QEMU-Lauf ist mit diesem Stand nicht belegt. Die Prüfung oben endet beim
-  gebauten Image, nicht beim gebooteten System.
+- Belegt ist der Lauf unter QEMU ohne KVM (Software-Emulation) und ohne echte
+  Hardware.
