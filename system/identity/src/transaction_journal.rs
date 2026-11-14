@@ -7,7 +7,7 @@
 //! secrets in journal payloads.
 //!
 //! Record format (big-endian): magic "ATCJ", version u16, state u8, reserved u8 (=0),
-//! transaction ID [u8;16], payload length u32, payload, SHA-256(header || payload).
+//! transaction ID `[u8;16]`, payload length u32, payload, SHA-256(header || payload).
 //! The checksum detects accidental corruption; it is not an authenticity mechanism.
 
 use sha2::{Digest, Sha256};
