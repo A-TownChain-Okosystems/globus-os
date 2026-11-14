@@ -39,6 +39,7 @@ impl Default for CapabilityAuthority {
 }
 
 impl CapabilityAuthority {
+    /// Neue Instanz mit leerer Tabelle.
     pub const fn new() -> Self {
         Self {
             table: Mutex::new(CapabilityTable::new()),
@@ -233,18 +234,22 @@ impl CapabilityAuthority {
         granted
     }
 
+    /// Anzahl aller vergebenen Capabilities.
     pub fn count(&self) -> usize {
         self.table.lock().count()
     }
 
+    /// Anzahl der Capabilities eines Prozesses.
     pub fn count_for(&self, pid: Pid) -> usize {
         self.table.lock().count_for(pid)
     }
 
+    /// Kennungen der Capabilities eines Prozesses.
     pub fn cap_ids_for(&self, pid: Pid) -> Vec<CapId> {
         self.table.lock().list_for(pid).iter().map(|c| c.id).collect()
     }
 
+    /// Kopien der Capabilities eines Prozesses.
     pub fn capabilities_for(&self, pid: Pid) -> Vec<Capability> {
         self.table
             .lock()
