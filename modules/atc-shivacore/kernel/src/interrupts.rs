@@ -370,6 +370,50 @@ pub fn online_cpus() -> usize {
     ONLINE_CPUS.load(Ordering::Acquire)
 }
 
+/// Setzt einen Dienst auf seinen Startzustand zurueck.
+///
+/// Der Prozess laeuft in diesem Moment: sein Trap hat uns hierher gebracht,
+/// seine Seitentabelle ist aktiv. Deshalb ist sein Stapel ueber die virtuelle
+/// Adresse erreichbar und muss nicht eigens abgebildet werden. Geleert wird nur
+/// der Stapelbereich, nicht der Haufen und nicht die Daten: der Dienst soll
+/// nichts vom vorigen Lauf sehen, aber seine Capabilities behalten.
+fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::Service) {
+    let start = service.start_rsp;
+    let end = start.saturating_add(16);
+    if start >= service.stack_low && end <= service.stack_low.saturating_add(0x0000_8000) {
+        unsafe {
+            core::ptr::write_bytes(
+                service.stack_low as *mut u8,
+                0,
+                (end - service.stack_low) as usize,
+            );
+            // Startvertrag exakt wie beim Boot: erst Konsole, dann Eingabe.
+            core::ptr::write_volatile(start as *mut u64, service.caps[0]);
+            core::ptr::write_volatile((start as *mut u64).add(1), service.caps[1]);
+        }
+    }
+    frame.rax = 0;
+    frame.rbx = 0;
+    frame.rcx = 0;
+    frame.rdx = 0;
+    frame.rsi = 0;
+    frame.rdi = 0;
+    frame.rbp = start;
+    frame.r8 = 0;
+    frame.r9 = 0;
+    frame.r10 = 0;
+    frame.r11 = 0;
+    frame.r12 = 0;
+    frame.r13 = 0;
+    frame.r14 = 0;
+    frame.r15 = 0;
+    frame.rip = service.entry_rip;
+    frame.rsp = start;
+    // Nur die Pflichtbits: Bit 1 ist immer gesetzt, IF (Bit 9) muss stehen,
+    // sonst bekaeme der Dienst keine Ticks mehr und das Fenster bliebe stumm.
+    frame.rflags = 0x202;
+}
+
 /// Beendet den aufrufenden Prozess aus einem Syscall heraus (P1-3B, echter
 /// Prozess-Exit).
 ///
@@ -378,6 +422,21 @@ pub fn online_cpus() -> usize {
 /// Frame-Freigabe passieren im Timer-Tick — der Syscall-Pfad schaltet keinen
 /// Speicher frei.
 fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
+    // Ein Dienst verschwindet nicht, er kehrt an seinen Startzustand zurueck.
+    // Das passiert VOR dem Widerruf der Capabilities: danach haette der neue
+    // Lauf keine Rechte mehr, und ein Neustart ohne Rechte waere ein Dienst,
+    // der nichts tun kann.
+    if let Some(service) = crate::services::restart(u64::from(pid.0)) {
+        reset_service_process(frame, &service);
+        serial_println!(
+            "ShivaCore: Dienst '{}' PID={} neu gestartet (Versuch {}/{}) — Stapel geleert, Startvertrag neu geschrieben, Capabilities bleiben",
+            service.name,
+            pid.0,
+            service.attempts,
+            service.limit
+        );
+        return;
+    }
     let revoked = cleanup_process(pid);
     // Nach dem Wechsel weg von dieser Seitentabelle sind ihre Eintraege im TLB
     // wertlos; der Wechsel selbst leert die nicht-globalen Eintraege. Das
