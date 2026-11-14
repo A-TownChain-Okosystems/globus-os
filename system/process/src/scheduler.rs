@@ -3,16 +3,19 @@
 use crate::{ProcessId, ProcessInfo, ProcessState};
 
 #[derive(Debug, Default)]
+/// Priority scheduler over a process table, highest priority first.
 pub struct Scheduler {
     processes: Vec<ProcessInfo>,
     current: Option<ProcessId>,
 }
 
 impl Scheduler {
+    /// Creates an empty scheduler.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Adds a process if its id is unknown and keeps the table sorted.
     pub fn register(&mut self, process: ProcessInfo) {
         if self.processes.iter().any(|p| p.id == process.id) {
             return;
@@ -22,6 +25,7 @@ impl Scheduler {
             .sort_by(|a, b| b.priority.cmp(&a.priority).then_with(|| a.id.cmp(&b.id)));
     }
 
+    /// Sets the state of a registered process; false when the id is unknown.
     pub fn set_state(&mut self, id: ProcessId, state: ProcessState) -> bool {
         let Some(process) = self.processes.iter_mut().find(|p| p.id == id) else {
             return false;
@@ -30,6 +34,7 @@ impl Scheduler {
         true
     }
 
+    /// Picks the next runnable process, marks it running and remembers it.
     pub fn next_process(&mut self) -> Option<ProcessId> {
         let next = self
             .processes
@@ -49,9 +54,11 @@ impl Scheduler {
         next
     }
 
+    /// Process selected by the last call to `next_process`.
     pub fn current(&self) -> Option<ProcessId> {
         self.current
     }
+    /// The process table, highest priority first.
     pub fn processes(&self) -> &[ProcessInfo] {
         &self.processes
     }
