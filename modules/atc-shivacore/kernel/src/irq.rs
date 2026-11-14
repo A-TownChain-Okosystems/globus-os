@@ -42,15 +42,20 @@ pub enum IrqError {
 /// Zustand einer Line: ruhig oder mit offener, noch nicht quittierter Zustellung.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IrqState {
+    /// Ruhig; keine offene Zustellung.
     Idle,
+    /// Zustellung offen und noch nicht quittiert; solange ist die Line maskiert.
     Pending,
 }
 
 /// Eine vermittelte Interrupt-Line.
 #[derive(Debug, Clone, Copy)]
 pub struct IrqLine {
+    /// Nummer der Line.
     pub line: u32,
+    /// Prozess, der diese Line abonniert hat.
     pub subscriber: Pid,
+    /// Zustand der Line.
     pub state: IrqState,
     /// Zustellungen insgesamt, auch die koaleszierten.
     pub deliveries: u64,
@@ -72,6 +77,7 @@ pub struct IrqTable {
 }
 
 impl IrqTable {
+    /// Leere Tabelle ohne Lines.
     pub fn new() -> Self {
         Self {
             lines: BTreeMap::new(),
@@ -154,18 +160,22 @@ impl IrqTable {
         Ok(entry.subscriber)
     }
 
+    /// Line zu einer Nummer; None, wenn sie nicht vermittelt wird.
     pub fn get(&self, line: u32) -> Option<&IrqLine> {
         self.lines.get(&line)
     }
 
+    /// Anzahl der Lines mit offener Zustellung.
     pub fn masked_lines(&self) -> usize {
         self.lines.values().filter(|l| l.is_masked()).count()
     }
 
+    /// Anzahl der vermittelten Lines.
     pub fn len(&self) -> usize {
         self.lines.len()
     }
 
+    /// True, solange keine Line vermittelt wird.
     pub fn is_empty(&self) -> bool {
         self.lines.is_empty()
     }
