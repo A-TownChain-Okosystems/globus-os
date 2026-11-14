@@ -13,34 +13,53 @@ use alloc::string::{String, ToString};
 use globus_diagnostics::EventLog;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand eines Treibers.
 pub enum DriverState {
+    /// Registriert, aber nicht gestartet.
     Registered,
+    /// Gestartet und im Betrieb.
     Active,
+    /// Ein Laufzeitfehler ist aufgetreten.
     Faulted,
+    /// Vom Rest des Systems abgetrennt.
     Isolated,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler eines Treibers.
 pub enum DriverError {
+    /// Der Start ist fehlgeschlagen.
     InitializationFailed,
+    /// Der Treiber hat zur Laufzeit einen Fehler gemeldet.
     RuntimeFault,
+    /// Das Geraet ist nicht erreichbar.
     DeviceUnavailable,
 }
 
+/// Ein Treiber mit Start und Stop.
 pub trait Driver {
+    /// Name des Treibers.
     fn name(&self) -> &str;
+    /// Startet den Treiber.
     fn start(&mut self) -> Result<(), DriverError>;
+    /// Haelt den Treiber an.
     fn stop(&mut self);
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Verwaltungseintrag eines Treibers.
 pub struct DriverRecord {
+    /// Name des Treibers.
     pub name: String,
+    /// Geraet, an das der Treiber gebunden ist.
     pub device_id: u64,
+    /// Aktueller Zustand.
     pub state: DriverState,
 }
 
+/// Beaufsichtigt Treiber und schreibt ihren Zustandswechsel ins Ereignisprotokoll.
 pub struct DriverSupervisor {
     records: alloc::vec::Vec<DriverRecord>,
+    /// Protokoll der Zustandswechsel.
     pub events: EventLog,
 }
 impl Default for DriverSupervisor {
@@ -49,12 +68,14 @@ impl Default for DriverSupervisor {
     }
 }
 impl DriverSupervisor {
+    /// Leere Aufsicht.
     pub const fn new() -> Self {
         Self {
             records: alloc::vec::Vec::new(),
             events: EventLog::new(),
         }
     }
+    /// Nimmt einen Treiber auf; false bei doppelter Bindung.
     pub fn register(&mut self, name: &str, device_id: u64) -> bool {
         if name.is_empty() || self.records.iter().any(|r| r.device_id == device_id) {
             return false;
@@ -67,6 +88,7 @@ impl DriverSupervisor {
         self.records.sort_by_key(|r| r.device_id);
         true
     }
+    /// Setzt einen Treiber auf aktiv; false, wenn er nicht registriert ist.
     pub fn mark_active(&mut self, device_id: u64) -> bool {
         let Some(record) = self.records.iter_mut().find(|r| r.device_id == device_id) else {
             return false;
@@ -96,9 +118,11 @@ impl DriverSupervisor {
             false
         }
     }
+    /// Eintrag zu einem Geraet.
     pub fn get(&self, device_id: u64) -> Option<&DriverRecord> {
         self.records.iter().find(|r| r.device_id == device_id)
     }
+    /// Alle Eintraege.
     pub fn records(&self) -> &[DriverRecord] {
         &self.records
     }
