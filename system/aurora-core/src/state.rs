@@ -1,21 +1,25 @@
 use crate::{AuroraError, RequestStatus};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustandsmaschine einer Anfrage; haelt den zuletzt bestaetigten Status.
 pub struct StateMachine {
     status: RequestStatus,
 }
 
 impl StateMachine {
+    /// Startet im Status `Created`.
     pub const fn new() -> Self {
         Self {
             status: RequestStatus::Created,
         }
     }
 
+    /// Aktueller Status.
     pub const fn status(&self) -> RequestStatus {
         self.status
     }
 
+    /// Setzt `next`, wenn die Uebergangstabelle ihn erlaubt.
     pub fn transition(&mut self, next: RequestStatus) -> Result<(), AuroraError> {
         if self.can_transition(next) {
             self.status = next;
