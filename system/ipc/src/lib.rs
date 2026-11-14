@@ -6,6 +6,7 @@
 
 extern crate alloc;
 
+/// Message channels, the channel registry and IPC error types.
 pub mod channel;
 pub use channel::{ChannelRegistry, IpcError};
 
