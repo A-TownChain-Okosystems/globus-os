@@ -16,6 +16,7 @@ extern crate alloc;
 
 mod allocator;
 mod framebuffer;
+mod identity_gate;
 mod spawn_build;
 mod gdt;
 mod hal;
@@ -431,13 +432,23 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                             // Programm. Fehlt oder passt er nicht, wird das
                             // gesagt — eine Anmeldung gibt es dann nicht.
                             match shivacore::identity_file::load(&entries, bytes) {
-                                Ok(record) => serial_println!(
-                                    "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: gelesen ({} Byte, Argon2id {} KiB t={} p={})",
-                                    globus_identity_core::RECORD_LEN,
-                                    record.params.memory_kib,
-                                    record.params.iterations,
-                                    record.params.parallelism
-                                ),
+                                Ok(record) => {
+                                    serial_println!(
+                                        "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: gelesen ({} Byte, Argon2id {} KiB t={} p={})",
+                                        globus_identity_core::RECORD_LEN,
+                                        record.params.memory_kib,
+                                        record.params.iterations,
+                                        record.params.parallelism
+                                    );
+                                    // IDENT-003: Der Datensatz geht an das
+                                    // Prueftor; ab hier prueft der Kernel, nicht
+                                    // das Fenster.
+                                    identity_gate::publish(record);
+                                    serial_println!(
+                                        "ShivaCore: IDENT-003 Prueftor bereit (Syscall {:#06X}, nur der Konsolenbesitzer)",
+                                        libshivacore::Syscall::IdentityCheck.id()
+                                    );
+                                }
                                 Err(error) => serial_println!(
                                     "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: {:?} — fail-closed, keine Anmeldung",
                                     error
