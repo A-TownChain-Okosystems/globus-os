@@ -44,6 +44,7 @@ struct PendingRelease {
     frames: Vec<PhysFrame>,
 }
 
+/// Gibt die Seitentabellen-Frames beendeter Prozesse frei und zaehlt, was dabei geschieht.
 pub struct FrameReclaimer {
     /// Welche Seitentabellen-Frames gehoeren zu welchem Prozess.
     registry: Mutex<BTreeMap<u64, Vec<PhysFrame>>>,
@@ -62,11 +63,13 @@ pub struct FrameReclaimer {
 /// zugreift — dann wird nicht freigegeben (fail-closed).
 static ONLINE_CPUS: AtomicUsize = AtomicUsize::new(1);
 
+/// Setzt die Zahl der aktiven CPUs; bei mehr als einer wird nicht freigegeben, weil ohne IPI-Shootdown kein Nachweis moeglich ist, dass niemand mehr auf die Seite zugreift.
 pub fn set_online_cpus(count: usize) {
     ONLINE_CPUS.store(count.max(1), Ordering::Release);
 }
 
 impl FrameReclaimer {
+    /// Leerer Raeumer ohne angemeldete Tabellen.
     pub const fn new() -> Self {
         Self {
             registry: Mutex::new(BTreeMap::new()),
@@ -88,6 +91,7 @@ impl FrameReclaimer {
         self.registry.lock().insert(pid.0 as u64, frames);
     }
 
+    /// Anzahl der angemeldeten Frames eines Prozesses.
     pub fn registered(&self, pid: Pid) -> usize {
         self.registry
             .lock()
@@ -96,14 +100,17 @@ impl FrameReclaimer {
             .unwrap_or(0)
     }
 
+    /// Anzahl der wartenden Freigabeauftraege.
     pub fn pending_len(&self) -> usize {
         self.pending.lock().len()
     }
 
+    /// Bisher freigegebene Frames.
     pub fn freed_frames(&self) -> usize {
         self.freed_frames.load(Ordering::Relaxed)
     }
 
+    /// Wie oft der Allocator belegt war; es wird nur gezaehlt, nicht gewartet.
     pub fn busy_retries(&self) -> usize {
         self.busy_retries.load(Ordering::Relaxed)
     }
@@ -140,10 +147,12 @@ impl FrameReclaimer {
         self.busy_retries.fetch_add(1, Ordering::Relaxed);
     }
 
+    /// Frames, die uebersprungen wurden, weil sie noch in Benutzung sind.
     pub fn skipped_active(&self) -> usize {
         self.skipped_active.load(Ordering::Relaxed)
     }
 
+    /// Freigaben, die wegen weiterer aktiver CPUs aufgeschoben wurden.
     pub fn held_multi_cpu(&self) -> usize {
         self.held_multi_cpu.load(Ordering::Relaxed)
     }
@@ -256,6 +265,7 @@ impl Default for FrameReclaimer {
     }
 }
 
+/// Der eine Raeumer des Kernels.
 pub static RECLAIMER: FrameReclaimer = FrameReclaimer::new();
 
 #[cfg(test)]
