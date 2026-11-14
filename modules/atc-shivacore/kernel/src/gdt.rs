@@ -11,6 +11,7 @@ use x86_64::structures::gdt::{Descriptor, GlobalDescriptorTable, SegmentSelector
 use x86_64::structures::tss::TaskStateSegment;
 use x86_64::VirtAddr;
 
+/// Index im Interrupt-Stack-Table, auf dem der Double-Fault-Handler laeuft.
 pub const DOUBLE_FAULT_IST_INDEX: u16 = 0;
 
 const STACK_SIZE: usize = 4096 * 5;
@@ -65,6 +66,7 @@ lazy_static! {
     };
 }
 
+/// Laedt den GDT und setzt CS, SS und TSS.
 pub fn init() {
     GDT.0.load();
     unsafe {
@@ -87,9 +89,11 @@ pub fn init() {
 pub fn user_code_selector() -> SegmentSelector {
     GDT.1.user_code_selector
 }
+/// Datenselektor fuer CPL3.
 pub fn user_data_selector() -> SegmentSelector {
     GDT.1.user_data_selector
 }
+/// Codesegment des Kernels auf CPL0.
 pub fn kernel_code_selector() -> SegmentSelector {
     GDT.1.code_selector
 }
