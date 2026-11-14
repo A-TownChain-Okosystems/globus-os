@@ -9,8 +9,8 @@
 > Die Zahl 555 ist am 14.11.2026 erneut gegen `git ls-files` gestellt und
 > unveraendert; nachgezogen wurden die Zeilenzahlen der beiden Dokumente, die
 > seit der E-6-Bestaetigung gewachsen sind (Wiederherstellungsspezifikation
-> 1062 -> 1148), weil der vorige Wert gemessen war und nicht geschaetzt werden
-> darf.
+> 1062 -> 1148 -> 1175), weil der vorige Wert gemessen war und nicht geschaetzt
+> werden darf. Die Zahl 555 stammt weiter aus `git ls-files`.
 > in der Tabelle, die Zahl ist gemessen und nicht fortgeschrieben. Dazu die
 > Wiederherstellungsspezifikation mit ihrem Layout-Pruefer
 > (`docs/identity/SPEC-RECOVERY-001.md`, `scripts/check_recovery_spec.py`)
@@ -93,7 +93,7 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
-| `docs/identity/SPEC-RECOVERY-001.md` | 1148 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 1175 |
 | `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 204 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
