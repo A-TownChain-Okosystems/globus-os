@@ -216,6 +216,7 @@ impl AddressSpace {
         Ok(())
     }
 
+    /// Frame der obersten Seitentabelle dieses Adressraums.
     pub fn frame(&self) -> PhysFrame<Size4KiB> {
         self.frame
     }
@@ -239,6 +240,7 @@ pub struct RecordingAllocator<'a, A: FrameAllocator<Size4KiB>> {
 
 #[cfg(feature = "x86-boot")]
 impl<'a, A: FrameAllocator<Size4KiB>> RecordingAllocator<'a, A> {
+    /// Wrapper, der jede Anfrage an den inneren Allocator weiterreicht und die vergebenen Frames mitschreibt.
     pub fn new(inner: &'a mut A) -> Self {
         Self {
             inner,
@@ -246,6 +248,7 @@ impl<'a, A: FrameAllocator<Size4KiB>> RecordingAllocator<'a, A> {
         }
     }
 
+    /// Die mitgeschriebenen Frames; sie gehen in das Eigentum des Aufrufers ueber.
     pub fn into_frames(self) -> alloc::vec::Vec<PhysFrame<Size4KiB>> {
         self.frames
     }
