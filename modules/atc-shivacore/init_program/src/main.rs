@@ -108,7 +108,7 @@ fn syscall_exit(code: u64) {
 const YIELDS_BEFORE_EXIT: u64 = 40;
 
 /// Einstiegspunkt. Der Name ist der des Linkerskripts, kein Rust-Komfort.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() -> ! {
     // Die Adresse wird vom Loader gesetzt; wir notieren sie nur im Register,
     // damit ein Abschneiden der ersten Anweisung im Log auffaellt.
