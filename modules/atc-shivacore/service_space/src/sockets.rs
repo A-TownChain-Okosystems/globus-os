@@ -30,6 +30,7 @@ pub enum SocketDomain {
 }
 
 impl SocketDomain {
+    /// Name der Domäne als AF_*-Kennung.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Unix => "AF_UNIX",
@@ -38,9 +39,11 @@ impl SocketDomain {
         }
     }
 
+    /// True für eine lokale Domäne (Unix).
     pub fn is_local(&self) -> bool {
         matches!(self, Self::Unix)
     }
+    /// True für eine Netzwerk-Domäne (Inet, Inet6).
     pub fn is_network(&self) -> bool {
         !self.is_local()
     }
@@ -60,6 +63,7 @@ pub enum SocketType {
 }
 
 impl SocketType {
+    /// Name des Typs als SOCK_*-Kennung.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Stream => "SOCK_STREAM",
@@ -69,14 +73,17 @@ impl SocketType {
         }
     }
 
+    /// True für verbindungsorientierte Typen (Stream, SeqPacket).
     pub fn is_connection_oriented(&self) -> bool {
         matches!(self, Self::Stream | Self::SeqPacket)
     }
 
+    /// True für den verbindungslosen Datagramm-Typ.
     pub fn is_connectionless(&self) -> bool {
         matches!(self, Self::Datagram)
     }
 
+    /// True, wenn der Typ Root-Rechte verlangt (Raw).
     pub fn requires_root(&self) -> bool {
         matches!(self, Self::Raw)
     }
@@ -85,14 +92,20 @@ impl SocketType {
 /// Socket-Protokoll (meist 0 = Default)
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SocketProtocol {
-    Default, // 0
-    Tcp,     // IPPROTO_TCP = 6
-    Udp,     // IPPROTO_UDP = 17
-    Raw,     // IPPROTO_RAW = 255
-    Icmp,    // IPPROTO_ICMP = 1
+    /// Protokoll aus dem Socket-Typ ableiten (0).
+    Default,
+    /// TCP (IPPROTO_TCP = 6).
+    Tcp,
+    /// UDP (IPPROTO_UDP = 17).
+    Udp,
+    /// Raw IP (IPPROTO_RAW = 255).
+    Raw,
+    /// ICMP (IPPROTO_ICMP = 1).
+    Icmp,
 }
 
 impl SocketProtocol {
+    /// Protokoll aus dem IPPROTO-Wert; unbekannte Werte ergeben Default.
     pub fn from_u8(v: u8) -> Self {
         match v {
             6 => Self::Tcp,
@@ -103,6 +116,7 @@ impl SocketProtocol {
         }
     }
 
+    /// Numerischer IPPROTO-Wert des Protokolls.
     pub fn to_u8(&self) -> u8 {
         match self {
             Self::Default => 0,
@@ -113,6 +127,7 @@ impl SocketProtocol {
         }
     }
 
+    /// Protokollname in Großbuchstaben.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Default => "DEFAULT",
@@ -167,13 +182,16 @@ impl SocketAddr {
         }
     }
 
+    /// True für eine Unix-Pfadadresse.
     pub fn is_unix(&self) -> bool {
         matches!(self, Self::Unix(_))
     }
+    /// True für eine IPv4-Adresse.
     pub fn is_inet(&self) -> bool {
         matches!(self, Self::Inet { .. })
     }
 
+    /// Domäne, zu der die Adresse gehört.
     pub fn domain(&self) -> SocketDomain {
         match self {
             Self::Unix(_) => SocketDomain::Unix,
@@ -182,6 +200,7 @@ impl SocketAddr {
         }
     }
 
+    /// Port der Adresse; None bei Unix-Pfaden.
     pub fn port(&self) -> Option<u16> {
         match self {
             Self::Inet { port, .. } | Self::Inet6 { port, .. } => Some(*port),
@@ -189,6 +208,7 @@ impl SocketAddr {
         }
     }
 
+    /// Adresse als Text: Pfad oder Punktnotation mit Port.
     pub fn ip_str(&self) -> String {
         match self {
             Self::Unix(p) => p.clone(),
@@ -209,6 +229,7 @@ impl SocketAddr {
         }
     }
 
+    /// Unix-Pfad der Adresse; None bei Netzwerkadressen.
     pub fn path(&self) -> Option<&str> {
         match self {
             Self::Unix(p) => Some(p.as_str()),
@@ -221,34 +242,47 @@ impl SocketAddr {
 // Socket State
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Zustand eines Sockets im Verbindungslebenszyklus.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum SocketState {
-    Unconnected, // Frisch erstellt
-    Listening,   // accept() wartet
-    Connecting,  // connect() läuft
-    Connected,   // Verbindung aktiv
-    Closing,     // Halb geschlossen
-    Closed,      // Vollständig geschlossen
-    Error,       // Fehlerzustand
+    /// Frisch erstellt, weder gebunden noch verbunden.
+    Unconnected,
+    /// Gebunden und wartet auf accept().
+    Listening,
+    /// connect() läuft, Verbindung noch nicht bestätigt.
+    Connecting,
+    /// Verbindung steht in beide Richtungen.
+    Connected,
+    /// Halb geschlossen, die lokale Seite hat geschlossen.
+    Closing,
+    /// Vollständig geschlossen, Ressourcen freigegeben.
+    Closed,
+    /// Fehlerzustand, der Socket ist nicht mehr nutzbar.
+    Error,
 }
 
 impl SocketState {
+    /// True für Connected, Listening und Connecting.
     pub fn is_active(&self) -> bool {
         matches!(self, Self::Connected | Self::Listening | Self::Connecting)
     }
 
+    /// True, wenn Daten gelesen werden können (Connected, Listening, Closing).
     pub fn is_readable(&self) -> bool {
         matches!(self, Self::Connected | Self::Listening | Self::Closing)
     }
 
+    /// True, wenn geschrieben werden kann (Connected, Connecting).
     pub fn is_writable(&self) -> bool {
         matches!(self, Self::Connected | Self::Connecting)
     }
 
+    /// True für Closed und Error.
     pub fn is_closed(&self) -> bool {
         matches!(self, Self::Closed | Self::Error)
     }
 
+    /// Zustandsname in Großbuchstaben.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::Unconnected => "UNCONNECTED",
@@ -266,17 +300,28 @@ impl SocketState {
 // Socket Options
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Socket-Optionen, wie sie setsockopt setzt und getsockopt liefert.
 #[derive(Clone, Debug)]
 pub struct SocketOptions {
+    /// Blockiert nicht; Aufrufe liefern WouldBlock statt zu warten.
     pub nonblocking: bool,
+    /// Erlaubt Binden auf eine Adresse im TIME_WAIT-Zustand.
     pub reuseaddr: bool,
+    /// Erlaubt mehreren Sockets denselben Port.
     pub reuseport: bool,
+    /// Hält die Verbindung mit Prüfpaketen wach.
     pub keepalive: bool,
+    /// Erlaubt das Senden an die Broadcast-Adresse.
     pub broadcast: bool,
+    /// Wartezeit beim Schließen in Sekunden; None schließt sofort.
     pub linger: Option<u32>, // Sekunden
+    /// Größe des Sendepuffers in Byte.
     pub send_buf_size: usize,
+    /// Größe des Empfangspuffers in Byte.
     pub recv_buf_size: usize,
+    /// Sendetimeout in Millisekunden; None blockiert unbegrenzt.
     pub send_timeout: Option<u32>, // ms
+    /// Empfangstimeout in Millisekunden; None blockiert unbegrenzt.
     pub recv_timeout: Option<u32>, // ms
 }
 
@@ -301,6 +346,7 @@ impl Default for SocketOptions {
 // Socket Buffer
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Puffer für Sende- und Empfangsdaten eines Sockets.
 #[derive(Clone, Debug)]
 pub struct SocketBuffer {
     data: Vec<u8>,
@@ -309,6 +355,7 @@ pub struct SocketBuffer {
 }
 
 impl SocketBuffer {
+    /// Leerer Puffer mit fester Kapazität in Byte.
     pub fn new(capacity: usize) -> Self {
         Self {
             data: Vec::with_capacity(capacity),
@@ -317,6 +364,7 @@ impl SocketBuffer {
         }
     }
 
+    /// Schreibt so viele Bytes wie Platz ist und liefert die geschriebene Anzahl.
     pub fn write(&mut self, src: &[u8]) -> usize {
         let avail = self
             .capacity
@@ -326,6 +374,7 @@ impl SocketBuffer {
         to_write
     }
 
+    /// Liest bis zur Größe des Zielpuffers und liefert die gelesene Anzahl.
     pub fn read(&mut self, dst: &mut [u8]) -> usize {
         let unread = self.data.len() - self.read_pos;
         if unread == 0 {
@@ -341,18 +390,23 @@ impl SocketBuffer {
         to_read
     }
 
+    /// Anzahl ungelesener Bytes.
     pub fn available(&self) -> usize {
         self.data.len() - self.read_pos
     }
+    /// Freier Platz in Byte.
     pub fn remaining(&self) -> usize {
         self.capacity.saturating_sub(self.available())
     }
+    /// True, wenn keine ungelesenen Bytes vorliegen.
     pub fn is_empty(&self) -> bool {
         self.available() == 0
     }
+    /// True, wenn kein Platz mehr frei ist.
     pub fn is_full(&self) -> bool {
         self.remaining() == 0
     }
+    /// Verwirft alle gepufferten Bytes.
     pub fn clear(&mut self) {
         self.data.clear();
         self.read_pos = 0;
@@ -369,26 +423,43 @@ pub type SockId = u32;
 /// Ein einzelner Socket
 #[derive(Clone, Debug)]
 pub struct Socket {
+    /// Eindeutige Socket-ID.
     pub id: SockId,
+    /// Domäne des Sockets.
     pub domain: SocketDomain,
+    /// Typ des Sockets.
     pub sock_type: SocketType,
+    /// Protokoll des Sockets.
     pub protocol: SocketProtocol,
+    /// Aktueller Verbindungszustand.
     pub state: SocketState,
+    /// Lokale Adresse, sofern gebunden.
     pub local_addr: Option<SocketAddr>,
+    /// Gegenstelle, sofern verbunden.
     pub peer_addr: Option<SocketAddr>,
+    /// Gesetzte Socket-Optionen.
     pub options: SocketOptions,
+    /// Empfangspuffer.
     pub recv_buf: SocketBuffer,
+    /// Sendepuffer.
     pub send_buf: SocketBuffer,
+    /// Noch nicht angenommene Verbindungen bei listen().
     pub backlog: Vec<SockId>, // Pending connections (listen)
+    /// Obergrenze der Warteschlange.
     pub max_backlog: usize,
+    /// Prozess, dem der Socket gehört; 0 steht für den Kernel.
     pub owner_pid: u32,
+    /// Zuletzt aufgetretener Fehler, sofern vorhanden.
     pub error: Option<SocketError>,
     // Stats
+    /// Insgesamt gesendete Bytes.
     pub bytes_sent: u64,
+    /// Insgesamt empfangene Bytes.
     pub bytes_recv: u64,
 }
 
 impl Socket {
+    /// Legt einen Socket im Zustand Unconnected mit Standardpuffern an.
     pub fn new(
         id: SockId,
         domain: SocketDomain,
@@ -417,55 +488,81 @@ impl Socket {
         }
     }
 
+    /// True für einen Stream-Socket.
     pub fn is_stream(&self) -> bool {
         self.sock_type == SocketType::Stream
     }
+    /// True für einen Datagramm-Socket.
     pub fn is_dgram(&self) -> bool {
         self.sock_type == SocketType::Datagram
     }
+    /// True, wenn der Socket auf accept() wartet.
     pub fn is_listening(&self) -> bool {
         self.state == SocketState::Listening
     }
+    /// True, wenn die Verbindung steht.
     pub fn is_connected(&self) -> bool {
         self.state == SocketState::Connected
     }
+    /// True, wenn Verbindungen in der Warteschlange liegen.
     pub fn has_pending(&self) -> bool {
         !self.backlog.is_empty()
     }
+    /// Anzahl wartender Verbindungen.
     pub fn pending_count(&self) -> usize {
         self.backlog.len()
     }
+    /// True, wenn Daten anliegen oder Verbindungen warten.
     pub fn can_read(&self) -> bool {
         self.state.is_readable() && (self.recv_buf.available() > 0 || self.has_pending())
     }
+    /// True, wenn der Sendepuffer noch Platz hat.
     pub fn can_write(&self) -> bool {
         self.state.is_writable() && self.send_buf.remaining() > 0
     }
+    /// True, wenn ein Fehler am Socket vermerkt ist.
     pub fn has_error(&self) -> bool {
         self.error.is_some()
     }
 }
 
+/// Fehler eines Socket-Aufrufs, errno und Text sind nachgebildet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SocketError {
+    /// Socket ist nicht verbunden (ENOTCONN).
     NotConnected,
+    /// Socket ist bereits verbunden (EISCONN).
     AlreadyConnected,
+    /// Socket ist nicht im Zustand Listening.
     NotListening,
+    /// Adresse oder Port ist bereits belegt (EADDRINUSE).
     AddrInUse,
+    /// Adresse ist lokal nicht verfügbar (EADDRNOTAVAIL).
     AddrNotAvailable,
+    /// Gegenstelle hat die Verbindung abgelehnt (ECONNREFUSED).
     ConnectionRefused,
+    /// Verbindung wurde von der Gegenstelle zurückgesetzt (ECONNRESET).
     ConnectionReset,
+    /// Zeitlimit überschritten (ETIMEDOUT).
     TimedOut,
+    /// Aufruf würde blockieren (EWOULDBLOCK).
     WouldBlock,
+    /// Nachricht größer als der zulässige Rahmen (EMSGSIZE).
     MessageTooLong,
+    /// Handle bezeichnet keinen Socket (ENOTSOCK).
     NotASocket,
+    /// Ungültiges Handle (EBADF).
     BadDescriptor,
+    /// Fehlende Berechtigung, etwa Raw-Socket ohne Root (EPERM).
     PermissionDenied,
+    /// Kein Pufferspeicher verfügbar (ENOBUFS).
     NoBufferSpace,
+    /// Operation wird nicht unterstützt (EOPNOTSUPP).
     OperationNotSupported,
 }
 
 impl SocketError {
+    /// Errno-Wert nach Linux-Konvention; -1, wenn keiner festgelegt ist.
     pub fn errno(&self) -> i32 {
         match self {
             Self::NotConnected => 107,     // ENOTCONN
@@ -486,6 +583,7 @@ impl SocketError {
         }
     }
 
+    /// Meldungstext des Fehlers.
     pub fn as_str(&self) -> &'static str {
         match self {
             Self::NotConnected => "Not connected",
@@ -511,6 +609,7 @@ impl SocketError {
 // Socket Manager
 // ══════════════════════════════════════════════════════════════════════════════
 
+/// Verwaltet alle Sockets samt Listener-Registern und Zählern.
 pub struct SocketManager {
     sockets: BTreeMap<SockId, Socket>,
     next_id: SockId,
@@ -532,6 +631,7 @@ impl Default for SocketManager {
 }
 
 impl SocketManager {
+    /// Leere Socket-Tabelle mit ID-Vergabe ab 1.
     pub fn new() -> Self {
         Self {
             sockets: BTreeMap::new(),
@@ -962,27 +1062,41 @@ impl SocketManager {
 /// Socket-Option für setsockopt
 #[derive(Clone, Debug)]
 pub enum SocketOpt {
+    /// Blockierendes Verhalten setzen.
     NonBlock(bool),
+    /// Adresswiederverwendung setzen (SO_REUSEADDR).
     ReuseAddr(bool),
+    /// Portwiederverwendung setzen (SO_REUSEPORT).
     ReusePort(bool),
+    /// Haltbarkeitsprüfung setzen (SO_KEEPALIVE).
     KeepAlive(bool),
+    /// Broadcast-Erlaubnis setzen (SO_BROADCAST).
     Broadcast(bool),
+    /// Linger-Zeit in Sekunden setzen (SO_LINGER).
     Linger(Option<u32>),
+    /// Sendepuffergröße in Byte setzen (SO_SNDBUF).
     SendBuf(usize),
+    /// Empfangspuffergröße in Byte setzen (SO_RCVBUF).
     RecvBuf(usize),
+    /// Sendetimeout in Millisekunden setzen (SO_SNDTIMEO).
     SendTimeout(Option<u32>),
+    /// Empfangstimeout in Millisekunden setzen (SO_RCVTIMEO).
     RecvTimeout(Option<u32>),
 }
 
 /// Poll-State für einen Socket
 #[derive(Clone, Copy, Debug)]
 pub struct PollState {
+    /// Daten oder Verbindungen liegen bereit.
     pub readable: bool,
+    /// Der Socket kann Daten aufnehmen.
     pub writable: bool,
+    /// Am Socket liegt ein Fehler an.
     pub error: bool,
 }
 
 impl PollState {
+    /// True, wenn mindestens ein Ereignis gemeldet ist.
     pub fn is_any(&self) -> bool {
         self.readable || self.writable || self.error
     }
@@ -991,12 +1105,19 @@ impl PollState {
 /// Globale Socket-Statistiken
 #[derive(Clone, Debug)]
 pub struct SocketStats {
+    /// Aktuell offene Sockets.
     pub total_sockets: u64,
+    /// Seit dem Start angelegte Sockets.
     pub total_created: u64,
+    /// Seit dem Start angenommene Verbindungen.
     pub total_accepted: u64,
+    /// Seit dem Start gesendete Bytes.
     pub total_bytes_sent: u64,
+    /// Seit dem Start empfangene Bytes.
     pub total_bytes_recv: u64,
+    /// Registrierte Unix-Pfade.
     pub unix_listeners: u64,
+    /// Registrierte IPv4-Ports.
     pub inet_listeners: u64,
 }
 
