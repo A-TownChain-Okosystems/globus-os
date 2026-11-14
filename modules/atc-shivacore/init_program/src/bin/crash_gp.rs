@@ -15,6 +15,8 @@ use core::panic::PanicInfo;
 #[path = "../allocator.rs"]
 mod allocator;
 
+/// Einsprungpunkt, der `hlt` im Ring 3 ausfuehrt und damit absichtlich
+/// eine General Protection Fault ausloest.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     unsafe {
