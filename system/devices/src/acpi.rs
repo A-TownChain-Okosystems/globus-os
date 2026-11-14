@@ -1,6 +1,7 @@
 //! ACPI table discovery contracts and checksum validation.
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Root-System-Description-Pointer der ACPI-Revision 1 mit 32-Bit-Adressen.
 pub struct RsdpV1 {
     /// Revision des RSDP.
     pub revision: u8,
