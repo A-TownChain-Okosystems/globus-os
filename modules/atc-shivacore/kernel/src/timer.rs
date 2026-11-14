@@ -32,12 +32,14 @@ pub trait TimerSource: Send + Sync {
 
 // ─── Simulierte Zeitquelle (für Tests und Software-Validierung) ─────────────
 
+/// Zeitquelle fuer Tests: die Zeit steht still, bis sie vorgestellt oder gesetzt wird.
 pub struct SimulatedTimerSource {
     current_ns: Mutex<u64>,
     freq: u64,
 }
 
 impl SimulatedTimerSource {
+    /// Neue simulierte Quelle, die bei null beginnt und die angegebene Frequenz meldet.
     pub fn new(freq: u64) -> Self {
         SimulatedTimerSource {
             current_ns: Mutex::new(0),
@@ -77,6 +79,7 @@ pub struct MonotonicClock {
 }
 
 impl MonotonicClock {
+    /// Merkt sich den Stand der Quelle beim Start; die Uptime-Werte sind danach relativ dazu.
     pub fn new(source: &'static dyn TimerSource) -> Self {
         let boot_ns = source.now_ns();
         MonotonicClock { source, boot_ns }
@@ -115,12 +118,17 @@ impl MonotonicClock {
 /// Ein registrierter Timer-Callback mit Deadline.
 #[derive(Clone, Debug)]
 pub struct TimerEvent {
+    /// Kennung des Timers.
     pub id: u64,
+    /// Zeitpunkt in Nanosekunden, gemessen mit derselben Quelle wie der Verwalter.
     pub deadline_ns: u64,
+    /// Prozess, der den Timer angefordert hat.
     pub pid: u64,
+    /// Was beim Ablauf geschieht.
     pub callback_type: TimerCallback,
 }
 
+/// Art des Timers.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum TimerCallback {
     /// Weckt einen Prozess auf (für sleep()).
@@ -139,6 +147,7 @@ pub struct TimerManager {
 }
 
 impl TimerManager {
+    /// Leerer Verwalter; Kennungen beginnen bei 1. Die Ereignisse liegen nach Frist in einer Abbildung, deshalb verdraengt eine zweite Anmeldung mit derselben Frist die erste.
     pub fn new(source: &'static dyn TimerSource) -> Self {
         TimerManager {
             events: BTreeMap::new(),
@@ -259,32 +268,45 @@ impl TimerManager {
 
 // ─── Convenience: Duration-Hilfsfunktionen ──────────────────────────────────
 
+/// Rechnungen zwischen Nanosekunden und groesseren Einheiten; die Umrechnung nach Nanosekunden prueft nicht auf Ueberlauf.
 pub mod duration {
+    /// Nanosekunden je Mikrosekunde.
     pub const NS_PER_US: u64 = 1_000;
+    /// Nanosekunden je Millisekunde.
     pub const NS_PER_MS: u64 = 1_000_000;
+    /// Nanosekunden je Sekunde.
     pub const NS_PER_SEC: u64 = 1_000_000_000;
+    /// Nanosekunden je Minute.
     pub const NS_PER_MIN: u64 = 60 * NS_PER_SEC;
+    /// Nanosekunden je Stunde.
     pub const NS_PER_HOUR: u64 = 60 * NS_PER_MIN;
 
+    /// Mikrosekunden in Nanosekunden.
     pub fn from_ms(ms: u64) -> u64 {
         ms * NS_PER_MS
     }
+    /// Sekunden in Nanosekunden.
     pub fn from_secs(secs: u64) -> u64 {
         secs * NS_PER_SEC
     }
+    /// Millisekunden in Nanosekunden.
     pub fn from_us(us: u64) -> u64 {
         us * NS_PER_US
     }
+    /// Minuten in Nanosekunden.
     pub fn from_mins(mins: u64) -> u64 {
         mins * NS_PER_MIN
     }
 
+    /// Nanosekunden in Millisekunden, abgerundet.
     pub fn to_ms(ns: u64) -> u64 {
         ns / NS_PER_MS
     }
+    /// Nanosekunden in Sekunden, abgerundet.
     pub fn to_secs(ns: u64) -> u64 {
         ns / NS_PER_SEC
     }
+    /// Nanosekunden in Mikrosekunden, abgerundet.
     pub fn to_us(ns: u64) -> u64 {
         ns / NS_PER_US
     }
