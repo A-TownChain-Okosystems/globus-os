@@ -114,8 +114,11 @@ pub enum VmError {
     UnknownVm(VmId),
     /// Operation is not allowed in the current state.
     InvalidState {
+        /// The VM the operation addressed.
         id: VmId,
+        /// The state in which the operation was refused.
         state: VmState,
+        /// The refused operation.
         operation: &'static str,
     },
     /// The identifier counter is exhausted.
