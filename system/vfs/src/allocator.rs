@@ -4,10 +4,15 @@
 use crate::bitmap::{BitmapError, FreeSpaceBitmap};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des Block-Allocators.
 pub enum AllocationError {
+    /// Die Bitmap hat abgelehnt.
     Bitmap(BitmapError),
+    /// Der Bereich ist leer oder liegt ausserhalb des Volumes.
     InvalidRange,
+    /// Die Rechnung laeuft ueber den Wertebereich hinaus.
     Overflow,
+    /// Es sind nicht genug freie Bloecke vorhanden.
     OutOfSpace,
 }
 
@@ -26,6 +31,7 @@ pub struct BlockAllocator {
 }
 
 impl BlockAllocator {
+    /// Legt den Allocator an und markiert den reservierten Bereich als belegt.
     pub fn new(
         total_blocks: u64,
         reserved_start: u64,
@@ -57,6 +63,7 @@ impl BlockAllocator {
         })
     }
 
+    /// Vergibt `blocks` zusammenhaengende Bloecke und liefert den Startblock.
     pub fn allocate(&mut self, blocks: u64) -> Result<u64, AllocationError> {
         if blocks == 0 {
             return Err(AllocationError::InvalidRange);
@@ -90,6 +97,7 @@ impl BlockAllocator {
         Err(AllocationError::OutOfSpace)
     }
 
+    /// Gibt einen Bereich wieder frei.
     pub fn release(&mut self, start: u64, blocks: u64) -> Result<(), AllocationError> {
         let end = start.checked_add(blocks).ok_or(AllocationError::Overflow)?;
         let total = self.bitmap.len();
@@ -114,10 +122,12 @@ impl BlockAllocator {
         Ok(())
     }
 
+    /// True, wenn der Block frei ist.
     pub fn is_free(&self, block: u64) -> Result<bool, AllocationError> {
         self.bitmap.is_free(block).map_err(AllocationError::Bitmap)
     }
 
+    /// Anzahl freier Bloecke.
     pub fn free_blocks(&self) -> u64 {
         (0..self.bitmap.len())
             .filter(|&i| self.bitmap.is_free(i).unwrap_or(false))
