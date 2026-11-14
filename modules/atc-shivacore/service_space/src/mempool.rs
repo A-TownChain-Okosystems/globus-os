@@ -6,6 +6,7 @@ use alloc::sync::Arc;
 use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
+/// Art einer Transaktion: Transfer (1), Stake (2), Unstake (3), Delegate (4), Vote (5), ContractCall (6), ContractDeploy (7).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TxType {
@@ -18,6 +19,7 @@ pub enum TxType {
     ContractDeploy = 7,
 }
 impl TxType {
+    /// Art zum Zahlenwert; unbekannte Werte ergeben None.
     pub fn from_u8(v: u8) -> Option<Self> {
         match v {
             1 => Some(TxType::Transfer),
@@ -30,6 +32,7 @@ impl TxType {
             _ => None,
         }
     }
+    /// Grundkosten der Art in Gaseinheiten, ohne Zuschlag für die Nutzlast.
     pub fn base_gas(&self) -> u64 {
         match self {
             TxType::Transfer => 1000,
@@ -42,24 +45,38 @@ impl TxType {
         }
     }
 }
+/// Transaktion mit Kennung, Absender, Betrag, Gasfeldern und Signatur.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Transaction {
+    /// Kennung, über alle Felder außer der Signatur berechnet.
     pub id: [u8; 32],
+    /// Art der Transaktion.
     pub tx_type: TxType,
+    /// Absender als DID.
     pub sender_did: String,
+    /// Empfänger als DID; None bei Arten ohne Empfänger.
     pub recipient_did: Option<String>,
+    /// Betrag in der kleinsten Einheit.
     pub amount: u64,
+    /// Preis je Gaseinheit.
     pub gas_price: u64,
+    /// Höchstes Gasbudget der Transaktion.
     pub gas_limit: u64,
+    /// Fortlaufende Nummer des Absenders.
     pub nonce: u64,
+    /// Zeitpunkt der Erstellung.
     pub timestamp: u64,
+    /// Nutzlast der Transaktion.
     pub payload: Vec<u8>,
+    /// Signatur über die Transaktion; sie geht nicht in die Kennung ein.
     pub signature: [u8; 64],
+    /// Bezug auf den Proof-of-History-Eintrag.
     pub poh_hash: [u8; 32],
 }
 impl Transaction {
     // A full transaction spec; grouping the 11 fields into a params struct
     // is tracked design debt.
+    /// Baut die Transaktion und berechnet die Kennung über alle Felder außer der Signatur.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         tx_type: TxType,
@@ -103,34 +120,52 @@ impl Transaction {
             poh_hash,
         }
     }
+    /// Grundkosten der Art plus 10 je Byte Nutzlast.
     pub fn gas_cost(&self) -> u64 {
         self.tx_type.base_gas() + (self.payload.len() as u64) * 10
     }
+    /// Höchstgebühr aus Gaslimit mal Gaspreis, sättigend gerechnet.
     pub fn max_fee(&self) -> u64 {
         self.gas_limit.saturating_mul(self.gas_price)
     }
+    /// Liefert die Transaktionskennung; ein eigener Nutzlast-Hash wird nicht gebildet.
     pub fn payload_hash(&self) -> [u8; 32] {
         self.id
     }
 }
+/// Bearbeitungsstand einer Transaktion im Pool.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TxStatus {
+    /// Angenommen, aber noch nicht geprüft.
     Pending,
+    /// Geprüft und für eine Charge freigegeben.
     Validated,
+    /// In den DAG übernommen.
     InDag,
+    /// Bestätigt und im Zustand übernommen.
     Confirmed,
+    /// Abgelehnt; der Grund steht am Eintrag.
     Rejected,
+    /// Veraltet und nicht mehr ausführbar.
     Expired,
 }
+/// Eintrag des Pools zu einer Transaktion.
 #[derive(Clone, Debug, PartialEq)]
 pub struct PoolEntry {
+    /// Die Transaktion selbst.
     pub tx: Transaction,
+    /// Bearbeitungsstand.
     pub status: TxStatus,
+    /// Zeitpunkt der Aufnahme in den Pool.
     pub added_at: u64,
+    /// Zeitpunkt der Prüfung, sofern geprüft.
     pub validated_at: Option<u64>,
+    /// Grund der Ablehnung, sofern abgelehnt.
     pub reject_reason: Option<String>,
+    /// Rang für die Auswahl: Gaspreis mal Gaslimit.
     pub priority: u64,
 }
+/// Pool offener Transaktionen mit Grenzen für Anzahl und Alter.
 pub struct MemoryPool {
     entries: Mutex<BTreeMap<[u8; 32], PoolEntry>>,
     by_sender: Mutex<BTreeMap<String, Vec<[u8; 32]>>>,
@@ -138,6 +173,7 @@ pub struct MemoryPool {
     max_age_ns: u64,
 }
 impl MemoryPool {
+    /// Pool mit Höchstzahl an Einträgen und Höchstalter in Sekunden.
     pub fn new(max_size: usize, max_age_secs: u64) -> Self {
         MemoryPool {
             entries: Mutex::new(BTreeMap::new()),
@@ -146,6 +182,7 @@ impl MemoryPool {
             max_age_ns: max_age_secs * 1_000_000_000,
         }
     }
+    /// Nimmt eine Transaktion als Pending auf; voller Pool und doppelte Kennung werden abgelehnt.
     pub fn add(&self, tx: Transaction, now: u64) -> Result<(), MempoolError> {
         let mut e = self.entries.lock();
         if e.len() >= self.max_size {
@@ -173,6 +210,7 @@ impl MemoryPool {
             .push(tx.id);
         Ok(())
     }
+    /// Prüft Gasbudget, Empfänger und Gaspreis und setzt den Stand auf Validated; Nonce und Deckung prüft erst der TxValidator.
     pub fn validate_tx(&self, tx_id: &[u8; 32], now: u64) -> Result<(), MempoolError> {
         let mut e = self.entries.lock();
         let entry = e.get_mut(tx_id).ok_or(MempoolError::TxNotFound)?;
@@ -195,6 +233,7 @@ impl MemoryPool {
         entry.validated_at = Some(now);
         Ok(())
     }
+    /// Gibt bis zu max_count geprüfte Transaktionen zurück, nach Rang absteigend.
     pub fn get_pending_batch(&self, max_count: usize) -> Vec<Transaction> {
         let e = self.entries.lock();
         let mut v: Vec<&PoolEntry> = e
@@ -207,16 +246,19 @@ impl MemoryPool {
             .map(|x| x.tx.clone())
             .collect()
     }
+    /// Setzt den Stand auf InDag, sofern die Kennung bekannt ist.
     pub fn mark_in_dag(&self, tx_id: &[u8; 32]) {
         if let Some(e) = self.entries.lock().get_mut(tx_id) {
             e.status = TxStatus::InDag;
         }
     }
+    /// Setzt den Stand auf Confirmed, sofern die Kennung bekannt ist.
     pub fn mark_confirmed(&self, tx_id: &[u8; 32]) {
         if let Some(e) = self.entries.lock().get_mut(tx_id) {
             e.status = TxStatus::Confirmed;
         }
     }
+    /// Entfernt bestätigte, abgelehnte und zu alte offene Einträge und liefert deren Anzahl.
     pub fn cleanup(&self, now: u64) -> usize {
         let mut e = self.entries.lock();
         let mut bs = self.by_sender.lock();
@@ -238,12 +280,15 @@ impl MemoryPool {
         }
         rm.len()
     }
+    /// Kopie des Eintrags, sofern vorhanden.
     pub fn get(&self, tx_id: &[u8; 32]) -> Option<PoolEntry> {
         self.entries.lock().get(tx_id).cloned()
     }
+    /// Anzahl aller Einträge.
     pub fn count(&self) -> usize {
         self.entries.lock().len()
     }
+    /// Anzahl der Einträge im Stand Pending.
     pub fn pending_count(&self) -> usize {
         self.entries
             .lock()
@@ -251,6 +296,7 @@ impl MemoryPool {
             .filter(|e| e.status == TxStatus::Pending)
             .count()
     }
+    /// Anzahl der Einträge im Stand Validated.
     pub fn validated_count(&self) -> usize {
         self.entries
             .lock()
@@ -258,6 +304,7 @@ impl MemoryPool {
             .filter(|e| e.status == TxStatus::Validated)
             .count()
     }
+    /// Anzahl der Einträge im Stand Confirmed.
     pub fn confirmed_count(&self) -> usize {
         self.entries
             .lock()
@@ -265,6 +312,7 @@ impl MemoryPool {
             .filter(|e| e.status == TxStatus::Confirmed)
             .count()
     }
+    /// Anzahl der Einträge im Stand Rejected.
     pub fn rejected_count(&self) -> usize {
         self.entries
             .lock()
@@ -272,6 +320,7 @@ impl MemoryPool {
             .filter(|e| e.status == TxStatus::Rejected)
             .count()
     }
+    /// Alle Transaktionen eines Absenders in der Reihenfolge ihrer Aufnahme.
     pub fn txs_by_sender(&self, did: &str) -> Vec<Transaction> {
         let bs = self.by_sender.lock();
         let e = self.entries.lock();
@@ -283,6 +332,7 @@ impl MemoryPool {
             })
             .unwrap_or_default()
     }
+    /// Höchste Nonce eines Absenders im Pool; 0, wenn keine vorliegt.
     pub fn sender_nonce(&self, did: &str) -> u64 {
         let bs = self.by_sender.lock();
         let e = self.entries.lock();
@@ -296,6 +346,7 @@ impl MemoryPool {
             .unwrap_or(0)
     }
 }
+/// Merkt je DID die nächste erwartete Nonce.
 pub struct NonceTracker {
     nonces: Mutex<BTreeMap<String, u64>>,
 }
@@ -306,11 +357,13 @@ impl Default for NonceTracker {
 }
 
 impl NonceTracker {
+    /// Leerer Zähler.
     pub fn new() -> Self {
         NonceTracker {
             nonces: Mutex::new(BTreeMap::new()),
         }
     }
+    /// True und Zähler um eins weiter, wenn die Nonce passt; sonst false.
     pub fn check_and_advance(&self, did: &str, nonce: u64) -> bool {
         let mut n = self.nonces.lock();
         let e = n.entry(did.to_string()).or_insert(0);
@@ -321,23 +374,32 @@ impl NonceTracker {
             false
         }
     }
+    /// Erwartete Nonce, 0 wenn die DID unbekannt ist.
     pub fn expected_nonce(&self, did: &str) -> u64 {
         self.nonces.lock().get(did).copied().unwrap_or(0)
     }
+    /// Setzt die erwartete Nonce fest.
     pub fn set_nonce(&self, did: &str, nonce: u64) {
         self.nonces.lock().insert(did.to_string(), nonce);
     }
+    /// Vergisst die Nonce einer DID.
     pub fn reset(&self, did: &str) {
         self.nonces.lock().remove(did);
     }
 }
+/// Konto mit Guthaben, Einsatz und Nonce.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Account {
+    /// Inhaber als DID.
     pub did: String,
+    /// Frei verfügbares Guthaben.
     pub balance: u64,
+    /// Gebundener Einsatz.
     pub staked: u64,
+    /// Zuletzt gezählte Nonce.
     pub nonce: u64,
 }
+/// Zustandsspeicher der Konten hinter einer Sperre.
 pub struct StateDb {
     accounts: Mutex<BTreeMap<String, Account>>,
 }
@@ -348,11 +410,13 @@ impl Default for StateDb {
 }
 
 impl StateDb {
+    /// Leerer Speicher.
     pub fn new() -> Self {
         StateDb {
             accounts: Mutex::new(BTreeMap::new()),
         }
     }
+    /// Guthaben einer DID; 0, wenn unbekannt.
     pub fn get_balance(&self, did: &str) -> u64 {
         self.accounts
             .lock()
@@ -360,12 +424,15 @@ impl StateDb {
             .map(|a| a.balance)
             .unwrap_or(0)
     }
+    /// Einsatz einer DID; 0, wenn unbekannt.
     pub fn get_staked(&self, did: &str) -> u64 {
         self.accounts.lock().get(did).map(|a| a.staked).unwrap_or(0)
     }
+    /// Nonce einer DID; 0, wenn unbekannt.
     pub fn get_nonce(&self, did: &str) -> u64 {
         self.accounts.lock().get(did).map(|a| a.nonce).unwrap_or(0)
     }
+    /// Schreibt einer DID Guthaben gut und legt sie bei Bedarf an.
     pub fn deposit(&self, did: &str, amount: u64) {
         let mut a = self.accounts.lock();
         let acc = a.entry(did.to_string()).or_insert(Account {
@@ -376,6 +443,7 @@ impl StateDb {
         });
         acc.balance += amount;
     }
+    /// Bucht einen Betrag ab; zu wenig Guthaben ergibt InsufficientBalance.
     pub fn withdraw(&self, did: &str, amount: u64) -> Result<(), MempoolError> {
         let mut a = self.accounts.lock();
         let acc = a.entry(did.to_string()).or_insert(Account {
@@ -390,6 +458,7 @@ impl StateDb {
         acc.balance -= amount;
         Ok(())
     }
+    /// Verschiebt einen Betrag vom Guthaben in den Einsatz.
     pub fn stake(&self, did: &str, amount: u64) -> Result<(), MempoolError> {
         let mut a = self.accounts.lock();
         let acc = a.entry(did.to_string()).or_insert(Account {
@@ -405,6 +474,7 @@ impl StateDb {
         acc.staked += amount;
         Ok(())
     }
+    /// Verschiebt einen Betrag vom Einsatz zurück ins Guthaben.
     pub fn unstake(&self, did: &str, amount: u64) -> Result<(), MempoolError> {
         let mut a = self.accounts.lock();
         let acc = a.entry(did.to_string()).or_insert(Account {
@@ -420,6 +490,7 @@ impl StateDb {
         acc.balance += amount;
         Ok(())
     }
+    /// Zählt die Nonce einer DID um eins weiter.
     pub fn increment_nonce(&self, did: &str) {
         let mut a = self.accounts.lock();
         let acc = a.entry(did.to_string()).or_insert(Account {
@@ -430,6 +501,7 @@ impl StateDb {
         });
         acc.nonce += 1;
     }
+    /// Summe aus Guthaben und Einsatz über alle Konten.
     pub fn total_supply(&self) -> u64 {
         self.accounts
             .lock()
@@ -438,12 +510,14 @@ impl StateDb {
             .sum()
     }
 }
+/// Prüft Transaktionen gegen Kontostand, Nonce und Mindestpreis und bucht sie ab.
 pub struct TxValidator {
     state: Arc<StateDb>,
     nonces: Arc<NonceTracker>,
     min_gas_price: u64,
 }
 impl TxValidator {
+    /// Prüfer über Zustand und Nonce-Zähler mit Mindestpreis je Gaseinheit.
     pub fn new(state: Arc<StateDb>, nonces: Arc<NonceTracker>, min_gas_price: u64) -> Self {
         TxValidator {
             state,
@@ -451,6 +525,7 @@ impl TxValidator {
             min_gas_price,
         }
     }
+    /// Prüft in fester Reihenfolge Mindestpreis, Gasbudget, Empfänger, Nonce, Deckung und Einsatz.
     pub fn validate(&self, tx: &Transaction) -> Result<(), MempoolError> {
         if tx.gas_price < self.min_gas_price {
             return Err(MempoolError::GasPriceTooLow);
@@ -476,6 +551,7 @@ impl TxValidator {
         }
         Ok(())
     }
+    /// Bucht Höchstgebühr und Betrag ab, führt Einsatzwechsel aus und zählt die Nonce weiter; nicht verbrauchtes Gas wird nicht erstattet.
     pub fn apply(&self, tx: &Transaction) -> Result<(), MempoolError> {
         self.state.withdraw(&tx.sender_did, tx.max_fee())?;
         match tx.tx_type {
@@ -497,18 +573,30 @@ impl TxValidator {
         Ok(())
     }
 }
+/// Ablehnungsgründe des Pools und der Prüfung.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum MempoolError {
+    /// Der Pool hat seine Höchstzahl erreicht.
     PoolFull,
+    /// Die Kennung ist bereits im Pool.
     DuplicateTx,
+    /// Zur Kennung gibt es keinen Eintrag.
     TxNotFound,
+    /// Das Gasbudget deckt die Grundkosten nicht.
     GasLimitTooLow,
+    /// Der Gaspreis liegt unter dem Mindestpreis.
     GasPriceTooLow,
+    /// Der Gaspreis ist 0.
     ZeroGasPrice,
+    /// Ein Transfer mit Betrag hat keinen Empfänger.
     NoRecipient,
+    /// Die Nonce weicht von der erwarteten ab.
     InvalidNonce { expected: u64, got: u64 },
+    /// Das Guthaben deckt Betrag und Höchstgebühr nicht.
     InsufficientBalance,
+    /// Der Einsatz reicht für das Abheben nicht.
     InsufficientStake,
+    /// Die Transaktion gilt als veraltet.
     Expired,
 }
 #[cfg(test)]
