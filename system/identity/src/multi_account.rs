@@ -14,9 +14,13 @@ use super::{
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler der Mehrkonten-Koordination.
 pub enum MultiAccountError {
+    /// Fuer diesen Benutzer existiert bereits ein Konto.
     DuplicateAccount,
+    /// Fuer diesen Benutzer existiert kein Konto.
     AccountNotFound,
+    /// Der Identitaetsdienst hat einen Fehler gemeldet.
     Identity(IdentityServiceError),
 }
 
@@ -37,14 +41,17 @@ pub struct MultiAccountIdentityService {
 }
 
 impl MultiAccountIdentityService {
+    /// Leere Koordination ohne Konten.
     pub fn new() -> Self {
         Self::default()
     }
 
+    /// Anzahl registrierter Konten.
     pub fn account_count(&self) -> usize {
         self.accounts.len()
     }
 
+    /// Registriert ein Konto; ein zweites Konto zum selben Benutzer wird abgelehnt.
     pub fn register(
         &mut self,
         user_id: UserId,
@@ -74,6 +81,7 @@ impl MultiAccountIdentityService {
     }
 
     #[allow(clippy::too_many_arguments)]
+    /// Stellt ein Konto aus einer Wiederherstellungsphrase wieder her.
     pub fn restore(
         &mut self,
         user_id: UserId,
@@ -103,6 +111,7 @@ impl MultiAccountIdentityService {
         Ok(result)
     }
 
+    /// Meldet ein Konto an und liefert die Sitzung.
     pub fn login(
         &mut self,
         user_id: &UserId,
@@ -117,6 +126,7 @@ impl MultiAccountIdentityService {
             .map_err(MultiAccountError::Identity)
     }
 
+    /// Meldet ein Konto ab.
     pub fn logout(&mut self, user_id: &UserId) -> Result<(), MultiAccountError> {
         self.accounts
             .get_mut(user_id.as_str())
@@ -125,6 +135,7 @@ impl MultiAccountIdentityService {
         Ok(())
     }
 
+    /// Sitzung eines Kontos, falls sie noch gueltig ist.
     pub fn session(&self, user_id: &UserId, now_unix: u64) -> Option<&IdentitySession> {
         self.accounts
             .get(user_id.as_str())
