@@ -40,6 +40,7 @@ impl CredentialRecord {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Persistierter Identitaetsdatensatz aus Profil und Verifier.
 pub struct IdentityRecord {
+    /// Version des Datensatzes.
     pub version: u16,
     /// Profil des Kontos.
     pub profile: AccountProfile,
@@ -114,6 +115,7 @@ pub struct InMemoryIdentityStore {
 }
 
 impl InMemoryIdentityStore {
+    /// Leerer Speicher.
     pub fn new() -> Self {
         Self::default()
     }
