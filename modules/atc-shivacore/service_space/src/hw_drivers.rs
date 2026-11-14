@@ -489,8 +489,11 @@ impl shivacore::timer::TimerSource for HpetTimer {
 /// virtio-blk request types
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum VirtioBlkReqType {
+    /// Read data from the device.
     Read = 0,
+    /// Write data to the device.
     Write = 1,
+    /// Flush outstanding writes to the device.
     Flush = 4,
 }
 
@@ -535,8 +538,11 @@ impl VirtioBlkHeader {
 /// virtio-blk status codes
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum VirtioBlkStatus {
+    /// The request completed successfully.
     Ok = 0,
+    /// The device reported an I/O error.
     IoError = 1,
+    /// The request type is not supported by the device.
     Unsupp = 2,
 }
 
