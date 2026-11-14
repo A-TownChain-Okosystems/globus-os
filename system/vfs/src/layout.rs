@@ -2,19 +2,30 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum LayoutError {
+    /// Geometrie oder Blockzahl ist unbrauchbar.
     InvalidGeometry,
+    /// Die Rechnung laeuft ueber den Wertebereich hinaus.
     Overflow,
+    /// Die Metadaten passen nicht in die reservierten Bloecke.
     MetadataTooLarge,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Lage der Metadatenbereiche auf dem Volume.
 pub struct MetadataLayout {
+    /// Erster Block der Freispeicher-Bitmap.
     pub bitmap_start: u64,
+    /// Anzahl Bloecke der Bitmap.
     pub bitmap_blocks: u64,
+    /// Erster Block der Inode-Tabelle.
     pub inode_start: u64,
+    /// Anzahl Bloecke der Inode-Tabelle.
     pub inode_blocks: u64,
+    /// Erster Block des Journals.
     pub journal_start: u64,
+    /// Anzahl Bloecke des Journals.
     pub journal_blocks: u64,
+    /// Erster Block der Nutzdaten.
     pub data_start: u64,
 }
 
