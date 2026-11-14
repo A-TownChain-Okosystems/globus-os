@@ -48,18 +48,30 @@ des Owners, weil er die eingefrorene Syscall-ABI und das Capability-Modell berue
   ausserhalb des Fensters, fehlende Frames. Jeder Fall mit eigenem Status, keiner
   mit erfundenem PID.
 
-## 4. Blocker 3: Ohne erreichbaren Frame-Allokator gibt es keinen Prozess
+## 4. Blocker 3: Frame-Allokator im Syscall-Pfad (teilweise erledigt)
 
-Der Bootpfad haelt den Allokator lokal. Selbst mit Capability und gueltigem Plan
-kann ein Syscall heute keinen Adressraum bauen. Ein Spawn, der `ok(pid)`
-zurueckgibt, waere eine Luege; ein Spawn, der `ResourceExhausted` sagt, waere die
-Wahrheit.
+Berichtigt am 14.11.2026: "der Bootpfad haelt den Allokator lokal" gilt nicht
+mehr. `memory::FRAME_ALLOCATOR` ist veroeffentlicht und wird im Interrupt-Kontext
+ueber `try_lock` benutzt — die Reclaim-Warteschlange gibt dort
+Seitentabellen-Frames mit `deallocate_frame` zurueck. Ein belegter Allokator
+blockiert nicht, sondern stellt den Auftrag in die Warteschlange fuer den
+naechsten Tick.
+
+Was fuer einen Spawn weiterhin fehlt, ist nicht der Zugriff, sondern der
+**aufbauende** Weg: einen PML4 samt Seitentabellen anfordern, einen Mapper fuer
+genau diesen Adressraum bilden und die Programmbilder hinein abbilden. Dafuer
+muss der Syscall-Pfad dieselben Bausteine benutzen, die der Bootpfad benutzt
+(`AddressSpace::create`, `map_user_binary`) — kein zweiter Weg zum selben Ziel.
+Ein Spawn, der `ok(pid)` zurueckgibt, waere eine Luege; ein Spawn, der
+`ResourceExhausted` sagt, waere die Wahrheit.
 
 ## 5. Reihenfolge
 
 1. Segmente abbilden (Blocker 1) — reine Kernel-Korrektheit, keine ABI-Aenderung,
    sofort pruefbar: Init mit Stringliteral muss laufen statt zu sterben.
-2. Frame-Allokator erreichbar machen (Blocker 3).
+2. Aufbauenden Weg im Syscall-Pfad bereitstellen (Blocker 3): PML4, Mapper,
+   Abbildung ueber dieselben Bausteine wie der Bootpfad. Der Zugriff auf den
+   Allokator steht bereits.
 3. Erst dann ABI 2.1 mit `SpawnProcess` (Blocker 2) — mit Owner-Entscheidung.
 
 Solange 1 fehlt, ist jeder Spawn-Versuch ein Test der Abbildung, nicht des Spawns.
