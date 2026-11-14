@@ -2,6 +2,7 @@
 // ATC Linux Edition -- Sprint 0 Platzhalter
 // Rust mit std, GUI via eframe/egui. eframe 0.36-API (run_native, SCR-0078).
 
+//! ATC Linux Edition, Sprint 0: Platzhalterfenster auf eframe/egui.
 use eframe::egui;
 
 #[derive(Default)]
