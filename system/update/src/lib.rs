@@ -1,7 +1,9 @@
 //! Atomic update state machine with rollback semantics.
 
 pub mod boot_state;
+/// Boot health tracking for the fail-closed A/B switch.
 pub mod health;
+/// Allowed update state transitions.
 pub mod transition;
 
 pub use boot_state::{BootState, BootStateError};
@@ -9,27 +11,41 @@ pub use health::{BootHealth, HealthError};
 pub use transition::TransitionError;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Boot slot of the A/B scheme.
 pub enum Slot {
+    /// Slot A.
     A,
+    /// Slot B.
     B,
 }
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Update lifecycle state.
 pub enum UpdateState {
+    /// Nothing staged yet.
     Idle,
+    /// Payload fetched, not yet verified.
     Downloaded,
+    /// Payload bytes were verified.
     Verified,
+    /// The verified update was activated.
     Activated,
+    /// The update was rolled back to the previous slot.
     RolledBack,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Update plan: current slot, target slot and state.
 pub struct UpdatePlan {
+    /// Slot currently booted.
     pub current: Slot,
+    /// Slot the update will be written to.
     pub target: Slot,
+    /// Current state of the plan.
     pub state: UpdateState,
 }
 
 impl UpdatePlan {
+    /// Creates an idle plan for `current` with the other slot as target.
     pub fn new(current: Slot) -> Self {
         Self {
             current,
