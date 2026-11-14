@@ -23,8 +23,11 @@ const MAX_PAYLOAD_LEN: usize = 64 * 1024;
 #[repr(u8)]
 /// Zustand eines Journaleintrags.
 pub enum TransactionState {
+    /// Der Eintrag ist angekuendigt, die Aenderung noch nicht uebernommen.
     Prepared = 1,
+    /// Die Aenderung ist uebernommen und dauerhaft.
     Committed = 2,
+    /// Der Eintrag wurde verworfen; die Aenderung findet nicht statt.
     Aborted = 3,
 }
 
