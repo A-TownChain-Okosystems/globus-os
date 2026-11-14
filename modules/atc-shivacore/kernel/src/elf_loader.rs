@@ -291,6 +291,17 @@ impl<'a> ElfParser<'a> {
 use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
 
 
+/// Obergrenze fuer den Datenanteil eines Abbilds: vorbelegte Daten plus bss.
+///
+/// Der Wert kommt NICHT aus einer VM-Grenze, sondern aus dem Adressfenster, das
+/// der Prozess fuer Daten hat: `UserAddressSpace::default().data_size` ist
+/// 1 MiB. Was darueber liegt, kann ohnehin nicht vollstaendig abgebildet
+/// werden — und `p_memsz` ist eine Angabe aus der Datei, also ungeprueft.
+/// Ohne Grenze wuerde ein praepariertes ELF beim Bauen des Abbilds beliebig
+/// viel Haufen anfordern (die bss-Nullen werden als Puffer angelegt), bevor
+/// irgendetwas abgebildet ist. Deshalb fail-closed vor der Allokation.
+pub const MAX_IMAGE_DATA_BYTES: usize = 0x0010_0000;
+
 /// Baut ein Userspace-Abbild aus einer ELF-Datei.
 ///
 /// Bis hierher nahm der Bootpfad nur das ausfuehrbare Segment mit; alles andere
@@ -311,10 +322,20 @@ pub fn user_binary_from_elf(name: &str, elf: &[u8]) -> Result<UserBinary, ElfLoa
     let mut data = Vec::new();
     if let Some(segment) = parser.data_segment() {
         let bytes = parser.segment_data(segment)?;
-        data.extend_from_slice(bytes);
         let bss = segment.p_memsz.saturating_sub(segment.p_filesz);
+        // Erst rechnen, dann anlegen: die Grenze gilt fuer die Summe, sonst
+        // fordert eine grosse p_memsz den Puffer, bevor irgendetwas abgebildet
+        // ist. `usize`-Ueberlauf wird dabei als "zu gross" behandelt.
+        let total = (bytes.len() as u64)
+            .checked_add(bss)
+            .and_then(|summe| usize::try_from(summe).ok())
+            .ok_or(ElfLoadError::ImageTooLarge)?;
+        if total > MAX_IMAGE_DATA_BYTES {
+            return Err(ElfLoadError::ImageTooLarge);
+        }
+        data.extend_from_slice(bytes);
         if bss > 0 {
-            data.resize(data.len() + bss as usize, 0);
+            data.resize(total, 0);
         }
     }
     Ok(UserBinary {
@@ -417,6 +438,8 @@ pub enum ElfLoadError {
     Parse(ElfParseError),
     /// Es gibt kein ausfuehrbares Segment.
     NoCodeSegment,
+    /// Der Datenanteil (Daten plus bss) liegt ueber `MAX_IMAGE_DATA_BYTES`.
+    ImageTooLarge,
     /// Die Prozessverwaltung hat die Datei abgelehnt.
     Userspace(UserspaceError),
 }
@@ -437,6 +460,11 @@ impl core::fmt::Display for ElfLoadError {
         match self {
             ElfLoadError::Parse(e) => write!(f, "ELF parse error: {}", e),
             ElfLoadError::NoCodeSegment => write!(f, "no executable code segment"),
+            ElfLoadError::ImageTooLarge => write!(
+                f,
+                "data image exceeds {} bytes",
+                MAX_IMAGE_DATA_BYTES
+            ),
             ElfLoadError::Userspace(e) => write!(f, "userspace error: {}", e),
         }
     }
@@ -1355,6 +1383,48 @@ mod tests {
         elf.extend_from_slice(code);
         elf.extend_from_slice(data);
         elf
+    }
+
+
+    #[test]
+    fn zu_grosser_datenanteil_wird_vor_der_allokation_abgelehnt() {
+        // bss allein ueber der Grenze: kein Puffer, kein Abbild, nur Fehler.
+        let elf = two_segment_elf(
+            0x01C0_0000,
+            &[0x90, 0xF4],
+            b"AB",
+            MAX_IMAGE_DATA_BYTES as u64,
+        );
+        assert!(matches!(
+            user_binary_from_elf("zu-gross", &elf),
+            Err(ElfLoadError::ImageTooLarge)
+        ));
+    }
+
+    #[test]
+    fn genau_an_der_grenze_wird_angenommen() {
+        let elf = two_segment_elf(
+            0x01C0_0000,
+            &[0x90, 0xF4],
+            b"AB",
+            MAX_IMAGE_DATA_BYTES as u64 - 2,
+        );
+        let binary = user_binary_from_elf("an-der-grenze", &elf).expect("Grenze ist zulaessig");
+        assert_eq!(binary.data.len(), MAX_IMAGE_DATA_BYTES);
+    }
+
+    #[test]
+    fn ein_byte_ueber_der_grenze_wird_abgelehnt() {
+        let elf = two_segment_elf(
+            0x01C0_0000,
+            &[0x90, 0xF4],
+            b"AB",
+            MAX_IMAGE_DATA_BYTES as u64 - 1,
+        );
+        assert!(matches!(
+            user_binary_from_elf("ein-byte-zu-viel", &elf),
+            Err(ElfLoadError::ImageTooLarge)
+        ));
     }
 
     #[test]
