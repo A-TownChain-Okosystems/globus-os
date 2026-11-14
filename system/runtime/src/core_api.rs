@@ -72,7 +72,12 @@ impl RuntimeCore {
             | Syscall::IpcReceive
             | Syscall::CapabilityQuery
             | Syscall::HandleClose
-            | Syscall::MonotonicTime => true,
+            | Syscall::MonotonicTime
+            // Console (0x0050) gehoert seit dem Anmeldefenster zum Vertrag: der
+            // Kernel nimmt Text gegen ein Konsole-Recht entgegen und schreibt
+            // ihn auf die Flaeche. Traegt dieser Arm nicht mit, bricht der
+            // Build auf Stable mit E0004.
+            | Syscall::Console => true,
         }
     }
 
