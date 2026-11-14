@@ -5,11 +5,15 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des Block-Caches.
 pub enum CacheError {
+    /// Das Geraet hat abgelehnt.
     Block(BlockError),
+    /// Der Block passt nicht zur Geometrie.
     InvalidBlock,
 }
 
+/// Cache fuer genau einen Block ueber einem Geraet.
 pub struct BlockCache<D> {
     device: D,
     geometry: BlockGeometry,
@@ -18,6 +22,7 @@ pub struct BlockCache<D> {
 }
 
 impl<D: BlockDevice> BlockCache<D> {
+    /// Nimmt die Geometrie vom Geraet.
     pub fn new(device: D) -> Self {
         let geometry = device.geometry();
         Self {
@@ -28,10 +33,12 @@ impl<D: BlockDevice> BlockCache<D> {
         }
     }
 
+    /// Geometrie des Geraets.
     pub fn geometry(&self) -> BlockGeometry {
         self.geometry
     }
 
+    /// Liest einen Block aus dem Cache oder vom Geraet.
     pub fn read_block(&mut self, lba: u64, out: &mut [u8]) -> Result<(), CacheError> {
         if out.len() != self.geometry.block_size as usize {
             return Err(CacheError::InvalidBlock);
@@ -53,6 +60,7 @@ impl<D: BlockDevice> BlockCache<D> {
         Ok(())
     }
 
+    /// Schreibt einen Block und verwirft den Cache-Eintrag.
     pub fn write_block(&mut self, lba: u64, input: &[u8]) -> Result<(), CacheError> {
         if input.len() != self.geometry.block_size as usize {
             return Err(CacheError::InvalidBlock);
