@@ -83,6 +83,14 @@ Das Fenster benutzt beides, damit die Grenze nicht nur behauptet ist:
 | nach `Esc` (Dienst-Neustart) | `Start 3` — `.data` ueberlebt das Zuruecksetzen, weil der Kernel den Stapel leert und die Daten nicht neu kopiert |
 | Eingabe nach dem Neustart | `xy` erscheint im Feld, Feld war vorher leer |
 
+Der Datenanteil ist begrenzt: `MAX_IMAGE_DATA_BYTES` = 1 MiB, also genau das
+Datenfenster des Prozesses (`UserAddressSpace::data_size`). Die Grenze wird vor
+der Allokation geprueft, weil `p_memsz` eine ungepruefte Angabe aus der Datei
+ist und die bss-Nullen als Puffer angelegt werden; zusaetzlich prueft
+`map_user_binary` mit `data_fits` gegen das Fenster des jeweiligen Prozesses.
+Drei Kantentests: genau an der Grenze zulaessig, ein Byte darueber abgelehnt,
+bss allein ueber der Grenze abgelehnt.
+
 Der letzte Punkt ist die ehrliche Grenze des Supervisors: zurueckgesetzt wird der
 Stapel, nicht das Datensegment. Ein Programm, das seinen Zustand in `.data`
 haelt, sieht den alten Zustand wieder. Ein echter Neustart aus dem Abbild
@@ -116,10 +124,11 @@ Das ist keine Fehlermeldung, sondern der Befund: `globus-identity` ist Host-Code
 
 | Ebene | Ergebnis |
 |---|---|
-| Workspace (Host, rustc 1.100.0) | 1788 bestanden, 0 fehlgeschlagen |
+| Workspace (Host, rustc 1.100.0) | 1792 bestanden, 0 fehlgeschlagen |
 | ABI | 39 bestanden, davon 3 neu (Tastenlayout, Konsolen-Opcodes, Syscall-Nummer 0x0050) |
 | Diensteverwaltung | 5 Tests: Startvertrag, Ersetzen statt Verdoppeln, Limit, unbekannte PID, Reihenfolge im Exit-Pfad |
-| ELF-Abbild | 3 Tests: Code+Daten+bss-Nullen, Programm ohne Datensegment, Programm ohne Codesegment |
+| ELF-Abbild | 6 Tests: Code+Daten+bss-Nullen, ohne Datensegment, ohne Codesegment, Grenze (genau/ein Byte darueber/bss allein) |
+| Datenfenster | 1 Test: Fenstergroesse zulaessig, ein Byte darueber nicht |
 | Fenster-Crate | kein Testrahmen (bare metal); Nachweis ueber QEMU |
 | rustfmt/clippy | eigene Aenderungen ohne Befund; die Datei `interrupts.rs` ist im Bestand nicht rustfmt-clean (Importreihenfolge, lange Signaturen) und wurde nicht umformatiert |
 
