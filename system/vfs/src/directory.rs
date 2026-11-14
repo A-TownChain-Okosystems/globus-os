@@ -2,14 +2,20 @@
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum DirectoryError {
+    /// Der Zielpuffer ist zu klein.
     Buffer,
+    /// Der Name ist leer, zu lang oder enthaelt NUL beziehungsweise Schraegstrich.
     InvalidName,
+    /// Die Inode ist 0.
     InvalidInode,
+    /// Typbyte oder reservierte Bytes sind unbekannt beziehungsweise nicht 0.
     InvalidType,
+    /// Die Laengenrechnung laeuft ueber.
     Overflow,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Art eines Verzeichniseintrags.
 pub enum DirectoryType {
     File = 1,
     Directory = 2,
@@ -17,13 +23,18 @@ pub enum DirectoryType {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ein Verzeichniseintrag.
 pub struct DirectoryRecord {
+    /// Inode des Ziels.
     pub inode: u64,
+    /// Art des Eintrags.
     pub kind: DirectoryType,
+    /// Name im Verzeichnis, ohne NUL und ohne Schraegstrich.
     pub name: String,
 }
 
 impl DirectoryRecord {
+    /// Laenge der kodierten Form, nachdem Name, Typ und Inode geprueft wurden.
     pub fn encoded_len(&self) -> Result<usize, DirectoryError> {
         if self.inode == 0
             || self.name.is_empty()
@@ -37,6 +48,7 @@ impl DirectoryRecord {
             .ok_or(DirectoryError::Overflow)
     }
 
+    /// Schreibt den Eintrag kanonisch in den Puffer.
     pub fn encode(&self, out: &mut [u8]) -> Result<usize, DirectoryError> {
         let len = self.encoded_len()?;
         if out.len() < len {
@@ -50,6 +62,7 @@ impl DirectoryRecord {
         Ok(len)
     }
 
+    /// Liest einen Eintrag und dessen Laenge.
     pub fn decode(input: &[u8]) -> Result<(Self, usize), DirectoryError> {
         if input.len() < 16 {
             return Err(DirectoryError::Buffer);
