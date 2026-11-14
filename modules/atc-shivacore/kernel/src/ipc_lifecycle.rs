@@ -616,6 +616,18 @@ pub static CHANNELS_TEST_LOCK: spin::Mutex<()> = spin::Mutex::new(());
 /// Die eine Instanz fuer Kanal-Lebensdauer.
 pub static CHANNELS: Mutex<ChannelRegistry> = Mutex::new(ChannelRegistry::new());
 
+/// Setzt den geteilten Kanalbestand fuer einen Test auf den leeren Stand.
+///
+/// Die Registry ist prozessweit, alle Tests eines Testlaufs teilen sie. Ein
+/// Test, der einen Kanal offen laesst, verfaelscht damit die Zusicherungen des
+/// naechsten: beobachtet wurde ein Test, der ein Ereignis in Kanal 1 ablegte,
+/// ohne es zu lesen, und ein spaeterer Test, der `pending_of(1) == Some(0)`
+/// erwartete. Nur Testcode; der Aufrufer haelt `CHANNELS_TEST_LOCK`.
+#[cfg(test)]
+pub fn reset_channels_for_tests() {
+    *CHANNELS.lock() = ChannelRegistry::new();
+}
+
 /// Die eine Instanz fuer Prozess-Handles.
 pub static HANDLES: Mutex<HandleTable> = Mutex::new(HandleTable::new());
 
@@ -667,6 +679,7 @@ mod tests {
     #[test]
     fn own_channel_is_destroyed_on_exit() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         assert!(reg.open(0x20, pid(1)));
         assert!(reg.enqueue(0x20, 0xAA));
@@ -679,6 +692,7 @@ mod tests {
     #[test]
     fn shared_channel_survives_for_remaining_process() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x21, pid(1));
         reg.attach(0x21, pid(2));
@@ -694,6 +708,7 @@ mod tests {
     #[test]
     fn last_participant_destroys_channel() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x22, pid(1));
         reg.attach(0x22, pid(2));
@@ -706,6 +721,7 @@ mod tests {
     #[test]
     fn waiters_are_aborted_when_channel_dies() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x23, pid(1));
         reg.wait(0x23, pid(2));
@@ -717,6 +733,7 @@ mod tests {
     #[test]
     fn double_close_is_not_a_double_free() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x24, pid(1));
         assert_eq!(reg.close(0x24, pid(1)), CloseOutcome::Destroyed);
@@ -728,6 +745,7 @@ mod tests {
     #[test]
     fn release_proves_double_close_is_blocked() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x26, pid(1));
         reg.enqueue(0x26, 0xCC);
@@ -740,6 +758,7 @@ mod tests {
     #[test]
     fn snapshot_counts_surviving_shared_channels() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x27, pid(1));
         reg.attach(0x27, pid(2));
@@ -755,6 +774,7 @@ mod tests {
     #[test]
     fn live_send_and_recv_go_through_the_registry() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open_with(0x40, pid(1), 4);
         assert_eq!(reg.send(pid(1), 0x40, 0x1234), Ok(()));
@@ -765,6 +785,7 @@ mod tests {
     #[test]
     fn non_participant_is_denied_fail_closed() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x41, pid(1));
         assert_eq!(reg.send(pid(2), 0x41, 1), Err(LiveIpcError::NotParticipant));
@@ -777,6 +798,7 @@ mod tests {
     #[test]
     fn full_channel_refuses_instead_of_dropping_silently() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open_with(0x42, pid(1), 2);
         assert_eq!(reg.send(pid(1), 0x42, 1), Ok(()));
@@ -791,6 +813,7 @@ mod tests {
     #[test]
     fn attach_during_release_is_denied_after_the_channel_died() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x43, pid(1));
         reg.release(pid(1));
@@ -802,6 +825,7 @@ mod tests {
     #[test]
     fn send_during_close_is_lost_with_the_channel() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x44, pid(1));
         reg.send(pid(1), 0x44, 11).unwrap();
@@ -813,6 +837,7 @@ mod tests {
     #[test]
     fn two_participants_exit_in_either_order() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         for first in [pid(1), pid(2)] {
             let mut reg = ChannelRegistry::new();
             reg.open(0x45, pid(1));
@@ -830,6 +855,7 @@ mod tests {
     #[test]
     fn access_after_last_participant_is_denied() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         reg.open(0x46, pid(1));
         reg.attach(0x46, pid(2));
@@ -852,6 +878,7 @@ mod tests {
     #[test]
     fn pump_delivers_in_order_up_to_the_channel_capacity() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         CHANNELS.lock().open_with(0x50, pid(1), 2);
         let mut queue = ingress(3);
         let report = pump_from_ingress(&mut queue, 0x50, 8);
@@ -868,6 +895,7 @@ mod tests {
     #[test]
     fn pump_skips_a_busy_channel_without_losing_anything() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         CHANNELS.lock().open_with(0x51, pid(1), 8);
         let mut queue = ingress(2);
         let guard = CHANNELS.lock();
@@ -890,6 +918,7 @@ mod tests {
     #[test]
     fn pump_does_not_feed_an_unknown_or_dead_channel() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut queue = ingress(1);
         let report = pump_from_ingress(&mut queue, 0x5F, 8);
         assert_eq!(report.pumped, 0);
@@ -899,6 +928,7 @@ mod tests {
     #[test]
     fn recv_and_attach_during_close_do_not_resurrect_a_channel() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         CHANNELS.lock().open(0x52, pid(1));
         CHANNELS.lock().attach(0x52, pid(2));
         CHANNELS.lock().send(pid(1), 0x52, 7).unwrap();
@@ -916,6 +946,7 @@ mod tests {
     #[test]
     fn exit_keeps_the_message_for_the_remaining_participant() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         CHANNELS.lock().open(0x53, pid(1));
         CHANNELS.lock().attach(0x53, pid(2));
         CHANNELS.lock().send(pid(1), 0x53, 0xAA).unwrap();
@@ -928,6 +959,7 @@ mod tests {
     #[test]
     fn revoked_handle_is_stale() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut table = HandleTable::new();
         let h = table.open(pid(1), HandleKind::Channel, 0x30);
         assert_eq!(table.validate(pid(1), h), Ok(0x30));
@@ -939,6 +971,7 @@ mod tests {
     #[test]
     fn foreign_handle_is_denied() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut table = HandleTable::new();
         let h = table.open(pid(1), HandleKind::Process, 0x40);
         assert_eq!(table.validate(pid(2), h), Err(HandleError::Stale));
@@ -947,6 +980,7 @@ mod tests {
     #[test]
     fn release_of_process_without_resources_is_empty() {
         let _kanal = CHANNELS_TEST_LOCK.lock();
+        reset_channels_for_tests();
         let mut reg = ChannelRegistry::new();
         let mut table = HandleTable::new();
         reg.open(0x25, pid(1));
