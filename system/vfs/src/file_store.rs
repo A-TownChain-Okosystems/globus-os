@@ -4,6 +4,7 @@ use crate::{ExtentError, ExtentMap};
 use globus_devices::block::{BlockDevice, BlockRequest};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler der Datei-IO ueber Extents.
 pub enum FileStoreError {
     /// Das Geraet hat einen IO-Fehler gemeldet.
     Io,
