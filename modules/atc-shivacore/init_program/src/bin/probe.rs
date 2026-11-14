@@ -38,6 +38,8 @@ fn syscall(number: u16) {
     }
 }
 
+/// Einsprungpunkt, der wiederholt den MonotonicTime-Syscall aufruft und
+/// damit Syscall-Pfad und Timer prueft.
 #[no_mangle]
 pub extern "C" fn _start() -> ! {
     loop {
