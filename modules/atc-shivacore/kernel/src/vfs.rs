@@ -20,20 +20,31 @@ use crate::capability::Rights;
 
 // ─── Datei-Typen ───────────────────────────────────────────────────────────
 
+/// Art eines Eintrags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum FileType {
+    /// Regulaere Datei mit Inhalt.
     File,
+    /// Verzeichnis mit Kindern.
     Directory,
+    /// Verweis auf ein Ziel.
     Symlink,
 }
 
+/// Angaben zu einem Eintrag.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FileMetadata {
+    /// Art des Eintrags.
     pub file_type: FileType,
+    /// Groesse in Byte.
     pub size: u64,
+    /// Anlagezeitpunkt.
     pub created_at: u64,
+    /// Zeitpunkt der letzten Aenderung; der Schreibpfad setzt vereinfachend den Wert 1.
     pub modified_at: u64,
+    /// Prozess, der den Eintrag angelegt hat.
     pub owner_pid: u64,
+    /// Rechte des Eintrags.
     pub permissions: Rights,
 }
 
@@ -123,21 +134,32 @@ impl Inode {
 
 // ─── File-Handle ──────────────────────────────────────────────────────────
 
+/// Offener Zugriff auf eine Datei; die Inode bleibt ausserhalb der oeffentlichen Felder.
 #[derive(Debug)]
 pub struct FileHandle {
     inode_id: u64,
+    /// Aktuelle Position in Byte.
     pub position: u64,
+    /// Eroeffnungsart.
     pub mode: OpenMode,
+    /// Prozess, der die Datei geoeffnet hat.
     pub pid: u64,
+    /// Capability, mit der die Datei geoeffnet wurde.
     pub cap_handle: u64,
 }
 
+/// Eroeffnungsart; sie entscheidet beim Oeffnen ueber das verlangte Recht.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OpenMode {
+    /// Nur lesen.
     Read,
+    /// Nur schreiben.
     Write,
+    /// Lesen und schreiben.
     ReadWrite,
+    /// Schreiben ab dem Dateiende; das Oeffnen setzt die Position auf die Laenge, danach gilt die aktuelle Position.
     Append,
+    /// Anlegen, falls nicht vorhanden, und schreiben.
     Create,
 }
 
@@ -188,6 +210,7 @@ fn parent_path(path: &str) -> (String, String) {
 
 // ─── VFS ───────────────────────────────────────────────────────────────────
 
+/// Dateibaum im Speicher mit Handles und Capability-Pruefung.
 pub struct Vfs {
     inodes: BTreeMap<u64, Inode>,
     next_inode: u64,
@@ -199,6 +222,7 @@ pub struct Vfs {
 }
 
 impl Vfs {
+    /// Legt das Wurzelverzeichnis an; Rechte entscheidet die uebergebene Authority, nicht der Baum.
     pub fn new(caps: Arc<CapabilityAuthority>) -> Self {
         let mut vfs = Vfs {
             inodes: BTreeMap::new(),
@@ -254,6 +278,7 @@ impl Vfs {
 
     // ── Verzeichnis-Operationen ────────────────────────────────────────────
 
+    /// Prueft das Schreibrecht, loest das Elternverzeichnis auf und legt einen Eintrag an.
     pub fn mkdir(&mut self, path: &str, pid: u64, cap_handle: u64) -> Result<(), VfsError> {
         if !self.check_cap(pid, cap_handle, Rights::WRITE) {
             return Err(VfsError::PermissionDenied);
@@ -286,6 +311,7 @@ impl Vfs {
         Ok(())
     }
 
+    /// Prueft das Leserecht und liefert die Kinder des Verzeichnisses.
     pub fn list_dir(
         &self,
         path: &str,
@@ -315,6 +341,7 @@ impl Vfs {
         Ok(entries)
     }
 
+    /// Prueft das Schreibrecht, lehnt die Wurzel und nicht leere Verzeichnisse ab und entfernt den Eintrag.
     pub fn rmdir(&mut self, path: &str, pid: u64, cap_handle: u64) -> Result<(), VfsError> {
         if !self.check_cap(pid, cap_handle, Rights::WRITE) {
             return Err(VfsError::PermissionDenied);
@@ -347,6 +374,7 @@ impl Vfs {
 
     // ── Datei-Operationen ──────────────────────────────────────────────────
 
+    /// Prueft das Schreibrecht, loest das Elternverzeichnis auf und legt eine leere Datei an.
     pub fn create_file(&mut self, path: &str, pid: u64, cap_handle: u64) -> Result<(), VfsError> {
         if !self.check_cap(pid, cap_handle, Rights::WRITE) {
             return Err(VfsError::PermissionDenied);
@@ -379,6 +407,7 @@ impl Vfs {
         Ok(())
     }
 
+    /// Verlangt je nach Eroeffnungsart Lesen, Schreiben oder beides, legt bei Create die Datei an und liefert eine Kennung.
     pub fn open(
         &mut self,
         path: &str,
@@ -433,6 +462,7 @@ impl Vfs {
         Ok(fd)
     }
 
+    /// Prueft das Leserecht, liest ab der aktuellen Position hoechstens bis zur Puffergroesse und rueckt die Position vor.
     pub fn read(
         &mut self,
         fd: u64,
@@ -463,6 +493,7 @@ impl Vfs {
         Ok(to_read)
     }
 
+    /// Prueft das Schreibrecht, erweitert die Datei bei Bedarf mit Nullen, schreibt ab der aktuellen Position und setzt Groesse und Aenderungszeitpunkt neu.
     pub fn write(
         &mut self,
         fd: u64,
@@ -494,6 +525,7 @@ impl Vfs {
         Ok(data.len())
     }
 
+    /// Gibt die Kennung frei.
     pub fn close(&mut self, fd: u64) -> Result<(), VfsError> {
         self.handles
             .remove(&fd)
@@ -501,6 +533,7 @@ impl Vfs {
         Ok(())
     }
 
+    /// Setzt die Position absolut; es gibt keine Basisangabe und keine Pruefung gegen die Dateigroesse.
     pub fn seek(&mut self, fd: u64, offset: u64) -> Result<u64, VfsError> {
         let handle = self
             .handles
@@ -510,6 +543,7 @@ impl Vfs {
         Ok(offset)
     }
 
+    /// Prueft das Leserecht und liefert die Angaben des Eintrags.
     pub fn stat(&self, path: &str, _pid: u64, cap_handle: u64) -> Result<FileMetadata, VfsError> {
         if !self.check_cap(_pid, cap_handle, Rights::READ) {
             return Err(VfsError::PermissionDenied);
@@ -521,6 +555,7 @@ impl Vfs {
 
     // ── Symlink ───────────────────────────────────────────────────────────
 
+    /// Prueft das Schreibrecht, loest das Elternverzeichnis auf und legt einen Verweis mit Zieltext an.
     pub fn create_symlink(
         &mut self,
         path: &str,
@@ -559,6 +594,7 @@ impl Vfs {
         Ok(())
     }
 
+    /// Prueft das Leserecht und liefert den Zieltext; ein anderer Eintragstyp wird als solcher gemeldet.
     pub fn read_symlink(&self, path: &str, _pid: u64, cap_handle: u64) -> Result<String, VfsError> {
         if !self.check_cap(_pid, cap_handle, Rights::READ) {
             return Err(VfsError::PermissionDenied);
@@ -573,6 +609,7 @@ impl Vfs {
 
     // ── Datei löschen ──────────────────────────────────────────────────────
 
+    /// Prueft das Schreibrecht, verlangt eine Datei und entfernt sie samt ihren offenen Handles.
     pub fn remove_file(&mut self, path: &str, pid: u64, cap_handle: u64) -> Result<(), VfsError> {
         if !self.check_cap(pid, cap_handle, Rights::WRITE) {
             return Err(VfsError::PermissionDenied);
@@ -609,6 +646,7 @@ impl Vfs {
 
     // ── Baum-Anzeige (Debug) ───────────────────────────────────────────────
 
+    /// Liefert eine eingerueckte Darstellung des Baums als Zeilen.
     pub fn tree(&self) -> Vec<String> {
         let mut out = Vec::new();
         self.print_subtree(self.root_inode, "", &mut out);
@@ -655,27 +693,43 @@ impl Vfs {
 
 // ─── DirEntry ─────────────────────────────────────────────────────────────
 
+/// Ein Eintrag einer Verzeichnisliste.
 #[derive(Debug, Clone)]
 pub struct DirEntry {
+    /// Name des Eintrags.
     pub name: String,
+    /// Art des Eintrags.
     pub file_type: FileType,
+    /// Groesse in Byte.
     pub size: u64,
 }
 
 // ─── Fehler ────────────────────────────────────────────────────────────────
 
+/// Ablehnungsgruende des Dateibaums.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum VfsError {
+    /// Der Pfad oder die Kennung ist nicht vorhanden.
     NotFound,
+    /// Der Name ist im Verzeichnis schon belegt.
     AlreadyExists,
+    /// Ein Pfadteil ist kein Verzeichnis.
     NotADirectory,
+    /// Verlangt ist eine Datei, der Eintrag ist ein Verzeichnis.
     IsADirectory,
+    /// Der Eintrag ist kein Verweis.
     NotASymlink,
+    /// Das Verzeichnis hat noch Kinder.
     DirectoryNotEmpty,
+    /// Die Wurzel laesst sich nicht entfernen.
     CannotRemoveRoot,
+    /// Die Capability fehlt, gehoert einem anderen Prozess oder deckt das verlangte Recht nicht.
     PermissionDenied,
+    /// Die Kennung ist nicht offen.
     BadFileDescriptor,
+    /// Die Eroeffnungsart erlaubt die Operation nicht.
     InvalidMode,
+    /// Meldung des Datentraegers; beim Speicher-Backend von keiner Stelle erzeugt.
     IoError(String),
 }
 
