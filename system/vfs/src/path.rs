@@ -1,6 +1,7 @@
 //! Deterministic VFS path normalization and mount resolution.
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Fehler beim Normalisieren oder Aufloesen eines Pfads.
 pub enum PathError {
     /// Der Pfad beginnt nicht mit einem Schraegstrich.
     NotAbsolute,
