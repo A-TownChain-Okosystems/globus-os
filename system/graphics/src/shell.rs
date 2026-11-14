@@ -3,39 +3,59 @@
 use crate::SurfaceId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Kennung einer Anwendung in der Shell.
 pub struct AppId(pub u64);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Eintrag im Anwendungsverzeichnis der Shell.
 pub struct AppEntry {
+    /// Kennung der Anwendung.
     pub id: AppId,
+    /// Anzeigename.
     pub name: String,
+    /// Befehl, der die Anwendung startet.
     pub command: String,
+    /// True, wenn die Anwendung angeheftet ist.
     pub pinned: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Eine Benachrichtigung.
 pub struct Notification {
+    /// Kennung der Benachrichtigung.
     pub id: u64,
+    /// Titel.
     pub title: String,
+    /// Text der Benachrichtigung.
     pub body: String,
+    /// True, wenn sie als dringend gilt.
     pub urgent: bool,
+    /// True, wenn sie verworfen wurde.
     pub dismissed: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Eintrag in der Taskleiste.
 pub struct TaskItem {
+    /// Anwendung des Tasks.
     pub app: AppId,
+    /// Flaeche des Tasks.
+    /// Besitzende Flaeche.
     pub surface: SurfaceId,
+    /// True, wenn der Task aktiv ist.
     pub active: bool,
+    /// True, wenn der Task minimiert ist.
     pub minimized: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Flaeche, die die Zwischenablage besitzt.
 pub struct ClipboardOwner {
     pub surface: SurfaceId,
 }
 
 #[derive(Debug, Default)]
+/// Zustand der Desktop-Shell: Anwendungen, Tasks, Benachrichtigungen und Zwischenablage.
 pub struct DesktopShell {
     apps: Vec<AppEntry>,
     tasks: Vec<TaskItem>,
@@ -46,6 +66,7 @@ pub struct DesktopShell {
 }
 
 impl DesktopShell {
+    /// Leere Shell.
     pub fn new() -> Self {
         Self {
             next_app: 1,
@@ -53,6 +74,7 @@ impl DesktopShell {
             ..Self::default()
         }
     }
+    /// Nimmt eine Anwendung auf und vergibt ihre Kennung.
     pub fn register_app(
         &mut self,
         name: impl Into<String>,
@@ -69,6 +91,7 @@ impl DesktopShell {
         });
         id
     }
+    /// Anwendungen, deren Name die Suche enthaelt.
     pub fn search_apps(&self, query: &str) -> Vec<&AppEntry> {
         let q = query.trim().to_ascii_lowercase();
         self.apps
@@ -80,6 +103,7 @@ impl DesktopShell {
             })
             .collect()
     }
+    /// Haengt eine Flaeche als Task an eine Anwendung.
     pub fn attach_task(&mut self, app: AppId, surface: SurfaceId) {
         self.tasks.retain(|t| t.surface != surface);
         self.tasks.push(TaskItem {
@@ -89,6 +113,7 @@ impl DesktopShell {
             minimized: false,
         });
     }
+    /// Macht den Task aktiv.
     pub fn activate_task(&mut self, surface: SurfaceId) {
         for task in &mut self.tasks {
             task.active = task.surface == surface;
@@ -97,12 +122,14 @@ impl DesktopShell {
             }
         }
     }
+    /// Minimiert den Task.
     pub fn minimize_task(&mut self, surface: SurfaceId) {
         if let Some(task) = self.tasks.iter_mut().find(|t| t.surface == surface) {
             task.minimized = true;
             task.active = false;
         }
     }
+    /// Legt eine Benachrichtigung an und liefert ihre Kennung.
     pub fn notify(
         &mut self,
         title: impl Into<String>,
@@ -120,6 +147,7 @@ impl DesktopShell {
         });
         id
     }
+    /// Verwirft eine Benachrichtigung; false, wenn sie unbekannt ist.
     pub fn dismiss_notification(&mut self, id: u64) -> bool {
         if let Some(n) = self.notifications.iter_mut().find(|n| n.id == id) {
             n.dismissed = true;
@@ -128,18 +156,23 @@ impl DesktopShell {
             false
         }
     }
+    /// Setzt den Besitzer der Zwischenablage.
     pub fn set_clipboard_owner(&mut self, surface: Option<SurfaceId>) {
         self.clipboard_owner = surface.map(|surface| ClipboardOwner { surface });
     }
+    /// Aktueller Besitzer der Zwischenablage.
     pub fn clipboard_owner(&self) -> Option<ClipboardOwner> {
         self.clipboard_owner
     }
+    /// Alle Anwendungen.
     pub fn apps(&self) -> &[AppEntry] {
         &self.apps
     }
+    /// Alle Tasks.
     pub fn tasks(&self) -> &[TaskItem] {
         &self.tasks
     }
+    /// Alle Benachrichtigungen.
     pub fn notifications(&self) -> &[Notification] {
         &self.notifications
     }
