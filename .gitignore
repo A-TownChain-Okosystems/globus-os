@@ -7,3 +7,6 @@ dist/
 build/
 *.egg-info/
 .venv/
+
+# Erzeugte Disk-Images aus scripts/qemu_boot.sh (Kernel-ELF + Ramdisk)
+/images/
