@@ -10,12 +10,19 @@ use spin::Mutex;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[repr(u8)]
 pub enum TxType {
+    /// Uebertraegt Guthaben.
     Transfer = 1,
+    /// Legt einen Einsatz an.
     Stake = 2,
+    /// Hebt einen Einsatz ab.
     Unstake = 3,
+    /// Uebertraegt Stimmgewicht auf einen Validator.
     Delegate = 4,
+    /// Gibt eine Konsensstimme ab.
     Vote = 5,
+    /// Ruft einen Vertrag auf.
     ContractCall = 6,
+    /// Setzt einen Vertrag ein.
     ContractDeploy = 7,
 }
 impl TxType {
@@ -591,7 +598,12 @@ pub enum MempoolError {
     /// Ein Transfer mit Betrag hat keinen Empfänger.
     NoRecipient,
     /// Die Nonce weicht von der erwarteten ab.
-    InvalidNonce { expected: u64, got: u64 },
+    InvalidNonce {
+        /// Nonce, die der Zustand erwarten laesst.
+        expected: u64,
+        /// Nonce, die die Transaktion vorlegt.
+        got: u64,
+    },
     /// Das Guthaben deckt Betrag und Höchstgebühr nicht.
     InsufficientBalance,
     /// Der Einsatz reicht für das Abheben nicht.
