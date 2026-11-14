@@ -5,20 +5,35 @@ use core::fmt;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// Service classes that the boot plan puts in a fixed order.
 pub enum BootService {
+    /// Security subsystem; first in the plan and required by every other service.
     Security,
+    /// Memory management.
     Memory,
+    /// Process management.
     Process,
+    /// Inter-process communication.
     Ipc,
+    /// Device management.
     Devices,
+    /// Virtual file system.
     Vfs,
+    /// Identity service.
     Identity,
+    /// Wallet service.
     Wallet,
+    /// Network stack.
     Network,
+    /// Graphics stack.
     Graphics,
+    /// Audio stack.
     Audio,
+    /// Package management.
     Package,
+    /// System updates.
     Update,
+    /// Runtime for user applications.
     Runtime,
+    /// System settings.
     Settings,
 }
 
@@ -31,7 +46,9 @@ impl fmt::Display for BootService {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// One boot step: the service that starts and the services it requires.
 pub struct BootStep {
+    /// The service this step starts.
     pub service: BootService,
+    /// Services that must already be running before this step.
     pub requires: &'static [BootService],
 }
 
