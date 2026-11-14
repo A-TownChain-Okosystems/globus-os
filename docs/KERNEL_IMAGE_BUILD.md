@@ -87,6 +87,10 @@ Damit ist die Kette Quelltext → Kernel-ELF → Image → laufendes System bele
 auf Emulation. Echte Hardware und ein Lauf mit KVM sind nicht Teil dieses
 Nachweises.
 
+Was nach dem Boot sichtbar wird und wie weit der Betrieb reicht, steht getrennt
+in `docs/BOOT_TO_LOGIN_TEST-2026-11-14.md` (Bildschirminhalt, echte
+Tastatureingabe, Ende des implementierten Stadiums).
+
 ## Offen
 
 - Der Boot-Builder selbst braucht Nightly (Zwang des `bootloader`-Crates) und
