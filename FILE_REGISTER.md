@@ -84,8 +84,8 @@
 | `docs/decisions/IDENTITY-IN-IMAGE-DECISION-2026-11-14.md` | 306 |
 | `docs/desktop/IMPLEMENTATION_PLAN.md` | 178 |
 | `docs/identity/MULTI_ACCOUNT_TRANSACTION_MODEL.md` | 81 |
-| `docs/identity/SPEC-RECOVERY-001.md` | 674 |
-| `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 187 |
+| `docs/identity/SPEC-RECOVERY-001.md` | 875 |
+| `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md` | 204 |
 | `docs/specs/SPEC-OVERVIEW.md` | 40 |
 | `docs/virtualization/VM_ARCHITECTURE_AND_ROADMAP.md` | 155 |
 | `governance/doc-debt-baseline.json` | 4 |
