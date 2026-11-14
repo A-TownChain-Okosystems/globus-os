@@ -3,23 +3,35 @@
 use std::collections::{BTreeMap, BTreeSet};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// A dependency edge with the minimum accepted version.
 pub struct Dependency {
+    /// Name of the required package.
     pub package: String,
+    /// Lowest version accepted for that package.
     pub minimum_version: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// A package as seen by the resolver.
 pub struct PackageNode {
+    /// Package name; unique per resolve call.
     pub name: String,
+    /// Version of this node.
     pub version: String,
+    /// Edges to other packages.
     pub dependencies: Vec<Dependency>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why resolution stopped.
 pub enum ResolveError {
+    /// A package node carried no name.
     EmptyName,
+    /// The root or a required dependency is missing from the input.
     MissingDependency,
+    /// The dependencies form a cycle.
     Cycle,
+    /// A found version is below the required minimum.
     VersionMismatch,
 }
 
@@ -38,6 +50,7 @@ fn version_at_least(actual: &str, minimum: &str) -> bool {
     }
 }
 
+/// Resolves the transitive dependencies of `root`, dependencies first.
 pub fn resolve(packages: &[PackageNode], root: &str) -> Result<Vec<String>, ResolveError> {
     let mut map = BTreeMap::new();
     for package in packages {
