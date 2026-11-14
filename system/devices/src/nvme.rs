@@ -43,6 +43,7 @@ pub struct NvmeCommand {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Eine Fertigmeldung des Controllers.
 pub struct NvmeCompletion {
+    /// Kennung des zugehoerigen Kommandos.
     pub command_id: u16,
     /// Statusfeld des Controllers.
     pub status: u16,
