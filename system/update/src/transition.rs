@@ -3,12 +3,16 @@
 use crate::{Slot, UpdatePlan, UpdateState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Why a state transition was refused.
 pub enum TransitionError {
+    /// The transition is not part of the allowed chain.
     InvalidState,
+    /// The plan points at a slot that cannot be switched to.
     WrongTarget,
 }
 
 impl UpdatePlan {
+    /// Advances to `next` when the chain allows it; activation flips the slots.
     pub fn advance(&mut self, next: UpdateState) -> Result<(), TransitionError> {
         let valid = matches!(
             (self.state, next),
