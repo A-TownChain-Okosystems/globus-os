@@ -1,41 +1,68 @@
 //! NVMe MMIO register programming and controller initialization runtime.
 
 pub const CAP: u64 = 0x00;
+/// Registeroffset der Controller-Version.
 pub const VS: u64 = 0x08;
+/// Registeroffset der Controller-Konfiguration.
 pub const CC: u64 = 0x14;
+/// Registeroffset des Controller-Status.
 pub const CSTS: u64 = 0x1c;
+/// Registeroffset der Groesse der Admin-Queues.
 pub const AQA: u64 = 0x24;
+/// Registeroffset der Adresse der Submission-Queue.
 pub const ASQ: u64 = 0x28;
+/// Registeroffset der Adresse der Completion-Queue.
 pub const ACQ: u64 = 0x30;
+/// Bit im CC-Register, das den Controller einschaltet.
 pub const CC_EN: u32 = 1;
+/// Statusbit, das die Bereitschaft des Controllers meldet.
 pub const CSTS_RDY: u32 = 1;
+/// Statusbit, das einen fatalen Controller-Fehler meldet.
 pub const CSTS_CFS: u32 = 1 << 1;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Konfiguration eines NVMe-Controllers.
 pub struct NvmeControllerConfig {
+    /// Tiefe der Admin-Queue.
     pub admin_queue_depth: u16,
+    /// Tiefe der IO-Queues.
     pub io_queue_depth: u16,
+    /// Seitengroesse in Byte.
     pub page_size: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler des NVMe-Controllers.
 pub enum NvmeControllerError {
+    /// Die Konfiguration ist unbrauchbar.
     InvalidConfig,
+    /// Der Controller hat nicht rechtzeitig geantwortet.
     Timeout,
+    /// Der Controller meldet einen fatalen Fehler.
     ControllerFatal,
+    /// Das Anlegen der Queues ist fehlgeschlagen.
     QueueSetupFailed,
+    /// Das Identify-Kommando ist fehlgeschlagen.
     IdentifyFailed,
+    /// Der Controller ist bereits eingeschaltet.
     AlreadyEnabled,
+    /// Der Controller ist noch nicht eingeschaltet.
     NotEnabled,
 }
 
+/// Zugriff auf die MMIO-Register des Controllers.
 pub trait NvmeMmio {
+    /// Liest ein 32-Bit-Register.
     fn read32(&self, offset: u64) -> u32;
+    /// Liest ein 64-Bit-Register.
     fn read64(&self, offset: u64) -> u64;
+    /// Schreibt ein 32-Bit-Register.
     fn write32(&mut self, offset: u64, value: u32);
+    /// Schreibt ein 64-Bit-Register.
     fn write64(&mut self, offset: u64, value: u64);
 }
 
+/// Prueft Tiefen und Seitengroesse einer Konfiguration.
 pub fn validate_config(c: NvmeControllerConfig) -> Result<(), NvmeControllerError> {
     if !c.admin_queue_depth.is_power_of_two()
         || !(2..=4096).contains(&c.admin_queue_depth)
@@ -50,20 +77,29 @@ pub fn validate_config(c: NvmeControllerConfig) -> Result<(), NvmeControllerErro
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand des Controllers.
 pub enum ControllerState {
+    /// Zurueckgesetzt, noch nicht konfiguriert.
     Reset,
+    /// Einschalten laeuft.
     Enabling,
+    /// Bereit fuer Kommandos.
     Ready,
+    /// Fataler Fehler, Reset noetig.
     Fatal,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Physische Adressen der Admin-Queues.
 pub struct AdminQueueAddresses {
+    /// Adresse der Submission-Queue.
     pub submission: u64,
+    /// Adresse der Completion-Queue.
     pub completion: u64,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Zustand eines NVMe-Controllers.
 pub struct NvmeController {
     state: ControllerState,
     config: NvmeControllerConfig,
@@ -71,6 +107,7 @@ pub struct NvmeController {
 }
 
 impl NvmeController {
+    /// Legt den Controller im Zustand Reset an.
     pub fn new(config: NvmeControllerConfig) -> Result<Self, NvmeControllerError> {
         validate_config(config)?;
         Ok(Self {
@@ -79,12 +116,15 @@ impl NvmeController {
             admin: None,
         })
     }
+    /// Aktueller Zustand.
     pub fn state(&self) -> ControllerState {
         self.state
     }
+    /// Konfiguration des Controllers.
     pub fn config(&self) -> NvmeControllerConfig {
         self.config
     }
+    /// Programmiert Groesse und Adressen der Admin-Queues.
     pub fn configure_admin_queues(
         &mut self,
         mmio: &mut impl NvmeMmio,
@@ -109,6 +149,7 @@ impl NvmeController {
         self.admin = Some(addresses);
         Ok(())
     }
+    /// Schaltet den Controller ein und wechselt nach Enabling.
     pub fn enable(&mut self, mmio: &mut impl NvmeMmio) -> Result<(), NvmeControllerError> {
         if self.state == ControllerState::Ready || self.state == ControllerState::Enabling {
             return Err(NvmeControllerError::AlreadyEnabled);
@@ -125,6 +166,7 @@ impl NvmeController {
         self.state = ControllerState::Enabling;
         Ok(())
     }
+    /// Fragt den Status ab und meldet Ready, Fatal oder Timeout.
     pub fn poll_ready(&mut self, mmio: &impl NvmeMmio) -> Result<(), NvmeControllerError> {
         if self.state != ControllerState::Enabling {
             return Err(NvmeControllerError::NotEnabled);
