@@ -29,7 +29,8 @@ pub enum SystemState {
 }
 
 impl SystemState {
-    pub fn is_operational(self) -> bool {
+    /// Returns true only in the multi-user state, when user services are up.
+pub fn is_operational(self) -> bool {
         matches!(self, Self::MultiUser)
     }
 }
