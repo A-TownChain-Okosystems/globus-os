@@ -90,7 +90,6 @@ pub struct DmaBufDescriptor {
 pub struct HardwareOverlay {
     /// True, wenn das Overlay aktiv ist.
     pub enabled: bool,
-    /// Pufferformat der Overlayquelle.
     pub source: BufferFormat,
     /// Ebene des Overlays.
     pub z_order: i32,
@@ -119,7 +118,9 @@ pub trait DisplayOutput {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Aufloesung und Bildwiederholrate.
 pub struct DisplayMode {
+    /// Breite in Pixel.
     pub width: u32,
+    /// Hoehe in Pixel.
     pub height: u32,
     /// Bildwiederholrate in Hertz.
     /// Bildwiederholrate in Hertz.
