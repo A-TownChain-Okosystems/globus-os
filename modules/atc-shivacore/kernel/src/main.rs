@@ -1297,6 +1297,19 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         // Als Dienst eintragen, BEVOR der Scheduler sichtbar wird: ein Exit
         // vor dem Eintrag waere ein stiller Verlust, und ein Dienst, den der
         // Kernel nicht kennt, verschwindet beim ersten Beenden.
+        // Startzustand der Daten hinterlegen, BEVOR der Dienst laeuft: beim
+        // Zuruecksetzen wird genau dieses Abbild wiederhergestellt.
+        if !crate::services::store_image(
+            u64::from(ats1000::Pid(1003).0),
+            space.data_base,
+            &binary.data,
+        ) {
+            serial_println!(
+                "ShivaCore: Abbild von '{}' nicht hinterlegt ({} Bytes ueber der Grenze) — Beenden setzt die Daten nicht zurueck",
+                name,
+                binary.data.len()
+            );
+        }
         crate::services::register(
             u64::from(ats1000::Pid(1003).0),
             &name,
