@@ -3,36 +3,55 @@
 use alloc::vec;
 use alloc::vec::Vec;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Fehler eines Sende- oder Empfangsrings.
 pub enum RingError {
+    /// Der Ring ist leer.
     Empty,
+    /// Der Ring ist voll.
     Full,
+    /// Der Rahmen ueberschreitet die Maximallaenge.
     TooLarge,
+    /// Adresse oder Laenge des Puffers ist unbrauchbar.
     InvalidBuffer,
+    /// Das Geraet haelt den Puffer noch.
     DeviceOwnsBuffer,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein Puffer im DMA-Adressraum des Geraets.
 pub struct DmaBuffer {
+    /// Physische Adresse des Puffers.
     pub address: u64,
+    /// Laenge in Byte.
     pub length: u32,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein Sendedeskriptor.
 pub struct TxDescriptor {
+    /// Puffer mit den Nutzdaten.
     pub buffer: DmaBuffer,
+    /// Laenge der Nutzdaten in Byte.
     pub length: u16,
+    /// True, wenn das Geraet den Deskriptor haelt.
     pub owned_by_device: bool,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein Empfangsdeskriptor.
 pub struct RxDescriptor {
+    /// Puffer fuer den empfangenen Rahmen.
     pub buffer: DmaBuffer,
+    /// Aufnahmefaehigkeit des Puffers in Byte.
     pub capacity: u16,
+    /// True, wenn das Geraet den Deskriptor haelt.
     pub owned_by_device: bool,
 }
 
+/// Groesster Ethernet-Rahmen ohne VLAN-Tag in Byte.
 pub const MAX_FRAME_SIZE: u16 = 1518;
 
+/// Prueft Puffer und Laenge eines Sendedeskriptors.
 pub fn validate_tx(desc: TxDescriptor) -> Result<(), RingError> {
     if desc.buffer.length == 0
         || desc.length == 0
@@ -46,6 +65,7 @@ pub fn validate_tx(desc: TxDescriptor) -> Result<(), RingError> {
     }
     Ok(())
 }
+/// Prueft Puffer und Kapazitaet eines Empfangsdeskriptors.
 pub fn validate_rx(desc: RxDescriptor) -> Result<(), RingError> {
     if desc.buffer.length == 0
         || desc.capacity == 0
@@ -58,6 +78,7 @@ pub fn validate_rx(desc: RxDescriptor) -> Result<(), RingError> {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ring aus Sendedeskriptoren.
 pub struct TxRing {
     entries: Vec<Option<TxDescriptor>>,
     producer: usize,
@@ -65,6 +86,7 @@ pub struct TxRing {
     count: usize,
 }
 impl TxRing {
+    /// Legt einen Ring mit nicht verschwindender Tiefe an.
     pub fn new(depth: usize) -> Result<Self, RingError> {
         if depth == 0 {
             Err(RingError::InvalidBuffer)
@@ -77,15 +99,19 @@ impl TxRing {
             })
         }
     }
+    /// Anzahl belegter Plaetze.
     pub fn len(&self) -> usize {
         self.count
     }
+    /// True, wenn der Ring leer ist.
     pub fn is_empty(&self) -> bool {
         self.count == 0
     }
+    /// Tiefe des Rings.
     pub fn capacity(&self) -> usize {
         self.entries.len()
     }
+    /// Uebergibt einen Deskriptor an das Geraet.
     pub fn submit(&mut self, mut d: TxDescriptor) -> Result<(), RingError> {
         validate_tx(d)?;
         if self.count == self.entries.len() {
@@ -97,6 +123,7 @@ impl TxRing {
         self.count += 1;
         Ok(())
     }
+    /// Nimmt einen vom Geraet fertiggestellten Deskriptor ab.
     pub fn device_complete(&mut self) -> Result<TxDescriptor, RingError> {
         if self.count == 0 {
             return Err(RingError::Empty);
@@ -110,6 +137,7 @@ impl TxRing {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Ring aus Empfangsdeskriptoren.
 pub struct RxRing {
     entries: Vec<Option<RxDescriptor>>,
     producer: usize,
@@ -117,6 +145,7 @@ pub struct RxRing {
     count: usize,
 }
 impl RxRing {
+    /// Legt einen Ring mit nicht verschwindender Tiefe an.
     pub fn new(depth: usize) -> Result<Self, RingError> {
         if depth == 0 {
             Err(RingError::InvalidBuffer)
@@ -129,9 +158,11 @@ impl RxRing {
             })
         }
     }
+    /// Anzahl der beim Geraet liegenden Empfangsdeskriptoren.
     pub fn available(&self) -> usize {
         self.count
     }
+    /// Stellt dem Geraet einen Empfangspuffer bereit.
     pub fn post(&mut self, mut d: RxDescriptor) -> Result<(), RingError> {
         validate_rx(d)?;
         if self.count == self.entries.len() {
@@ -143,6 +174,7 @@ impl RxRing {
         self.count += 1;
         Ok(())
     }
+    /// Nimmt einen empfangenen Rahmen dieser Laenge ab.
     pub fn device_receive(&mut self, length: u16) -> Result<RxDescriptor, RingError> {
         if self.count == 0 {
             return Err(RingError::Empty);
