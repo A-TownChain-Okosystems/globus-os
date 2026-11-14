@@ -2,26 +2,37 @@
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum JournalError {
+    /// Der Puffer ist zu klein fuer einen Journal-Eintrag.
     Buffer,
+    /// Reihenfolge, Feldwert oder Laenge ist ungueltig.
     Invalid,
+    /// Die Sequenznummer laeuft ueber.
     SequenceOverflow,
+    /// Das Journal ist voll.
     Full,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Art der Journal-Operation.
 pub enum JournalOp {
     Write = 1,
     Clear = 2,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Ein Journal-Eintrag in seiner Plattenform.
 pub struct JournalRecord {
+    /// Fortlaufende Sequenznummer.
     pub sequence: u64,
+    /// Block, auf den die Operation zielt.
     pub target_block: u64,
+    /// Art der Operation.
     pub op: JournalOp,
+    /// Pruefsumme ueber den Eintrag ohne dieses Feld.
     pub checksum: u32,
 }
 
+/// Feste Groesse eines Journal-Eintrags in Byte.
 pub const JOURNAL_RECORD_SIZE: usize = 32;
 
 fn checksum(bytes: &[u8]) -> u32 {
@@ -34,6 +45,7 @@ fn checksum(bytes: &[u8]) -> u32 {
 }
 
 impl JournalRecord {
+    /// Baut einen Eintrag und berechnet seine Pruefsumme.
     pub fn new(sequence: u64, target_block: u64, op: JournalOp) -> Self {
         let mut record = Self {
             sequence,
@@ -55,6 +67,7 @@ impl JournalRecord {
         out[20..24].copy_from_slice(&self.checksum.to_le_bytes());
     }
 
+    /// Schreibt den Eintrag in den Puffer.
     pub fn encode(&self, out: &mut [u8]) -> Result<(), JournalError> {
         if out.len() < JOURNAL_RECORD_SIZE {
             return Err(JournalError::Buffer);
@@ -63,6 +76,7 @@ impl JournalRecord {
         Ok(())
     }
 
+    /// Liest einen Eintrag und prueft Pruefsumme und reservierte Bytes.
     pub fn decode(input: &[u8]) -> Result<Self, JournalError> {
         if input.len() < JOURNAL_RECORD_SIZE {
             return Err(JournalError::Buffer);
@@ -95,6 +109,7 @@ impl JournalRecord {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Journal mit fester Kapazitaet.
 pub struct Journal {
     capacity: usize,
     records: Vec<JournalRecord>,
@@ -102,6 +117,7 @@ pub struct Journal {
 }
 
 impl Journal {
+    /// Journal mit nicht verschwindender Kapazitaet.
     pub fn new(capacity: usize) -> Result<Self, JournalError> {
         if capacity == 0 {
             return Err(JournalError::Invalid);
@@ -113,14 +129,17 @@ impl Journal {
         })
     }
 
+    /// Alle Eintraege in Einfuegereihenfolge.
     pub fn records(&self) -> &[JournalRecord] {
         &self.records
     }
 
+    /// Noch nicht abgeschlossene Eintraege.
     pub fn pending(&self) -> &[JournalRecord] {
         &self.records
     }
 
+    /// Haengt eine Operation an und liefert den Eintrag.
     pub fn append(
         &mut self,
         target_block: u64,
@@ -139,10 +158,12 @@ impl Journal {
         Ok(record)
     }
 
+    /// Leert das Journal nach erfolgreichem Replay.
     pub fn clear(&mut self) {
         self.records.clear();
     }
 
+    /// Prueft die Eintraege der Reihe nach und liefert den letzten Zielblock.
     pub fn recover(&self) -> Result<u64, JournalError> {
         let mut previous = 0;
         for record in &self.records {
