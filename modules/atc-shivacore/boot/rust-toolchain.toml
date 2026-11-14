@@ -1,0 +1,11 @@
+# Nightly nur hier: der bootloader-Crate (0.11) ruft intern cargo mit -Z auf.
+# Dieses Crate ist aus dem Root-Workspace ausgeschlossen und baut nur den
+# Boot-Image-Builder; Kernel-Funktionalitaet entsteht hier nicht.
+#
+# Nightly laesst sich nicht auf eine Versionsnummer fixieren; die Evidenz
+# haelt deshalb `rustc -Vv` fest, damit ein Wechsel sichtbar wird.
+[toolchain]
+channel = "nightly"
+targets = ["x86_64-unknown-none"]
+components = ["llvm-tools-preview", "rust-src", "rustfmt"]
+profile = "minimal"
