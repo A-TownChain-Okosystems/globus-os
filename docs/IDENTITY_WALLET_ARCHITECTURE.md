@@ -111,7 +111,7 @@ Restore Identity
   -> encrypt and persist local wallet state
 ```
 
-A recovery flow MUST NOT require the original device to be online.
+A recovery flow MUST NOT require the original device to be online. The concrete recovery contract — what is derived, which records are written, the state machine and the acceptance tests — is specified in [`identity/SPEC-RECOVERY-001.md`](identity/SPEC-RECOVERY-001.md).
 
 ## 8. Trust boundaries
 
