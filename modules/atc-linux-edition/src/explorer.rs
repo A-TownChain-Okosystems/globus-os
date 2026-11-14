@@ -5,11 +5,13 @@
 
 use std::collections::HashMap;
 
+/// Explorer-Tab: Bloecke, Transaktionen, Adressen, Suche. Stub.
 pub struct ExplorerTab {
     // Stub-Platzhalter — Felder werden mit der Implementierung ergänzt (Issue #76)
 }
 
 impl ExplorerTab {
+    /// Legt einen leeren Tab an.
     pub fn new() -> Self {
         Self {}
     }
