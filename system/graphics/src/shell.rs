@@ -51,6 +51,7 @@ pub struct TaskItem {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Flaeche, die die Zwischenablage besitzt.
 pub struct ClipboardOwner {
+    /// Besitzende Flaeche.
     pub surface: SurfaceId,
 }
 
