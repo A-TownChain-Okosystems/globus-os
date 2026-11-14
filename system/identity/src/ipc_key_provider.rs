@@ -6,6 +6,7 @@ use zeroize::Zeroizing;
 
 /// Trusted local transport used to invoke the ShivaCore identity-key endpoint.
 pub trait IdentityKeyIpcTransport {
+    /// Laedt den Schluessel ueber den vertrauenswuerdigen lokalen Transport.
     fn load_key(
         &self,
         request: IdentityKeyLoadRequest,
@@ -18,6 +19,7 @@ pub struct IpcIdentityKeyService<T> {
     capability_token: u64,
 }
 impl<T> IpcIdentityKeyService<T> {
+    /// Bindet einen Transport und das Capability-Token, das er vorlegen darf.
     pub fn new(transport: T, capability_token: u64) -> Self {
         Self {
             transport,
