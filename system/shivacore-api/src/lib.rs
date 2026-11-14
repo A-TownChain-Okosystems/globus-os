@@ -32,15 +32,21 @@ pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 #[repr(u16)]
 /// Syscalls der stabilen ABI; der numerische Wert ist Teil des Vertrags.
 pub enum Syscall {
+    /// Gibt die CPU freiwillig ab.
     Yield = 0x0001,
     /// Beendet den aufrufenden Prozess. Das Exit-Code-Argument steht in
     /// `arg0`; der Kernel widerruft die Capabilities, setzt den Prozess auf
     /// Zombie und gibt seinen Adressraum verzoegert frei.
     Exit = 0x0002,
+    /// Sendet eine Nachricht an einen Endpunkt.
     IpcSend = 0x0010,
+    /// Empfaengt eine Nachricht von einem Endpunkt.
     IpcReceive = 0x0011,
+    /// Fragt eine Capability ab, ohne sie zu veraendern.
     CapabilityQuery = 0x0020,
+    /// Gibt ein Handle frei.
     HandleClose = 0x0030,
+    /// Liest die monotone Zeit.
     MonotonicTime = 0x0040,
 }
 
@@ -82,12 +88,19 @@ pub enum CapabilityRight {
 #[repr(u32)]
 /// Fehler, die die ABI zurueckmeldet; die numerischen Werte sind stabil.
 pub enum AbiError {
+    /// Die Syscall-Nummer ist unbekannt.
     InvalidSyscall = 1,
+    /// Das Handle ist unbekannt oder bereits freigegeben.
     InvalidHandle = 2,
+    /// Die Capability deckt die Operation nicht.
     PermissionDenied = 3,
+    /// Argumente oder Puffergroessen sind ungueltig.
     InvalidPayload = 4,
+    /// Der Endpunkt existiert nicht oder ist geschlossen.
     EndpointUnavailable = 5,
+    /// Eine Ressourcengrenze ist erreicht.
     ResourceExhausted = 6,
+    /// Der Aufrufer erwartet eine andere ABI-Version.
     AbiVersionMismatch = 7,
 }
 
@@ -342,13 +355,21 @@ impl CapabilityRights {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum KernelBootPhase {
+    /// Der Heap steht bereit.
     Heap = 0,
+    /// Capabilities koennen vergeben werden.
     Capabilities = 1,
+    /// Prozesse koennen angelegt werden.
     Processes = 2,
+    /// Der Planer laeuft.
     Scheduler = 3,
+    /// IPC ist nutzbar.
     Ipc = 4,
+    /// Das Dateisystem ist eingebunden.
     FileSystem = 5,
+    /// Die Sicherheitsschicht ist aktiv.
     Security = 6,
+    /// Der Boot ist abgeschlossen.
     Ready = 7,
 }
 
