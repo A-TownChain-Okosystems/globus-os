@@ -37,6 +37,10 @@ pub enum ResourceType {
     Timer,
     /// SC-006 REQ-SC006-08: genau ein Geraet, Zugriff nur ueber Device-Cap {ACCESS}.
     Device,
+    /// Die Systemkonsole (Framebuffer + Schrift). Zugriff nur ueber eine
+    /// Console-Cap mit Schreibrecht; sie ist der einzige Weg, aus dem Ring 3
+    /// Text auf den Bildschirm zu bringen.
+    Console,
 }
 
 impl ResourceType {
