@@ -26,9 +26,15 @@ pub enum InterruptMode {
     /// Klassische Interruptleitung.
     Legacy,
     /// Message-Signalled Interrupts.
-    Msi { vectors: u16 },
+    Msi {
+        /// Number of vectors this entry occupies.
+        vectors: u16,
+    },
     /// MSI-X.
-    Msix { vectors: u16 },
+    Msix {
+        /// Number of vectors this entry occupies.
+        vectors: u16,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
