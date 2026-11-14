@@ -36,10 +36,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Nightly ist hier technisch noetig (bootloader/build-std) und laesst sich
+      # nicht auf eine Versionsnummer fixieren; die Zeilen unten halten die
+      # tatsaechlich benutzte Version fest, damit ein Wechsel auffaellt.
       - uses: dtolnay/rust-toolchain@nightly
         with:
           targets: x86_64-unknown-none
           components: llvm-tools-preview, rust-src
+      - name: Toolchain festhalten
+        run: |
+          rustup show active-toolchain
+          rustc -Vv
+          cargo -V
 
       - name: Build kernel ELF
         id: build_kernel
