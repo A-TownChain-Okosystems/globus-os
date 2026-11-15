@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 use core::sync::atomic::{AtomicU64, Ordering};
-use shivacore::spawn::{layout_for_slot, SpawnError};
+use shivacore::spawn::{SpawnError, layout_for_slot};
 use shivacore::userspace::UserBinary;
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
@@ -67,7 +67,12 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
     // Safety: Quelle ist die Kernel-Wurzel, die selbst keine Nutzerseiten
     // enthaelt; der Speicherabstand ist beim Boot veroeffentlicht.
     let mut space = unsafe {
-        shivacore::addr_space::AddressSpace::create(offset, allocator, &layout.mapped_regions(), root)
+        shivacore::addr_space::AddressSpace::create(
+            offset,
+            allocator,
+            &layout.mapped_regions(),
+            root,
+        )
     }
     .ok_or(SpawnError::ResourcesUnavailable)?;
     // `map_binary` schreibt ueber die **virtuellen** Adressen des neuen Raums
@@ -88,7 +93,8 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
     });
     mapped.map_err(|_| SpawnError::MapFailed)?;
     let frames = space.all_frames();
-    shivacore::reclaim::RECLAIMER.register_tables(shivacore::ats1000::Pid(tag as u32), frames.clone());
+    shivacore::reclaim::RECLAIMER
+        .register_tables(shivacore::ats1000::Pid(tag as u32), frames.clone());
     Ok(BuiltSpace {
         cr3: space.frame().start_address().as_u64(),
         frames: frames.len(),
