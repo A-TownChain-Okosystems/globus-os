@@ -5,8 +5,8 @@ use alloc::vec::Vec;
 
 use bootloader_api::info::{MemoryRegionKind, MemoryRegions};
 use x86_64::{
-    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
     PhysAddr, VirtAddr,
+    structures::paging::{FrameAllocator, OffsetPageTable, PageTable, PhysFrame, Size4KiB},
 };
 
 /// Abbildet die aktiven Seitentabellen ueber den physischen Speicherabstand und gibt die Offset-Abbildung darauf zurueck.
