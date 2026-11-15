@@ -16,6 +16,7 @@ extern crate std;
 // die alten Pfade `shivacore::madt::…` am Leben.
 pub use libshivacore::{acpi_devices, madt};
 
+/// Adressraum je Prozess: Seitentabellen, Fenster und die Rechte je Eintrag.
 pub mod addr_space;
 /// Physikalischer Framespeicher; nur im Testbuild eingebunden.
 #[cfg(test)]
@@ -46,7 +47,9 @@ pub mod entropy_gate;
 pub mod fault;
 /// Hardware-Abstraktion; derzeit die Prozessorinformation.
 pub mod hal;
+/// Pruefung des Identitaetsdatensatzes im Kernel: Ergebnis, Kennung und Gate.
 pub mod identity_check;
+/// Lesen des Identitaetsdatensatzes aus Eintraegen und Abbild, mit Fehlerwegen.
 pub mod identity_file;
 /// Begrenzte Eingabewarteschlange zwischen Interrupt-Handler und Konsument.
 pub mod input_queue;
@@ -54,6 +57,7 @@ pub mod input_queue;
 pub mod ioapic;
 /// Interprozesskommunikation mit Nachrichten und Warteschlangen.
 pub mod ipc;
+/// Lebensdauer von Handles und Kanaelen: oeffnen, teilen, schliessen, widerrufen.
 pub mod ipc_lifecycle;
 /// IRQ-Vermittlung mit ihren Fehlern.
 pub mod irq;
