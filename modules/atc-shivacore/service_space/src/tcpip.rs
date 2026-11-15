@@ -14,8 +14,8 @@ use alloc::vec::Vec;
 use spin::Mutex;
 
 use crate::net::{
-    EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError, NetworkStack,
-    ETH_TYPE_IPV4,
+    ETH_TYPE_IPV4, EthernetFrame, Ipv4Address, MacAddress, NetworkDevice, NetworkError,
+    NetworkStack,
 };
 
 // ─── Protokoll-Nummern ─────────────────────────────────────────────────────
