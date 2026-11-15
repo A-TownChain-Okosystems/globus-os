@@ -1,10 +1,11 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Stand:** 15.11.2026, gegen `git ls-files` gemessen: 560 Dateien.
+> **Stand:** 15.11.2026, gegen `git ls-files` gemessen: 561 Dateien.
 > Grundlage ist der untersuchte Quellstand `50ffc556` zuzüglich des Architektur-Audits
 > `docs/audits/SHIVACORE-DEPENDENCY-MATRIX-2026-11-15.md` und der ABI-Contract
-> `docs/architecture/SHIVACORE-SYSCALL-ABI-001.md`. Frühere Kopfangaben (540, 555,
+> `docs/architecture/SHIVACORE-SYSCALL-ABI-001.md` sowie die Entscheidungsvorlage
+> `docs/decisions/ABI-E1-E7-ENTSCHEIDUNGSVORLAGE-2026-11-15.md`. Frühere Kopfangaben (540, 555,
 > 557, 558) sind überholt; maßgeblich ist die Tabelle, nicht der Kopf.
 > **Zeilenzahlen** aus dem committeten Stand, Binärdateien ohne Zahl.
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
@@ -42,9 +43,10 @@
 | `Cargo.toml` | 39 |
 | `docs/architecture/SHIVACORE-SYSCALL-ABI-001.md` | 332 |
 | `docs/audits/SHIVACORE-DEPENDENCY-MATRIX-2026-11-15.md` | 104 |
+| `docs/decisions/ABI-E1-E7-ENTSCHEIDUNGSVORLAGE-2026-11-15.md` | 147 |
 | `modules/atc-shivacore/boot/rust-toolchain.toml` | 11 |
 | `rust-toolchain.toml` | 18 |
-| `FILE_REGISTER.md` | 573 |
+| `FILE_REGISTER.md` | 575 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
