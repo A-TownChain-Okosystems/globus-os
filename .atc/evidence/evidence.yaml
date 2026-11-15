@@ -5,9 +5,9 @@
 schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-15"
-generated_by: "Aurora (Toolchain-Block 14./15.11.) — Evidenz an die fixierte Toolchain gebunden; frueherer Datensatz als RESIDUAL erhalten"
-bound_commit: 4315a94e561c3cf4a865c2dad87b38c4d2ab5b4e
-tree_sha: f4b0ccc6ff67a78cc08fe4ee9f0f13a236b2f02c
+generated_by: "Aurora (G4-B/G4-C 15.11.) — Evidenz auf den bereinigten Stand gebunden; korrigierte Befundbasis dokumentiert"
+bound_commit: 4ac37d86149926529ab240404e3ca096a0e83796
+tree_sha: 01204215feffaf5ec8dba0c0d765f2cce04b78c5
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -39,8 +39,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 4315a94e561c3cf4a865c2dad87b38c4d2ab5b4e
-  timestamp: 2026-11-15T00:55:00+00:00
+  commit: 4ac37d86149926529ab240404e3ca096a0e83796
+  timestamp: 2026-11-15T01:05:00+00:00
   result: PASS
   runner: local-sandbox
 # ---------------------------------------------------------------------------
@@ -63,29 +63,39 @@ toolchain:
   override_proof: "im Repo meldet rustc -V: 1.100.0 (overridden by 'rust-toolchain.toml')"
 verification:
   method: "frischer Clone von bound_commit, Toolchain aus rust-toolchain.toml"
-  head: 4315a94e561c3cf4a865c2dad87b38c4d2ab5b4e
-  tree_sha: f4b0ccc6ff67a78cc08fe4ee9f0f13a236b2f02c
+  head: 4ac37d86149926529ab240404e3ca096a0e83796
+  tree_sha: 01204215feffaf5ec8dba0c0d765f2cce04b78c5
   commands:
     - {cmd: "cargo +1.100.0 -V", exit: 0, out: "cargo 1.100.0 (3acc79c0c 2026-11-05)"}
     - {cmd: "rustc +1.100.0 -Vv", exit: 0, out: "release: 1.100.0, commit-hash 0ef1bc38, host x86_64-unknown-linux-gnu, LLVM 23.1.5"}
     - {cmd: "rustup show active-toolchain (im Repo)", exit: 0, out: "1.100.0-x86_64-unknown-linux-gnu (overridden by rust-toolchain.toml)"}
     - {cmd: "cargo test -p globus-identity", exit: 0, passed: 60, failed: 0, note: "die eingefrorenen key_version=2-Vektoren sind NICHT im Rust-Code, sie stehen im Spec-Pruefer"}
     - {cmd: "cargo check --workspace --all-targets", exit: 0}
-    - {cmd: "cargo fmt --all -- --check", exit: 1, result: FAIL_PREEXISTING, detail: "251 Diffs, vorbestehend; in diesem Block wurde kein Rust-Code geaendert"}
-    - {cmd: "cargo clippy --workspace --all-targets -- -D warnings", exit: 101, result: FAIL_PREEXISTING, detail: "32 Befunde: 24 collapsible if, 4 missing docs, chunks_exact, loop-index"}
+    - {cmd: "cargo fmt --all -- --check", exit: 0, result: PASS, detail: "0 Diffs nach G4-A"}
+    - {cmd: "cargo clippy --workspace --all-targets -- -D warnings", exit: 0, result: PASS, detail: "0 Befunde nach G4-B; korrigierte Basis 38 statt 32"}
+    - {cmd: "cargo test --workspace --all-targets", exit: 0, passed: 1864, failed: 0, suites: 33}
   results:
     - {suite: "globus-identity (cargo test -p globus-identity)", passed: 60, failed: 0, exit: 0}
     - {suite: "cargo check --workspace --all-targets", result: PASS, exit: 0}
     - {suite: "scripts/check_recovery_spec.py (Spezifikationspruefer)", result: PASS, exit: 0, detail: "112 Zusagen"}
-    - {suite: "cargo fmt --all -- --check", result: FAIL_PREEXISTING, exit: 1}
-    - {suite: "cargo clippy --workspace --all-targets -- -D warnings", result: FAIL_PREEXISTING, exit: 101}
+    - {suite: "cargo fmt --all -- --check", result: PASS, exit: 0}
+    - {suite: "cargo clippy --workspace --all-targets -- -D warnings", result: PASS, exit: 0, findings: 0}
+    - {suite: "cargo test --workspace --all-targets", passed: 1864, failed: 0, suites: 33, exit: 0}
   artifacts: []
   artifacts_note: "kein Image gebaut; das Boot-Crate braucht Nightly und war nicht Teil dieses Blocks"
   not_verified:
-    - "Gate 4 (fmt, clippy) rot und vorbestehend; daraus folgt kein VERIFIED und kein RELEASED"
-    - "key_version = 2 ist spezifiziert (Spec-Pruefer Exit 0, 112 Zusagen), aber NICHT in Rust implementiert"
+    - "Cargo-Manifest-Warnungen bleiben offen (unbenutzte Abhaengigkeiten, unbenutztes Feld repository, fehlendes [lints] in identity-core) - keine Clippy-Befunde, aber eigene Aufgabe"
+    - "key_version = 2 ist spezifiziert (Spec-Pruefer Exit 0, 112 Zusagen), aber NICHT in Rust implementiert; I-1 bis I-4 gesperrt"
     - "CI-Lauf: keiner. Committer-Adresse unbetaetigt, push-getriggerte Laeufe enden als startup_failure bei 0 Jobs"
     - "QEMU-Bootlauf in diesem Block nicht wiederholt"
+  corrected_baseline:
+    clippy_findings_14_11: 32
+    clippy_findings_15_11: 38
+    note: >-
+      Die Zahl 32 vom 14.11. war eine unvollstaendige Messung aus einem teilweise
+      gecachten Build und wird nicht ueberschrieben, sondern als solche gefuehrt.
+      Nach vollstaendigem Neuuebersetzen meldet Clippy 36 Befunde in Rust-Dateien
+      plus 2 Manifest-Hinweise; G4-B hat alle 36 Rust-Befunde behoben.
   evidence_history:
     - status: RESIDUAL
       bound_commit: c2b935ec805ca3b93e2e127e5ae438cebec76040
