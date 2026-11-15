@@ -20,7 +20,7 @@ crate-type = ["lib"]
 
 [features]
 default = []
-x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:noto-sans-mono-bitmap"]
+x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:noto-sans-mono-bitmap", "dep:lazy_static"]
 
 [dependencies]
 bootloader_api = { version = "0.11", optional = true }
@@ -29,7 +29,7 @@ globus-entropy-core = { path = "../../../system/entropy-core" }
 x86_64 = { version = "0.15", optional = true }
 uart_16550 = { version = "0.8", optional = true }
 pic8259 = { version = "0.11", optional = true }
-lazy_static = { version = "1.5", features = ["spin_no_std"] }
+lazy_static = { version = "1.5", features = ["spin_no_std"], optional = true }
 linked_list_allocator = "0.10"
 noto-sans-mono-bitmap = { version = "0.3", default-features = false, features = ["regular", "size_16", "unicode-basic-latin", "unicode-latin-1-supplement"], optional = true }
 globus-diagnostics = { path = "../../../system/diagnostics" }
