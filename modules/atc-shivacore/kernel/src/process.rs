@@ -18,9 +18,9 @@ use alloc::collections::BTreeMap;
 use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use alloc::sync::Arc;
 use crate::cap_authority::CapabilityAuthority;
 use crate::capability::{CapId, Pid, ResourceType, Rights};
+use alloc::sync::Arc;
 
 /// Prozess-Typen laut ATS-1000
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -258,7 +258,8 @@ impl ProcessManager {
         resource_id: u64,
         required: Rights,
     ) -> bool {
-        self.authority.check(pid, resource_type, resource_id, required)
+        self.authority
+            .check(pid, resource_type, resource_id, required)
     }
 
     /// Delegiert eine Capability an einen anderen Prozess
