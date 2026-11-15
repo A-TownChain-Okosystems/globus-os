@@ -1,3 +1,8 @@
+//! Pruefkern der Identitaetsanmeldung (IDENT-001).
+//!
+//! `no_std` + `alloc`: derselbe Verifizierer laeuft auf dem Host und im
+//! Kernel-Image. Enthaelt den Datensatz, die Parameterpruefung und die
+//! Argon2id-Ableitung; Zufall und Speicher kommen von aussen.
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ─────────────────────────────────────────────────────────────────────────
 // IDENT-001 — Pruefkern fuer die Anmeldung (Entscheidung des Owners, 14.11.2026)
@@ -45,11 +50,17 @@ pub const HASH_LEN: usize = 32;
 /// Fail-closed: ein Datensatz, der mehr Speicher oder mehr Durchgaenge verlangt
 /// als hier steht, wird abgelehnt, statt den Kernel in eine teure Rechnung zu
 /// schicken. 19 MiB ist die Festlegung des Owners und liegt innerhalb.
+/// Kleinster erlaubter Speicherbedarf in KiB.
 pub const MIN_MEMORY_KIB: u32 = 8 * 1024;
+/// Groesster erlaubter Speicherbedarf in KiB.
 pub const MAX_MEMORY_KIB: u32 = 32 * 1024;
+/// Kleinste erlaubte Durchgangszahl der Schluesselableitung.
 pub const MIN_ITERATIONS: u32 = 1;
+/// Groesste erlaubte Durchgangszahl der Schluesselableitung.
 pub const MAX_ITERATIONS: u32 = 10;
+/// Kleinste erlaubte Parallelitaet der Ableitung.
 pub const MIN_PARALLELISM: u32 = 1;
+/// Groesste erlaubte Parallelitaet der Ableitung.
 pub const MAX_PARALLELISM: u32 = 4;
 
 /// Warum eine Anmeldung nicht bestaetigt wurde.
