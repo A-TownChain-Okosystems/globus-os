@@ -180,11 +180,11 @@ impl DeviceRegistry {
             .iter()
             .position(|(e, _)| e.id == device)
             .ok_or(RegistryError::UnknownDevice)?;
-        if let Some(owner) = self.devices[index].1 {
-            if owner != cap.owner {
-                self.stats.denied_foreign_claim += 1;
-                return Err(RegistryError::NotTheOwner);
-            }
+        if let Some(owner) = self.devices[index].1
+            && owner != cap.owner
+        {
+            self.stats.denied_foreign_claim += 1;
+            return Err(RegistryError::NotTheOwner);
         }
         Ok(self.devices.remove(index).0)
     }
