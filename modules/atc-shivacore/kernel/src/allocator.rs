@@ -6,10 +6,10 @@
 
 #[cfg(feature = "x86-boot")]
 use x86_64::{
-    structures::paging::{
-        mapper::MapToError, FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB,
-    },
     VirtAddr,
+    structures::paging::{
+        FrameAllocator, Mapper, Page, PageTableFlags, Size4KiB, mapper::MapToError,
+    },
 };
 
 /// Beginn des Heap-Bereichs im virtuellen Speicher.
@@ -34,7 +34,8 @@ pub fn free_bytes() -> usize {
 }
 
 #[cfg_attr(all(not(test), feature = "x86-boot"), global_allocator)] // [AD-028] Nur im echten Boot-Binary aktiv — als Abhaengigkeit stellt das Ziel-Binary (std) den Allokator
-pub static ALLOCATOR: linked_list_allocator::LockedHeap = linked_list_allocator::LockedHeap::empty();
+pub static ALLOCATOR: linked_list_allocator::LockedHeap =
+    linked_list_allocator::LockedHeap::empty();
 
 /// Erweitert den Haufen um `bytes` aus dem Frame-Vorrat.
 ///
