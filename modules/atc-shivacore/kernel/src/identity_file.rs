@@ -34,10 +34,7 @@ pub enum CredentialError {
 }
 
 /// Liest den Datensatz aus dem Ramdisk-Verzeichnis.
-pub fn load(
-    entries: &[Entry],
-    image: &[u8],
-) -> Result<CredentialRecord, CredentialError> {
+pub fn load(entries: &[Entry], image: &[u8]) -> Result<CredentialRecord, CredentialError> {
     let entry = ramdisk::lookup(entries, CREDENTIAL_ENTRY, Reader::Kernel)
         .ok_or(CredentialError::Missing)?;
     let bytes = entry.data(image).ok_or(CredentialError::Unreadable)?;
@@ -68,8 +65,8 @@ mod tests {
     #[test]
     fn gueltiger_datensatz_wird_gelesen() {
         let record = record_bytes();
-        let image = ramdisk::build(&[("init", &[0xF4]), (CREDENTIAL_ENTRY, &record)])
-            .expect("Abbild");
+        let image =
+            ramdisk::build(&[("init", &[0xF4]), (CREDENTIAL_ENTRY, &record)]).expect("Abbild");
         let entries = ramdisk::parse(&image).expect("Verzeichnis");
         let loaded = load(&entries, &image).expect("Datensatz");
         assert_eq!(loaded.params, KdfParams::OWNER_DEFAULT);
@@ -109,8 +106,8 @@ mod tests {
     #[test]
     fn ein_programm_sieht_den_datensatz_nicht() {
         let record = record_bytes();
-        let image = ramdisk::build(&[("init", &[0xF4]), (CREDENTIAL_ENTRY, &record)])
-            .expect("Abbild");
+        let image =
+            ramdisk::build(&[("init", &[0xF4]), (CREDENTIAL_ENTRY, &record)]).expect("Abbild");
         let entries = ramdisk::parse(&image).expect("Verzeichnis");
         // Der Kernel liest ihn, ein Programm nicht — fuer das Programm ist er
         // nicht vorhanden, nicht "verweigert".
