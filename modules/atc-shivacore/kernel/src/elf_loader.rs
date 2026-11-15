@@ -290,7 +290,6 @@ impl<'a> ElfParser<'a> {
 
 use crate::userspace::{UserAddressSpace, UserBinary, UserspaceError, UserspaceManager};
 
-
 /// Obergrenze fuer den Datenanteil eines Abbilds: vorbelegte Daten plus bss.
 ///
 /// Der Wert kommt NICHT aus einer VM-Grenze, sondern aus dem Adressfenster, das
@@ -460,11 +459,9 @@ impl core::fmt::Display for ElfLoadError {
         match self {
             ElfLoadError::Parse(e) => write!(f, "ELF parse error: {}", e),
             ElfLoadError::NoCodeSegment => write!(f, "no executable code segment"),
-            ElfLoadError::ImageTooLarge => write!(
-                f,
-                "data image exceeds {} bytes",
-                MAX_IMAGE_DATA_BYTES
-            ),
+            ElfLoadError::ImageTooLarge => {
+                write!(f, "data image exceeds {} bytes", MAX_IMAGE_DATA_BYTES)
+            }
             ElfLoadError::Userspace(e) => write!(f, "userspace error: {}", e),
         }
     }
@@ -1364,7 +1361,12 @@ mod tests {
         let data_off: u64 = code_off + code.len() as u64;
         for (index, (flags, offset, filesz, memsz)) in [
             (PF_R | PF_X, code_off, code.len() as u64, code.len() as u64),
-            (PF_R | PF_W, data_off, data.len() as u64, data.len() as u64 + bss),
+            (
+                PF_R | PF_W,
+                data_off,
+                data.len() as u64,
+                data.len() as u64 + bss,
+            ),
         ]
         .into_iter()
         .enumerate()
@@ -1384,7 +1386,6 @@ mod tests {
         elf.extend_from_slice(data);
         elf
     }
-
 
     #[test]
     fn zu_grosser_datenanteil_wird_vor_der_allokation_abgelehnt() {
@@ -1435,7 +1436,10 @@ mod tests {
         assert_eq!(binary.code, alloc::vec![0x90, 0x90, 0xF4]);
         assert_eq!(binary.data.len(), 16, "Daten plus bss-Auffuellung");
         assert_eq!(&binary.data[..4], b"ABCD");
-        assert!(binary.data[4..].iter().all(|byte| *byte == 0), "bss nicht genullt");
+        assert!(
+            binary.data[4..].iter().all(|byte| *byte == 0),
+            "bss nicht genullt"
+        );
     }
 
     #[test]
@@ -1460,7 +1464,7 @@ mod tests {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         // Add a second program header for data segment
         let phdr2_off = 64 + 56; // After first Phdr
-                                 // Extend with data Phdr
+        // Extend with data Phdr
         elf.extend_from_slice(&[0u8; 56]);
         // p_type = PT_LOAD
         elf[phdr2_off..phdr2_off + 4].copy_from_slice(&PT_LOAD.to_le_bytes());
