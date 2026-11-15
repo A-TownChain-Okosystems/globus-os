@@ -163,10 +163,10 @@ impl ProcessManager {
             pcb.state = ProcessState::Terminated(exit_code);
         }
 
-        if let Some(parent_pid) = parent {
-            if let Some(parent) = self.processes.get_mut(&parent_pid) {
-                parent.children.retain(|&c| c != pid);
-            }
+        if let Some(parent_pid) = parent
+            && let Some(parent) = self.processes.get_mut(&parent_pid)
+        {
+            parent.children.retain(|&c| c != pid);
         }
 
         true
