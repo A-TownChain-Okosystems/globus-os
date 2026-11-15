@@ -33,6 +33,7 @@ pub fn free_bytes() -> usize {
     ALLOCATOR.lock().free()
 }
 
+/// Der globale Allokator des Kernel-Binaries; im Testbuild bleibt er ungenutzt.
 #[cfg_attr(all(not(test), feature = "x86-boot"), global_allocator)] // [AD-028] Nur im echten Boot-Binary aktiv — als Abhaengigkeit stellt das Ziel-Binary (std) den Allokator
 pub static ALLOCATOR: linked_list_allocator::LockedHeap =
     linked_list_allocator::LockedHeap::empty();
