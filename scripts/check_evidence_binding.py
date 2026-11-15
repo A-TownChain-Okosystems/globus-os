@@ -9,6 +9,11 @@ Aufruf:
     python3 scripts/check_evidence_binding.py [--commit SHA]
 
 Exit 0 = bindung ok, Exit 1 = veraltet/widerspruechlich, Exit 2 = Datei kaputt.
+
+Zusaetzlich geprueft (15.11.2026):
+  - das Dateiregister bildet den Baum an HEAD ab (Mengengleichheit), und
+  - jedes Audit in docs/audits/ mit `audit-basis: <sha>` nennt einen aufloesbaren
+    Vorfahren von HEAD. Der aufnehmende Commit ist nicht der untersuchte Stand.
 """
 import argparse
 import os
@@ -68,6 +73,89 @@ def load_yaml(text):
         if m and m.group(2):
             data[m.group(1)] = m.group(2).strip('"')
     return data
+
+
+AUDIT_DIR = os.path.join("docs", "audits")
+REGISTER = "FILE_REGISTER.md"
+AUDIT_BASIS_RE = re.compile(r"<!--\s*audit-basis:\s*([0-9a-f]{7,40})\s*-->")
+
+
+def tracked_files(rev):
+    """Alle Dateien des Baums an `rev`, wie sie committet sind."""
+    out = sh(["git", "ls-tree", "-r", "--name-only", rev])
+    if out is None:
+        return None
+    return {line for line in out.splitlines() if line}
+
+
+def register_entries():
+    """Pfade aus dem Dateiregister (Tabellenzeilen mit Pfad in Backticks)."""
+    if not os.path.exists(REGISTER):
+        return None
+    entries = set()
+    for line in open(REGISTER, encoding="utf-8").read().splitlines():
+        m = re.match(r"^\|\s*`([^`]+)`\s*\|", line)
+        if m:
+            entries.add(m.group(1))
+    return entries
+
+
+def check_register(rev):
+    """Das Register muss den Baum abbilden, sonst zaehlt niemand mehr mit.
+
+    Ein Register, das eine Datei nicht nennt, ist keine Zaehlung; eine Zeile
+    ohne Datei ist eine Behauptung ueber etwas, das nicht existiert.
+    """
+    if rev is None:
+        return [], ["Register nicht pruefbar (kein HEAD)"]
+    tracked = tracked_files(rev)
+    entries = register_entries()
+    if tracked is None:
+        return [], ["git ls-tree fehlgeschlagen, Register nicht pruefbar"]
+    if entries is None:
+        return [f"{REGISTER} fehlt"], []
+    problems = []
+    missing = sorted(tracked - entries)
+    extra = sorted(entries - tracked)
+    if missing:
+        problems.append(
+            f"Register unvollstaendig: {len(missing)} Datei(en) im Baum ohne Zeile, "
+            f"z. B. {missing[0]}"
+        )
+    if extra:
+        problems.append(
+            f"Register nennt {len(extra)} Pfad(e) ohne Baum-Eintrag, z. B. {extra[0]}"
+        )
+    return problems, []
+
+
+def check_audit_basis(rev):
+    """Ein Audit nennt den untersuchten Quellstand, nicht sich selbst.
+
+    `audit-basis` muss ein aufloesbarer Vorfahr von HEAD sein. Damit kann ein
+    Audit-Dokument nicht stillschweigend behaupten, der Commit, der es aufnimmt,
+    sei der untersuchte Code-Stand.
+    """
+    problems = []
+    if rev is None or not os.path.isdir(AUDIT_DIR):
+        return problems
+    for name in sorted(os.listdir(AUDIT_DIR)):
+        if not name.endswith(".md"):
+            continue
+        path = os.path.join(AUDIT_DIR, name)
+        with open(path, encoding="utf-8") as fh:
+            text = fh.read()
+        m = AUDIT_BASIS_RE.search(text)
+        if not m:
+            continue
+        basis = m.group(1)
+        if sh(["git", "cat-file", "-e", basis + "^{commit}"]) is None:
+            problems.append(f"{path}: audit-basis {basis[:10]} ist nicht aufloesbar")
+        elif not is_ancestor(basis, rev):
+            problems.append(
+                f"{path}: audit-basis {basis[:10]} ist kein Vorfahr von HEAD {rev[:10]}"
+            )
+    return problems
 
 
 def main():
@@ -137,6 +225,11 @@ def main():
         # bestandene Tests zeigen.
         if "passed" in entry and int(entry.get("passed") or 0) <= 0:
             problems.append(f"verification-Eintrag ohne bestandene Tests: {entry}")
+
+    register_problems, register_notes = check_register(head)
+    problems.extend(register_problems)
+    notes.extend(register_notes)
+    problems.extend(check_audit_basis(head))
 
     if problems:
         print("EVIDENZ NICHT KONFORM:", file=sys.stderr)
