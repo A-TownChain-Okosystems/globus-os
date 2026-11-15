@@ -5,6 +5,9 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 # Dieselbe Argon2id-Implementierung fuer Host und Image: eine Wahrheit, kein
 # zweiter Verifizierer. `alloc` statt `std`, damit der Kern im Kernel laeuft.
