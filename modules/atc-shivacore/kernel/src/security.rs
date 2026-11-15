@@ -20,26 +20,26 @@ use spin::Mutex;
 /// Ein m-of-n Multi-Sig Antrag.
 #[derive(Clone, Debug)]
 pub struct MultiSigProposal {
-/// Fortlaufende Antrags-ID, vom Manager vergeben.
+    /// Fortlaufende Antrags-ID, vom Manager vergeben.
     pub id: u64,
-/// Menschlich lesbare Beschreibung des Antrags.
+    /// Menschlich lesbare Beschreibung des Antrags.
     pub description: String,
-/// Hash der Daten, ueber die abgestimmt wird.
+    /// Hash der Daten, ueber die abgestimmt wird.
     pub data_hash: [u8; 32], // Hash der zu authorisierenden Daten
-/// Schwelle m: so viele Signaturen sind zur Ausfuehrung noetig.
-    pub required_sigs: u32,  // m
-/// Obergrenze n: so viele Signer sind zugelassen.
-    pub total_signers: u32,  // n
-/// Abgegebene Signaturen als Paar aus DID und Ed25519-Signatur.
+    /// Schwelle m: so viele Signaturen sind zur Ausfuehrung noetig.
+    pub required_sigs: u32, // m
+    /// Obergrenze n: so viele Signer sind zugelassen.
+    pub total_signers: u32, // n
+    /// Abgegebene Signaturen als Paar aus DID und Ed25519-Signatur.
     pub signatures: Vec<(String, [u8; 64])>, // (DID, Ed25519-Signatur)
-/// Zeitstempel der Antragserstellung in Timer-Ticks.
+    /// Zeitstempel der Antragserstellung in Timer-Ticks.
     pub created_at: u64,
-/// Gesetzt, sobald der Antrag einmal ausgefuehrt wurde.
+    /// Gesetzt, sobald der Antrag einmal ausgefuehrt wurde.
     pub executed: bool,
 }
 
 impl MultiSigProposal {
-/// Legt einen Antrag ohne Signaturen an; die Schwelle bleibt offen.
+    /// Legt einen Antrag ohne Signaturen an; die Schwelle bleibt offen.
     pub fn new(
         id: u64,
         description: String,
@@ -60,11 +60,11 @@ impl MultiSigProposal {
         }
     }
 
-/// Nimmt eine Signatur an.
-///
-/// Lehnt ab, wenn der Antrag bereits ausgefuehrt ist, wenn mehr Signaturen
-/// eingehen als Signer zugelassen sind, oder wenn dieselbe DID zweimal
-/// unterschreibt. Letzteres ist der Grund, warum die DID Teil des Eintrags ist.
+    /// Nimmt eine Signatur an.
+    ///
+    /// Lehnt ab, wenn der Antrag bereits ausgefuehrt ist, wenn mehr Signaturen
+    /// eingehen als Signer zugelassen sind, oder wenn dieselbe DID zweimal
+    /// unterschreibt. Letzteres ist der Grund, warum die DID Teil des Eintrags ist.
     pub fn sign(&mut self, did: String, signature: [u8; 64]) -> Result<(), SecurityError> {
         if self.executed {
             return Err(SecurityError::AlreadyExecuted);
@@ -80,21 +80,21 @@ impl MultiSigProposal {
         Ok(())
     }
 
-/// True, sobald mindestens `required_sigs` Signaturen vorliegen.
+    /// True, sobald mindestens `required_sigs` Signaturen vorliegen.
     pub fn is_ready(&self) -> bool {
         self.signatures.len() as u32 >= self.required_sigs
     }
 
-/// Fehlende Signaturen bis zur Schwelle, gesaettigt bei null.
+    /// Fehlende Signaturen bis zur Schwelle, gesaettigt bei null.
     pub fn remaining_sigs(&self) -> u32 {
         self.required_sigs
             .saturating_sub(self.signatures.len() as u32)
     }
 
-/// Markiert den Antrag als ausgefuehrt.
-///
-/// Fail-closed: ohne ausreichende Signaturen oder bei doppelter Ausfuehrung
-/// bleibt der Zustand unveraendert.
+    /// Markiert den Antrag als ausgefuehrt.
+    ///
+    /// Fail-closed: ohne ausreichende Signaturen oder bei doppelter Ausfuehrung
+    /// bleibt der Zustand unveraendert.
     pub fn execute(&mut self) -> Result<(), SecurityError> {
         if !self.is_ready() {
             return Err(SecurityError::InsufficientSignatures {
@@ -112,9 +112,9 @@ impl MultiSigProposal {
 
 /// Verwaltet alle Multi-Sig-Anträge.
 pub struct MultiSigManager {
-/// Alle Antraege, nach ID sortiert und einzeln gesperrt.
+    /// Alle Antraege, nach ID sortiert und einzeln gesperrt.
     proposals: Mutex<BTreeMap<u64, MultiSigProposal>>,
-/// Naechste freie Antrags-ID; beginnt bei eins.
+    /// Naechste freie Antrags-ID; beginnt bei eins.
     next_id: Mutex<u64>,
 }
 
@@ -125,7 +125,7 @@ impl Default for MultiSigManager {
 }
 
 impl MultiSigManager {
-/// Erzeugt einen leeren Manager.
+    /// Erzeugt einen leeren Manager.
     pub fn new() -> Self {
         MultiSigManager {
             proposals: Mutex::new(BTreeMap::new()),
@@ -133,7 +133,7 @@ impl MultiSigManager {
         }
     }
 
-/// Legt einen Antrag an und liefert seine ID.
+    /// Legt einen Antrag an und liefert seine ID.
     pub fn create(
         &self,
         description: String,
@@ -155,7 +155,7 @@ impl MultiSigManager {
         id
     }
 
-/// Reicht eine Signatur an einen bestehenden Antrag weiter.
+    /// Reicht eine Signatur an einen bestehenden Antrag weiter.
     pub fn sign(
         &self,
         proposal_id: u64,
@@ -169,7 +169,7 @@ impl MultiSigManager {
         proposal.sign(did, signature)
     }
 
-/// Fuehrt einen Antrag aus, wenn die Schwelle erreicht ist.
+    /// Fuehrt einen Antrag aus, wenn die Schwelle erreicht ist.
     pub fn execute(&self, proposal_id: u64) -> Result<(), SecurityError> {
         let mut proposals = self.proposals.lock();
         let proposal = proposals
@@ -178,12 +178,12 @@ impl MultiSigManager {
         proposal.execute()
     }
 
-/// Kopie eines Antrags, falls vorhanden.
+    /// Kopie eines Antrags, falls vorhanden.
     pub fn get(&self, proposal_id: u64) -> Option<MultiSigProposal> {
         self.proposals.lock().get(&proposal_id).cloned()
     }
 
-/// Anzahl verwalteter Antraege.
+    /// Anzahl verwalteter Antraege.
     pub fn count(&self) -> usize {
         self.proposals.lock().len()
     }
@@ -196,40 +196,40 @@ impl MultiSigManager {
 #[derive(Clone, Debug)]
 /// Ein Eintrag der manipulationsfesten Audit-Kette.
 pub struct AuditEntry {
-/// Laufende Nummer innerhalb der Kette, beginnend bei eins.
+    /// Laufende Nummer innerhalb der Kette, beginnend bei eins.
     pub seq: u64,
-/// Zeitpunkt der Aufzeichnung in Timer-Ticks.
+    /// Zeitpunkt der Aufzeichnung in Timer-Ticks.
     pub timestamp: u64,
-/// Akteur des Ereignisses als DID.
+    /// Akteur des Ereignisses als DID.
     pub actor_did: String,
-/// Aktionsname, etwa `capability.grant` oder `process.exit`.
+    /// Aktionsname, etwa `capability.grant` oder `process.exit`.
     pub action: String,
-/// Ressource, auf die sich die Aktion bezog.
+    /// Ressource, auf die sich die Aktion bezog.
     pub resource: String,
-/// Ergebnis der Aktion.
+    /// Ergebnis der Aktion.
     pub result: AuditResult,
-/// Hash des Vorgaengers; bei Eintrag eins alle Nullen.
+    /// Hash des Vorgaengers; bei Eintrag eins alle Nullen.
     pub prev_hash: [u8; 32],
-/// Keccak-256 ueber Nummer, Zeit, Akteur, Aktion, Ressource und Vorgaengerhash.
+    /// Keccak-256 ueber Nummer, Zeit, Akteur, Aktion, Ressource und Vorgaengerhash.
     pub entry_hash: [u8; 32],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 /// Ergebnis einer aufgezeichneten Aktion.
 pub enum AuditResult {
-/// Aktion wurde ausgefuehrt.
+    /// Aktion wurde ausgefuehrt.
     Allowed,
-/// Aktion wurde mangels Recht oder Zustand abgelehnt.
+    /// Aktion wurde mangels Recht oder Zustand abgelehnt.
     Denied,
-/// Aktion endete technisch fehlerhaft.
+    /// Aktion endete technisch fehlerhaft.
     Error,
 }
 
 /// Anhaengende, hashverkettete Ereignisliste.
 pub struct AuditLog {
-/// Ereignisse in Aufzeichnungsreihenfolge.
+    /// Ereignisse in Aufzeichnungsreihenfolge.
     entries: Mutex<Vec<AuditEntry>>,
-/// Hash des letzten Eintrags, Ausgangspunkt fuer den naechsten.
+    /// Hash des letzten Eintrags, Ausgangspunkt fuer den naechsten.
     last_hash: Mutex<[u8; 32]>,
 }
 
@@ -240,7 +240,7 @@ impl Default for AuditLog {
 }
 
 impl AuditLog {
-/// Leeres Log, als Konstante verwendbar fuer globale Instanzen.
+    /// Leeres Log, als Konstante verwendbar fuer globale Instanzen.
     pub const fn new() -> Self {
         AuditLog {
             entries: Mutex::new(Vec::new()),
@@ -248,7 +248,7 @@ impl AuditLog {
         }
     }
 
-/// Haengt ein Ereignis an und bindet es an den Vorgaengerhash.
+    /// Haengt ein Ereignis an und bindet es an den Vorgaengerhash.
     pub fn log(
         &self,
         timestamp: u64,
@@ -284,11 +284,11 @@ impl AuditLog {
         });
     }
 
-/// Prueft die Kette vollstaendig nach.
-///
-/// Jeder Eintrag wird neu gehasht und gegen den gespeicherten Wert sowie den
-/// Vorgaengerhash verglichen. Ein einzelnes nachtraeglich geaendertes Feld
-/// genuegt, um die Pruefung scheitern zu lassen.
+    /// Prueft die Kette vollstaendig nach.
+    ///
+    /// Jeder Eintrag wird neu gehasht und gegen den gespeicherten Wert sowie den
+    /// Vorgaengerhash verglichen. Ein einzelnes nachtraeglich geaendertes Feld
+    /// genuegt, um die Pruefung scheitern zu lassen.
     pub fn verify_chain(&self) -> bool {
         let entries = self.entries.lock();
         let mut expected_prev: [u8; 32] = [0u8; 32];
@@ -313,11 +313,11 @@ impl AuditLog {
         true
     }
 
-/// Kopie aller Eintraege zur Auswertung.
+    /// Kopie aller Eintraege zur Auswertung.
     pub fn entries(&self) -> Vec<AuditEntry> {
         self.entries.lock().clone()
     }
-/// Anzahl der Ereignisse im Log.
+    /// Anzahl der Ereignisse im Log.
     pub fn count(&self) -> usize {
         self.entries.lock().len()
     }
@@ -357,23 +357,23 @@ pub const BAN_THRESHOLD: i32 = -50;
 #[derive(Clone, Debug)]
 /// Reputationsstand eines Peers.
 pub struct PeerReputation {
-/// Peer-Kennung.
+    /// Peer-Kennung.
     pub peer_id: u64,
-/// Aktueller Punktestand zwischen `REPUTATION_MIN` und `REPUTATION_MAX`.
+    /// Aktueller Punktestand zwischen `REPUTATION_MIN` und `REPUTATION_MAX`.
     pub score: i32,
-/// Anzahl der belohnten Aktionen.
+    /// Anzahl der belohnten Aktionen.
     pub good_actions: u32,
-/// Anzahl der bestraften Aktionen.
+    /// Anzahl der bestraften Aktionen.
     pub bad_actions: u32,
-/// Sperrzustand; bei `BAN_THRESHOLD` gesetzt, ueber der Schwelle wieder geloescht.
+    /// Sperrzustand; bei `BAN_THRESHOLD` gesetzt, ueber der Schwelle wieder geloescht.
     pub banned: bool,
-/// Zeitpunkt der letzten Aenderung in Timer-Ticks.
+    /// Zeitpunkt der letzten Aenderung in Timer-Ticks.
     pub last_updated: u64,
 }
 
 /// Reputationsregister ueber alle bekannten Peers.
 pub struct ReputationSystem {
-/// Reputationsstaende, nach Peer-Kennung sortiert.
+    /// Reputationsstaende, nach Peer-Kennung sortiert.
     peers: Mutex<BTreeMap<u64, PeerReputation>>,
 }
 
@@ -384,14 +384,14 @@ impl Default for ReputationSystem {
 }
 
 impl ReputationSystem {
-/// Leeres Register.
+    /// Leeres Register.
     pub fn new() -> Self {
         ReputationSystem {
             peers: Mutex::new(BTreeMap::new()),
         }
     }
 
-/// Legt einen Peer mit neutralem Stand an; bestehende Staende bleiben unberuehrt.
+    /// Legt einen Peer mit neutralem Stand an; bestehende Staende bleiben unberuehrt.
     pub fn register(&self, peer_id: u64) {
         self.peers.lock().entry(peer_id).or_insert(PeerReputation {
             peer_id,
@@ -403,7 +403,7 @@ impl ReputationSystem {
         });
     }
 
-/// Hebt den Punktestand, gezaehlt als gute Aktion; hebt eine Sperre bei Erholung auf.
+    /// Hebt den Punktestand, gezaehlt als gute Aktion; hebt eine Sperre bei Erholung auf.
     pub fn reward(&self, peer_id: u64, amount: i32, timestamp: u64) {
         let mut peers = self.peers.lock();
         if let Some(r) = peers.get_mut(&peer_id) {
@@ -416,7 +416,7 @@ impl ReputationSystem {
         }
     }
 
-/// Senkt den Punktestand, gezaehlt als schlechte Aktion; sperrt bei Erreichen der Schwelle.
+    /// Senkt den Punktestand, gezaehlt als schlechte Aktion; sperrt bei Erreichen der Schwelle.
     pub fn penalize(&self, peer_id: u64, amount: i32, timestamp: u64) {
         let mut peers = self.peers.lock();
         if let Some(r) = peers.get_mut(&peer_id) {
@@ -429,7 +429,7 @@ impl ReputationSystem {
         }
     }
 
-/// Sperrzustand eines Peers; unbekannte Peers gelten als nicht gesperrt.
+    /// Sperrzustand eines Peers; unbekannte Peers gelten als nicht gesperrt.
     pub fn is_banned(&self, peer_id: u64) -> bool {
         self.peers
             .lock()
@@ -438,7 +438,7 @@ impl ReputationSystem {
             .unwrap_or(false)
     }
 
-/// Punktestand eines Peers; unbekannte Peers zaehlen als null.
+    /// Punktestand eines Peers; unbekannte Peers zaehlen als null.
     pub fn score(&self, peer_id: u64) -> i32 {
         self.peers
             .lock()
@@ -447,21 +447,21 @@ impl ReputationSystem {
             .unwrap_or(0)
     }
 
-/// Kopie des Reputationsstands, falls der Peer bekannt ist.
+    /// Kopie des Reputationsstands, falls der Peer bekannt ist.
     pub fn get(&self, peer_id: u64) -> Option<PeerReputation> {
         self.peers.lock().get(&peer_id).cloned()
     }
 
-/// Anzahl bekannter Peers.
+    /// Anzahl bekannter Peers.
     pub fn peer_count(&self) -> usize {
         self.peers.lock().len()
     }
-/// Anzahl der gesperrten Peers.
+    /// Anzahl der gesperrten Peers.
     pub fn banned_count(&self) -> usize {
         self.peers.lock().values().filter(|r| r.banned).count()
     }
 
-/// Hebt eine Sperre auf und setzt den Punktestand auf null.
+    /// Hebt eine Sperre auf und setzt den Punktestand auf null.
     pub fn unban(&self, peer_id: u64) {
         if let Some(r) = self.peers.lock().get_mut(&peer_id) {
             r.banned = false;
@@ -476,18 +476,18 @@ impl ReputationSystem {
 
 /// Token-Bucket eines einzelnen Peers.
 pub struct TokenBucket {
-/// Fassungsvermoegen des Buckets in Tokens.
+    /// Fassungsvermoegen des Buckets in Tokens.
     capacity: u32,
-/// Aktuell verfuegbare Tokens.
+    /// Aktuell verfuegbare Tokens.
     tokens: Mutex<u32>,
-/// Nachfuellrate in Tokens je Sekunde.
-    refill_rate: u32,        // tokens per second
-/// Zeitpunkt der letzten Auffuellung in Nanosekunden.
+    /// Nachfuellrate in Tokens je Sekunde.
+    refill_rate: u32, // tokens per second
+    /// Zeitpunkt der letzten Auffuellung in Nanosekunden.
     last_refill: Mutex<u64>, // nanoseconds
 }
 
 impl TokenBucket {
-/// Volle Tasse zum Zeitpunkt `now`.
+    /// Volle Tasse zum Zeitpunkt `now`.
     pub fn new(capacity: u32, refill_rate: u32, now: u64) -> Self {
         TokenBucket {
             capacity,
@@ -497,10 +497,10 @@ impl TokenBucket {
         }
     }
 
-/// Entnimmt Tokens und fuellt vorher nach.
-///
-/// Nachgefuellt wird nur in vollen Sekunden; Teilmengen bleiben im Zeitstempel
-/// stehen, damit die Auffuellung ueber viele Aufrufe nicht verloren geht.
+    /// Entnimmt Tokens und fuellt vorher nach.
+    ///
+    /// Nachgefuellt wird nur in vollen Sekunden; Teilmengen bleiben im Zeitstempel
+    /// stehen, damit die Auffuellung ueber viele Aufrufe nicht verloren geht.
     pub fn try_consume(&self, now: u64, count: u32) -> bool {
         let mut tokens = self.tokens.lock();
         let mut last = self.last_refill.lock();
@@ -522,7 +522,7 @@ impl TokenBucket {
         }
     }
 
-/// Verfuegbare Tokens zum Zeitpunkt `now`, ohne zu entnehmen.
+    /// Verfuegbare Tokens zum Zeitpunkt `now`, ohne zu entnehmen.
     pub fn available(&self, now: u64) -> u32 {
         let mut tokens = self.tokens.lock();
         let mut last = self.last_refill.lock();
@@ -535,16 +535,16 @@ impl TokenBucket {
 
 /// Ratenbegrenzung mit einem Bucket je Peer.
 pub struct RateLimiter {
-/// Buckets nach Peer-Kennung.
+    /// Buckets nach Peer-Kennung.
     buckets: Mutex<BTreeMap<u64, TokenBucket>>,
-/// Fassungsvermoegen neu angelegter Buckets.
+    /// Fassungsvermoegen neu angelegter Buckets.
     capacity: u32,
-/// Nachfuellrate, die neu angelegte Buckets erhalten.
+    /// Nachfuellrate, die neu angelegte Buckets erhalten.
     refill_rate: u32,
 }
 
 impl RateLimiter {
-/// Leerer Limiter mit Vorgaben fuer neue Buckets.
+    /// Leerer Limiter mit Vorgaben fuer neue Buckets.
     pub fn new(capacity: u32, refill_rate: u32) -> Self {
         RateLimiter {
             buckets: Mutex::new(BTreeMap::new()),
@@ -553,7 +553,7 @@ impl RateLimiter {
         }
     }
 
-/// Entnimmt ein Token; der Bucket entsteht beim ersten Zugriff.
+    /// Entnimmt ein Token; der Bucket entsteht beim ersten Zugriff.
     pub fn allow(&self, peer_id: u64, now: u64) -> bool {
         let mut buckets = self.buckets.lock();
         let bucket = buckets
@@ -562,7 +562,7 @@ impl RateLimiter {
         bucket.try_consume(now, 1)
     }
 
-/// Anzahl der Peers mit eigenem Bucket.
+    /// Anzahl der Peers mit eigenem Bucket.
     pub fn peer_count(&self) -> usize {
         self.buckets.lock().len()
     }
@@ -576,20 +576,20 @@ impl RateLimiter {
 /// In Produktion würde dies XChaCha20-Poly1305 oder AES-GCM verwenden.
 #[derive(Clone, Debug)]
 pub struct SecureChannel {
-/// DID der Gegenseite.
+    /// DID der Gegenseite.
     pub peer_did: String,
-/// Sitzungsschluessel; im Testpfad direkt gesetzt, produktiv aus einem Handshake.
+    /// Sitzungsschluessel; im Testpfad direkt gesetzt, produktiv aus einem Handshake.
     pub session_key: [u8; 32],
-/// Zustand des Kanals; nach `close` false.
+    /// Zustand des Kanals; nach `close` false.
     pub established: bool,
-/// Anzahl verschluesselter Nachrichten.
+    /// Anzahl verschluesselter Nachrichten.
     pub messages_sent: u64,
-/// Anzahl entschluesselter Nachrichten.
+    /// Anzahl entschluesselter Nachrichten.
     pub messages_recv: u64,
 }
 
 impl SecureChannel {
-/// Eroeffnet einen Kanal im Zustand `established`.
+    /// Eroeffnet einen Kanal im Zustand `established`.
     pub fn new(peer_did: String, session_key: [u8; 32]) -> Self {
         SecureChannel {
             peer_did,
@@ -600,10 +600,10 @@ impl SecureChannel {
         }
     }
 
-/// Verschluesselt eine Nachricht und zaehlt sie.
-///
-/// Der Testpfad arbeitet mit wiederholtem XOR. Das ist bewusst kein AEAD und
-/// steht hier nur, damit der Kanalablauf pruefbar ist.
+    /// Verschluesselt eine Nachricht und zaehlt sie.
+    ///
+    /// Der Testpfad arbeitet mit wiederholtem XOR. Das ist bewusst kein AEAD und
+    /// steht hier nur, damit der Kanalablauf pruefbar ist.
     pub fn encrypt(&mut self, plaintext: &[u8]) -> Vec<u8> {
         self.messages_sent += 1;
         // Simplified: XOR with key (repeating). Production: AEAD.
@@ -614,21 +614,21 @@ impl SecureChannel {
         ciphertext
     }
 
-/// Entschluesselt eine Nachricht und zaehlt die Gegenrichtung.
-///
-/// XOR ist selbstinvers; der Aufruf nutzt dieselbe Schleife wie `encrypt`,
-/// zaehlt aber unter `messages_recv`.
+    /// Entschluesselt eine Nachricht und zaehlt die Gegenrichtung.
+    ///
+    /// XOR ist selbstinvers; der Aufruf nutzt dieselbe Schleife wie `encrypt`,
+    /// zaehlt aber unter `messages_recv`.
     pub fn decrypt(&mut self, ciphertext: &[u8]) -> Vec<u8> {
         self.messages_recv += 1;
         // XOR is symmetric
         self.encrypt(ciphertext) // reuse same logic
     }
 
-/// Zustand des Kanals.
+    /// Zustand des Kanals.
     pub fn is_established(&self) -> bool {
         self.established
     }
-/// Schliesst den Kanal; weitere Nachrichten werden abgelehnt.
+    /// Schliesst den Kanal; weitere Nachrichten werden abgelehnt.
     pub fn close(&mut self) {
         self.established = false;
     }
@@ -636,7 +636,7 @@ impl SecureChannel {
 
 /// Kanalspeicher je Peer.
 pub struct SecureChannelManager {
-/// Kanaele nach Peer-DID.
+    /// Kanaele nach Peer-DID.
     channels: Mutex<BTreeMap<String, SecureChannel>>,
 }
 
@@ -647,21 +647,21 @@ impl Default for SecureChannelManager {
 }
 
 impl SecureChannelManager {
-/// Leerer Kanalspeicher.
+    /// Leerer Kanalspeicher.
     pub fn new() -> Self {
         SecureChannelManager {
             channels: Mutex::new(BTreeMap::new()),
         }
     }
 
-/// Eroeffnet einen Kanal und ersetzt einen bestehenden desselben Peers.
+    /// Eroeffnet einen Kanal und ersetzt einen bestehenden desselben Peers.
     pub fn establish(&self, peer_did: String, session_key: [u8; 32]) -> bool {
         let channel = SecureChannel::new(peer_did.clone(), session_key);
         self.channels.lock().insert(peer_did, channel);
         true
     }
 
-/// Verschluesselt fuer einen Peer; fail-closed ohne offenen Kanal.
+    /// Verschluesselt fuer einen Peer; fail-closed ohne offenen Kanal.
     pub fn send(&self, peer_did: &str, plaintext: &[u8]) -> Result<Vec<u8>, SecurityError> {
         let mut channels = self.channels.lock();
         let channel = channels
@@ -673,7 +673,7 @@ impl SecureChannelManager {
         Ok(channel.encrypt(plaintext))
     }
 
-/// Entschluesselt von einem Peer; fail-closed ohne offenen Kanal.
+    /// Entschluesselt von einem Peer; fail-closed ohne offenen Kanal.
     pub fn recv(&self, peer_did: &str, ciphertext: &[u8]) -> Result<Vec<u8>, SecurityError> {
         let mut channels = self.channels.lock();
         let channel = channels
@@ -685,18 +685,18 @@ impl SecureChannelManager {
         Ok(channel.decrypt(ciphertext))
     }
 
-/// Schliesst den Kanal eines Peers, ohne ihn zu entfernen.
+    /// Schliesst den Kanal eines Peers, ohne ihn zu entfernen.
     pub fn close(&self, peer_did: &str) {
         if let Some(c) = self.channels.lock().get_mut(peer_did) {
             c.close();
         }
     }
 
-/// Anzahl bekannter Kanaele.
+    /// Anzahl bekannter Kanaele.
     pub fn channel_count(&self) -> usize {
         self.channels.lock().len()
     }
-/// Prueft, ob fuer eine DID ein Kanal besteht.
+    /// Prueft, ob fuer eine DID ein Kanal besteht.
     pub fn has_channel(&self, peer_did: &str) -> bool {
         self.channels.lock().contains_key(peer_did)
     }
@@ -708,15 +708,15 @@ impl SecureChannelManager {
 
 /// Buendelt die Sicherheitsbausteine des Kernels hinter gemeinsamen Zeigern.
 pub struct SecurityManager {
-/// Multi-Sig-Verwaltung.
+    /// Multi-Sig-Verwaltung.
     pub multisig: Arc<MultiSigManager>,
-/// Audit-Log.
+    /// Audit-Log.
     pub audit: Arc<AuditLog>,
-/// Reputationsregister.
+    /// Reputationsregister.
     pub reputation: Arc<ReputationSystem>,
-/// Ratenbegrenzung, voreingestellt auf 100 Tokens und 10 je Sekunde.
+    /// Ratenbegrenzung, voreingestellt auf 100 Tokens und 10 je Sekunde.
     pub rate_limiter: Arc<RateLimiter>,
-/// Kanalspeicher.
+    /// Kanalspeicher.
     pub channels: Arc<SecureChannelManager>,
 }
 
@@ -727,7 +727,7 @@ impl Default for SecurityManager {
 }
 
 impl SecurityManager {
-/// Erzeugt alle Bausteine mit Standardwerten.
+    /// Erzeugt alle Bausteine mit Standardwerten.
     pub fn new() -> Self {
         SecurityManager {
             multisig: Arc::new(MultiSigManager::new()),
@@ -791,7 +791,13 @@ pub static KERNEL_AUDIT: AuditLog = AuditLog::new();
 /// Zeichnet ein Kernel-Ereignis mit dem aktuellen Takt auf.
 pub fn record(actor: &str, action: &str, resource: &str, result: AuditResult) {
     let ticks = AUDIT_CLOCK.load(core::sync::atomic::Ordering::Relaxed);
-    KERNEL_AUDIT.log(ticks, actor.to_string(), action.to_string(), resource.to_string(), result);
+    KERNEL_AUDIT.log(
+        ticks,
+        actor.to_string(),
+        action.to_string(),
+        resource.to_string(),
+        result,
+    );
 }
 
 /// Anzahl der Audit-Eintraege im kernelweiten Log.
@@ -811,26 +817,26 @@ pub fn audit_chain_intact() -> bool {
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Fehler der Sicherheitsschicht.
 pub enum SecurityError {
-/// Der Antrag wurde bereits ausgefuehrt.
+    /// Der Antrag wurde bereits ausgefuehrt.
     AlreadyExecuted,
-/// Diese DID hat den Antrag schon unterschrieben; die DID steht im Fehler.
+    /// Diese DID hat den Antrag schon unterschrieben; die DID steht im Fehler.
     AlreadySigned(String),
-/// Es liegen bereits so viele Signaturen vor, wie Signer zugelassen sind.
+    /// Es liegen bereits so viele Signaturen vor, wie Signer zugelassen sind.
     TooManySignatures,
-/// Die Schwelle ist nicht erreicht; Anzahl und Schwelle stehen im Fehler.
+    /// Die Schwelle ist nicht erreicht; Anzahl und Schwelle stehen im Fehler.
     InsufficientSignatures {
         /// Anzahl der bereits gueltigen Signaturen.
         have: u32,
         /// Erforderliche Anzahl Signaturen.
         required: u32,
     },
-/// Zu dieser ID gibt es keinen Antrag.
+    /// Zu dieser ID gibt es keinen Antrag.
     ProposalNotFound,
-/// Fuer diesen Peer besteht kein offener Kanal.
+    /// Fuer diesen Peer besteht kein offener Kanal.
     ChannelNotEstablished,
-/// Der Peer ist gesperrt.
+    /// Der Peer ist gesperrt.
     PeerBanned,
-/// Das Token-Budget des Peers ist erschoepft.
+    /// Das Token-Budget des Peers ist erschoepft.
     RateLimited,
 }
 
