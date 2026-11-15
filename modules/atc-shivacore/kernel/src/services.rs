@@ -128,7 +128,6 @@ pub fn restore_image(pid: u64) -> Option<usize> {
     Some(len)
 }
 
-
 /// Traegt einen laufenden Dienst ein.
 ///
 /// Ein zweiter Eintrag fuer dieselbe PID ersetzt den ersten: zwei Wahrheiten
@@ -186,9 +185,7 @@ pub fn get(pid: u64) -> Option<Service> {
 /// zurueck oder der Prozess endet wie jeder andere.
 pub fn restart(pid: u64) -> Option<Service> {
     let mut services = SERVICES.lock();
-    let service = services
-        .iter_mut()
-        .find(|service| service.pid == pid)?;
+    let service = services.iter_mut().find(|service| service.pid == pid)?;
     if service.attempts >= service.limit {
         return None;
     }
@@ -240,7 +237,6 @@ mod tests {
         );
     }
 
-
     #[test]
     fn abbild_wird_hinterlegt_und_ersetzt() {
         assert!(store_image(7_777, 0x01D0_0000, &[1, 2, 3, 4]));
@@ -264,7 +260,10 @@ mod tests {
         assert!(!store_image(7_780, 0x01D0_0000, &zu_gross));
         assert!(image_len(7_780).is_none(), "nichts hinterlegt");
         let grenze = alloc::vec![0u8; MAX_SERVICE_IMAGE_BYTES];
-        assert!(store_image(7_781, 0x01D0_0000, &grenze), "genau die Grenze ist zulaessig");
+        assert!(
+            store_image(7_781, 0x01D0_0000, &grenze),
+            "genau die Grenze ist zulaessig"
+        );
         assert_eq!(image_len(7_781), Some(MAX_SERVICE_IMAGE_BYTES));
     }
 
@@ -286,7 +285,15 @@ mod tests {
     fn zweiter_eintrag_ersetzt_statt_zu_verdoppeln() {
         let _guard = guard();
         eintragen(1003, 2);
-        register(1003, "greeter2", 0x01C0_1000, 0x07EF_FFE0, 0x07EF_8000, [7, 8], 1);
+        register(
+            1003,
+            "greeter2",
+            0x01C0_1000,
+            0x07EF_FFE0,
+            0x07EF_8000,
+            [7, 8],
+            1,
+        );
         assert_eq!(count(), 1, "zwei Wahrheiten ueber denselben Prozess");
         assert_eq!(get(1003).unwrap().name, "greeter2");
     }
@@ -301,7 +308,6 @@ mod tests {
         // Der Eintrag bleibt stehen: der Dienst ist bekannt, nur erschoepft.
         assert_eq!(get(1003).unwrap().attempts, 2);
     }
-
 
     #[test]
     fn is_service_antwortet_ohne_klon() {
@@ -325,9 +331,16 @@ mod tests {
         // ergaebe einen Dienst ohne Rechte, und ein Neustart nach
         // `exit_process` kaeme zu spaet. Die Reihenfolge ist die Zusicherung.
         let src = include_str!("interrupts.rs");
-        let funktion = src.find("fn exit_current_process").expect("Exit-Funktion fehlt");
-        let dienste = src.find("crate::services::restart(u64::from(pid.0))").expect("Dienstpruefung fehlt");
-        let widerruf = funktion + src[funktion..].find("cleanup_process(pid)").expect("Widerruf fehlt");
+        let funktion = src
+            .find("fn exit_current_process")
+            .expect("Exit-Funktion fehlt");
+        let dienste = src
+            .find("crate::services::restart(u64::from(pid.0))")
+            .expect("Dienstpruefung fehlt");
+        let widerruf = funktion
+            + src[funktion..]
+                .find("cleanup_process(pid)")
+                .expect("Widerruf fehlt");
         assert!(funktion < dienste, "Dienstpruefung fehlt im Exit-Pfad");
         assert!(dienste < widerruf, "Dienstpruefung steht nach dem Widerruf");
     }
