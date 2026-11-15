@@ -600,9 +600,10 @@ mod tests {
             .unwrap();
 
         // Charlie kann senden
-        assert!(ipc
-            .send(&caps, pid(3), ch, b"from charlie".to_vec())
-            .is_ok());
+        assert!(
+            ipc.send(&caps, pid(3), ch, b"from charlie".to_vec())
+                .is_ok()
+        );
 
         // Charlie kann aber nicht weiter delegieren (kein DELEGATE-Recht)
         let result = caps.delegate(pid(3), charlie_cap, pid(4), Rights::WRITE);
