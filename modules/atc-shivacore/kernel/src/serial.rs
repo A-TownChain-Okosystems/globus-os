@@ -4,7 +4,7 @@
 
 use lazy_static::lazy_static;
 use spin::Mutex;
-use uart_16550::{backend::PioBackend, Config, Uart16550Tty};
+use uart_16550::{Config, Uart16550Tty, backend::PioBackend};
 
 lazy_static! {
     /// COM1 als serielle Debug-Konsole; die Sperre macht die Ausgabe aus mehreren Kontexten vertraeglich.
