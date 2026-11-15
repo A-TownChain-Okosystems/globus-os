@@ -19,7 +19,6 @@ edition = "2024"
 # aurora-core und seine Abhaengigkeiten >= 1.89; ab hier ist Stable die Basis.
 rust-version = "1.100"
 license = "Apache-2.0"
-repository = "https://github.com/A-TownChain-Okosystems/globus-os"
 [workspace.lints.rust]
 unsafe_code = "warn"
 missing_docs = "warn"
