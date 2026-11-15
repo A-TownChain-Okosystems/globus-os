@@ -266,10 +266,10 @@ impl AtcFileSystem {
         self.nodes.insert(path.to_string(), node.clone());
 
         // Parent children aktualisieren
-        if let Some(p) = self.nodes.get_mut(&parent) {
-            if !p.children.contains(&path.to_string()) {
-                p.children.push(path.to_string());
-            }
+        if let Some(p) = self.nodes.get_mut(&parent)
+            && !p.children.contains(&path.to_string())
+        {
+            p.children.push(path.to_string());
         }
 
         Ok(node)
