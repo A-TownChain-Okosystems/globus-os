@@ -139,7 +139,7 @@ fn hex(bytes: &[u8]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::vm::{build_bytecode, Opcode};
+    use crate::vm::{Opcode, build_bytecode};
     fn setup() -> ContractExecutor {
         let vm = Arc::new(VmEngine::new(1_000_000));
         let state = Arc::new(crate::mempool::StateDb::new());
