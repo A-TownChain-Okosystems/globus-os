@@ -29,15 +29,15 @@ pub enum ModuleState {
     /// Vom System gefunden, aber noch nicht geladen.
     Registered, // Discovered but not loaded
     /// `init` laeuft; das Modul ist noch nicht nutzbar.
-    Loading,    // init() in progress
+    Loading, // init() in progress
     /// `init` war erfolgreich, das Modul arbeitet.
-    Active,     // init() succeeded, module running
+    Active, // init() succeeded, module running
     /// `exit` laeuft; das Modul wird abgebaut.
-    Unloading,  // exit() in progress
+    Unloading, // exit() in progress
     /// `init` ist mit Fehler zurueckgekommen.
-    Failed,     // init() returned error
+    Failed, // init() returned error
     /// Sauber entladen; ein erneutes Laden ist moeglich.
-    Unloaded,   // Successfully unloaded
+    Unloaded, // Successfully unloaded
 }
 
 impl ModuleState {
@@ -123,13 +123,13 @@ impl ModulePriority {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum ModuleLicense {
     /// GPL-kompatible Lizenz; verunreinigt den Kernel nicht.
-    Gpl,         // GPL-compatible
+    Gpl, // GPL-compatible
     /// MIT-Lizenz.
-    Mit,         // MIT
+    Mit, // MIT
     /// BSD-Lizenz.
-    Bsd,         // BSD
+    Bsd, // BSD
     /// Apache-2.0-Lizenz.
-    Apache,      // Apache 2.0
+    Apache, // Apache 2.0
     /// Proprietaere Lizenz; verunreinigt den Kernel.
     Proprietary, // Proprietary (taints kernel)
 }
