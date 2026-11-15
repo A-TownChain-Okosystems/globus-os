@@ -64,7 +64,10 @@ mod tests {
         assert_eq!(owner.owner(), 0, "der Kernel schreibt");
         assert!(owner.claim(1003));
         assert_eq!(owner.owner(), 1003);
-        assert!(!owner.claim(1004), "ein zweiter Schreiber wird nicht Inhaber");
+        assert!(
+            !owner.claim(1004),
+            "ein zweiter Schreiber wird nicht Inhaber"
+        );
         assert_eq!(owner.owner(), 1003);
     }
 
@@ -77,7 +80,10 @@ mod tests {
         assert!(owner.release(1003));
         assert_eq!(owner.owner(), 0, "der Kernel schreibt wieder");
         assert!(!owner.release(1003), "die zweite Freigabe ist keine");
-        assert!(owner.claim(1004), "nach der Rueckgabe darf neu uebergeben werden");
+        assert!(
+            owner.claim(1004),
+            "nach der Rueckgabe darf neu uebergeben werden"
+        );
     }
 
     #[test]
@@ -87,6 +93,9 @@ mod tests {
         assert!(owner.claim(1003));
         assert!(owner.release(1003));
         assert_eq!(owner.owner(), 0);
-        assert!(owner.claim(1003), "derselbe Dienst darf sie wieder uebernehmen");
+        assert!(
+            owner.claim(1003),
+            "derselbe Dienst darf sie wieder uebernehmen"
+        );
     }
 }
