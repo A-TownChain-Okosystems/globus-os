@@ -27,7 +27,7 @@
 | Datei | Zeilen |
 |------|--------|
 | `.atc/compliance.yaml` | 12 |
-| `.atc/evidence/evidence.yaml` | 265 |
+| `.atc/evidence/evidence.yaml` | 298 |
 | `.atc/lifecycle.yaml` | 6 |
 | `.atc/ownership.yaml` | 10 |
 | `.atc/repository.yaml` | 21 |
@@ -52,8 +52,8 @@
 | `CHANGELOG.md` | 7 |
 | `CODEOWNERS` | 3 |
 | `CONTRIBUTING.md` | 9 |
-| `Cargo.lock` | 5.390 |
-| `Cargo.toml` | 40 |
+| `Cargo.lock` | 5383 |
+| `Cargo.toml` | 39 |
 | `modules/atc-shivacore/boot/rust-toolchain.toml` | 11 |
 | `rust-toolchain.toml` | 18 |
 | `FILE_REGISTER.md` | 585 |
@@ -383,7 +383,7 @@
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/threads.rs` | 1.468 |
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/tracing.rs` | 2.255 |
 | `modules/atc-shivacore/legacy/kernel-src-uncompiled/user_io.rs` | 1.324 |
-| `modules/atc-shivacore/service_space/Cargo.toml` | 36 |
+| `modules/atc-shivacore/service_space/Cargo.toml` | 33 |
 | `modules/atc-shivacore/service_space/src/atcnet.rs` | 1.309 |
 | `modules/atc-shivacore/service_space/src/blockchain.rs` | 551 |
 | `modules/atc-shivacore/service_space/src/consensus.rs` | 1.208 |
@@ -446,7 +446,7 @@
 | `system/aurora-core/src/lib.rs` | 115 |
 | `system/aurora-core/src/state.rs` | 77 |
 | `system/aurora-core/src/types.rs` | 74 |
-| `system/core/Cargo.toml` | 14 |
+| `system/core/Cargo.toml` | 13 |
 | `system/core/src/boot.rs` | 194 |
 | `system/core/src/lib.rs` | 45 |
 | `system/devices/Cargo.toml` | 11 |
@@ -482,9 +482,9 @@
 | `system/graphics/src/media_surface.rs` | 182 |
 | `system/graphics/src/shell.rs` | 202 |
 | `system/graphics/src/wm.rs` | 377 |
-| `system/identity-core/Cargo.toml` | 11 |
+| `system/identity-core/Cargo.toml` | 14 |
 | `system/identity-core/examples/issue-record.rs` | 55 |
-| `system/identity-core/src/lib.rs` | 374 |
+| `system/identity-core/src/lib.rs` | 385 |
 | `system/identity/Cargo.toml` | 19 |
 | `system/identity/README.md` | 78 |
 | `system/identity/src/account_lifecycle.rs` | 184 |
@@ -536,7 +536,7 @@
 | `system/process/Cargo.toml` | 8 |
 | `system/process/src/lib.rs` | 38 |
 | `system/process/src/scheduler.rs` | 85 |
-| `system/runtime/Cargo.toml` | 26 |
+| `system/runtime/Cargo.toml` | 20 |
 | `system/runtime/src/core_api.rs` | 127 |
 | `system/runtime/src/error_reporting.rs` | 63 |
 | `system/runtime/src/lib.rs` | 248 |
