@@ -295,7 +295,11 @@ mod tests {
     #[test]
     fn a_kernel_fault_still_stops_the_kernel() {
         assert_eq!(
-            decide(ExceptionKind::InvalidOpcode, Origin::Kernel, ProcessKind::Plain),
+            decide(
+                ExceptionKind::InvalidOpcode,
+                Origin::Kernel,
+                ProcessKind::Plain
+            ),
             FaultAction::PanicKernel
         );
     }
@@ -324,7 +328,6 @@ mod tests {
             );
         }
     }
-
 
     #[test]
     fn ein_dienst_stuerzt_nicht_ab_sondern_beginnt_neu() {
@@ -366,7 +369,6 @@ mod tests {
         assert_eq!(ende.terminated, 1);
         assert_eq!(ende.service_restarts, 1);
     }
-
 
     #[test]
     fn der_exit_code_nennt_die_ursache() {
