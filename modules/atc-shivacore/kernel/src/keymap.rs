@@ -192,7 +192,7 @@ pub fn decode(scancode: u8, state: &mut ModifierState) -> Decoded {
                 pressed,
                 character: None,
                 state_changed: false,
-            }
+            };
         }
         (CONTROL_LEFT, true) => {
             return Decoded {
@@ -200,7 +200,7 @@ pub fn decode(scancode: u8, state: &mut ModifierState) -> Decoded {
                 pressed,
                 character: None,
                 state_changed: false,
-            }
+            };
         }
         (ALT_LEFT, false) => {
             return Decoded {
@@ -208,7 +208,7 @@ pub fn decode(scancode: u8, state: &mut ModifierState) -> Decoded {
                 pressed,
                 character: None,
                 state_changed: false,
-            }
+            };
         }
         (ALT_LEFT, true) => {
             return Decoded {
@@ -216,7 +216,7 @@ pub fn decode(scancode: u8, state: &mut ModifierState) -> Decoded {
                 pressed,
                 character: None,
                 state_changed: false,
-            }
+            };
         }
         _ => {}
     }
