@@ -1,26 +1,10 @@
 # 📋 File Register — globus-os
 
 > **Zweck:** Vollständige Liste aller getrackten Dateien (ohne Build-Artefakte).
-> **Stand:** 14.11.2026, gegen `dde2de2` nachgezaehlt: 555 Dateien. Der
-> vorige Kopf nannte 540, waehrend die Tabelle bereits 548 Zeilen hatte; beim
-> Nachzaehlen fehlten drei Kernel-Dateien
-> (`modules/atc-shivacore/kernel/src/identity_check.rs`, `identity_file.rs`,
-> `identity_gate.rs`) und die beiden Dateien des Entropiekerns. Sie stehen jetzt
-> Die Zahl 557 ist am 14.11.2026 gegen `git ls-files` gestellt (555 + die beiden
-> neuen Toolchain-Dateien `rust-toolchain.toml` und
-> `modules/atc-shivacore/boot/rust-toolchain.toml`) und
-> bestaetigt; nachgezogen wurden die Zeilenzahlen der beiden Dokumente, die
-> seit der E-6-Bestaetigung gewachsen sind (Wiederherstellungsspezifikation
-> 1062 -> 1148 -> 1175 -> 1304), weil der vorige Wert gemessen war und nicht
-> geschaetzt werden darf. Der Pruefer wuchs mit der eingefrorenen Ableitung auf
-> 545 Zeilen. Die Zahl 555 stammt weiter aus `git ls-files`.
-> in der Tabelle, die Zahl ist gemessen und nicht fortgeschrieben. Dazu die
-> Wiederherstellungsspezifikation mit ihrem Layout-Pruefer
-> (`docs/identity/SPEC-RECOVERY-001.md`, `scripts/check_recovery_spec.py`)
-> und die Bestandsaufnahme `docs/identity/INVENTORY-IDENTITY-WALLET-2026-11-14.md`.
-> Die Liste ist vollständig; der vorige Stand
-> nannte 522 und war um 15 Einträge unvollständig (unter anderem fehlten die
-> neueren Dokumente aus dem Kernel-Strang).
+> **Stand:** 15.11.2026, gegen `git ls-files` gemessen: 559 Dateien.
+> Grundlage ist der untersuchte Quellstand `50ffc556` zuzüglich des Architektur-Audits
+> `docs/audits/SHIVACORE-DEPENDENCY-MATRIX-2026-11-15.md`. Frühere Kopfangaben (540, 555,
+> 557, 558) sind überholt; maßgeblich ist die Tabelle, nicht der Kopf.
 > **Zeilenzahlen** aus dem committeten Stand, Binärdateien ohne Zahl.
 > **Standards:** ATC-STD-201 · Evidence: `.atc/evidence/evidence.yaml`
 
@@ -55,9 +39,10 @@
 | `CONTRIBUTING.md` | 9 |
 | `Cargo.lock` | 5383 |
 | `Cargo.toml` | 39 |
+| `docs/audits/SHIVACORE-DEPENDENCY-MATRIX-2026-11-15.md` | 104 |
 | `modules/atc-shivacore/boot/rust-toolchain.toml` | 11 |
 | `rust-toolchain.toml` | 18 |
-| `FILE_REGISTER.md` | 586 |
+| `FILE_REGISTER.md` | 571 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
