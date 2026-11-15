@@ -146,8 +146,7 @@ impl CredentialRecord {
             return Err(VerifyError::UnsupportedKdf);
         }
         let memory_kib = u16::from_le_bytes([bytes[6], bytes[7]]) as u32;
-        let iterations =
-            u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
+        let iterations = u32::from_le_bytes([bytes[8], bytes[9], bytes[10], bytes[11]]);
         let parallelism = bytes[12] as u32;
         if bytes[13..16] != [0, 0, 0] {
             return Err(VerifyError::ReservedNotZero);
@@ -168,11 +167,7 @@ impl CredentialRecord {
         if hash == [0u8; HASH_LEN] {
             return Err(VerifyError::EmptySecret);
         }
-        Ok(Self {
-            params,
-            salt,
-            hash,
-        })
+        Ok(Self { params, salt, hash })
     }
 
     /// Prueft ein Passwort gegen diesen Datensatz.
@@ -229,8 +224,13 @@ mod tests {
         let argon = Argon2::new(
             Algorithm::Argon2id,
             Version::V0x13,
-            Params::new(params.memory_kib, params.iterations, params.parallelism, Some(HASH_LEN))
-                .expect("Parameter"),
+            Params::new(
+                params.memory_kib,
+                params.iterations,
+                params.parallelism,
+                Some(HASH_LEN),
+            )
+            .expect("Parameter"),
         );
         let mut hash = [0u8; HASH_LEN];
         argon
