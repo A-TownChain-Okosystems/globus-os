@@ -49,8 +49,12 @@ const PILN: [usize; 24] = [
     10, 7, 11, 17, 18, 3, 5, 16, 8, 21, 24, 4, 15, 23, 19, 13, 12, 2, 20, 14, 22, 9, 6, 1,
 ];
 
+// Die Iota-Schleife laeuft ueber RC; dass das genau ROUNDS Runden sind,
+// steht als Compile-Zeit-Zusicherung und nicht als Annahme.
+const _RC_DECKT_ROUNDS: () = assert!(RC.len() == ROUNDS);
+
 fn keccak_f1600(a: &mut [u64; 25]) {
-    for round in 0..ROUNDS {
+    for round_constant in RC {
         // theta
         let mut c = [0u64; 5];
         for (x, slot) in c.iter_mut().enumerate() {
@@ -79,7 +83,7 @@ fn keccak_f1600(a: &mut [u64; 25]) {
             }
         }
         // iota
-        a[0] ^= RC[round];
+        a[0] ^= round_constant;
     }
 }
 
@@ -94,18 +98,15 @@ fn absorb(state: &mut [u64; 25], block: &[u8; RATE]) {
 pub fn keccak256(data: &[u8]) -> [u8; 32] {
     let mut state = [0u64; 25];
 
-    let mut chunks = data.chunks_exact(RATE);
-    for chunk in &mut chunks {
-        let mut block = [0u8; RATE];
-        block.copy_from_slice(chunk);
-        absorb(&mut state, &block);
+    let (blocks, rest) = data.as_chunks::<RATE>();
+    for block in blocks {
+        absorb(&mut state, block);
     }
 
     // Padding nach Original-Keccak: 0x01 am Ende der Nachricht, 0x80 als letztes
     // Byte des Blocks. (SHA-3 nutzt 0x06 — bewusst nicht uebernommen, weil die
     // Audit-Kette dann nicht gegen die verbreiteten Keccak-256-Vektoren pruefbar
     // waere.)
-    let rest = chunks.remainder();
     let mut block = [0u8; RATE];
     block[..rest.len()].copy_from_slice(rest);
     block[rest.len()] ^= 0x01;
