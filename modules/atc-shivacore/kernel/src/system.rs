@@ -580,7 +580,7 @@ pub struct InitConfig {
     /// Umgebung, die Init erbt.
     pub env: Vec<(String, String)>,
     /// True, wenn Zombie-Kinder automatisch eingesammelt werden.
-    pub auto_reap: bool,   // Auto-reap zombie children
+    pub auto_reap: bool, // Auto-reap zombie children
     /// Obergrenze fuer Neustarts nach einem Absturz.
     pub max_restarts: u32, // Max restarts if init crashes
     /// Bisherige Neustarts.
