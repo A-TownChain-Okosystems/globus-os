@@ -13,9 +13,9 @@ use alloc::vec::Vec;
 use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
+    VirtAddr,
     structures::paging::OffsetPageTable,
     structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
-    VirtAddr,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -984,12 +984,14 @@ mod tests {
         assert_eq!(bin.data_len(), 0);
     }
 
-
     #[test]
     fn data_fenster_grenze_wird_eingehalten() {
         let space = UserAddressSpace::default();
         assert!(space.data_fits(space.data_size), "Fenster selbst passt");
-        assert!(!space.data_fits(space.data_size + 1), "ein Byte zu viel passt nicht");
+        assert!(
+            !space.data_fits(space.data_size + 1),
+            "ein Byte zu viel passt nicht"
+        );
         assert!(space.data_fits(0), "leerer Datenanteil ist zulaessig");
     }
 
@@ -1367,7 +1369,7 @@ mod tests {
         let ctx = mgr.enter_userspace(pid).unwrap();
         assert!(ctx.is_user_mode());
         let ctx = ctx.clone(); // Borrow-Ende: handle_syscall nimmt &mut self
-                               // 3. Handle syscalls
+        // 3. Handle syscalls
         let rsp = mgr.handle_syscall(pid, 1, &[]).unwrap();
         assert!(rsp > 0);
         // 4. Check memory
