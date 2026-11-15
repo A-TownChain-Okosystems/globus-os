@@ -21,7 +21,7 @@ pub const KERNEL_INPUT_CHANNEL: u64 = libshivacore::KERNEL_INPUT_CHANNEL;
 pub const CONSOLE_RESOURCE_ID: u64 = 1;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use libshivacore::{
-    validate_abi_version, AbiError, CapabilityHandle, Syscall, MAX_SYSCALL_PAYLOAD,
+    AbiError, CapabilityHandle, MAX_SYSCALL_PAYLOAD, Syscall, validate_abi_version,
 };
 
 /// Registry-Fehler in ABI-Fehler uebersetzen. Jede Variante ist eine
@@ -236,7 +236,9 @@ impl SyscallDispatcher {
                             "ipc.send",
                             &alloc::format!(
                                 "pid={:?} channel={:#x} payload={:#x}",
-                                pid, channel, payload
+                                pid,
+                                channel,
+                                payload
                             ),
                             crate::security::AuditResult::Allowed,
                         );
@@ -248,7 +250,9 @@ impl SyscallDispatcher {
                             "ipc.denied",
                             &alloc::format!(
                                 "pid={:?} channel={:#x} grund={:?}",
-                                pid, channel, error
+                                pid,
+                                channel,
+                                error
                             ),
                             crate::security::AuditResult::Denied,
                         );
@@ -299,7 +303,9 @@ impl SyscallDispatcher {
                             "ipc.recv",
                             &alloc::format!(
                                 "pid={:?} channel={:#x} word={:#x}",
-                                pid, channel, word
+                                pid,
+                                channel,
+                                word
                             ),
                             crate::security::AuditResult::Allowed,
                         );
@@ -312,7 +318,9 @@ impl SyscallDispatcher {
                             "ipc.denied",
                             &alloc::format!(
                                 "pid={:?} channel={:#x} grund={:?}",
-                                pid, channel, error
+                                pid,
+                                channel,
+                                error
                             ),
                             crate::security::AuditResult::Denied,
                         );
@@ -601,10 +609,13 @@ mod tests {
         crate::ipc_lifecycle::CHANNELS
             .lock()
             .open_with(KERNEL_INPUT_CHANNEL, pid(1), 8);
-        crate::ipc_lifecycle::CHANNELS.lock().attach(KERNEL_INPUT_CHANNEL, pid(1));
         crate::ipc_lifecycle::CHANNELS
             .lock()
-            .deliver(KERNEL_INPUT_CHANNEL, InputEvent::new(0x1E, Some('a')).packed());
+            .attach(KERNEL_INPUT_CHANNEL, pid(1));
+        crate::ipc_lifecycle::CHANNELS.lock().deliver(
+            KERNEL_INPUT_CHANNEL,
+            InputEvent::new(0x1E, Some('a')).packed(),
+        );
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -676,10 +687,13 @@ mod tests {
         crate::ipc_lifecycle::CHANNELS
             .lock()
             .open_with(KERNEL_INPUT_CHANNEL, pid(1), 8);
-        crate::ipc_lifecycle::CHANNELS.lock().attach(KERNEL_INPUT_CHANNEL, pid(1));
         crate::ipc_lifecycle::CHANNELS
             .lock()
-            .deliver(KERNEL_INPUT_CHANNEL, InputEvent::new(0x1E, Some('a')).packed());
+            .attach(KERNEL_INPUT_CHANNEL, pid(1));
+        crate::ipc_lifecycle::CHANNELS.lock().deliver(
+            KERNEL_INPUT_CHANNEL,
+            InputEvent::new(0x1E, Some('a')).packed(),
+        );
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -722,23 +736,11 @@ mod tests {
     fn monotonic_time_only_advances_on_tick() {
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
-        let a = d.dispatch(
-            pid(1),
-            request(Syscall::MonotonicTime),
-            &mut table,
-        );
-        let b = d.dispatch(
-            pid(1),
-            request(Syscall::MonotonicTime),
-            &mut table,
-        );
+        let a = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
+        let b = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
         assert_eq!(a.value, b.value, "Lesen darf die Zeit nicht veraendern");
         advance_monotonic_tick();
-        let c = d.dispatch(
-            pid(1),
-            request(Syscall::MonotonicTime),
-            &mut table,
-        );
+        let c = d.dispatch(pid(1), request(Syscall::MonotonicTime), &mut table);
         assert_eq!(c.value, a.value + 1, "genau ein Tick pro Hardware-IRQ");
     }
 
