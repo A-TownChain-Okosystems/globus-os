@@ -17,11 +17,11 @@ use shivacore::syscall_gate::SyscallGate;
 use shivacore::user_sched::{SavedContext, UserScheduler};
 use shivacore::userspace::UserContext;
 use spin::Mutex;
+use x86_64::VirtAddr;
 use x86_64::registers::rflags::RFlags;
 use x86_64::structures::idt::{
     InterruptDescriptorTable, InterruptStackFrame, InterruptStackFrameValue, PageFaultErrorCode,
 };
-use x86_64::VirtAddr;
 
 /// Erster Vektor der ersten PIC-Bank; ab hier liegen die Geraetevektoren, nicht die Ausnahmen.
 pub const PIC_1_OFFSET: u8 = 0x20;
@@ -330,7 +330,9 @@ pub fn init_user_scheduler(
 /// Prozessmanager und der VFS hatten je eine weitere. Damit entschied keine
 /// Instanz allein. Der Kernel ruft diese Funktion direkt nach
 /// `KernelState::boot()` auf und uebergibt seine Authority.
-pub fn install_authority(authority: alloc::sync::Arc<shivacore::cap_authority::CapabilityAuthority>) -> usize {
+pub fn install_authority(
+    authority: alloc::sync::Arc<shivacore::cap_authority::CapabilityAuthority>,
+) -> usize {
     let identity = authority.identity();
     let mut guard = SYSCALL_GATE.lock();
     *guard = Some(SyscallGate::with_authority(authority));
@@ -462,7 +464,12 @@ fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
     shivacore::security::record(
         "kernel",
         "process.exit",
-        &alloc::format!("pid={:?} code={} caps_widerrufen={}", pid, exit_code, revoked),
+        &alloc::format!(
+            "pid={:?} code={} caps_widerrufen={}",
+            pid,
+            exit_code,
+            revoked
+        ),
         shivacore::security::AuditResult::Allowed,
     );
     serial_println!(
@@ -591,7 +598,9 @@ pub fn cleanup_process(pid: Pid) -> usize {
             "handle.revoke",
             &alloc::format!(
                 "pid={:?} handes_widerrufen={} veraltet_abgewiesen={}",
-                pid, ipc.handles_revoked, ipc.stale_handles_denied
+                pid,
+                ipc.handles_revoked,
+                ipc.stale_handles_denied
             ),
             shivacore::security::AuditResult::Allowed,
         );
@@ -763,7 +772,6 @@ fn handle_console(pid: Pid, request: SyscallRequest) -> shivacore::syscall::Sysc
         _ => SyscallResponse::err(AbiError::InvalidPayload),
     }
 }
-
 
 /// Prueft ein Passwort aus dem Anmeldefenster.
 ///
@@ -1386,10 +1394,9 @@ fn handle_exception(
                         service.limit
                     );
                 }
-                let recorded =
-                    FAULT_COUNTERS
-                        .lock()
-                        .record(origin, shivacore::fault::FaultAction::RestartService);
+                let recorded = FAULT_COUNTERS
+                    .lock()
+                    .record(origin, shivacore::fault::FaultAction::RestartService);
                 shivacore::security::record(
                     "kernel",
                     "fault.service_restart",
@@ -1649,7 +1656,8 @@ extern "C" fn timer_trap_rust(frame: &mut UserTrapFrame) {
                         use x86_64::structures::paging::FrameAllocator;
                         let list_before_probe = allocator.free_list_len();
                         let probe = allocator.allocate_frame();
-                        let reused = probe.is_some() && allocator.free_list_len() < list_before_probe;
+                        let reused =
+                            probe.is_some() && allocator.free_list_len() < list_before_probe;
                         if let Some(frame) = probe {
                             // Zurueck auf die Freiliste: der Probe-Frame war
                             // geliehen, nicht verbraucht.
@@ -2159,8 +2167,7 @@ extern "C" fn syscall_gate_rust(frame: &mut UserTrapFrame) {
                         actions.push(entry.action.as_str());
                     }
                 }
-                let (rounds, busy, delivered, backed_up) =
-                    shivacore::ipc_lifecycle::pump_stats();
+                let (rounds, busy, delivered, backed_up) = shivacore::ipc_lifecycle::pump_stats();
                 serial_println!(
                     "ShivaCore: IPC-Pumpe: {} Versuche, {} wegen belegter Sperre uebersprungen, {} zugestellt, {} Stau",
                     rounds,
