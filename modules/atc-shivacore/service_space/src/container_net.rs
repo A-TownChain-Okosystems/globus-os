@@ -1171,10 +1171,10 @@ impl FirewallRule {
                 return false;
             }
         }
-        if let Some(rp) = self.src_port {
-            if sp != Some(rp) {
-                return false;
-            }
+        if let Some(rp) = self.src_port
+            && sp != Some(rp)
+        {
+            return false;
         }
         if let Some((lo, hi)) = self.src_port_range {
             match sp {
@@ -1182,10 +1182,10 @@ impl FirewallRule {
                 _ => return false,
             }
         }
-        if let Some(rp) = self.dst_port {
-            if dp != Some(rp) {
-                return false;
-            }
+        if let Some(rp) = self.dst_port
+            && dp != Some(rp)
+        {
+            return false;
         }
         if let Some((lo, hi)) = self.dst_port_range {
             match dp {
@@ -1593,26 +1593,25 @@ impl ContainerNetManager {
             return Err("container namespace not found".into());
         }
         let mut veth = VethPair::new(hn, cn, host_ns, c_ns);
-        if let Some(bid) = bridge {
-            if let Some(b) = self.bridges.get_mut(&bid) {
-                let cid = self.namespaces.get(&c_ns).unwrap().container_pid;
-                if let Some(ip) = b.allocate_ip(cid) {
-                    veth.set_container_ip(ip, b.subnet.unwrap_or(self.default_subnet).prefix_len);
-                }
-                veth.attach_to_bridge(bid);
-                b.add_port(veth.container_iface.id);
+        if let Some(bid) = bridge
+            && let Some(b) = self.bridges.get_mut(&bid)
+        {
+            let cid = self.namespaces.get(&c_ns).unwrap().container_pid;
+            if let Some(ip) = b.allocate_ip(cid) {
+                veth.set_container_ip(ip, b.subnet.unwrap_or(self.default_subnet).prefix_len);
             }
+            veth.attach_to_bridge(bid);
+            b.add_port(veth.container_iface.id);
         }
         veth.bring_up();
         let vid = veth.id;
         if let Some(ns) = self.namespaces.get_mut(&c_ns) {
             ns.add_interface(veth.container_iface.clone());
-            if let Some(bid) = bridge {
-                if let Some(b) = self.bridges.get(&bid) {
-                    if let Some(gw) = b.gateway_ip {
-                        ns.add_route(Route::default(gw, veth.container_iface.id));
-                    }
-                }
+            if let Some(bid) = bridge
+                && let Some(b) = self.bridges.get(&bid)
+                && let Some(gw) = b.gateway_ip
+            {
+                ns.add_route(Route::default(gw, veth.container_iface.id));
             }
         }
         if let Some(ns) = self.namespaces.get_mut(&host_ns) {
@@ -1624,11 +1623,11 @@ impl ContainerNetManager {
     /// Loescht ein veth-Paar.
     pub fn destroy_veth_pair(&mut self, vid: u64) -> bool {
         if let Some(veth) = self.veth_pairs.remove(&vid) {
-            if let Some(bid) = veth.bridge_iface {
-                if let Some(b) = self.bridges.get_mut(&bid) {
-                    b.remove_port(veth.container_iface.id);
-                    b.release_ip(veth.container_iface.ip);
-                }
+            if let Some(bid) = veth.bridge_iface
+                && let Some(b) = self.bridges.get_mut(&bid)
+            {
+                b.remove_port(veth.container_iface.id);
+                b.release_ip(veth.container_iface.ip);
             }
             if let Some(ns) = self.namespaces.get_mut(&veth.container_ns) {
                 ns.remove_interface(veth.container_iface.id);
@@ -1819,10 +1818,10 @@ impl ContainerNetManager {
                 bytes,
             };
         }
-        if let Some(ns) = self.namespaces.get_mut(&src_ns) {
-            if let Some(r) = ns.lookup_route(dst).cloned() {
-                ns.tx(r.iface_id, bytes, 1);
-            }
+        if let Some(ns) = self.namespaces.get_mut(&src_ns)
+            && let Some(r) = ns.lookup_route(dst).cloned()
+        {
+            ns.tx(r.iface_id, bytes, 1);
         }
         if let Some(ns) = self.namespaces.get_mut(&dst_ns) {
             ns.rx(0, bytes, 1);
