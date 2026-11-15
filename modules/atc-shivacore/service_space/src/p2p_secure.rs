@@ -29,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::p2p::{MessageType, P2pMessage, P2pNode, CHAIN_ID};
+use crate::p2p::{CHAIN_ID, MessageType, P2pMessage, P2pNode};
 use shivacore::security::TokenBucket;
 
 /// Parsed HELLO payload: (protocol version, supported extensions, node id).
@@ -520,17 +520,17 @@ pub enum HandshakePhase {
     /// Noch kein Handshake begonnen.
     None = 0,
     /// Phase 1: HELLO gesendet.
-    HelloSent = 1,     // Phase 1 (HELLO)
+    HelloSent = 1, // Phase 1 (HELLO)
     /// Phase 2: Protokollfassung ausgehandelt.
-    Negotiated = 2,    // Phase 2 (PROTOCOL_NEGOTIATION)
+    Negotiated = 2, // Phase 2 (PROTOCOL_NEGOTIATION)
     /// Phase 3: Faehigkeiten ausgetauscht.
-    Capabilities = 3,  // Phase 3 (CAPABILITY_EXCHANGE)
+    Capabilities = 3, // Phase 3 (CAPABILITY_EXCHANGE)
     /// Phase 4: Gegenstelle authentifiziert.
     Authenticated = 4, // Phase 4 (AUTHENTICATION)
     /// Phase 5: Sitzungsschluessel ausgetauscht.
     KeysExchanged = 5, // Phase 5 (KEY_EXCHANGE)
     /// Phase 6: Sitzung steht.
-    Established = 6,   // Phase 6 (SESSION_ESTABLISHED)
+    Established = 6, // Phase 6 (SESSION_ESTABLISHED)
 }
 
 /// Sicherheitszustand eines Gegenübers.
