@@ -78,9 +78,7 @@ impl IdentityGate {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use globus_identity_core::{
-        hash_into, KdfParams, HASH_LEN, MAGIC, RECORD_LEN, SALT_LEN,
-    };
+    use globus_identity_core::{HASH_LEN, KdfParams, MAGIC, RECORD_LEN, SALT_LEN, hash_into};
 
     fn record_for(password: &[u8]) -> CredentialRecord {
         let params = KdfParams::OWNER_DEFAULT;
