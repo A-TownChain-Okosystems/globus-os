@@ -22,8 +22,8 @@ use alloc::vec::Vec;
 use core::sync::atomic::{AtomicU64, Ordering};
 
 use crate::genesis::{
-    GenesisBlock, GenesisBuilder, GenesisConfig, GenesisError, GenesisState, GenesisValidator,
-    LockType, GENESIS_CHAIN_ID,
+    GENESIS_CHAIN_ID, GenesisBlock, GenesisBuilder, GenesisConfig, GenesisError, GenesisState,
+    GenesisValidator, LockType,
 };
 
 // === Minimal Block (compatible mit blockchain.rs) === //
