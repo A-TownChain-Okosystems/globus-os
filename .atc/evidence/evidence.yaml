@@ -5,9 +5,9 @@
 schema_version: "1.0.0"
 repository: globus-os
 generated: "2026-11-15"
-generated_by: "Aurora (G4-B/G4-C 15.11.) — Evidenz auf den bereinigten Stand gebunden; korrigierte Befundbasis dokumentiert"
-bound_commit: 4ac37d86149926529ab240404e3ca096a0e83796
-tree_sha: 01204215feffaf5ec8dba0c0d765f2cce04b78c5
+generated_by: "Aurora (Phase A 15.11.) — Manifest-Audit dokumentiert, Evidenz auf den warnungsfreien Stand gebunden"
+bound_commit: c75bb7697c73045bb99770774722375cc7869a28
+tree_sha: 077d3655475c2c63e9b5730072f02151a8da13d9
 maturity_class: C          # A=substanziell B=Rebuild/Produkt C=Plattform/Anwendung
 r_level: null
 implementation:
@@ -39,8 +39,8 @@ canonical_role:                  # SCR-0080 P0-02: Single-Owner-per-Capability
 test_run:
   workflow: lokale Verifikation (kein CI-Lauf moeglich)
   run_id: null
-  commit: 4ac37d86149926529ab240404e3ca096a0e83796
-  timestamp: 2026-11-15T01:05:00+00:00
+  commit: c75bb7697c73045bb99770774722375cc7869a28
+  timestamp: 2026-11-15T01:55:00+00:00
   result: PASS
   runner: local-sandbox
 # ---------------------------------------------------------------------------
@@ -63,8 +63,8 @@ toolchain:
   override_proof: "im Repo meldet rustc -V: 1.100.0 (overridden by 'rust-toolchain.toml')"
 verification:
   method: "frischer Clone von bound_commit, Toolchain aus rust-toolchain.toml"
-  head: 4ac37d86149926529ab240404e3ca096a0e83796
-  tree_sha: 01204215feffaf5ec8dba0c0d765f2cce04b78c5
+  head: c75bb7697c73045bb99770774722375cc7869a28
+  tree_sha: 077d3655475c2c63e9b5730072f02151a8da13d9
   commands:
     - {cmd: "cargo +1.100.0 -V", exit: 0, out: "cargo 1.100.0 (3acc79c0c 2026-11-05)"}
     - {cmd: "rustc +1.100.0 -Vv", exit: 0, out: "release: 1.100.0, commit-hash 0ef1bc38, host x86_64-unknown-linux-gnu, LLVM 23.1.5"}
@@ -74,6 +74,7 @@ verification:
     - {cmd: "cargo fmt --all -- --check", exit: 0, result: PASS, detail: "0 Diffs nach G4-A"}
     - {cmd: "cargo clippy --workspace --all-targets -- -D warnings", exit: 0, result: PASS, detail: "0 Befunde nach G4-B; korrigierte Basis 38 statt 32"}
     - {cmd: "cargo test --workspace --all-targets", exit: 0, passed: 1864, failed: 0, suites: 33}
+    - {cmd: "cargo check --workspace --all-targets (Warnungen)", exit: 0, result: PASS, detail: "0 Warnungen nach dem Manifest-Audit"}
   results:
     - {suite: "globus-identity (cargo test -p globus-identity)", passed: 60, failed: 0, exit: 0}
     - {suite: "cargo check --workspace --all-targets", result: PASS, exit: 0}
@@ -259,6 +260,38 @@ residual_test_inventory_delta:
     13 sitzen in Modulen, die kein Target deklariert oder die per cfg abgeschaltet
     sind. In beiden Commits gleich, also kein Verlust, aber nicht einzeln belegt.
   rule: "Eine kleinere gruene Zahl beweist nicht, dass Tests fehlen - und eine groessere nicht, dass mehr geprueft wird. Massgeblich ist die Inventur, nicht die Summe."
+manifest_audit:
+  id: PHASE_A_MANIFEST_AUDIT_2026_11_15
+  method: >-
+    Jeder Punkt einzeln: Code- und Feature-Referenzen im gesamten Repo gesucht, erst danach
+    klassifiziert. Keine Entfernung ohne nachgewiesene Nichtverwendung.
+  items:
+    - {n: 1, manifest: "system/runtime", dep: globus-audio, klasse: REMOVE, beleg: "einziger Treffer war die Manifest-Zeile selbst"}
+    - {n: 2, manifest: "system/runtime", dep: globus-net, klasse: REMOVE, beleg: "kein Code-, kein Feature-Treffer"}
+    - {n: 3, manifest: "system/runtime", dep: globus-update, klasse: REMOVE, beleg: "kein Code-, kein Feature-Treffer"}
+    - {n: 4, manifest: "system/runtime", dep: globus-vfs, klasse: REMOVE, beleg: "kein Code-, kein Feature-Treffer"}
+    - {n: 5, manifest: "system/runtime", dep: globus-wallet-service, klasse: REMOVE, beleg: "kein Code-Treffer; damit auch keine zweite Wallet-Implementierung"}
+    - {n: 6, manifest: "Kernel", dep: lazy_static, klasse: FEATURE_REQUIRED, beleg: "genutzt in gdt.rs und interrupts.rs; beide im Bin-Target mit required-features = [x86-boot]. Jetzt optional und als dep:lazy_static im Feature; cargo tree zeigt es mit Feature, ohne Feature nicht"}
+    - {n: 7, manifest: "Service Space", dep: libm, klasse: REMOVE, beleg: "kein Code-Treffer"}
+    - {n: 8, manifest: "Service Space", dep: rand, klasse: REMOVE, beleg: "kein Code-Treffer; Entropie laeuft ueber globus-entropy-core, keine unkontrollierte Quelle"}
+    - {n: 9, manifest: "system/core", dep: libshivacore, klasse: REMOVE, beleg: "kein Code-Treffer; keine zweite Kernel-ABI-Referenz"}
+    - {n: 10, manifest: "Root-Manifest", feld: repository, klasse: REMOVE, beleg: "kein Member erbt es (kein repository.workspace = true)"}
+    - {n: 11, manifest: "system/identity-core", feld: "[lints]", klasse: ADD, beleg: "Workspace-Vererbung ergaenzt; dadurch 6 missing_docs sichtbar, alle behoben (Crate-Doku + 6 Konstanten-Dokus)"}
+    - {n: 12, manifest: "Service Space", dep: lazy_static, klasse: REMOVE, beleg: "im ersten Durchgang noch nicht gemeldet, im zweiten sichtbar geworden, kein Code-Treffer"}
+  result: >-
+    cargo check --workspace --all-targets ohne Warnung, clippy -D warnings Exit 0, fmt Exit 0,
+    1864 Tests in 33 Suiten ohne Ausfall.
+residual_static_test_inventory:
+  id: RESIDUAL_STATIC_TEST_INVENTORY_2026_11_15
+  status: OPEN_NOT_ATTRIBUTED
+  sizing: "2749 = 1877 + 872 ; 1877 = 1864 + 13"
+  meaning: >-
+    Drei getrennte Messgroessen: 2749 statische #[test]-Attribute insgesamt, davon 872 in
+    legacy/uncompiled und 1877 im kompilierten src-Bereich; 1864 davon laufen in den 33 Suiten.
+  offen: >-
+    Die 13 Differenz zwischen 1877 und 1864 ist nicht einzeln zugeordnet: Kandidaten sind
+    Module ohne Target-Deklaration und per cfg abgeschaltete Testmodule. In beiden Commits
+    (2ee2d9fe und c75bb769) identisch, also kein Verlust, aber ohne Einzelbeleg.
 ci_blocker:
   cause: "GitHub-Konto ohne verifizierte E-Mail-Adresse"
   effect: "alle Workflow-Laeufe enden in startup_failure; git push und Blob-API antworten 403"
