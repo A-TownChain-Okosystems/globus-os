@@ -32,6 +32,7 @@
 | `.atc/ownership.yaml` | 10 |
 | `.atc/repository.yaml` | 21 |
 | `.atc/standards.yaml` | 21 |
+| `.atc/ci-forensics/2026-11-15-startup-failure.md` | 43 |
 | `.cargo/config.toml` | 4 |
 | `.github/dependabot.yml` | 38 |
 | `.github/workflows/auto-format-rust.yml` | 44 |
@@ -56,7 +57,7 @@
 | `Cargo.toml` | 39 |
 | `modules/atc-shivacore/boot/rust-toolchain.toml` | 11 |
 | `rust-toolchain.toml` | 18 |
-| `FILE_REGISTER.md` | 585 |
+| `FILE_REGISTER.md` | 586 |
 | `LICENSE` | 202 |
 | `README.md` | 358 |
 | `ROADMAP.md` | 67 |
