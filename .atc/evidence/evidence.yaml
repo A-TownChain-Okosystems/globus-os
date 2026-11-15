@@ -235,6 +235,30 @@ verification_residual_c2b935e:
   not_verified:
     - "Boot-Lauf in QEMU (kein QEMU in der Audit-Umgebung)"
     - "IRQ-Trampolin/ACK-Pfad (SC-006 REQ-02/03) nicht implementiert"
+residual_test_inventory_delta:
+  id: RESIDUAL_TEST_INVENTORY_DELTA_2026_11_14
+  status: RESOLVED_MEASUREMENT_ARTIFACT
+  question: "2594 Tests in 34 Suiten (14.11.) gegen 1864 Tests in 33 Suiten (15.11.) - gingen Tests verloren?"
+  answer: >-
+    Nein. Die statische Testinventur ist zwischen 2ee2d9fe und 4ac37d86 in jeder
+    Datei identisch: 2749 #[test]-Attribute in 187 Dateien, davon 1877 im
+    kompilierten src-Bereich und 872 in legacy/uncompiled. Kein Test wurde
+    entfernt, umbenannt oder stillgelegt.
+  cause: >-
+    Die Differenz ist eine Doppelzaehlung in der alten Messung. 1864 + 730 = 2594
+    und 33 + 1 = 34: die alte Zahl summierte den Workspace-Lauf und einen
+    zusaetzlichen Einzellauf von shivacore-service-space (730 Tests in einer
+    Suite).
+  evidence:
+    - 'cargo test --workspace --all-targets auf bound_commit: 1864 Tests in 33 Suiten, davon shivacore 822 und shivacore-service-space 730'
+    - 'cargo test -p shivacore-service-space --lib: 730 Tests in 1 Suite (Exit 0) - genau die fehlende Zahl'
+    - 'Arithmetik: 1864 + 730 = 2594, 33 + 1 = 34 - die alte Angabe ist damit vollstaendig erklaert'
+    - 'Statische Inventur per git: 2749 #[test] in 187 Dateien auf BEIDEN Commits, dateiweise gleich (Summe alt 2749, neu 2749)'
+  open: >-
+    1877 statische Tests im kompilierten src-Bereich gegen 1864 ausgefuehrte: die
+    13 sitzen in Modulen, die kein Target deklariert oder die per cfg abgeschaltet
+    sind. In beiden Commits gleich, also kein Verlust, aber nicht einzeln belegt.
+  rule: "Eine kleinere gruene Zahl beweist nicht, dass Tests fehlen - und eine groessere nicht, dass mehr geprueft wird. Massgeblich ist die Inventur, nicht die Summe."
 ci_blocker:
   cause: "GitHub-Konto ohne verifizierte E-Mail-Adresse"
   effect: "alle Workflow-Laeufe enden in startup_failure; git push und Blob-API antworten 403"
