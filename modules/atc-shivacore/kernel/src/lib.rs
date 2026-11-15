@@ -16,8 +16,6 @@ extern crate std;
 // die alten Pfade `shivacore::madt::…` am Leben.
 pub use libshivacore::{acpi_devices, madt};
 
-/// Eigener Adressraum je Prozess mit Seitentabellen und Fenstern.
-pub mod console_owner;
 pub mod addr_space;
 /// Physikalischer Framespeicher; nur im Testbuild eingebunden.
 #[cfg(test)]
@@ -32,6 +30,8 @@ pub mod ats1000;
 pub mod cap_authority;
 /// Capability-System mit Rechten, Tabellen und Pruefungen.
 pub mod capability;
+/// Eigener Adressraum je Prozess mit Seitentabellen und Fenstern.
+pub mod console_owner;
 /// Zusammenspiel der Teilsysteme in einem Ablauf.
 pub mod cross_subsystem;
 /// Grenze zwischen Fehlerbehandlung und Ereignismeldung.
@@ -40,29 +40,29 @@ pub mod diagnostics;
 pub mod dma_auth;
 /// Laden von ELF64-Dateien und die Signalverwaltung.
 pub mod elf_loader;
+/// Lebensdauer von Kanaelen und Handles: oeffnen, teilen, schliessen, widerrufen.
+pub mod entropy_gate;
 /// Ausnahmen und Fehlerwege aus dem Userspace in den Kernel.
 pub mod fault;
 /// Hardware-Abstraktion; derzeit die Prozessorinformation.
 pub mod hal;
+pub mod identity_check;
+pub mod identity_file;
 /// Begrenzte Eingabewarteschlange zwischen Interrupt-Handler und Konsument.
 pub mod input_queue;
 /// IO-APIC: indirekte Register und Umleitung von Geraeteinterrupts.
 pub mod ioapic;
 /// Interprozesskommunikation mit Nachrichten und Warteschlangen.
 pub mod ipc;
-/// Lebensdauer von Kanaelen und Handles: oeffnen, teilen, schliessen, widerrufen.
-pub mod entropy_gate;
-pub mod identity_check;
-pub mod identity_file;
 pub mod ipc_lifecycle;
-/// Keccak-256 in reinem Rust.
-pub mod keccak;
 /// IRQ-Vermittlung mit ihren Fehlern.
 pub mod irq;
 /// Verbindung von der IRQ-Tabelle zum Maskenregister.
 pub mod irq_bridge;
 /// Zuordnung von Geraete-IRQs zu Vektoren.
 pub mod irq_routing;
+/// Keccak-256 in reinem Rust.
+pub mod keccak;
 /// Kernel-Abos auf IRQ-Leitungen.
 pub mod kernel_caps;
 /// Ablauf des Kernelstarts.
@@ -75,10 +75,10 @@ pub mod keymap;
 pub mod memory_manager;
 /// Prozessverwaltung mit Prozesszustand und Prozessliste.
 pub mod process;
-/// Ablaufplanung nach DA-HEFT mit Prioritaeten und Zeitscheiben.
-pub mod scheduler;
 /// Verzoegerte Freigabe von Seitentabellen-Frames.
 pub mod reclaim;
+/// Ablaufplanung nach DA-HEFT mit Prioritaeten und Zeitscheiben.
+pub mod scheduler;
 /// Mehrfachsignatur, Schluessel und Sicherheitspruefungen.
 pub mod security;
 /// Stabile Systemaufruf-Grenze.
@@ -107,9 +107,9 @@ pub mod lkm;
 pub mod pci_scan;
 /// Ramdisk mit Verzeichnis und Kennung.
 pub mod ramdisk;
-/// Annahme und Ergebnis eines Prozessstarts.
-pub mod spawn;
 /// Textausgabe auf dem Bildschirm mit fester Zeichenbreite.
 pub mod screen;
 /// Diensteverwaltung: Beenden heisst fuer einen Dienst Neustart.
 pub mod services;
+/// Annahme und Ergebnis eines Prozessstarts.
+pub mod spawn;
