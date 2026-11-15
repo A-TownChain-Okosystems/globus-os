@@ -305,18 +305,17 @@ impl SecurityAuditor {
         for h in 1..=height {
             if let (Some(block), Some(parent)) =
                 (bridge.chain.get_block(h), bridge.chain.get_block(h - 1))
+                && block.parent_hash != parent.id
             {
-                if block.parent_hash != parent.id {
-                    linked = false;
-                    report.add(AuditFinding::fail(
-                        "CHAIN-004",
-                        "BlockChain",
-                        Severity::Critical,
-                        &format!("Block {} parent_hash does not match block {} id", h, h - 1),
-                        "Verify block creation and chain append logic",
-                    ));
-                    break;
-                }
+                linked = false;
+                report.add(AuditFinding::fail(
+                    "CHAIN-004",
+                    "BlockChain",
+                    Severity::Critical,
+                    &format!("Block {} parent_hash does not match block {} id", h, h - 1),
+                    "Verify block creation and chain append logic",
+                ));
+                break;
             }
         }
         if linked {
@@ -875,18 +874,18 @@ impl SecurityAuditor {
         // Check 7.1: Every block has valid chain_id
         let mut all_valid = true;
         for h in 0..=bridge.height() {
-            if let Some(block) = bridge.chain.get_block(h) {
-                if block.chain_id != GENESIS_CHAIN_ID {
-                    all_valid = false;
-                    report.add(AuditFinding::fail(
-                        "BLK-001",
-                        "BlockValidation",
-                        Severity::Critical,
-                        &format!("Block {} has wrong chain_id: {}", h, block.chain_id),
-                        "All blocks must have chain_id = 658467",
-                    ));
-                    break;
-                }
+            if let Some(block) = bridge.chain.get_block(h)
+                && block.chain_id != GENESIS_CHAIN_ID
+            {
+                all_valid = false;
+                report.add(AuditFinding::fail(
+                    "BLK-001",
+                    "BlockValidation",
+                    Severity::Critical,
+                    &format!("Block {} has wrong chain_id: {}", h, block.chain_id),
+                    "All blocks must have chain_id = 658467",
+                ));
+                break;
             }
         }
         if all_valid {
@@ -900,18 +899,18 @@ impl SecurityAuditor {
         // Check 7.2: Every non-genesis block has non-empty proposer
         let mut proposer_ok = true;
         for h in 1..=bridge.height() {
-            if let Some(block) = bridge.chain.get_block(h) {
-                if block.proposer_did.is_empty() {
-                    proposer_ok = false;
-                    report.add(AuditFinding::fail(
-                        "BLK-002",
-                        "BlockValidation",
-                        Severity::Medium,
-                        &format!("Block {} has empty proposer_did", h),
-                        "Set proposer_did for all non-genesis blocks",
-                    ));
-                    break;
-                }
+            if let Some(block) = bridge.chain.get_block(h)
+                && block.proposer_did.is_empty()
+            {
+                proposer_ok = false;
+                report.add(AuditFinding::fail(
+                    "BLK-002",
+                    "BlockValidation",
+                    Severity::Medium,
+                    &format!("Block {} has empty proposer_did", h),
+                    "Set proposer_did for all non-genesis blocks",
+                ));
+                break;
             }
         }
         if proposer_ok {
@@ -925,18 +924,18 @@ impl SecurityAuditor {
         // Check 7.3: Every non-genesis block has non-zero PoH hash
         let mut poh_ok = true;
         for h in 1..=bridge.height() {
-            if let Some(block) = bridge.chain.get_block(h) {
-                if block.poh_hash == [0u8; 32] {
-                    poh_ok = false;
-                    report.add(AuditFinding::fail(
-                        "BLK-003",
-                        "BlockValidation",
-                        Severity::Medium,
-                        &format!("Block {} has zero PoH hash", h),
-                        "Link block to PoH sequence",
-                    ));
-                    break;
-                }
+            if let Some(block) = bridge.chain.get_block(h)
+                && block.poh_hash == [0u8; 32]
+            {
+                poh_ok = false;
+                report.add(AuditFinding::fail(
+                    "BLK-003",
+                    "BlockValidation",
+                    Severity::Medium,
+                    &format!("Block {} has zero PoH hash", h),
+                    "Link block to PoH sequence",
+                ));
+                break;
             }
         }
         if poh_ok {
@@ -950,18 +949,18 @@ impl SecurityAuditor {
         // Check 7.4: State root is computed for all blocks
         let mut state_ok = true;
         for h in 0..=bridge.height() {
-            if let Some(block) = bridge.chain.get_block(h) {
-                if block.state_root == [0u8; 32] {
-                    state_ok = false;
-                    report.add(AuditFinding::fail(
-                        "BLK-004",
-                        "BlockValidation",
-                        Severity::Low,
-                        &format!("Block {} has zero state_root", h),
-                        "Compute state_root from state",
-                    ));
-                    break;
-                }
+            if let Some(block) = bridge.chain.get_block(h)
+                && block.state_root == [0u8; 32]
+            {
+                state_ok = false;
+                report.add(AuditFinding::fail(
+                    "BLK-004",
+                    "BlockValidation",
+                    Severity::Low,
+                    &format!("Block {} has zero state_root", h),
+                    "Compute state_root from state",
+                ));
+                break;
             }
         }
         if state_ok {
