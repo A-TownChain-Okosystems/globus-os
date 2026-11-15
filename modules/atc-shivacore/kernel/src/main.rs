@@ -16,21 +16,22 @@ extern crate alloc;
 
 mod allocator;
 mod framebuffer;
-mod identity_gate;
-mod spawn_build;
 mod gdt;
 mod hal;
+mod identity_gate;
 mod interrupts;
 mod memory;
 mod serial;
 /// Diensteverwaltung: dieselbe Instanz wie in der Bibliothek, hier fuer den
 /// Kernel-Start noetig, weil der Exit-Pfad im Binaerbaum liegt.
 mod services;
+mod spawn_build;
 
 use alloc::{boxed::Box, vec::Vec};
 use bootloader_api::{
+    BootInfo,
     config::{BootloaderConfig, Mapping},
-    entry_point, BootInfo,
+    entry_point,
 };
 use core::panic::PanicInfo;
 use shivacore::ats1000;
@@ -53,8 +54,14 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     let cpu = hal::CpuInfo::detect();
     serial_println!(
         "ShivaCore: CPU vendor={} family={} model={} stepping={} apic={} x2apic={} nx={} invariant_tsc={}",
-        cpu.vendor_name(), cpu.family, cpu.model, cpu.stepping,
-        cpu.features.apic, cpu.features.x2apic, cpu.features.nx, cpu.features.invariant_tsc
+        cpu.vendor_name(),
+        cpu.family,
+        cpu.model,
+        cpu.stepping,
+        cpu.features.apic,
+        cpu.features.x2apic,
+        cpu.features.nx,
+        cpu.features.invariant_tsc
     );
     if !cpu.boot_compatible() {
         panic!("ShivaCore: CPU lacks required x86-64 boot features (SSE2/NX/APIC)");
@@ -179,8 +186,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         let mut hash = [0u8; identity::HASH_LEN];
         let tsc_hz = calibrate_tsc(20);
         let started = unsafe { core::arch::x86_64::_rdtsc() };
-        let calculated =
-            identity::hash_into(params, b"messung-im-image", &salt, &mut hash);
+        let calculated = identity::hash_into(params, b"messung-im-image", &salt, &mut hash);
         let cycles = unsafe { core::arch::x86_64::_rdtsc() }.saturating_sub(started);
         match (&calculated, tsc_hz) {
             (Ok(()), Some(hz)) if hz > 0 => {
@@ -234,7 +240,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         };
         match verdict {
             Ok(text) => serial_println!("ShivaCore: IDENT-001 Pruefweg im Image: {}", text),
-            Err(text) => serial_println!("ShivaCore: IDENT-001 Pruefweg im Image: {} — fail-closed", text),
+            Err(text) => serial_println!(
+                "ShivaCore: IDENT-001 Pruefweg im Image: {} — fail-closed",
+                text
+            ),
         }
     }
 
@@ -491,18 +500,23 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                             // Prozess, damit das Verzeichnis nicht nur Auswahl,
                             // sondern auch Vielfalt bedeutet.
                             if let Some(chosen_name) = &chosen {
-                                for entry in entries.iter().filter(|e| &e.name != chosen_name).filter(|e| {
-                                    shivacore::ramdisk::may_read(
-                                        &e.name,
-                                        shivacore::ramdisk::Reader::Program,
-                                    )
-                                }) {
+                                for entry in entries
+                                    .iter()
+                                    .filter(|e| &e.name != chosen_name)
+                                    .filter(|e| {
+                                        shivacore::ramdisk::may_read(
+                                            &e.name,
+                                            shivacore::ramdisk::Reader::Program,
+                                        )
+                                    })
+                                {
                                     let Some(data) = entry.data(bytes) else {
                                         continue;
                                     };
-                                    let Ok(binary) =
-                                        shivacore::elf_loader::user_binary_from_elf(&entry.name, data)
-                                    else {
+                                    let Ok(binary) = shivacore::elf_loader::user_binary_from_elf(
+                                        &entry.name,
+                                        data,
+                                    ) else {
                                         continue;
                                     };
                                     ramdisk_second = Some(binary);
@@ -575,7 +589,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     #[cfg(feature = "x86-boot")]
     {
-        use shivacore::pci_scan::{describe, scan_tree, DeviceKind, IoConfigSpace};
+        use shivacore::pci_scan::{DeviceKind, IoConfigSpace, describe, scan_tree};
         let mut cfg = IoConfigSpace;
         // scan_tree folgt Bruecken: auf einer Maschine mit Steckplaetzen haengt
         // der groesste Teil der Geraete nicht am Root-Bus.
@@ -945,13 +959,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     {
         use shivacore::capability::{ResourceType, Rights};
         let probe = ats1000::Pid(0x0C0F);
-        let probe_cap = kernel_state
-            .authority
-            .create(probe, ResourceType::Device, 0x77, Rights::READ);
+        let probe_cap =
+            kernel_state
+                .authority
+                .create(probe, ResourceType::Device, 0x77, Rights::READ);
         let seen_by_gate = interrupts::cap_count_for(probe);
-        let granted_by_gate_authority = kernel_state
-            .authority
-            .check_any(probe, probe_cap.0, Rights::READ);
+        let granted_by_gate_authority =
+            kernel_state
+                .authority
+                .check_any(probe, probe_cap.0, Rights::READ);
         kernel_state.authority.revoke(probe_cap);
         serial_println!(
             "ShivaCore: Authority-Crosscheck: cap={:?} ueber Prozess-Pfad angelegt, im Gate sichtbar={}, Rechte bestaetigt={}, nach Widerruf {}",
@@ -968,9 +984,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     {
         use shivacore::capability::{ResourceType, Rights};
         let init_pid = ats1000::Pid(1000);
-        let cap = kernel_state
-            .authority
-            .create(init_pid, ResourceType::IpcChannel, 0x10, Rights::READ | Rights::WRITE);
+        let cap = kernel_state.authority.create(
+            init_pid,
+            ResourceType::IpcChannel,
+            0x10,
+            Rights::READ | Rights::WRITE,
+        );
         serial_println!(
             "ShivaCore: Init-Capability fuer die Bilanz: {:?} fuer PID=1000, im Gate sichtbar={}",
             cap,
@@ -983,7 +1002,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // PID 1002 geteilt. Beim Exit muss der eine sterben und der andere fuer
     // 1002 offen bleiben.
     {
-        use shivacore::ipc_lifecycle::{HandleKind, CHANNELS, HANDLES};
+        use shivacore::ipc_lifecycle::{CHANNELS, HANDLES, HandleKind};
         let init = ats1000::Pid(1000);
         {
             let mut channels = CHANNELS.lock();
@@ -997,7 +1016,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // P1-3D: der echte Eingabekanal laeuft durch dieselbe Registry.
             // PID 1002 liest ihn per Syscall, Init ist zusaetzlicher
             // Teilnehmer — sein Exit darf den Kanal deshalb NICHT toeten.
-            channels.open_with(shivacore::syscall::KERNEL_INPUT_CHANNEL, ats1000::Pid(1002), 32);
+            channels.open_with(
+                shivacore::syscall::KERNEL_INPUT_CHANNEL,
+                ats1000::Pid(1002),
+                32,
+            );
             channels.attach(shivacore::syscall::KERNEL_INPUT_CHANNEL, init);
         }
         {
@@ -1072,10 +1095,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         // Tabellen und die vom Mapper geholten Nutzerseiten. Angemeldet wird
         // nach dem Abbilden, sonst fehlen die Zwischentabellen, die der Mapper
         // selbst anlegt.
-        shivacore::reclaim::RECLAIMER.register_tables(
-            shivacore::ats1000::Pid(1000),
-            process_space.all_frames(),
-        );
+        shivacore::reclaim::RECLAIMER
+            .register_tables(shivacore::ats1000::Pid(1000), process_space.all_frames());
         cr3_first = process_space.frame().start_address().as_u64();
     }
     // W^X-Nachweis zur Laufzeit: die tatsaechlich programmierten PTE-Flags der
@@ -1238,10 +1259,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         // Tabellen und die vom Mapper geholten Nutzerseiten. Angemeldet wird
         // nach dem Abbilden, sonst fehlen die Zwischentabellen, die der Mapper
         // selbst anlegt.
-        shivacore::reclaim::RECLAIMER.register_tables(
-            shivacore::ats1000::Pid(1001),
-            process_space.all_frames(),
-        );
+        shivacore::reclaim::RECLAIMER
+            .register_tables(shivacore::ats1000::Pid(1001), process_space.all_frames());
         cr3_second = process_space.frame().start_address().as_u64();
     }
     let user_pid_2 = ats1000::Pid(1001);
@@ -1281,9 +1300,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Registry, PID 1002 holt es per Syscall. Erst hier, nicht frueher: ohne
     // angemeldeten Nutzerkonsument liest der Kernel das FIFO selbst.
     if !greeter_present {
-        interrupts::INPUT_QUEUE.lock().push(
-            shivacore::input_queue::InputEvent::new(0x1E, Some('a')),
-        );
+        interrupts::INPUT_QUEUE
+            .lock()
+            .push(shivacore::input_queue::InputEvent::new(0x1E, Some('a')));
     }
     // ABI 2.0.0: Der Prozess baut einen Argumentblock in seiner Datenseite und
     // uebergibt den Zeiger. Das Abbild der Anweisungen wird hier aufgebaut, und
@@ -1370,10 +1389,8 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         // Tabellen und die vom Mapper geholten Nutzerseiten. Angemeldet wird
         // nach dem Abbilden, sonst fehlen die Zwischentabellen, die der Mapper
         // selbst anlegt.
-        shivacore::reclaim::RECLAIMER.register_tables(
-            shivacore::ats1000::Pid(1002),
-            process_space.all_frames(),
-        );
+        shivacore::reclaim::RECLAIMER
+            .register_tables(shivacore::ats1000::Pid(1002), process_space.all_frames());
         cr3_third = process_space.frame().start_address().as_u64();
     }
     // Vierter Prozess: das zweite Programm aus dem Verzeichnis. Eigener
@@ -1531,8 +1548,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     {
         let probe_slot = 0u64;
-        let layout = shivacore::spawn::layout_for_slot(probe_slot)
-            .expect("Platz 0 muss es geben");
+        let layout = shivacore::spawn::layout_for_slot(probe_slot).expect("Platz 0 muss es geben");
         let binary = userspace::UserBinary::from_bytes(
             "aufbau-selbsttest",
             alloc::vec![0xF4],
@@ -1541,8 +1557,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
-                shivacore::reclaim::RECLAIMER
-                    .queue_process(shivacore::ats1000::Pid(0x0C21));
+                shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(0x0C21));
                 let freed = {
                     let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
                     match slot.as_mut() {
@@ -1559,10 +1574,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                     freed
                 );
             }
-            Err(error) => serial_println!(
-                "ShivaCore: Aufbauender Weg: nicht gebaut ({:?})",
-                error
-            ),
+            Err(error) => serial_println!("ShivaCore: Aufbauender Weg: nicht gebaut ({:?})", error),
         }
     }
     // Selbsttest der Seitentabellen-Frame-Freigabe: zwei echte Frames holen,
@@ -1575,7 +1587,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         let probe_pid = KernelPid(0x0C20);
         let (first, second) = {
             let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
-            let allocator = slot.as_mut().expect("Frame-Allocator muss installiert sein");
+            let allocator = slot
+                .as_mut()
+                .expect("Frame-Allocator muss installiert sein");
             (allocator.allocate_frame(), allocator.allocate_frame())
         };
         match (first, second) {
@@ -1981,7 +1995,7 @@ fn map_mmio_page(
     base: u64,
 ) -> x86_64::VirtAddr {
     use x86_64::structures::paging::{
-        mapper::MapToError, page::Page, FrameAllocator, Mapper, PageTableFlags, PhysFrame, Size4KiB,
+        FrameAllocator, Mapper, PageTableFlags, PhysFrame, Size4KiB, mapper::MapToError, page::Page,
     };
     use x86_64::{PhysAddr, VirtAddr};
 
