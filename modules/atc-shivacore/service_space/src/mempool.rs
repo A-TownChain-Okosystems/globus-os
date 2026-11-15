@@ -279,10 +279,10 @@ impl MemoryPool {
             .map(|(k, _)| *k)
             .collect();
         for t in &rm {
-            if let Some(en) = e.remove(t) {
-                if let Some(txs) = bs.get_mut(&en.tx.sender_did) {
-                    txs.retain(|x| x != t);
-                }
+            if let Some(en) = e.remove(t)
+                && let Some(txs) = bs.get_mut(&en.tx.sender_did)
+            {
+                txs.retain(|x| x != t);
             }
         }
         rm.len()
