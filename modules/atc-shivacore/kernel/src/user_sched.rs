@@ -466,12 +466,11 @@ impl UserScheduler {
             }
         }
 
-        if best.is_none() {
-            if let Some(idx) = current_idx {
-                if self.entries[idx].is_runnable() {
-                    return Some(idx);
-                }
-            }
+        if best.is_none()
+            && let Some(idx) = current_idx
+            && self.entries[idx].is_runnable()
+        {
+            return Some(idx);
         }
 
         best.map(|(i, _)| i)
@@ -482,24 +481,22 @@ impl UserScheduler {
     pub fn schedule(&mut self, current_ctx: Option<&UserContext>) -> Option<(Pid, SavedContext)> {
         self.context_switches += 1;
 
-        if let Some(pid) = self.current {
-            if let Some(ctx) = current_ctx {
-                if let Some(entry) = self.get_entry_mut(pid) {
-                    entry.save_context(ctx);
-                }
-            }
+        if let Some(pid) = self.current
+            && let Some(ctx) = current_ctx
+            && let Some(entry) = self.get_entry_mut(pid)
+        {
+            entry.save_context(ctx);
         }
 
         // Pick next process
         let next_idx = self.pick_next()?;
 
         // Update states
-        if let Some(old_pid) = self.current {
-            if let Some(entry) = self.get_entry_mut(old_pid) {
-                if entry.state == SchedState::Running {
-                    entry.state = SchedState::Ready;
-                }
-            }
+        if let Some(old_pid) = self.current
+            && let Some(entry) = self.get_entry_mut(old_pid)
+            && entry.state == SchedState::Running
+        {
+            entry.state = SchedState::Ready;
         }
 
         let next_pid = self.entries[next_idx].pid;
@@ -515,20 +512,19 @@ impl UserScheduler {
     pub fn schedule_saved(&mut self, current_ctx: SavedContext) -> Option<(Pid, SavedContext)> {
         self.context_switches += 1;
 
-        if let Some(pid) = self.current {
-            if let Some(entry) = self.get_entry_mut(pid) {
-                entry.save_saved_context(current_ctx);
-            }
+        if let Some(pid) = self.current
+            && let Some(entry) = self.get_entry_mut(pid)
+        {
+            entry.save_saved_context(current_ctx);
         }
 
         let next_idx = self.pick_next()?;
 
-        if let Some(old_pid) = self.current {
-            if let Some(entry) = self.get_entry_mut(old_pid) {
-                if entry.state == SchedState::Running {
-                    entry.state = SchedState::Ready;
-                }
-            }
+        if let Some(old_pid) = self.current
+            && let Some(entry) = self.get_entry_mut(old_pid)
+            && entry.state == SchedState::Running
+        {
+            entry.state = SchedState::Ready;
         }
 
         let next_pid = self.entries[next_idx].pid;
@@ -546,17 +542,17 @@ impl UserScheduler {
     pub fn kernel_tick_saved(&mut self, current_ctx: SavedContext) {
         self.timer_ticks += 1;
         for entry in &mut self.entries {
-            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= wake {
-                    entry.state = SchedState::Ready;
-                    entry.wake_tick = None;
-                }
+            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state
+                && self.timer_ticks >= wake
+            {
+                entry.state = SchedState::Ready;
+                entry.wake_tick = None;
             }
         }
-        if let Some(pid) = self.current {
-            if let Some(entry) = self.get_entry_mut(pid) {
-                entry.save_saved_context(current_ctx);
-            }
+        if let Some(pid) = self.current
+            && let Some(entry) = self.get_entry_mut(pid)
+        {
+            entry.save_saved_context(current_ctx);
         }
     }
 
@@ -565,11 +561,11 @@ impl UserScheduler {
         self.timer_ticks += 1;
 
         for entry in &mut self.entries {
-            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= wake {
-                    entry.state = SchedState::Ready;
-                    entry.wake_tick = None;
-                }
+            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state
+                && self.timer_ticks >= wake
+            {
+                entry.state = SchedState::Ready;
+                entry.wake_tick = None;
             }
         }
 
@@ -596,11 +592,11 @@ impl UserScheduler {
 
         // Check wake-ups (Sleep entries)
         for entry in &mut self.entries {
-            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state {
-                if self.timer_ticks >= wake {
-                    entry.state = SchedState::Ready;
-                    entry.wake_tick = None;
-                }
+            if let SchedState::Blocked(BlockReason::Sleep(wake)) = entry.state
+                && self.timer_ticks >= wake
+            {
+                entry.state = SchedState::Ready;
+                entry.wake_tick = None;
             }
         }
 
@@ -729,10 +725,10 @@ impl UserScheduler {
 
     /// Continue a stopped process (SIGCONT)
     pub fn continue_process(&mut self, pid: Pid) {
-        if let Some(entry) = self.get_entry_mut(pid) {
-            if matches!(entry.state, SchedState::Blocked(BlockReason::Stopped)) {
-                entry.state = SchedState::Ready;
-            }
+        if let Some(entry) = self.get_entry_mut(pid)
+            && matches!(entry.state, SchedState::Blocked(BlockReason::Stopped))
+        {
+            entry.state = SchedState::Ready;
         }
     }
 
@@ -831,35 +827,35 @@ impl UserProcessSystem {
         let current = self.scheduler.current_pid();
 
         // Check for pending signals on current process
-        if let Some(pid) = current {
-            if let Some((signal, disp)) = self.signals.deliver(pid) {
-                use crate::elf_loader::{Signal, SignalResolution};
-                let resolution = SignalManager::resolve_action(signal, disp);
-                match resolution {
-                    SignalResolution::Terminate(_) | SignalResolution::Terminate(_)
-                        if signal == Signal::SigKill
-                            || signal == Signal::SigTerm
-                            || signal == Signal::SigSegv =>
-                    {
-                        self.kill(pid, 128 + signal as i32);
-                        return self.scheduler.schedule(None);
-                    }
-                    SignalResolution::Stop => {
-                        if let Some(ctx) = current.and_then(|p| self.userspace.get_context(p)) {
-                            return self.scheduler.stop_process(pid, Some(ctx));
-                        }
-                    }
-                    _ => {}
+        if let Some(pid) = current
+            && let Some((signal, disp)) = self.signals.deliver(pid)
+        {
+            use crate::elf_loader::{Signal, SignalResolution};
+            let resolution = SignalManager::resolve_action(signal, disp);
+            match resolution {
+                SignalResolution::Terminate(_) | SignalResolution::Terminate(_)
+                    if signal == Signal::SigKill
+                        || signal == Signal::SigTerm
+                        || signal == Signal::SigSegv =>
+                {
+                    self.kill(pid, 128 + signal as i32);
+                    return self.scheduler.schedule(None);
                 }
+                SignalResolution::Stop => {
+                    if let Some(ctx) = current.and_then(|p| self.userspace.get_context(p)) {
+                        return self.scheduler.stop_process(pid, Some(ctx));
+                    }
+                }
+                _ => {}
             }
         }
 
         // Normal timer tick → quantum check
-        if let Some(pid) = current {
-            if let Some(ctx) = self.userspace.get_context(pid) {
-                let ctx_copy = ctx.clone();
-                return self.scheduler.timer_tick(&ctx_copy);
-            }
+        if let Some(pid) = current
+            && let Some(ctx) = self.userspace.get_context(pid)
+        {
+            let ctx_copy = ctx.clone();
+            return self.scheduler.timer_tick(&ctx_copy);
         }
         self.scheduler.schedule(None)
     }
