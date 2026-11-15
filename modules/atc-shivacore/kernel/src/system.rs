@@ -472,10 +472,10 @@ impl ProcessGroupManager {
         };
 
         // Remove from old group
-        if let Some(&old_pgid) = self.process_groups.get(&pid.0) {
-            if let Some(g) = self.groups.iter_mut().find(|g| g.pgid == old_pgid) {
-                g.remove_member(pid);
-            }
+        if let Some(&old_pgid) = self.process_groups.get(&pid.0)
+            && let Some(g) = self.groups.iter_mut().find(|g| g.pgid == old_pgid)
+        {
+            g.remove_member(pid);
         }
 
         // Add to new group
