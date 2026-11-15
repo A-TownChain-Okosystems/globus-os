@@ -310,7 +310,9 @@ mod slot_tests {
 
     #[test]
     fn die_boot_fenster_bleiben_frei() {
-        assert!(
+        // Zusicherung ueber zwei Konstanten: als Compile-Zeit-Pruefung
+        // derselbe Nachweis, nur frueher und ohne Laufzeit-Assertion.
+        const _SPAWN_UEBER_BOOTFENSTER: () = assert!(
             SPAWN_WINDOW_BASE > 0x01C0_0000,
             "Bootfenster bleiben unberuehrt"
         );
