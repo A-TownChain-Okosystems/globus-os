@@ -18,9 +18,9 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::atcnet::{
-    self, deserialize_block_ann, deserialize_get_blocks, serialize_block_ann, serialize_get_blocks,
-    serialize_tx_broadcast, AtcNetError, AtcNetHandler, BlockAnnMsg, BlockData, BlocksMsg,
-    GetBlocksMsg, MessageType, PeerId, CHAIN_ID,
+    self, AtcNetError, AtcNetHandler, BlockAnnMsg, BlockData, BlocksMsg, CHAIN_ID, GetBlocksMsg,
+    MessageType, PeerId, deserialize_block_ann, deserialize_get_blocks, serialize_block_ann,
+    serialize_get_blocks, serialize_tx_broadcast,
 };
 use crate::genesis_bridge::{BridgeBlock, BridgeBlockChain, BridgeChainError, GenesisBridge};
 
@@ -789,7 +789,7 @@ fn simple_hash_local(data: &[u8]) -> [u8; 32] {
 mod tests {
     use super::*;
     use crate::genesis::{
-        GenesisAllocation, GenesisConfig, GenesisValidator, LockType, GENESIS_CHAIN_ID,
+        GENESIS_CHAIN_ID, GenesisAllocation, GenesisConfig, GenesisValidator, LockType,
     };
 
     fn dummy_pubkey(n: u8) -> [u8; 33] {
