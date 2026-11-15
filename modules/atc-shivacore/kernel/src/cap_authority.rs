@@ -24,8 +24,10 @@ use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
 
 use crate::ats1000::Pid;
-use crate::capability::{CapId, Capability, CapabilityError, CapabilityTable, ResourceType, Rights};
-use crate::security::{record, AuditResult};
+use crate::capability::{
+    CapId, Capability, CapabilityError, CapabilityTable, ResourceType, Rights,
+};
+use crate::security::{AuditResult, record};
 
 /// Die zentrale Berechtigungsinstanz.
 pub struct CapabilityAuthority {
@@ -80,7 +82,11 @@ impl CapabilityAuthority {
             "capability.create",
             &format!(
                 "pid={:?} cap={:?} resource={:?}:{} rights={:#06x}",
-                pid, cap, resource_type, resource_id, rights.bits()
+                pid,
+                cap,
+                resource_type,
+                resource_id,
+                rights.bits()
             ),
             AuditResult::Allowed,
         );
@@ -131,12 +137,10 @@ impl CapabilityAuthority {
         target_pid: Pid,
         attenuated_rights: Rights,
     ) -> Result<CapId, CapabilityError> {
-        let result = self.table.lock().delegate(
-            source_pid,
-            source_cap,
-            target_pid,
-            attenuated_rights,
-        );
+        let result =
+            self.table
+                .lock()
+                .delegate(source_pid, source_cap, target_pid, attenuated_rights);
         match &result {
             Ok(child) => record(
                 "capability-authority",
@@ -212,7 +216,10 @@ impl CapabilityAuthority {
                 "authorization.denied",
                 &format!(
                     "pid={:?} resource={:?}:{} required={:#06x}",
-                    pid, resource_type, resource_id, required.bits()
+                    pid,
+                    resource_type,
+                    resource_id,
+                    required.bits()
                 ),
                 AuditResult::Denied,
             );
@@ -227,7 +234,12 @@ impl CapabilityAuthority {
             record(
                 "capability-authority",
                 "authorization.denied",
-                &format!("pid={:?} cap={} required={:#06x}", pid, cap_id, required.bits()),
+                &format!(
+                    "pid={:?} cap={} required={:#06x}",
+                    pid,
+                    cap_id,
+                    required.bits()
+                ),
                 AuditResult::Denied,
             );
         }
@@ -246,7 +258,12 @@ impl CapabilityAuthority {
 
     /// Kennungen der Capabilities eines Prozesses.
     pub fn cap_ids_for(&self, pid: Pid) -> Vec<CapId> {
-        self.table.lock().list_for(pid).iter().map(|c| c.id).collect()
+        self.table
+            .lock()
+            .list_for(pid)
+            .iter()
+            .map(|c| c.id)
+            .collect()
     }
 
     /// Kopien der Capabilities eines Prozesses.
@@ -341,7 +358,12 @@ mod tests {
     fn every_mutation_is_recorded_in_the_audit_log() {
         let before = crate::security::recorded_events();
         let a = CapabilityAuthority::new();
-        let cap = a.create(pid(6), ResourceType::Memory, 9, Rights::READ | Rights::DELEGATE);
+        let cap = a.create(
+            pid(6),
+            ResourceType::Memory,
+            9,
+            Rights::READ | Rights::DELEGATE,
+        );
         a.delegate(pid(6), cap, pid(7), Rights::READ).unwrap();
         a.revoke(cap);
         a.revoke_all_for(pid(6));
