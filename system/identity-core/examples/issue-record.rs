@@ -8,12 +8,16 @@
 //! Parameter sind die festgelegten (Argon2id, 19 MiB, t = 2, p = 1) und stehen
 //! im Datensatz selbst.
 
-use globus_identity_core::{hash_into, KdfParams, HASH_LEN, MAGIC, RECORD_LEN, SALT_LEN};
+use globus_identity_core::{HASH_LEN, KdfParams, MAGIC, RECORD_LEN, SALT_LEN, hash_into};
 
 fn main() {
     let mut args = std::env::args().skip(1);
-    let password = args.next().expect("Nutzung: issue-record <passwort> <datei>");
-    let path = args.next().expect("Nutzung: issue-record <passwort> <datei>");
+    let password = args
+        .next()
+        .expect("Nutzung: issue-record <passwort> <datei>");
+    let path = args
+        .next()
+        .expect("Nutzung: issue-record <passwort> <datei>");
 
     let mut salt = [0u8; SALT_LEN];
     {
