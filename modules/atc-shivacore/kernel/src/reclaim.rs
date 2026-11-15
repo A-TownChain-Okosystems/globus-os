@@ -35,7 +35,7 @@ use spin::Mutex;
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 
 use crate::ats1000::Pid;
-use crate::security::{record, AuditResult};
+use crate::security::{AuditResult, record};
 
 /// Ein Auftrag: die Frames eines Adressraums, der niemandem mehr gehoert.
 struct PendingRelease {
@@ -329,8 +329,6 @@ mod tests {
         assert_eq!(reclaimer.pending_len(), 0);
         assert_eq!(reclaimer.freed_frames(), 0);
     }
-
-
 }
 
 #[cfg(test)]
@@ -347,7 +345,10 @@ mod accounting_tests {
         let reclaimer = FrameReclaimer::new();
         let pid = Pid(0x0D01);
         // Allokationsreihenfolge: Wurzel, PDPT, Code, Stack.
-        reclaimer.register_tables(pid, vec![frame(0x1000), frame(0x2000), frame(0x3000), frame(0x4000)]);
+        reclaimer.register_tables(
+            pid,
+            vec![frame(0x1000), frame(0x2000), frame(0x3000), frame(0x4000)],
+        );
         reclaimer.queue_process(pid);
         let mut order = Vec::new();
         reclaimer.drain_with(|f| {
@@ -371,7 +372,10 @@ mod accounting_tests {
             true
         });
         assert_eq!(freed, 2);
-        assert!(!seen.contains(&0x5000), "fremder Frame darf nicht freigegeben werden");
+        assert!(
+            !seen.contains(&0x5000),
+            "fremder Frame darf nicht freigegeben werden"
+        );
         let report = reclaimer.take_last_report();
         assert_eq!(report, vec![(pid.0 as u64, 2, 2, 0)]);
     }
