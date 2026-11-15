@@ -15,7 +15,7 @@
 
 extern crate alloc;
 
-use alloc::alloc::{alloc, dealloc, Layout};
+use alloc::alloc::{Layout, alloc, dealloc};
 use alloc::collections::BTreeMap;
 use alloc::format;
 use alloc::string::{String, ToString};
@@ -555,8 +555,12 @@ pub fn validate_heap_config() -> Result<(), String> {
 pub fn boot_log() -> String {
     format!(
         "ShivaCore Memory Subsystem:\n  Kernel-Heap:  0x{:x} - 0x{:x} ({} KiB)\n  Userspace:    0x{:x} - 0x{:x} ({} MiB)\n  Heap-Threshold: {} bytes\n  Bridge: linked_list_allocator <-> KernelMemoryManager",
-        HEAP_START, HEAP_END, HEAP_SIZE / 1024,
-        USERSPACE_BASE, USERSPACE_BASE + USERSPACE_MAX, USERSPACE_MAX / (1024 * 1024),
+        HEAP_START,
+        HEAP_END,
+        HEAP_SIZE / 1024,
+        USERSPACE_BASE,
+        USERSPACE_BASE + USERSPACE_MAX,
+        USERSPACE_MAX / (1024 * 1024),
         4096
     )
 }
