@@ -32,7 +32,7 @@
 | `.atc/ownership.yaml` | 10 |
 | `.atc/repository.yaml` | 21 |
 | `.atc/standards.yaml` | 21 |
-| `.atc/ci-forensics/2026-11-15-startup-failure.md` | 43 |
+| `.atc/ci-forensics/2026-11-15-startup-failure.md` | 65 |
 | `.cargo/config.toml` | 4 |
 | `.github/dependabot.yml` | 38 |
 | `.github/workflows/auto-format-rust.yml` | 44 |
