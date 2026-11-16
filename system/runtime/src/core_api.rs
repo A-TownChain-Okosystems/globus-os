@@ -62,7 +62,12 @@ impl RuntimeCore {
     /// True when this runtime build supports the syscall.
     pub const fn syscall_supported(&self, syscall: Syscall) -> bool {
         match syscall {
-            Syscall::Yield
+            // Exit gehoert seit ABI 0x0002 zum Vertrag: der Kernel widerruft die
+            // Capabilities, setzt den Prozess auf Zombie und gibt den
+            // Adressraum verzoegert frei. Ohne diesen Arm waere die Pruefung
+            // nicht vollstaendig und der Build auf Stable bricht mit E0004.
+            Syscall::Exit
+            | Syscall::Yield
             | Syscall::IpcSend
             | Syscall::IpcReceive
             | Syscall::CapabilityQuery
@@ -83,6 +88,11 @@ impl RuntimeCore {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exit_is_part_of_the_supported_abi() {
+        assert!(RuntimeCore::new().syscall_supported(Syscall::Exit));
+    }
 
     #[test]
     fn runtime_core_uses_kernel_abi_version() {
