@@ -654,10 +654,10 @@ impl DependencyGraph {
         let mut path = Vec::new();
 
         for node in &self.nodes {
-            if !visited.contains(node) {
-                if let Some(cycle) = self.dfs_cycle(node, &mut visited, &mut rec_stack, &mut path) {
-                    return Some(cycle);
-                }
+            if !visited.contains(node)
+                && let Some(cycle) = self.dfs_cycle(node, &mut visited, &mut rec_stack, &mut path)
+            {
+                return Some(cycle);
             }
         }
         None
@@ -1126,8 +1126,10 @@ impl ModuleRegistry {
         {
             let module = self.modules.get(name).unwrap();
             for conflict in &module.conflicts {
-                if let Some(other) = self.modules.get(conflict) {
-                    if other.state.is_active() {
+                if let Some(other) = self.modules.get(conflict)
+                    && other.state.is_active()
+                {
+                    {
                         let msg = format!(
                             "Module '{}' conflicts with active module '{}'",
                             module_name, conflict

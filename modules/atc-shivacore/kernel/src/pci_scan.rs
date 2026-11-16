@@ -240,12 +240,12 @@ pub fn scan_tree(cfg: &mut impl ConfigSpace, root_bus: u8) -> Vec<PciDevice> {
         }
         visited.push(bus);
         for device in scan_bus(cfg, bus) {
-            if device.is_pci_bridge() && depth < MAX_BRIDGE_DEPTH {
-                if let Some(secondary) = secondary_bus(cfg, device.address) {
-                    if !visited.contains(&secondary) {
-                        queue.push((secondary, depth + 1));
-                    }
-                }
+            if device.is_pci_bridge()
+                && depth < MAX_BRIDGE_DEPTH
+                && let Some(secondary) = secondary_bus(cfg, device.address)
+                && !visited.contains(&secondary)
+            {
+                queue.push((secondary, depth + 1));
             }
             found.push(device);
         }

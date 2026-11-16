@@ -209,13 +209,13 @@ impl KernelMemoryManager {
         }
 
         // Bei Kernel-Heap-Regionen: echtes dealloc
-        if region.source == AllocSource::KernelHeap {
-            if let Some((_, layout)) = self.heap_allocations.remove(&region_id) {
-                // Sichere dealloc: addr war ein echter Heap-Pointer
-                let ptr = region.addr as *mut u8;
-                unsafe {
-                    dealloc(ptr, layout);
-                }
+        if region.source == AllocSource::KernelHeap
+            && let Some((_, layout)) = self.heap_allocations.remove(&region_id)
+        {
+            // Sichere dealloc: addr war ein echter Heap-Pointer
+            let ptr = region.addr as *mut u8;
+            unsafe {
+                dealloc(ptr, layout);
             }
         }
 
@@ -474,14 +474,13 @@ impl MemoryManager for KernelMemoryManager {
         };
 
         // Heap- dealloc
-        if let Some(r) = self.regions.get(&id) {
-            if r.source == AllocSource::KernelHeap {
-                if let Some((_, layout)) = self.heap_allocations.remove(&id) {
-                    let ptr = r.addr as *mut u8;
-                    unsafe {
-                        dealloc(ptr, layout);
-                    }
-                }
+        if let Some(r) = self.regions.get(&id)
+            && r.source == AllocSource::KernelHeap
+            && let Some((_, layout)) = self.heap_allocations.remove(&id)
+        {
+            let ptr = r.addr as *mut u8;
+            unsafe {
+                dealloc(ptr, layout);
             }
         }
 

@@ -377,7 +377,9 @@ impl ChannelRegistry {
             return false;
         }
         self.double_close_blocked += 1;
-        self.double_close_blocked == self.double_close_blocked // immer wahr; Zaehler ist der Beleg
+        // Der Zaehler ist der Beleg, nicht der Rueckgabewert: nach dem
+        // Inkrement ist er zwangslaeufig groesser null.
+        self.double_close_blocked > 0
     }
 
     pub fn double_close_blocked(&self) -> usize {
@@ -878,9 +880,8 @@ mod tests {
         // Der Kanal lebt fuer 2 weiter, die Nachricht ist noch da.
         assert_eq!(CHANNELS.lock().recv(pid(2), 0x52), Ok(7));
         assert_eq!(CHANNELS.lock().close(0x52, pid(2)), CloseOutcome::Destroyed);
-        assert_eq!(
-            CHANNELS.lock().attach(0x52, pid(3)),
-            false,
+        assert!(
+            !CHANNELS.lock().attach(0x52, pid(3)),
             "ein toter Kanal nimmt niemanden mehr auf"
         );
     }
