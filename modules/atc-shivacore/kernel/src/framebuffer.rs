@@ -6,7 +6,7 @@
 
 use bootloader_api::info::{FrameBuffer, FrameBufferInfo, PixelFormat};
 use core::fmt;
-use noto_sans_mono_bitmap::{get_raster, get_raster_width, FontWeight, RasterHeight};
+use noto_sans_mono_bitmap::{FontWeight, RasterHeight, get_raster, get_raster_width};
 use spin::Mutex;
 
 const CHAR_HEIGHT: RasterHeight = RasterHeight::Size16;
@@ -65,9 +65,7 @@ impl FbWriter {
     }
 
     fn letzte_zeile(&self) -> usize {
-        self.info
-            .height
-            .saturating_sub(self.zeilen_hoehe())
+        self.info.height.saturating_sub(self.zeilen_hoehe())
     }
 
     /// Schiebt den Inhalt um eine Textzeile nach oben und leert die letzte Zeile.
@@ -79,8 +77,11 @@ impl FbWriter {
         while y + versatz < self.info.height {
             let quelle = (y + versatz) * stride;
             let ziel = y * stride;
-            if quelle + zeile_bytes <= self.framebuffer.len() && ziel + zeile_bytes <= self.framebuffer.len() {
-                self.framebuffer.copy_within(quelle..quelle + zeile_bytes, ziel);
+            if quelle + zeile_bytes <= self.framebuffer.len()
+                && ziel + zeile_bytes <= self.framebuffer.len()
+            {
+                self.framebuffer
+                    .copy_within(quelle..quelle + zeile_bytes, ziel);
             }
             y += 1;
         }
@@ -98,8 +99,12 @@ impl FbWriter {
 
     fn newline(&mut self) {
         self.x = 0;
-        let (neu_y, scroll) =
-            shivacore::screen::zeilen_vorschub(self.y, CHAR_HEIGHT.val(), LINE_SPACING, self.info.height);
+        let (neu_y, scroll) = shivacore::screen::zeilen_vorschub(
+            self.y,
+            CHAR_HEIGHT.val(),
+            LINE_SPACING,
+            self.info.height,
+        );
         if scroll {
             self.scroll_up();
             self.y = self.letzte_zeile();

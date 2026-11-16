@@ -517,9 +517,10 @@ mod tests {
             Err(RegistryError::WrongDevice)
         );
         assert!(reg.list().is_empty());
-        assert!(reg
-            .register(table.get(c).unwrap(), entry(3, DeviceClass::Input, "kbd"))
-            .is_ok());
+        assert!(
+            reg.register(table.get(c).unwrap(), entry(3, DeviceClass::Input, "kbd"))
+                .is_ok()
+        );
     }
 
     #[test]

@@ -13,9 +13,9 @@ use alloc::vec::Vec;
 use core::arch::asm;
 #[cfg(feature = "x86-boot")]
 use x86_64::{
+    VirtAddr,
     structures::paging::OffsetPageTable,
     structures::paging::{FrameAllocator, Mapper, Page, PageSize, PageTableFlags, Size4KiB},
-    VirtAddr,
 };
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -1266,7 +1266,7 @@ mod tests {
         let ctx = mgr.enter_userspace(pid).unwrap();
         assert!(ctx.is_user_mode());
         let ctx = ctx.clone(); // Borrow-Ende: handle_syscall nimmt &mut self
-                               // 3. Handle syscalls
+        // 3. Handle syscalls
         let rsp = mgr.handle_syscall(pid, 1, &[]).unwrap();
         assert!(rsp > 0);
         // 4. Check memory

@@ -526,7 +526,7 @@ impl VmEngine {
                     logs: vec![],
                     storage_changes: vec![],
                     error: Some(VmError::StorageError("Contract not found".into())),
-                }
+                };
             }
         };
         let gas = gas_limit.unwrap_or(self.default_gas);

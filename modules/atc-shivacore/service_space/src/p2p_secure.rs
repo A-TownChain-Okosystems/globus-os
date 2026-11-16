@@ -29,7 +29,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::p2p::{MessageType, P2pMessage, P2pNode, CHAIN_ID};
+use crate::p2p::{CHAIN_ID, MessageType, P2pMessage, P2pNode};
 use shivacore::security::TokenBucket;
 
 /// Parsed HELLO payload: (protocol version, supported extensions, node id).

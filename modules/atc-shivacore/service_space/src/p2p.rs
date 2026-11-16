@@ -14,10 +14,10 @@ use alloc::vec;
 use alloc::vec::Vec;
 use spin::Mutex;
 
-use crate::net::{Ipv4Address, MacAddress, NetworkError, NetworkStack, ETH_TYPE_IPV4};
+use crate::net::{ETH_TYPE_IPV4, Ipv4Address, MacAddress, NetworkError, NetworkStack};
 use crate::tcpip::{
-    Ipv4Packet, SocketId, SocketManager, TcpSegment, TcpState, UdpPacket, IP_PROTO_TCP,
-    IP_PROTO_UDP,
+    IP_PROTO_TCP, IP_PROTO_UDP, Ipv4Packet, SocketId, SocketManager, TcpSegment, TcpState,
+    UdpPacket,
 };
 
 // ─── Chain-ID ───────────────────────────────────────────────────────────────

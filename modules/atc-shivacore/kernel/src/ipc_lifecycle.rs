@@ -162,7 +162,10 @@ impl ChannelRegistry {
 
     /// Senden im Live-Pfad: Kanal offen, Absender Teilnehmer, Platz im Puffer.
     pub fn send(&mut self, pid: Pid, id: u64, payload: u64) -> Result<(), LiveIpcError> {
-        let state = self.channels.get_mut(&id).ok_or(LiveIpcError::UnknownChannel)?;
+        let state = self
+            .channels
+            .get_mut(&id)
+            .ok_or(LiveIpcError::UnknownChannel)?;
         if state.closed {
             return Err(LiveIpcError::Closed);
         }
@@ -178,7 +181,10 @@ impl ChannelRegistry {
 
     /// Empfangen im Live-Pfad: Kanal offen, Empfaenger Teilnehmer, Nachricht da.
     pub fn recv(&mut self, pid: Pid, id: u64) -> Result<u64, LiveIpcError> {
-        let state = self.channels.get_mut(&id).ok_or(LiveIpcError::UnknownChannel)?;
+        let state = self
+            .channels
+            .get_mut(&id)
+            .ok_or(LiveIpcError::UnknownChannel)?;
         if state.closed {
             return Err(LiveIpcError::Closed);
         }
@@ -371,8 +377,7 @@ impl ChannelRegistry {
             return false;
         }
         self.double_close_blocked += 1;
-        self.double_close_blocked
-            == self.double_close_blocked // immer wahr; Zaehler ist der Beleg
+        self.double_close_blocked == self.double_close_blocked // immer wahr; Zaehler ist der Beleg
     }
 
     pub fn double_close_blocked(&self) -> usize {
@@ -388,7 +393,11 @@ impl ChannelRegistry {
             .values()
             .filter(|state| state.participants.len() > 1)
             .count();
-        let messages = self.channels.values().map(|state| state.pending.len()).sum();
+        let messages = self
+            .channels
+            .values()
+            .map(|state| state.pending.len())
+            .sum();
         (self.channels.len(), shared, messages)
     }
 }
@@ -745,7 +754,10 @@ mod tests {
         let mut reg = ChannelRegistry::new();
         reg.open(0x43, pid(1));
         reg.release(pid(1));
-        assert!(!reg.attach(0x43, pid(2)), "toter Kanal nimmt niemanden mehr auf");
+        assert!(
+            !reg.attach(0x43, pid(2)),
+            "toter Kanal nimmt niemanden mehr auf"
+        );
         assert!(!reg.deliver(0x43, 7));
         assert_eq!(reg.device_drops(), 1);
     }
@@ -758,7 +770,10 @@ mod tests {
         reg.send(pid(1), 0x44, 11).unwrap();
         let report = reg.release(pid(1));
         assert_eq!(report.messages_discarded, 1);
-        assert_eq!(reg.send(pid(1), 0x44, 12), Err(LiveIpcError::UnknownChannel));
+        assert_eq!(
+            reg.send(pid(1), 0x44, 12),
+            Err(LiveIpcError::UnknownChannel)
+        );
     }
 
     #[test]
@@ -795,7 +810,10 @@ mod tests {
     fn ingress(n: u64) -> crate::input_queue::InputQueue {
         let mut queue = crate::input_queue::InputQueue::new();
         for i in 0..n {
-            queue.push(crate::input_queue::InputEvent::new(0x1E + i as u8, Some('a')));
+            queue.push(crate::input_queue::InputEvent::new(
+                0x1E + i as u8,
+                Some('a'),
+            ));
         }
         queue
     }
@@ -823,7 +841,10 @@ mod tests {
         let mut queue = ingress(2);
         let guard = CHANNELS.lock();
         let report = pump_from_ingress(&mut queue, 0x51, 8);
-        assert!(report.busy, "belegte Sperre wird gemeldet, nicht abgewartet");
+        assert!(
+            report.busy,
+            "belegte Sperre wird gemeldet, nicht abgewartet"
+        );
         assert_eq!(report.pumped, 0);
         assert_eq!(queue.len(), 2, "nichts entnommen, nichts verloren");
         drop(guard);
@@ -873,7 +894,10 @@ mod tests {
         let report = CHANNELS.lock().release(pid(1));
         assert_eq!((report.destroyed, report.released), (0, 1));
         assert_eq!(CHANNELS.lock().recv(pid(2), 0x53), Ok(0xAA));
-        assert_eq!(CHANNELS.lock().recv(pid(1), 0x53), Err(LiveIpcError::NotParticipant));
+        assert_eq!(
+            CHANNELS.lock().recv(pid(1), 0x53),
+            Err(LiveIpcError::NotParticipant)
+        );
     }
 
     #[test]

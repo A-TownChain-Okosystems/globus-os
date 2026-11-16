@@ -711,11 +711,7 @@ impl DhcpPool {
     pub fn capacity(&self) -> u64 {
         let s = self.start.to_u32();
         let e = self.end.to_u32();
-        if e >= s {
-            (e - s + 1) as u64
-        } else {
-            0
-        }
+        if e >= s { (e - s + 1) as u64 } else { 0 }
     }
     pub fn allocate(&mut self, cid: u32) -> Option<Ipv4Addr> {
         let s = self.start.to_u32();
@@ -1801,10 +1797,11 @@ mod tests {
                 .prefix_len,
             24
         );
-        assert!(ns
-            .lookup_route(Ipv4Addr::new(8, 8, 8, 8))
-            .unwrap()
-            .is_default());
+        assert!(
+            ns.lookup_route(Ipv4Addr::new(8, 8, 8, 8))
+                .unwrap()
+                .is_default()
+        );
     }
     #[test]
     fn t_ns_remove_route() {
@@ -2371,9 +2368,10 @@ mod tests {
         let ns = m.create_namespace("t", 1);
         assert!(m.firewall_chains.contains_key(&(ns, FirewallChain::Input)));
         assert!(m.firewall_chains.contains_key(&(ns, FirewallChain::Output)));
-        assert!(m
-            .firewall_chains
-            .contains_key(&(ns, FirewallChain::Forward)));
+        assert!(
+            m.firewall_chains
+                .contains_key(&(ns, FirewallChain::Forward))
+        );
     }
     #[test]
     fn t_cnm_bridge() {
@@ -2429,11 +2427,13 @@ mod tests {
     fn t_cnm_fw_add() {
         let mut m = ContainerNetManager::new();
         let ns = m.create_namespace("c", 1000);
-        assert!(m.add_firewall_rule(
-            FirewallRule::accept(ns, FirewallChain::Input)
-                .with_protocol(Protocol::Tcp)
-                .with_dst_port(80)
-        ));
+        assert!(
+            m.add_firewall_rule(
+                FirewallRule::accept(ns, FirewallChain::Input)
+                    .with_protocol(Protocol::Tcp)
+                    .with_dst_port(80)
+            )
+        );
         assert_eq!(m.total_firewall_rules(), 1);
     }
     #[test]
@@ -2822,9 +2822,10 @@ mod tests {
     #[test]
     fn t_veth_err_no_ns() {
         let mut m = ContainerNetManager::new();
-        assert!(m
-            .create_veth_pair(NetNsId(99), NetNsId(98), "v", "e", None)
-            .is_err());
+        assert!(
+            m.create_veth_pair(NetNsId(99), NetNsId(98), "v", "e", None)
+                .is_err()
+        );
     }
     #[test]
     fn t_fw_log_prefix() {

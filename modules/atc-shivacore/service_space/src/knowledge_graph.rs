@@ -989,15 +989,16 @@ mod tests {
             .unwrap();
 
         // pid(1) kann auf Alice schreiben, nicht auf Bob
-        assert!(kg
-            .add_triple(
+        assert!(
+            kg.add_triple(
                 &caps,
                 pid(1),
                 alice,
                 Predicate("name".to_string()),
                 ObjectValue::String("A".to_string())
             )
-            .is_ok());
+            .is_ok()
+        );
         assert_eq!(
             kg.add_triple(
                 &caps,
@@ -1010,15 +1011,16 @@ mod tests {
         );
 
         // pid(2) kann auf Bob schreiben, nicht auf Alice
-        assert!(kg
-            .add_triple(
+        assert!(
+            kg.add_triple(
                 &caps,
                 pid(2),
                 bob,
                 Predicate("name".to_string()),
                 ObjectValue::String("B".to_string())
             )
-            .is_ok());
+            .is_ok()
+        );
         assert_eq!(
             kg.add_triple(
                 &caps,

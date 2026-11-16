@@ -22,8 +22,8 @@ use alloc::vec;
 use alloc::vec::Vec;
 
 use crate::genesis::{
-    GenesisAllocation, GenesisBlock, GenesisBuilder, GenesisConfig, GenesisError, GenesisValidator,
-    LockType, GENESIS_CHAIN_ID,
+    GENESIS_CHAIN_ID, GenesisAllocation, GenesisBlock, GenesisBuilder, GenesisConfig, GenesisError,
+    GenesisValidator, LockType,
 };
 use crate::genesis_bridge::{
     BridgeBlock, BridgeBlockChain, BridgeChainError, BridgePoh, BridgeValidatorRegistry,

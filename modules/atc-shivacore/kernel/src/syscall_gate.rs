@@ -17,7 +17,7 @@ use crate::ats1000::Pid;
 use crate::cap_authority::CapabilityAuthority;
 use crate::capability::{CapId, CapabilityTable, ResourceType, Rights};
 use crate::input_queue::InputQueue;
-use crate::security::{record, set_audit_clock, AuditResult};
+use crate::security::{AuditResult, record, set_audit_clock};
 use crate::syscall::{SyscallDispatcher, SyscallRequest, SyscallResponse};
 
 /// Dispatcher + Capability-Tabelle als eine Einheit.
@@ -57,11 +57,7 @@ impl SyscallGate {
     }
 
     /// Ein Syscall vom Userspace: Dispatch inkl. Capability-Pruefung.
-    pub fn handle(
-        &mut self,
-        pid: Pid,
-        request: SyscallRequest,
-    ) -> SyscallResponse {
+    pub fn handle(&mut self, pid: Pid, request: SyscallRequest) -> SyscallResponse {
         // Der Takt, mit dem Audit-Eintraege versehen werden, kommt aus der
         // einzigen Zeitquelle des Kernels (Timer-Ticks).
         set_audit_clock(self.dispatcher.ticks());
@@ -71,7 +67,10 @@ impl SyscallGate {
             .dispatch(pid, request, &mut self.authority.lock());
         // Autorisierungsfehler sind sicherheitsrelevant: ein Prozess hat ein
         // Recht beansprucht, das ihm nicht gehoert.
-        if matches!(response.error, Some(libshivacore::AbiError::PermissionDenied)) {
+        if matches!(
+            response.error,
+            Some(libshivacore::AbiError::PermissionDenied)
+        ) {
             record(
                 "syscall-gate",
                 "authorization.denied",
@@ -190,20 +189,10 @@ mod tests {
     #[test]
     fn gate_time_only_moves_with_ticks() {
         let mut gate = SyscallGate::new();
-        let a = gate
-            .handle(
-                pid(1),
-                request(Syscall::MonotonicTime),
-            )
-            .value;
+        let a = gate.handle(pid(1), request(Syscall::MonotonicTime)).value;
         gate.on_tick();
         gate.on_tick();
-        let b = gate
-            .handle(
-                pid(1),
-                request(Syscall::MonotonicTime),
-            )
-            .value;
+        let b = gate.handle(pid(1), request(Syscall::MonotonicTime)).value;
         assert_eq!(b, a + 2, "zwei Ticks, zwei Schritte");
     }
 
@@ -230,20 +219,23 @@ mod tests {
         assert_eq!(revoked, 1);
         assert!(crate::security::recorded_events() >= before + 2);
         let entries = crate::security::KERNEL_AUDIT.entries();
-        let actions: alloc::vec::Vec<&str> =
-            entries.iter().map(|e| e.action.as_str()).collect();
+        let actions: alloc::vec::Vec<&str> = entries.iter().map(|e| e.action.as_str()).collect();
         assert!(actions.contains(&"capability.create"));
         assert!(actions.contains(&"capability.revoke_all"));
         assert!(crate::security::audit_chain_intact());
-        assert!(entries.iter().any(|e| e.resource.contains(&alloc::format!("{:?}", cap))));
+        assert!(
+            entries
+                .iter()
+                .any(|e| e.resource.contains(&alloc::format!("{:?}", cap)))
+        );
     }
 
     #[test]
     fn gate_records_authorization_denials() {
         let mut gate = SyscallGate::new();
-        let cap = gate
-            .capabilities_mut()
-            .create(pid(12), ResourceType::IpcChannel, 3, Rights::READ);
+        let cap =
+            gate.capabilities_mut()
+                .create(pid(12), ResourceType::IpcChannel, 3, Rights::READ);
         let req = SyscallRequest {
             capability: Some(CapabilityHandle(cap.0)),
             arg0: 3,
@@ -255,9 +247,12 @@ mod tests {
             Some(AbiError::PermissionDenied)
         );
         assert!(crate::security::recorded_events() > before);
-        assert!(crate::security::KERNEL_AUDIT
-            .entries()
-            .iter()
-            .any(|e| e.action == "authorization.denied" && e.result == crate::security::AuditResult::Denied));
+        assert!(
+            crate::security::KERNEL_AUDIT
+                .entries()
+                .iter()
+                .any(|e| e.action == "authorization.denied"
+                    && e.result == crate::security::AuditResult::Denied)
+        );
     }
 }

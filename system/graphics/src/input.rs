@@ -57,10 +57,7 @@ pub struct Modifiers {
 /// Ein Eingabeereignis.
 pub enum InputEvent {
     /// Der Zeiger hat sich bewegt.
-    PointerMove {
-        x: i32,
-        y: i32,
-    },
+    PointerMove { x: i32, y: i32 },
     /// Eine Maustaste wurde gedrueckt oder losgelassen.
     PointerButton {
         button: Button,
@@ -75,10 +72,7 @@ pub enum InputEvent {
         modifiers: Modifiers,
     },
     /// Das Scrollrad wurde bewegt.
-    Scroll {
-        delta_x: i32,
-        delta_y: i32,
-    },
+    Scroll { delta_x: i32, delta_y: i32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

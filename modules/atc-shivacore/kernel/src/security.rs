@@ -666,7 +666,13 @@ pub static KERNEL_AUDIT: AuditLog = AuditLog::new();
 /// Zeichnet ein Kernel-Ereignis mit dem aktuellen Takt auf.
 pub fn record(actor: &str, action: &str, resource: &str, result: AuditResult) {
     let ticks = AUDIT_CLOCK.load(core::sync::atomic::Ordering::Relaxed);
-    KERNEL_AUDIT.log(ticks, actor.to_string(), action.to_string(), resource.to_string(), result);
+    KERNEL_AUDIT.log(
+        ticks,
+        actor.to_string(),
+        action.to_string(),
+        resource.to_string(),
+        result,
+    );
 }
 
 /// Anzahl der Audit-Eintraege im kernelweiten Log.

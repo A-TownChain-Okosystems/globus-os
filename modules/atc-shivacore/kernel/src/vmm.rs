@@ -700,11 +700,13 @@ mod tests {
     #[test]
     fn user_mapping_inside_exact_interval_is_allowed() {
         assert!(validate_mapping_target(USER_SPACE_BASE, MappingFlags::user_read_only()).is_ok());
-        assert!(validate_mapping_target(
-            USER_SPACE_TOP_EXCLUSIVE - PAGE_SIZE,
-            MappingFlags::user_read_only()
-        )
-        .is_ok());
+        assert!(
+            validate_mapping_target(
+                USER_SPACE_TOP_EXCLUSIVE - PAGE_SIZE,
+                MappingFlags::user_read_only()
+            )
+            .is_ok()
+        );
     }
 
     #[test]
@@ -1015,13 +1017,15 @@ mod tests {
         );
         assert_eq!(backend.outstanding, 0);
         // HHDM + kernel_rw_nx → erlaubt
-        assert!(HardwareMapper::new(pml4, &mut backend)
-            .map_page(
-                HHDM_BASE,
-                PhysFrame::new(0x9000).unwrap(),
-                MappingFlags::kernel_rw_nx()
-            )
-            .is_ok());
+        assert!(
+            HardwareMapper::new(pml4, &mut backend)
+                .map_page(
+                    HHDM_BASE,
+                    PhysFrame::new(0x9000).unwrap(),
+                    MappingFlags::kernel_rw_nx()
+                )
+                .is_ok()
+        );
         assert_eq!(
             HardwareMapper::new(pml4, &mut backend)
                 .translate(HHDM_BASE)
@@ -1298,26 +1302,28 @@ mod tests {
             global: false,
             cache_disable: false,
         };
-        assert!(vmm
-            .map_owned(
+        assert!(
+            vmm.map_owned(
                 &mut backend,
                 USER_SPACE_BASE,
                 PhysFrame::new(0x9000).unwrap(),
                 wx
             )
-            .is_err());
+            .is_err()
+        );
         assert_eq!(vmm.mapping_count(), 0);
         assert_eq!(backend.outstanding, 0);
 
         // Kernel-Adresse mit User-Flags: likewise.
-        assert!(vmm
-            .map_owned(
+        assert!(
+            vmm.map_owned(
                 &mut backend,
                 HHDM_BASE,
                 PhysFrame::new(0x9000).unwrap(),
                 MappingFlags::user_read_only()
             )
-            .is_err());
+            .is_err()
+        );
         assert_eq!(vmm.mapping_count(), 0);
         assert_eq!(backend.outstanding, 0);
     }

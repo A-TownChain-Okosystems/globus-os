@@ -123,21 +123,33 @@ mod tests {
     fn unbekannter_name_wird_abgelehnt() {
         let image = ramdisk::build(&[("init", &[0x7f, b'E', b'L', b'F'])]).expect("Verzeichnis");
         let entries = ramdisk::parse(&image).expect("lesbar");
-        assert_eq!(plan(&entries, &image, &field("probe")), Err(SpawnError::NotFound));
+        assert_eq!(
+            plan(&entries, &image, &field("probe")),
+            Err(SpawnError::NotFound)
+        );
     }
 
     #[test]
     fn nicht_elf_wird_abgelehnt() {
         let image = ramdisk::build(&[("probe", &[1, 2, 3, 4])]).expect("Verzeichnis");
         let entries = ramdisk::parse(&image).expect("lesbar");
-        assert_eq!(plan(&entries, &image, &field("probe")), Err(SpawnError::NotExecutable));
+        assert_eq!(
+            plan(&entries, &image, &field("probe")),
+            Err(SpawnError::NotExecutable)
+        );
     }
 
     #[test]
     fn einstieg_ausserhalb_des_fensters_wird_abgelehnt() {
         let space = UserAddressSpace::default();
-        assert_eq!(validate_entry(0x2011c0, &space), Err(SpawnError::EntryOutsideWindow));
-        assert_eq!(validate_entry(0x500000, &space), Err(SpawnError::EntryOutsideWindow));
+        assert_eq!(
+            validate_entry(0x2011c0, &space),
+            Err(SpawnError::EntryOutsideWindow)
+        );
+        assert_eq!(
+            validate_entry(0x500000, &space),
+            Err(SpawnError::EntryOutsideWindow)
+        );
         assert_eq!(validate_entry(0x400000, &space), Ok(()));
     }
 
@@ -164,7 +176,12 @@ static LAST: Mutex<Option<Attempt>> = Mutex::new(None);
 /// (das Makro lebt im Binaer-Crate), die Protokollzeile schreibt der Kernel.
 pub fn note_attempt(pid: u64, plan: SpawnPlan, error: Option<SpawnError>) {
     let seq = SEQ.fetch_add(1, core::sync::atomic::Ordering::SeqCst) + 1;
-    *LAST.lock() = Some(Attempt { seq, pid, plan, error });
+    *LAST.lock() = Some(Attempt {
+        seq,
+        pid,
+        plan,
+        error,
+    });
 }
 
 /// Noch nicht protokollierte Entscheidung (genau einmal).
@@ -185,17 +202,28 @@ mod attempt_tests {
 
     #[test]
     fn entscheidung_wird_genau_einmal_gemeldet() {
-        let plan = SpawnPlan { name_len: 5, elf_len: 6608, entry: 0x400000 };
+        let plan = SpawnPlan {
+            name_len: 5,
+            elf_len: 6608,
+            entry: 0x400000,
+        };
         note_attempt(1000, plan, None);
         let first = take_unreported().expect("erste Meldung");
         assert_eq!(first.pid, 1000);
         assert!(first.error.is_none());
-        assert!(take_unreported().is_none(), "zweite Abfrage darf nichts liefern");
+        assert!(
+            take_unreported().is_none(),
+            "zweite Abfrage darf nichts liefern"
+        );
     }
 
     #[test]
     fn ablehnung_traegt_ihren_grund() {
-        let plan = SpawnPlan { name_len: 0, elf_len: 0, entry: 0 };
+        let plan = SpawnPlan {
+            name_len: 0,
+            elf_len: 0,
+            entry: 0,
+        };
         note_attempt(1001, plan, Some(SpawnError::NotFound));
         let reported = take_unreported().expect("Meldung");
         assert_eq!(reported.error, Some(SpawnError::NotFound));

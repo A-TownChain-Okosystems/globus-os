@@ -51,27 +51,42 @@ mod tests {
 
     #[test]
     fn zeichen_passt_setzt_cursor_weiter() {
-        assert_eq!(naechste_position(0, 0, CW, CH, DS, 1280, 720), (8, 0, false));
+        assert_eq!(
+            naechste_position(0, 0, CW, CH, DS, 1280, 720),
+            (8, 0, false)
+        );
     }
 
     #[test]
     fn zeichen_am_rechten_rand_bricht_um() {
-        assert_eq!(naechste_position(1272, 0, CW, CH, DS, 1280, 720), (0, 18, false));
+        assert_eq!(
+            naechste_position(1272, 0, CW, CH, DS, 1280, 720),
+            (0, 18, false)
+        );
     }
 
     #[test]
     fn letzte_zeile_am_boden_fordert_scroll() {
-        assert_eq!(naechste_position(1272, 702, CW, CH, DS, 1280, 720), (0, 702, true));
+        assert_eq!(
+            naechste_position(1272, 702, CW, CH, DS, 1280, 720),
+            (0, 702, true)
+        );
     }
 
     #[test]
     fn vorletzte_zeile_bricht_noch_ohne_scroll_um() {
-        assert_eq!(naechste_position(1272, 684, CW, CH, DS, 1280, 720), (0, 702, false));
+        assert_eq!(
+            naechste_position(1272, 684, CW, CH, DS, 1280, 720),
+            (0, 702, false)
+        );
     }
 
     #[test]
     fn zeilenanfang_der_letzten_zeile_bleibt_stehen() {
-        assert_eq!(naechste_position(0, 702, CW, CH, DS, 1280, 720), (8, 702, false));
+        assert_eq!(
+            naechste_position(0, 702, CW, CH, DS, 1280, 720),
+            (8, 702, false)
+        );
     }
 
     #[test]

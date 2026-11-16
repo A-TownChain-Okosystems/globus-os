@@ -575,7 +575,12 @@ mod sc006_types {
     #[test]
     fn revoke_all_for_removes_owner_and_descendants() {
         let mut t = CapabilityTable::new();
-        let a = t.create(Pid(1), ResourceType::IpcChannel, 7, Rights::READ | Rights::DELEGATE);
+        let a = t.create(
+            Pid(1),
+            ResourceType::IpcChannel,
+            7,
+            Rights::READ | Rights::DELEGATE,
+        );
         let b = t.create(Pid(1), ResourceType::IpcChannel, 8, Rights::READ);
         let child = t
             .delegate(Pid(1), a, Pid(2), Rights::READ)

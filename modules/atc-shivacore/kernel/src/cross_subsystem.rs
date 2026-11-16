@@ -13,7 +13,7 @@ use alloc::format;
 use alloc::string::String;
 use alloc::vec::Vec;
 
-use crate::atcfs::{atc_content_id, AtcFileSystem, FsError};
+use crate::atcfs::{AtcFileSystem, FsError, atc_content_id};
 use crate::ats1000::{FileSystem, MemoryManager};
 use crate::capability::{CapabilityTable, ResourceType, Rights};
 use crate::ipc::{ChannelId, IpcError, IpcSubsystem, Message};
@@ -68,12 +68,14 @@ mod tests {
         assert_eq!(region.owner_pid, p1);
 
         // 3. Process should have capabilities for its memory
-        assert!(h
-            .caps
-            .check(p1, ResourceType::Memory, region.region_id, Rights::READ));
-        assert!(h
-            .caps
-            .check(p1, ResourceType::Memory, region.region_id, Rights::WRITE));
+        assert!(
+            h.caps
+                .check(p1, ResourceType::Memory, region.region_id, Rights::READ)
+        );
+        assert!(
+            h.caps
+                .check(p1, ResourceType::Memory, region.region_id, Rights::WRITE)
+        );
 
         // 4. Write a file on behalf of the process (takes capability::Pid)
         h.fs.write_file(&h.caps, "/tmp/process1.dat", b"process data", p1)
@@ -214,10 +216,11 @@ mod tests {
             .unwrap();
 
         // Now child can read parent's memory
-        assert!(h
-            .mem
-            .read_check(&h.caps, child, parent_mem.region_id)
-            .is_ok());
+        assert!(
+            h.mem
+                .read_check(&h.caps, child, parent_mem.region_id)
+                .is_ok()
+        );
 
         // But child still cannot write (only READ was delegated)
         assert_eq!(

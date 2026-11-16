@@ -33,7 +33,7 @@ use crate::ats1000::{FileSystem, MemoryManager};
 use crate::cap_authority::CapabilityAuthority;
 use crate::capability::CapabilityTable;
 use crate::ipc::IpcSubsystem;
-use crate::memory_manager::{MemorySubsystem, HEAP_END, HEAP_SIZE, HEAP_START};
+use crate::memory_manager::{HEAP_END, HEAP_SIZE, HEAP_START, MemorySubsystem};
 use crate::process::ProcessManager;
 use crate::scheduler::DaHeftScheduler;
 use crate::security::SecurityManager;

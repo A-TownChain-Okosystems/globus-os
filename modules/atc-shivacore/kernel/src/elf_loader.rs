@@ -1213,7 +1213,7 @@ mod tests {
         let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
         // Add a second program header for data segment
         let phdr2_off = 64 + 56; // After first Phdr
-                                 // Extend with data Phdr
+        // Extend with data Phdr
         elf.extend_from_slice(&[0u8; 56]);
         // p_type = PT_LOAD
         elf[phdr2_off..phdr2_off + 4].copy_from_slice(&PT_LOAD.to_le_bytes());

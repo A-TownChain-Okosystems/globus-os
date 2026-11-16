@@ -793,9 +793,10 @@ mod tests {
         let n = Arc::new(NonceTracker::new());
         s.deposit("a", 1000000);
         let v = TxValidator::new(s, n, 1);
-        assert!(v
-            .validate(&mk(TxType::Transfer, "a", Some("b"), 100, 0, 10, 50000))
-            .is_ok());
+        assert!(
+            v.validate(&mk(TxType::Transfer, "a", Some("b"), 100, 0, 10, 50000))
+                .is_ok()
+        );
     }
     #[test]
     fn test_val_gas_low() {
