@@ -439,10 +439,10 @@ impl SeenSet {
             return false;
         }
         self.order.push_back(id);
-        if self.order.len() > self.max {
-            if let Some(old) = self.order.pop_front() {
-                self.seen.remove(&old);
-            }
+        if self.order.len() > self.max
+            && let Some(old) = self.order.pop_front()
+        {
+            self.seen.remove(&old);
         }
         true
     }

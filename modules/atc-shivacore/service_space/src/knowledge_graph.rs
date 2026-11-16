@@ -200,22 +200,22 @@ impl KnowledgeGraph {
 
         for triple in &self.triples {
             // Subject-Match
-            if let Some(s) = &pattern.subject {
-                if &triple.subject != s {
-                    continue;
-                }
+            if let Some(s) = &pattern.subject
+                && &triple.subject != s
+            {
+                continue;
             }
             // Predicate-Match
-            if let Some(p) = &pattern.predicate {
-                if triple.predicate.0 != *p {
-                    continue;
-                }
+            if let Some(p) = &pattern.predicate
+                && triple.predicate.0 != *p
+            {
+                continue;
             }
             // Object-Match
-            if let Some(o) = &pattern.object {
-                if &triple.object != o {
-                    continue;
-                }
+            if let Some(o) = &pattern.object
+                && &triple.object != o
+            {
+                continue;
             }
 
             // Capability-Check: Caller braucht READ auf Subject
@@ -288,13 +288,12 @@ impl KnowledgeGraph {
 
                 let out = self.outgoing(caps, caller, node);
                 for t in out {
-                    if t.predicate.0 == predicate {
-                        if let ObjectValue::Entity(target) = t.object {
-                            if !visited.contains(&target) {
-                                result.push(target);
-                                next_frontier.push(target);
-                            }
-                        }
+                    if t.predicate.0 == predicate
+                        && let ObjectValue::Entity(target) = t.object
+                        && !visited.contains(&target)
+                    {
+                        result.push(target);
+                        next_frontier.push(target);
                     }
                 }
             }
