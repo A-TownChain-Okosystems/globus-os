@@ -553,6 +553,17 @@ mod tests {
         assert_eq!(request.buffer_len, 0);
     }
 
+    /// Kanal 1 ist global und ueberlebt einzelne Tests. Ohne Zuruecksetzen
+    /// entscheidet die Testreihenfolge ueber das Ergebnis: ein Test, der ein
+    /// Ereignis absichtlich liegen laesst, vergiftet jeden folgenden.
+    fn leerer_eingabekanal(kapazitaet: usize) {
+        let mut channels = crate::ipc_lifecycle::CHANNELS.lock();
+        if channels.contains(KERNEL_INPUT_CHANNEL) {
+            channels.close(KERNEL_INPUT_CHANNEL, pid(1));
+        }
+        channels.open_with(KERNEL_INPUT_CHANNEL, pid(1), kapazitaet);
+    }
+
     #[test]
     fn kernel_input_channel_hands_out_the_next_event() {
         let _serial = KANAL_EINS.lock();
@@ -565,9 +576,7 @@ mod tests {
             KERNEL_INPUT_CHANNEL,
             Rights::READ,
         );
-        crate::ipc_lifecycle::CHANNELS
-            .lock()
-            .open_with(KERNEL_INPUT_CHANNEL, pid(1), 8);
+        leerer_eingabekanal(8);
         crate::ipc_lifecycle::CHANNELS
             .lock()
             .attach(KERNEL_INPUT_CHANNEL, pid(1));
@@ -609,9 +618,7 @@ mod tests {
             KERNEL_INPUT_CHANNEL,
             Rights::READ,
         );
-        crate::ipc_lifecycle::CHANNELS
-            .lock()
-            .open_with(KERNEL_INPUT_CHANNEL, pid(1), 4);
+        leerer_eingabekanal(4);
         let r = d.dispatch(
             pid(1),
             SyscallRequest {
@@ -641,9 +648,7 @@ mod tests {
             KERNEL_INPUT_CHANNEL,
             Rights::READ,
         );
-        crate::ipc_lifecycle::CHANNELS
-            .lock()
-            .open_with(KERNEL_INPUT_CHANNEL, pid(1), 8);
+        leerer_eingabekanal(8);
         crate::ipc_lifecycle::CHANNELS
             .lock()
             .attach(KERNEL_INPUT_CHANNEL, pid(1));
