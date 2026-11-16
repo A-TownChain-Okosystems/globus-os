@@ -13,10 +13,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      # Aktuelles Rust Stable (MSRV 1.100, deklariert in jeder Cargo.toml).
+      # Nightly bleibt allein dem Kernel-Boot-Image vorbehalten (build-std).
+      - uses: dtolnay/rust-toolchain@stable
         with:
           targets: x86_64-unknown-uefi
-          components: rustfmt, clippy, rust-src, llvm-tools-preview
+          components: rustfmt, clippy
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Build workspace

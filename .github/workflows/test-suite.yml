@@ -14,9 +14,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@nightly
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt, clippy, rust-src, llvm-tools-preview
+          components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
@@ -29,7 +29,7 @@ jobs:
               continue
             fi
             echo "=== cargo test in $d"
-            if ! (cd "$d" && cargo +nightly test --quiet); then
+            if ! (cd "$d" && cargo test --quiet); then
               echo "cargo test FAILED in $d"
               FAIL=1
             fi
