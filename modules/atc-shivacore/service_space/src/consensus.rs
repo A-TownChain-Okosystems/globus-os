@@ -790,13 +790,13 @@ mod tests {
     #[test]
     fn test_dag_multiple_parents() {
         let engine = setup();
-        let gen = engine.init_genesis(1000).unwrap();
+        let genesis = engine.init_genesis(1000).unwrap();
 
         // Zwei Vertices parallel zu Genesis (manual parents for parallelism)
         let poh1 = engine.poh().record(1100, &[0x11; 32]);
         let v1_vert = DagVertex::new(
             VertexType::Transaction,
-            vec![gen],
+            vec![genesis],
             engine.our_did().to_string(),
             1100,
             poh1.hash,
@@ -808,7 +808,7 @@ mod tests {
         let poh2 = engine.poh().record(1200, &[0x22; 32]);
         let v2_vert = DagVertex::new(
             VertexType::Transaction,
-            vec![gen],
+            vec![genesis],
             engine.our_did().to_string(),
             1200,
             poh2.hash,
@@ -870,11 +870,11 @@ mod tests {
     #[test]
     fn test_dag_get_children() {
         let engine = setup();
-        let gen = engine.init_genesis(1000).unwrap();
+        let genesis = engine.init_genesis(1000).unwrap();
         engine.propose_vertex([0x11; 32], 1100, [0; 64]).unwrap();
         engine.propose_vertex([0x22; 32], 1200, [0; 64]).unwrap();
 
-        let children = engine.dag().get_children(&gen);
+        let children = engine.dag().get_children(&genesis);
         assert_eq!(children.len(), 1);
     }
 
@@ -1040,7 +1040,7 @@ mod tests {
         let engine = setup();
 
         // 1. Init Genesis
-        let gen = engine.init_genesis(1000).unwrap();
+        let genesis = engine.init_genesis(1000).unwrap();
 
         // 2. Register validators
         engine.validators().register("did:validator1".into(), 100);
