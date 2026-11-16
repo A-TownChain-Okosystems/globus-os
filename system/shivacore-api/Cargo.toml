@@ -1,6 +1,7 @@
 [package]
 name = "libshivacore"
 version.workspace = true
+rust-version.workspace = true
 edition.workspace = true
 license.workspace = true
 description = "Stable ShivaCore userspace ABI: syscalls, capabilities, IPC and handles"

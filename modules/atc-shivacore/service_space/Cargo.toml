@@ -1,7 +1,8 @@
 [package]
 name = "shivacore-service-space"
 version = "0.1.0"
-edition = "2021"
+rust-version = "1.100"
+edition = "2024"
 description = "ShivaCore Service Space — Blockchain/Consensus/Genesis/Gossip/DID/RemoteCaps/KnowledgeGraph/SecurityAudit (AD-012/AD-028)"
 
 [lib]

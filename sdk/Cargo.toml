@@ -1,7 +1,8 @@
 [package]
 name="globus-os-sdk"
 version="0.1.0"
-edition="2021"
+rust-version = "1.100"
+edition = "2024"
 license="Apache-2.0"
 [dependencies]
 serde={version="1",features=["derive"]}

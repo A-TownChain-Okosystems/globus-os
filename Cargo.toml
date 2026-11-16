@@ -15,6 +15,9 @@ members = [
 [workspace.package]
 version = "0.1.0"
 edition = "2024"
+# Aktuelles Rust Stable (1.100.0, 09.11.2026). Edition 2024 verlangt >= 1.85,
+# aurora-core und seine Abhaengigkeiten >= 1.89; ab hier ist Stable die Basis.
+rust-version = "1.100"
 license = "Apache-2.0"
 repository = "https://github.com/A-TownChain-Okosystems/globus-os"
 [workspace.lints.rust]
