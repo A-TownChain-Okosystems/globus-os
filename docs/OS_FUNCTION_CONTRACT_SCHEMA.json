@@ -1,0 +1,66 @@
+{
+  "schema_version": "1.0.0",
+  "catalog_id": "ATC-OS-FUNCTION-CONTRACT-SCHEMA-001",
+  "purpose": "Normative machine-readable contract schema for every GlobusOS OS function. This schema defines required contract fields; it does not assert implementation or verification.",
+  "contract_status_values": [
+    "SPECIFIED",
+    "INCOMPLETE",
+    "BLOCKED",
+    "IMPLEMENTED",
+    "TESTED",
+    "CI-VERIFIED",
+    "E2E-VERIFIED",
+    "AUDITED",
+    "RELEASE-READY"
+  ],
+  "traceability_values": [
+    "COMPLETE",
+    "PARTIAL",
+    "INCOMPLETE",
+    "BROKEN"
+  ],
+  "source_binding_identity": [
+    "repository",
+    "exact_head_sha",
+    "path",
+    "blob_sha",
+    "symbol_kind",
+    "symbol_name"
+  ],
+  "required_function_fields": {
+    "id": "Stable ATC-FUNC-OS-* identifier; immutable once published.",
+    "domain": "Canonical OS subsystem domain.",
+    "function": "Short, unique function name.",
+    "purpose": "Observable responsibility and explicit non-responsibilities.",
+    "owner_boundary": "Exactly one canonical implementation owner; consumers are listed separately.",
+    "priority": "P0, P1, or P2 with rationale.",
+    "inputs": "Typed input schema, validation constraints, caller identity and trust assumptions.",
+    "outputs": "Typed successful result and externally observable state changes.",
+    "preconditions": "Required system state and authorization context.",
+    "postconditions": "Guaranteed state after success; no partial mutation on failure unless specified.",
+    "invariants": "Safety, determinism, isolation, lifecycle and resource invariants.",
+    "errors": "Stable error codes, conditions, recovery behavior, and side-effect guarantees.",
+    "authorization": "Required principal, capability, policy decision, approval and fail-closed behavior.",
+    "concurrency": "Synchronization, ordering, cancellation and race semantics.",
+    "resource_limits": "Memory, handles, queue, time/gas and exhaustion behavior as applicable.",
+    "audit": "Security events, provenance fields, redaction and retention requirements.",
+    "interfaces": "Versioned API/ABI/IPC/syscall/event contracts and compatibility rules.",
+    "tests": "Positive, negative, boundary, fault-injection and property tests.",
+    "evidence": "Exact source SHA, blob SHA, tests, CI run/job/step, E2E and audit evidence.",
+    "source_binding": "Exact symbol binding; null only while discovery is incomplete.",
+    "status": "Evidence-backed lifecycle status; never inferred from name/path/docs alone.",
+    "traceability": "COMPLETE only when every required traceability edge is present.",
+    "residuals": "Explicit unresolved contract, source, test, hardware, security or governance gaps."
+  },
+  "rules": [
+    "No function may be marked IMPLEMENTED, TESTED, CI-VERIFIED, E2E-VERIFIED, AUDITED or RELEASE-READY without matching evidence.",
+    "Unknown or unavailable sources require explicit residual/exclusion records; no silent omissions.",
+    "A UI screen or setting is not a backend function unless it has a defined authoritative API/service contract.",
+    "ShivaCore TCB owns only kernel-authoritative mechanisms; networking, AI, wallet, chain tooling and UI remain service/platform boundaries unless architecture governance explicitly decides otherwise.",
+    "Consensus, cryptographic protocol, authorization and state-transition ambiguities are BLOCKED, not guessed.",
+    "Source binding is keyed by repository, exact HEAD SHA, path, blob SHA, symbol kind and symbol name.",
+    "Catalog completeness and implementation verification are separate gates."
+  ],
+  "status": "SPECIFICATION_BASELINE",
+  "implementation_claim": false
+}

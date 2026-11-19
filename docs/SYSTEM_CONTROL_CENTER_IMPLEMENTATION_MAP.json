@@ -1,0 +1,790 @@
+{
+  "schema_id": "ATC-GLOBUSOS-SYSTEM-CONTROL-CENTER-MAP-001",
+  "schema_version": "1.0.0-draft",
+  "status": "PROPOSED / NOT VERIFIED",
+  "owner_repository": "A-TownChain-Okosystems/globus-os",
+  "canonical_frontend_catalog": "docs/GLOBUSOS_FRONTEND_FUNCTION_CATALOG.json",
+  "cross_cutting_contract_registry": "https://github.com/A-TownChain-Okosystems/a-townchain-ecosystem/issues/191",
+  "source_branch": "audit/os-function-catalog-2026-09-27",
+  "purpose": "Map existing GlobusOS Control Center UI function IDs to the proposed SYSCTL contract families without claiming implementation or creating replacement IDs.",
+  "authority_rule": "Standalone First, Ecosystem Second. This map is an OS UI integration map only; canonical service implementations remain in their owning repositories.",
+  "counts": {
+    "component_families": 20,
+    "function_candidates_enumerated": 63,
+    "function_candidates_reported_by_ecosystem_issue_191": 68,
+    "unaccounted_candidate_count": 5,
+    "ui_catalog_ids_reused": true
+  },
+  "status_semantics": {
+    "UNRESOLVED": "Candidate name/mapping only; exact interface, authoritative source symbol, caller/adapter, tests and exact-SHA evidence are not all linked.",
+    "MAPPED": "Use only after source-to-catalog semantic equivalence is proven.",
+    "EXCLUDED": "Use only with explicit reason and no duplicate registration.",
+    "BLOCKED": "Required owner/interface/evidence is unavailable or a prerequisite is unmet."
+  },
+  "required_security_flow": [
+    "UI",
+    "GlobusOS API adapter",
+    "Identity",
+    "Capability",
+    "Policy",
+    "Validation",
+    "Authoritative service/state",
+    "Audit"
+  ],
+  "common_error_codes": [
+    "INVALID_INPUT",
+    "UNAUTHENTICATED",
+    "PERMISSION_DENIED",
+    "POLICY_DENIED",
+    "APPROVAL_REQUIRED",
+    "CONFLICT",
+    "UNAVAILABLE",
+    "TIMEOUT",
+    "INTEGRITY_FAILURE",
+    "PARTIAL_FAILURE",
+    "INTERNAL_ERROR"
+  ],
+  "acceptance_gates": [
+    "Preserve existing ATC-FUNC-OS-UI-* IDs; no renumbering.",
+    "Every candidate has typed inputs, outputs, error semantics, preconditions, postconditions and versioning policy before implementation.",
+    "Every mutating path checks canonical identity/capability/policy and writes an auditable result.",
+    "Missing telemetry is not reported as zero; requested state is distinguished from observed state.",
+    "Privileged kernel, TPM/TEE, wallet signing, consensus and ATC-VM state transitions cannot be bypassed through UI or middleware.",
+    "Source binding requires exact 40-character commit SHA, path, symbol and blob SHA.",
+    "Verification requires Run -> Job -> Step -> terminal conclusion/exit code and log/artifact evidence.",
+    "No catalog status is promoted from UI presence, source-name similarity or green CI alone."
+  ],
+  "components": [
+    {
+      "component_id": "SYSCTL-001",
+      "component_name": "System dashboard",
+      "layer": "L1",
+      "sub_layer": "Status aggregation",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SYSTEM-001",
+        "ATC-FUNC-OS-UI-ADMIN-096"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_system_overview",
+          "signature_candidate": "get_system_overview()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_system_health",
+          "signature_candidate": "get_system_health()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_system_uptime",
+          "signature_candidate": "get_system_uptime()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Runtime status is only a candidate source; full health and uptime contracts remain unverified."
+    },
+    {
+      "component_id": "SYSCTL-002",
+      "component_name": "Configuration management",
+      "layer": "L2",
+      "sub_layer": "Settings API adapter",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-ADMIN-094",
+        "ATC-FUNC-OS-UI-PERSONAL-012",
+        "ATC-FUNC-OS-UI-SYSTEM-009"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_config",
+          "signature_candidate": "get_config()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "validate_config",
+          "signature_candidate": "validate_config()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "apply_config",
+          "signature_candidate": "apply_config()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "rollback_config",
+          "signature_candidate": "rollback_config()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Do not claim atomic apply or rollback without authoritative service guarantees."
+    },
+    {
+      "component_id": "SYSCTL-003",
+      "component_name": "User management",
+      "layer": "L2",
+      "sub_layer": "Identity/session adapter",
+      "canonical_owner": "globus-os + canonical identity service",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-ADMIN-092",
+        "ATC-FUNC-OS-UI-PERSONAL-011"
+      ],
+      "function_candidates": [
+        {
+          "name": "list_users",
+          "signature_candidate": "list_users()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_user_permissions",
+          "signature_candidate": "get_user_permissions()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "manage_user_sessions",
+          "signature_candidate": "manage_user_sessions()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Do not create a second identity/session store."
+    },
+    {
+      "component_id": "SYSCTL-004",
+      "component_name": "Identity and access control",
+      "layer": "L2",
+      "sub_layer": "Authorization adapter",
+      "canonical_owner": "globus-os canonical security services",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SEC-019",
+        "ATC-FUNC-OS-UI-SEC-021",
+        "ATC-FUNC-OS-UI-SEC-022"
+      ],
+      "function_candidates": [
+        {
+          "name": "authenticate_admin",
+          "signature_candidate": "authenticate_admin()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "authorize_action",
+          "signature_candidate": "authorize_action()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "check_capability",
+          "signature_candidate": "check_capability()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Existing security primitives are not equivalent to a complete Control Center adapter."
+    },
+    {
+      "component_id": "SYSCTL-005",
+      "component_name": "Security management",
+      "layer": "L2",
+      "sub_layer": "Security posture view",
+      "canonical_owner": "globus-os + canonical ShivaCore/boot evidence",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SEC-018",
+        "ATC-FUNC-OS-UI-SEC-024",
+        "ATC-FUNC-OS-UI-TRUST-002"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_security_status",
+          "signature_candidate": "get_security_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_secure_boot_status",
+          "signature_candidate": "get_secure_boot_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_policy_status",
+          "signature_candidate": "get_policy_status()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Secure Boot remains blocked/not verified until reproducible boot evidence exists."
+    },
+    {
+      "component_id": "SYSCTL-006",
+      "component_name": "Service management",
+      "layer": "L2",
+      "sub_layer": "Service lifecycle API",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-MGMT-031",
+        "ATC-FUNC-OS-UI-ADMIN-093"
+      ],
+      "function_candidates": [
+        {
+          "name": "list_services",
+          "signature_candidate": "list_services()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_service_status",
+          "signature_candidate": "get_service_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "start_service",
+          "signature_candidate": "start_service()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "stop_service",
+          "signature_candidate": "stop_service()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Service model/boot order does not prove a complete operational supervisor."
+    },
+    {
+      "component_id": "SYSCTL-007",
+      "component_name": "Resource management",
+      "layer": "L2",
+      "sub_layer": "Telemetry aggregation",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-ADMIN-095",
+        "ATC-FUNC-OS-UI-ADMIN-096"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_cpu_usage",
+          "signature_candidate": "get_cpu_usage()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_memory_usage",
+          "signature_candidate": "get_memory_usage()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_storage_usage",
+          "signature_candidate": "get_storage_usage()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Distinguish missing/stale telemetry from a numeric zero."
+    },
+    {
+      "component_id": "SYSCTL-008",
+      "component_name": "Device management",
+      "layer": "L2",
+      "sub_layer": "Device and driver status",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SYSTEM-005",
+        "ATC-FUNC-OS-UI-SYSTEM-006",
+        "ATC-FUNC-OS-UI-MGMT-033"
+      ],
+      "function_candidates": [
+        {
+          "name": "list_devices",
+          "signature_candidate": "list_devices()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_device_status",
+          "signature_candidate": "get_device_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_driver_status",
+          "signature_candidate": "get_driver_status()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Device data models do not prove live hardware telemetry."
+    },
+    {
+      "component_id": "SYSCTL-009",
+      "component_name": "Network management",
+      "layer": "L2",
+      "sub_layer": "Network settings adapter",
+      "canonical_owner": "globus-os; A-TownChain only for chain peer status",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SYSTEM-004",
+        "ATC-FUNC-OS-UI-ATC-055"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_network_status",
+          "signature_candidate": "get_network_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_interface_config",
+          "signature_candidate": "get_interface_config()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "validate_network_config",
+          "signature_candidate": "validate_network_config()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Separate OS interface configuration from blockchain peer/network status."
+    },
+    {
+      "component_id": "SYSCTL-010",
+      "component_name": "Update management",
+      "layer": "L2",
+      "sub_layer": "Update and recovery adapter",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-MGMT-034",
+        "ATC-FUNC-OS-UI-MGMT-035",
+        "ATC-FUNC-OS-UI-TRUST-008"
+      ],
+      "function_candidates": [
+        {
+          "name": "check_updates",
+          "signature_candidate": "check_updates()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "verify_update_signature",
+          "signature_candidate": "verify_update_signature()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "stage_update",
+          "signature_candidate": "stage_update()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "rollback_update",
+          "signature_candidate": "rollback_update()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "A state machine/order check is not proof of cryptographic signature verification or end-to-end recovery."
+    },
+    {
+      "component_id": "SYSCTL-011",
+      "component_name": "Diagnostics and logs",
+      "layer": "L2",
+      "sub_layer": "Diagnostic query/export",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-MGMT-038",
+        "ATC-FUNC-OS-UI-DEV-076"
+      ],
+      "function_candidates": [
+        {
+          "name": "collect_diagnostics",
+          "signature_candidate": "collect_diagnostics()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "query_logs",
+          "signature_candidate": "query_logs()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "export_diagnostic_report",
+          "signature_candidate": "export_diagnostic_report()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Redact secrets and distinguish structured events from general log query/export."
+    },
+    {
+      "component_id": "SYSCTL-012",
+      "component_name": "Event and audit management",
+      "layer": "L2",
+      "sub_layer": "Audit query and integrity",
+      "canonical_owner": "globus-os + authoritative audit sources",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SEC-028",
+        "ATC-FUNC-OS-UI-SEC-029",
+        "ATC-FUNC-OS-UI-ADMIN-099",
+        "ATC-FUNC-OS-UI-TRUST-009"
+      ],
+      "function_candidates": [
+        {
+          "name": "query_audit_events",
+          "signature_candidate": "query_audit_events()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "verify_audit_integrity",
+          "signature_candidate": "verify_audit_integrity()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "export_audit_evidence",
+          "signature_candidate": "export_audit_evidence()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Append-only/tamper-evident semantics and integrity verification must be evidenced."
+    },
+    {
+      "component_id": "SYSCTL-013",
+      "component_name": "Storage management",
+      "layer": "L2",
+      "sub_layer": "VFS/mount status",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-SYSTEM-007"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_volume_status",
+          "signature_candidate": "get_volume_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_mount_status",
+          "signature_candidate": "get_mount_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_storage_health",
+          "signature_candidate": "get_storage_health()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Mount metadata does not prove volume health or persistent storage backend."
+    },
+    {
+      "component_id": "SYSCTL-014",
+      "component_name": "Backup and restore",
+      "layer": "L2",
+      "sub_layer": "Backup/restore workflow",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-MGMT-036",
+        "ATC-FUNC-OS-UI-MGMT-037"
+      ],
+      "function_candidates": [
+        {
+          "name": "create_backup",
+          "signature_candidate": "create_backup()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "verify_backup",
+          "signature_candidate": "verify_backup()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "restore_backup",
+          "signature_candidate": "restore_backup()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Require integrity checks, restore validation, approval and recovery evidence."
+    },
+    {
+      "component_id": "SYSCTL-015",
+      "component_name": "Installation and platform management",
+      "layer": "L2",
+      "sub_layer": "Installer/platform detection",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-TRUST-001",
+        "ATC-FUNC-OS-UI-TRUST-003"
+      ],
+      "function_candidates": [
+        {
+          "name": "detect_platform",
+          "signature_candidate": "detect_platform()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_installation_mode",
+          "signature_candidate": "get_installation_mode()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "validate_platform_requirements",
+          "signature_candidate": "validate_platform_requirements()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Dedicated install-mode UI function is a gap in the current frontend catalog; reconcile before assigning a new ID."
+    },
+    {
+      "component_id": "SYSCTL-016",
+      "component_name": "Aurora AI management",
+      "layer": "L2",
+      "sub_layer": "Canonical Aurora adapter",
+      "canonical_owner": "aurora-ai; GlobusOS authorization boundary",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-AI-039..ATC-FUNC-OS-UI-AI-053"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_ai_runtime_status",
+          "signature_candidate": "get_ai_runtime_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "list_ai_backends",
+          "signature_candidate": "list_ai_backends()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_ai_policy_status",
+          "signature_candidate": "get_ai_policy_status()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Do not duplicate model/agent runtime; model output does not grant privilege."
+    },
+    {
+      "component_id": "SYSCTL-017",
+      "component_name": "A-TownChain management",
+      "layer": "L2",
+      "sub_layer": "Canonical chain/node adapter",
+      "canonical_owner": "a-townchain",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-ATC-054..ATC-FUNC-OS-UI-ATC-069"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_node_status",
+          "signature_candidate": "get_node_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_sync_status",
+          "signature_candidate": "get_sync_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_chain_health",
+          "signature_candidate": "get_chain_health()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Use canonical node/protocol APIs; do not add chain, wallet or consensus implementation here."
+    },
+    {
+      "component_id": "SYSCTL-018",
+      "component_name": "ATC-VM management",
+      "layer": "L2",
+      "sub_layer": "Canonical VM status adapter",
+      "canonical_owner": "a-townchain/components/vm",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-ATC-065"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_vm_runtime_status",
+          "signature_candidate": "get_vm_runtime_status()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_execution_limits",
+          "signature_candidate": "get_execution_limits()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_vm_resource_usage",
+          "signature_candidate": "get_vm_resource_usage()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Status/limits only; do not implement a second VM."
+    },
+    {
+      "component_id": "SYSCTL-019",
+      "component_name": "System notifications",
+      "layer": "L2",
+      "sub_layer": "Notification aggregation",
+      "canonical_owner": "globus-os",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-PERSONAL-015"
+      ],
+      "function_candidates": [
+        {
+          "name": "list_system_alerts",
+          "signature_candidate": "list_system_alerts()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "acknowledge_alert",
+          "signature_candidate": "acknowledge_alert()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "get_alert_history",
+          "signature_candidate": "get_alert_history()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "Acknowledgement is a state change and requires authorization/audit where applicable."
+    },
+    {
+      "component_id": "SYSCTL-020",
+      "component_name": "Policy management",
+      "layer": "L2",
+      "sub_layer": "Policy view/proposal",
+      "canonical_owner": "globus-os canonical policy authority; Aurora AI policy remains separate",
+      "existing_frontend_function_ids": [
+        "ATC-FUNC-OS-UI-ADMIN-091",
+        "ATC-FUNC-OS-UI-AI-050"
+      ],
+      "function_candidates": [
+        {
+          "name": "get_policy",
+          "signature_candidate": "get_policy()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "validate_policy",
+          "signature_candidate": "validate_policy()",
+          "contract_status": "UNRESOLVED"
+        },
+        {
+          "name": "propose_policy_change",
+          "signature_candidate": "propose_policy_change()",
+          "contract_status": "UNRESOLVED"
+        }
+      ],
+      "reconciliation_status": "UNRESOLVED",
+      "notes": "A proposal is not an activation; approval and authoritative enforcement are separate."
+    }
+  ],
+  "count_discrepancy": {
+    "status": "UNRESOLVED",
+    "finding": "Issue #191 states 68 function candidates, but the 20 component rows enumerate 63 named candidates.",
+    "required_action": "Identify and document the five missing candidate names before marking the SYSCTL candidate inventory complete."
+  },
+  "desktop_context_menu": {
+    "component_id": "GLOBUSOS-DESKTOP-CONTEXT-MENU-001",
+    "name": "Native desktop context menu",
+    "status": "PROPOSED / NOT VERIFIED",
+    "canonical_owner": "A-TownChain-Okosystems/globus-os",
+    "canonical_module_to_audit": "system/graphics/{desktop,input,shell,wm}",
+    "related_issue": "https://github.com/A-TownChain-Okosystems/globus-os/issues/78",
+    "contract_id": "GLOBUSOS-CONTEXT-MENU-001",
+    "frontend_function_ids": [
+      "ATC-FUNC-OS-UI-DESKTOP-005",
+      "ATC-FUNC-OS-UI-DESKTOP-006",
+      "ATC-FUNC-OS-UI-DESKTOP-007",
+      "ATC-FUNC-OS-UI-DESKTOP-008",
+      "ATC-FUNC-OS-UI-DESKTOP-009",
+      "ATC-FUNC-OS-UI-DESKTOP-010",
+      "ATC-FUNC-OS-UI-DESKTOP-011",
+      "ATC-FUNC-OS-UI-DESKTOP-012"
+    ],
+    "target_kinds": [
+      "desktop_background",
+      "application_icon",
+      "file_or_folder",
+      "window_titlebar",
+      "taskbar_item",
+      "notification_or_tray_item"
+    ],
+    "functions": [
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-005",
+        "name": "Open context menu for a validated UI target",
+        "contract_status": "UNRESOLVED",
+        "notes": "Invoke from pointer, touch-and-hold or keyboard; anchor and target identity must be validated."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-006",
+        "name": "Resolve context target and available actions",
+        "contract_status": "UNRESOLVED",
+        "notes": "Resolve desktop, app icon, file/folder, window, taskbar and notification targets from authoritative UI state."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-007",
+        "name": "Navigate and select context actions",
+        "contract_status": "UNRESOLVED",
+        "notes": "Support pointer, keyboard arrows, Enter/Space, Escape, focus restoration and accessible labels."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-008",
+        "name": "Dispatch a non-privileged UI action",
+        "contract_status": "UNRESOLVED",
+        "notes": "Dispatch only allowlisted actions against the current target; reject stale or mismatched targets."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-009",
+        "name": "Request an authorized system action",
+        "contract_status": "UNRESOLVED",
+        "notes": "Route settings, service, file mutation, network and other privileged operations through OS API, identity, capability, policy and audit."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-010",
+        "name": "Show action state and execution result",
+        "contract_status": "UNRESOLVED",
+        "notes": "Represent loading, disabled, denied, approval-required, success, failure and stale state; success only after authoritative confirmation."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-011",
+        "name": "Dismiss menu and restore focus",
+        "contract_status": "UNRESOLVED",
+        "notes": "Dismiss on Escape, outside click, target invalidation or completed action; return focus predictably."
+      },
+      {
+        "function_id": "ATC-FUNC-OS-UI-DESKTOP-012",
+        "name": "Expose action labels, shortcuts and accessibility metadata",
+        "contract_status": "UNRESOLVED",
+        "notes": "Provide stable labels, shortcut hints, focus order and accessible role/name/state; avoid color-only status."
+      }
+    ],
+    "security_flow": [
+      "UI",
+      "GlobusOS API",
+      "Identity",
+      "Capability",
+      "Policy",
+      "Validation",
+      "Authoritative State",
+      "Audit"
+    ],
+    "error_states": [
+      "INVALID_TARGET",
+      "STALE_TARGET",
+      "ACTION_NOT_AVAILABLE",
+      "UNAUTHENTICATED",
+      "PERMISSION_DENIED",
+      "POLICY_DENIED",
+      "APPROVAL_REQUIRED",
+      "UNAVAILABLE",
+      "TIMEOUT",
+      "PARTIAL_FAILURE",
+      "INTERNAL_ERROR"
+    ],
+    "acceptance_gates": [
+      "No context menu action grants authority by its presence or selection.",
+      "Target identity and state are validated again at dispatch time.",
+      "Mutations go through authoritative OS APIs and canonical identity/capability/policy checks.",
+      "Destructive operations use explicit confirmation and audit where applicable.",
+      "Keyboard, touch, focus restoration and accessibility behavior are tested.",
+      "Success is shown only after authoritative state confirmation.",
+      "Exact source SHA, source symbol, tests and Run/Job/Step CI evidence are linked before status promotion."
+    ]
+  }
+}
