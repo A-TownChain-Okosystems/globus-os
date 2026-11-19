@@ -17,5 +17,7 @@ jobs:
         with:
           repository: A-TownChain-Okosystems/atc-standards
           path: atc-standards
+      - name: Fail-closed evidence validator regression tests
+        run: python3 -m unittest discover -s tools/ci -p 'test_*.py' -v
       - name: Repository-Audit (R-Level aus .atc/repository.yaml)
         run: python3 atc-standards/tools/atc-repo-audit/atc_repo_audit.py . --registry atc-standards/registry/repositories.yaml
