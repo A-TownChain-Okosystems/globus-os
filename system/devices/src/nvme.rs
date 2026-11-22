@@ -81,6 +81,8 @@ pub struct NvmeQueue {
     id: NvmeQueueId,
     depth: u16,
     submissions: Vec<NvmeCommand>,
+    /// Vom Controller abgeholte, noch nicht fertig gemeldete Kommandos.
+    inflight: Vec<NvmeCommand>,
     completions: Vec<NvmeCompletion>,
 }
 
@@ -94,6 +96,7 @@ impl NvmeQueue {
             id,
             depth,
             submissions: Vec::with_capacity(depth as usize),
+            inflight: Vec::with_capacity(depth as usize),
             completions: Vec::with_capacity(depth as usize),
         })
     }
@@ -107,16 +110,17 @@ impl NvmeQueue {
     }
     /// Anzahl noch nicht abgeholter Kommandos.
     pub fn pending(&self) -> usize {
-        self.submissions.len()
+        self.submissions.len() + self.inflight.len()
     }
     /// Reiht ein Kommando ein und lehnt doppelte Kennungen ab.
     pub fn submit(&mut self, command: NvmeCommand) -> Result<(), NvmeError> {
-        if self.submissions.len() >= self.depth as usize {
+        if self.submissions.len() + self.inflight.len() >= self.depth as usize {
             return Err(NvmeError::QueueFull);
         }
         if self
             .submissions
             .iter()
+            .chain(self.inflight.iter())
             .any(|c| c.command_id == command.command_id)
             || self
                 .completions
@@ -141,16 +145,29 @@ impl NvmeQueue {
         if self.submissions.is_empty() {
             None
         } else {
-            Some(self.submissions.remove(0))
+            let command = self.submissions.remove(0);
+            self.inflight.push(command);
+            Some(command)
         }
     }
     /// Traegt eine Fertigmeldung ein.
     pub fn complete(&mut self, completion: NvmeCompletion) -> Result<(), NvmeError> {
-        if !self
-            .submissions
+        if self
+            .completions
             .iter()
             .any(|c| c.command_id == completion.command_id)
         {
+            return Err(NvmeError::DuplicateCommand);
+        }
+        let before = self.inflight.len();
+        self.inflight
+            .retain(|c| c.command_id != completion.command_id);
+        let was_inflight = before != self.inflight.len();
+        let was_queued = self
+            .submissions
+            .iter()
+            .any(|c| c.command_id == completion.command_id);
+        if !was_inflight && !was_queued {
             return Err(NvmeError::SubmissionFailed);
         }
         self.submissions
@@ -201,6 +218,36 @@ mod tests {
             }),
             Err(NvmeError::SubmissionFailed)
         );
+    }
+    #[test]
+    fn controller_may_complete_a_taken_command() {
+        let mut q = NvmeQueue::new(NvmeQueueId(1), 4).unwrap();
+        q.submit(command(7)).unwrap();
+        let taken = q.take_submission().unwrap();
+        assert_eq!(taken.command_id, 7);
+        // Ein abgeholtes Kommando bleibt offen, bis es fertig gemeldet ist.
+        assert_eq!(q.pending(), 1);
+        q.complete(NvmeCompletion {
+            command_id: 7,
+            status: 0,
+            result: 0,
+        })
+        .unwrap();
+        assert_eq!(q.pending(), 0);
+        assert_eq!(q.poll_completion().unwrap().command_id, 7);
+    }
+    #[test]
+    fn second_completion_for_same_command_is_rejected() {
+        let mut q = NvmeQueue::new(NvmeQueueId(1), 4).unwrap();
+        q.submit(command(8)).unwrap();
+        q.take_submission().unwrap();
+        let done = NvmeCompletion {
+            command_id: 8,
+            status: 0,
+            result: 0,
+        };
+        q.complete(done).unwrap();
+        assert_eq!(q.complete(done), Err(NvmeError::DuplicateCommand));
     }
     #[test]
     fn rejects_invalid_dma() {
