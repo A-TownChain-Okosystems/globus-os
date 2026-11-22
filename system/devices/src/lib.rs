@@ -36,6 +36,8 @@ pub mod msi;
 pub mod nvme;
 /// NVMe-Controller und sein Lebenszyklus.
 pub mod nvme_controller;
+/// Registerfenster als MMIO-Backend fuer Controller.
+pub mod nvme_mmio;
 /// PCI-Konfigurationsraum und Geraeteerkennung.
 pub mod pci;
 /// Erkannte Geraete und Treiberbindung.
