@@ -22,6 +22,8 @@ pub mod block_cache;
 pub mod block_manager;
 /// Speicherkarte und Bildpuffer aus der Firmware.
 pub mod boot;
+/// Seitenrahmen fuer DMA-Puffer.
+pub mod dma_alloc;
 /// Treiberzustaende und ihre Aufsicht.
 pub mod driver_lifecycle;
 /// Ethernet-Rahmen und Geraetevertrag.
