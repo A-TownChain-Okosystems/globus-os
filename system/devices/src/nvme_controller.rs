@@ -189,28 +189,14 @@ impl NvmeController {
 #[cfg(test)]
 mod tests {
     use super::*;
-    struct Mock {
-        regs: [u64; 64],
+    use crate::nvme_mmio::BarWindow;
+
+    /// Registerfenster statt eines eigenen Test-Mocks: derselbe Baustein, der
+    /// spaeter das physische MMIO traegt, mit Grenzpruefung und fail-closed.
+    fn window() -> BarWindow {
+        BarWindow::new(4096).expect("Registerfenster mit 4 KiB")
     }
-    impl Default for Mock {
-        fn default() -> Self {
-            Self { regs: [0; 64] }
-        }
-    }
-    impl NvmeMmio for Mock {
-        fn read32(&self, o: u64) -> u32 {
-            self.regs[(o / 8) as usize] as u32
-        }
-        fn read64(&self, o: u64) -> u64 {
-            self.regs[(o / 8) as usize]
-        }
-        fn write32(&mut self, o: u64, v: u32) {
-            self.regs[(o / 8) as usize] = v as u64
-        }
-        fn write64(&mut self, o: u64, v: u64) {
-            self.regs[(o / 8) as usize] = v
-        }
-    }
+
     fn config() -> NvmeControllerConfig {
         NvmeControllerConfig {
             admin_queue_depth: 32,
@@ -220,7 +206,7 @@ mod tests {
     }
     #[test]
     fn setup_programs_admin_queues() {
-        let mut m = Mock::default();
+        let mut m = window();
         let mut c = NvmeController::new(config()).unwrap();
         c.configure_admin_queues(
             &mut m,
@@ -235,7 +221,7 @@ mod tests {
     }
     #[test]
     fn ready_transition_is_explicit() {
-        let mut m = Mock::default();
+        let mut m = window();
         let mut c = NvmeController::new(config()).unwrap();
         c.configure_admin_queues(
             &mut m,
