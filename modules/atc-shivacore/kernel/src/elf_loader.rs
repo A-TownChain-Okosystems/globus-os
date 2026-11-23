@@ -231,8 +231,7 @@ impl<'a> ElfParser<'a> {
         // keine vertrauenswuerdigen Kernel-Groessen.
         let mut program_headers = Vec::new();
         let phdr_size = 56; // sizeof(Elf64_Phdr) = 56 bytes
-        let table_start =
-            usize::try_from(e_phoff).map_err(|_| ElfParseError::InvalidOffset)?;
+        let table_start = usize::try_from(e_phoff).map_err(|_| ElfParseError::InvalidOffset)?;
         let table_len = (e_phnum as usize)
             .checked_mul(phdr_size)
             .ok_or(ElfParseError::InvalidOffset)?;
@@ -245,7 +244,10 @@ impl<'a> ElfParser<'a> {
 
         for i in 0..e_phnum as usize {
             let offset = table_start
-                .checked_add(i.checked_mul(phdr_size).ok_or(ElfParseError::InvalidOffset)?)
+                .checked_add(
+                    i.checked_mul(phdr_size)
+                        .ok_or(ElfParseError::InvalidOffset)?,
+                )
                 .ok_or(ElfParseError::InvalidOffset)?;
             let phdr = Elf64ProgramHeader {
                 p_type: u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()),
@@ -264,10 +266,10 @@ impl<'a> ElfParser<'a> {
                 {
                     return Err(ElfParseError::InvalidSegment);
                 }
-                let file_start = usize::try_from(phdr.p_offset)
-                    .map_err(|_| ElfParseError::InvalidOffset)?;
-                let file_len = usize::try_from(phdr.p_filesz)
-                    .map_err(|_| ElfParseError::InvalidOffset)?;
+                let file_start =
+                    usize::try_from(phdr.p_offset).map_err(|_| ElfParseError::InvalidOffset)?;
+                let file_len =
+                    usize::try_from(phdr.p_filesz).map_err(|_| ElfParseError::InvalidOffset)?;
                 let file_end = file_start
                     .checked_add(file_len)
                     .ok_or(ElfParseError::InvalidOffset)?;
@@ -287,7 +289,9 @@ impl<'a> ElfParser<'a> {
                 && p.is_executable()
                 && p.p_memsz > 0
                 && p.p_vaddr <= e_entry
-                && p.p_vaddr.checked_add(p.p_memsz).is_some_and(|end| e_entry < end)
+                && p.p_vaddr
+                    .checked_add(p.p_memsz)
+                    .is_some_and(|end| e_entry < end)
         });
         if !entry_is_executable {
             return Err(ElfParseError::InvalidEntry);
