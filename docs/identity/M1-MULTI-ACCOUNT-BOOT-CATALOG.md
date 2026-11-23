@@ -91,6 +91,18 @@ scripts/qemu_boot.sh
 
 The packaging tool does not create credentials, derive wallet keys, or mutate persistent identity state.
 
+For canonical repository exports, the GCR1 file can be passed as one already-validated catalog instead of individual ATID files:
+
+```bash
+cargo run -p globus-identity --example build-boot-catalog -- \\
+  /run/identity/accounts.gua \\
+  /run/boot/sys.accounts \\
+  /run/boot/sys.credentials \\
+  --gcr1=/run/identity/credentials.gcr
+```
+
+The `AccountStateRepository::export_credential_snapshot()` API produces that ephemeral GCR1 projection. The packer validates the GUA1/GCR1 one-to-one binding before publishing either output file.
+
 ## Remaining M1 blockers
 
 **M1 is not production-complete.** The storage primitive and the boot projection are implemented, but the production lifecycle is not connected end-to-end.
