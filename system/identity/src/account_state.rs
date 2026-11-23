@@ -71,6 +71,10 @@ pub enum AccountStateError {
     },
     /// The durable generation cannot be incremented safely.
     GenerationOverflow,
+    /// A requested account does not exist in the canonical repository.
+    AccountNotFound,
+    /// A replacement identity attempted to change the stable account binding.
+    IdentityBindingMismatch,
     /// A PHC credential cannot be represented by the canonical ATID kernel record.
     CredentialFormatRejected,
 }
@@ -497,6 +501,102 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
             .replace_plaintext_at_generation(expected_generation, &encoded)
             .map_err(AccountStateError::Storage)
     }
+
+    /// Atomically add an account to the canonical encrypted state.
+    ///
+    /// The caller supplies the generation it loaded. Duplicate usernames and UserIds are
+    /// rejected before the complete next state is committed. Concurrent writers conflict.
+    pub fn insert_account(
+        &mut self,
+        expected_generation: u64,
+        entry: AccountStateEntry,
+    ) -> Result<u64, AccountStateError> {
+        let actual = self.encrypted.generation()?;
+        if actual != expected_generation {
+            return Err(AccountStateError::GenerationConflict {
+                expected: expected_generation,
+                actual,
+            });
+        }
+        let mut accounts = self
+            .load_state()?
+            .unwrap_or_default()
+            .accounts;
+        if accounts.iter().any(|existing| {
+            existing.username == entry.username
+                || existing.identity.profile.user_id == entry.identity.profile.user_id
+        }) {
+            return Err(AccountStateError::DuplicateAccount);
+        }
+        accounts.push(entry);
+        let next = AccountState::new(accounts)?;
+        self.commit_state(expected_generation, &next)
+    }
+
+    /// Atomically replace an account's identity record without changing its username,
+    /// stable UserId, profile, wallet binding, or key version.
+    ///
+    /// This is the persistence boundary for credential rotation. The caller must produce
+    /// the replacement record through the existing IdentityService and then commit it here.
+    pub fn replace_identity(
+        &mut self,
+        expected_generation: u64,
+        username: &AccountUsername,
+        replacement: IdentityRecord,
+    ) -> Result<u64, AccountStateError> {
+        let actual = self.encrypted.generation()?;
+        if actual != expected_generation {
+            return Err(AccountStateError::GenerationConflict {
+                expected: expected_generation,
+                actual,
+            });
+        }
+        replacement.validate()?;
+        let mut accounts = self
+            .load_state()?
+            .ok_or(AccountStateError::AccountNotFound)?
+            .accounts;
+        let entry = accounts
+            .iter_mut()
+            .find(|entry| &entry.username == username)
+            .ok_or(AccountStateError::AccountNotFound)?;
+        if entry.identity.profile != replacement.profile
+            || entry.identity.version != replacement.version
+        {
+            return Err(AccountStateError::IdentityBindingMismatch);
+        }
+        entry.identity = replacement;
+        let next = AccountState::new(accounts)?;
+        self.commit_state(expected_generation, &next)
+    }
+
+    /// Atomically remove one account from the canonical encrypted state.
+    ///
+    /// The username mapping and credential/profile record disappear in the same commit.
+    pub fn remove_account(
+        &mut self,
+        expected_generation: u64,
+        username: &AccountUsername,
+    ) -> Result<u64, AccountStateError> {
+        let actual = self.encrypted.generation()?;
+        if actual != expected_generation {
+            return Err(AccountStateError::GenerationConflict {
+                expected: expected_generation,
+                actual,
+            });
+        }
+        let mut accounts = self
+            .load_state()?
+            .ok_or(AccountStateError::AccountNotFound)?
+            .accounts;
+        let before = accounts.len();
+        accounts.retain(|entry| &entry.username != username);
+        if accounts.len() == before {
+            return Err(AccountStateError::AccountNotFound);
+        }
+        let next = AccountState::new(accounts)?;
+        self.commit_state(expected_generation, &next)
+    }
 }
 
 #[cfg(test)]
@@ -527,6 +627,71 @@ mod tests {
             username: AccountUsername::parse(username).unwrap(),
             identity: IdentityRecord::new(profile, CredentialRecord::argon2id(hash)),
         }
+    }
+
+    #[test]
+    fn repository_lifecycle_commits_insert_rotation_and_delete_atomically() {
+        let encrypted = EncryptedBlobStore::new(InMemoryBlobStore::default(), TestKey);
+        let mut repository = AccountStateRepository::new(encrypted);
+        let alice = account(
+            "alice",
+            "user-alice",
+            "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        );
+        let bob = account(
+            "bob",
+            "user-bob",
+            "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+        );
+        assert_eq!(repository.insert_account(0, alice.clone()).unwrap(), 1);
+        assert_eq!(repository.insert_account(1, bob.clone()).unwrap(), 2);
+        assert_eq!(repository.load_state().unwrap().unwrap().len(), 2);
+
+        let mut rotated = alice.identity.clone();
+        rotated.credential.phc_hash =
+            "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC".into();
+        assert_eq!(
+            repository
+                .replace_identity(2, &alice.username, rotated.clone())
+                .unwrap(),
+            3
+        );
+        let loaded = repository.load_state().unwrap().unwrap();
+        assert_eq!(loaded.by_username(&alice.username).unwrap().identity, rotated);
+        assert_eq!(loaded.len(), 2);
+
+        assert_eq!(
+            repository.remove_account(3, &alice.username).unwrap(),
+            4
+        );
+        let loaded = repository.load_state().unwrap().unwrap();
+        assert_eq!(loaded.len(), 1);
+        assert!(loaded.by_username(&alice.username).is_none());
+        assert!(loaded.by_username(&bob.username).is_some());
+    }
+
+    #[test]
+    fn repository_lifecycle_rejects_duplicate_and_stale_writes() {
+        let encrypted = EncryptedBlobStore::new(InMemoryBlobStore::default(), TestKey);
+        let mut repository = AccountStateRepository::new(encrypted);
+        let alice = account(
+            "alice",
+            "user-alice",
+            "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+        );
+        repository.insert_account(0, alice.clone()).unwrap();
+        assert_eq!(
+            repository.insert_account(1, alice.clone()),
+            Err(AccountStateError::DuplicateAccount)
+        );
+        assert!(matches!(
+            repository.insert_account(0, account(
+                "bob",
+                "user-bob",
+                "$argon2id$v=19$m=19456,t=2,p=1$c2FsdHNhbHRzYWx0c2FsdA$BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB",
+            )),
+            Err(AccountStateError::GenerationConflict { expected: 0, actual: 1 })
+        ));
     }
 
     #[test]
