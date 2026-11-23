@@ -28,6 +28,8 @@ pub enum IdentityServiceError {
     InvalidCredentials,
     /// Der Argon2id-Hash konnte nicht berechnet werden.
     CredentialHashFailed,
+    /// Die Sitzungsdauer ist null oder der Ablaufzeitpunkt laesst sich nicht darstellen.
+    InvalidSessionLifetime,
 }
 
 impl From<IdentityError> for IdentityServiceError {
@@ -129,6 +131,20 @@ impl IdentityService {
         Ok(result)
     }
 
+    /// Rotate the account credential and invalidate its current in-memory session.
+    pub fn change_credential(
+        &mut self,
+        new_credential: &[u8],
+    ) -> Result<(), IdentityServiceError> {
+        if self.profile.is_none() {
+            return Err(IdentityServiceError::NotRegistered);
+        }
+        let replacement = hash_credential(new_credential)?;
+        self.credential_hash = Some(replacement);
+        self.session = None;
+        Ok(())
+    }
+
     /// Export only durable identity state. Active sessions are intentionally excluded.
     pub fn snapshot(&self) -> Result<IdentityRecord, IdentityServiceError> {
         let profile = self
@@ -198,12 +214,18 @@ impl IdentityService {
             .as_deref()
             .ok_or(IdentityServiceError::InvalidCredentials)?;
         verify_credential(stored, credential)?;
+        if ttl_seconds == 0 {
+            return Err(IdentityServiceError::InvalidSessionLifetime);
+        }
+        let expires_at_unix = now_unix
+            .checked_add(ttl_seconds)
+            .ok_or(IdentityServiceError::InvalidSessionLifetime)?;
         let session = IdentitySession {
             user_id: profile.user_id.clone(),
             wallet_address: profile.wallet_address.clone(),
             state: LoginState::Authenticated,
             issued_at_unix: now_unix,
-            expires_at_unix: now_unix.saturating_add(ttl_seconds),
+            expires_at_unix,
         };
         self.session = Some(session.clone());
         Ok(LoginResult { session })
@@ -280,6 +302,40 @@ mod tests {
         assert!(service.session(200).is_none());
         service.logout();
         assert!(service.session(200).is_none());
+    }
+
+    #[test]
+    fn zero_or_overflowing_session_lifetime_is_rejected() {
+        let user = UserId::new("alice").unwrap();
+        let mut service = IdentityService::new();
+        service
+            .register(user, "Alice", b"correct", 600, "devnet", 1)
+            .unwrap();
+        assert_eq!(
+            service.login(b"correct", 100, 0).unwrap_err(),
+            IdentityServiceError::InvalidSessionLifetime
+        );
+        assert_eq!(
+            service.login(b"correct", u64::MAX, 1).unwrap_err(),
+            IdentityServiceError::InvalidSessionLifetime
+        );
+    }
+
+    #[test]
+    fn credential_rotation_invalidates_the_existing_session() {
+        let user = UserId::new("alice").unwrap();
+        let mut service = IdentityService::new();
+        service
+            .register(user, "Alice", b"old-secret", 600, "devnet", 1)
+            .unwrap();
+        service.login(b"old-secret", 100, 300).unwrap();
+        service.change_credential(b"new-secret").unwrap();
+        assert!(service.session(101).is_none());
+        assert_eq!(
+            service.login(b"old-secret", 101, 300).unwrap_err(),
+            IdentityServiceError::InvalidCredentials
+        );
+        assert!(service.login(b"new-secret", 101, 300).is_ok());
     }
 
     #[test]
