@@ -68,7 +68,7 @@ pub enum BootCatalogBuildError {
     InvalidCatalog,
 }
 
-/// Validate and package already-exported GUA1 and GCR1 snapshots without rebuilding either catalog.
+/// Validate and package exported GUA1/GCR1 snapshots without rebuilding either catalog.
 ///
 /// This is the direct path for ephemeral exports from AccountStateRepository.
 pub fn build_boot_catalog_from_snapshots(
