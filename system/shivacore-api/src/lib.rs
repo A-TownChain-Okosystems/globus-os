@@ -23,8 +23,8 @@ pub use globus_ipc::{Endpoint, Message, MessageHeader};
 /// kann nicht wachsen. Der Block traegt seine eigene Groesse, der Kernel liest
 /// nur die Felder, die er kennt.
 pub const ABI_MAJOR: u16 = 2;
-/// Minor-Stand: vorwaertskompatibel, neue Felder werden angehaengt.
-pub const ABI_MINOR: u16 = 0;
+/// Minor-Stand 1: versioniertes LGN1-Payload fuer den Mehrkonten-IdentityCheck.
+pub const ABI_MINOR: u16 = 1;
 /// Gepackte ABI-Version, Major in den oberen 16 Bit.
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
@@ -60,12 +60,14 @@ pub enum Syscall {
     /// seine Ausgabe geht weiter auf die serielle Schnittstelle. Zwei
     /// Schreiber auf dieselbe Flaeche wuerden sich gegenseitig ueberschreiben.
     Console = 0x0050,
-    /// Prueft Benutzername und Passwort gegen den Mehrkonten-Katalog (IDENT-M2).
+    /// Prueft Zugangsdaten (IDENT-003 / IDENT-M2).
     ///
-    /// Der Puffer enthaelt ein versioniertes `LGN1`-Payload aus kanonischem
-    /// Benutzernamen und Passwort. Berechtigt ist nur der Konsolenbesitzer.
-    /// Rueckgabe: `0` bestanden, `1` Zugangsdaten falsch, `2` Konto/Katalog
-    /// nicht verfuegbar, `4` KDF nicht verfuegbar.
+    /// In einem Mehrkonten-Image enthaelt der Puffer ein versioniertes `LGN1`
+    /// Payload mit kanonischem Benutzernamen und Passwort. Im expliziten
+    /// Legacy-Einzelkonto-Image bleibt das alte Passwort-Payload lesbar.
+    /// Berechtigt ist nur der Besitzer der Konsolen-Capability.
+    /// Rueckgabe: `0` bestanden, `1` falsch, `2` Konto/Datensatz fehlt,
+    /// `4` KDF nicht verfuegbar.
     ///
     /// Die Nummer `0x0060` bleibt fuer `SpawnProcess` reserviert (Vorgabe des
     /// Owners); die Pruefung liegt deshalb auf dem naechsten Schritt der
