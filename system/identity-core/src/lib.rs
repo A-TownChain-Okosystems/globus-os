@@ -30,6 +30,9 @@
 
 extern crate alloc;
 
+/// Gemeinsame, no_std-faehige Kontenverzeichnis- und Boot-Katalogformate.
+pub mod catalog;
+
 use argon2::{Algorithm, Argon2, Params, Version};
 
 /// Kennung des Datensatzes ("ATID").
