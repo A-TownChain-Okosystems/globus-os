@@ -436,12 +436,17 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 if shivacore::ramdisk::is_container(bytes) {
                     match shivacore::ramdisk::parse(bytes) {
                         Ok(entries) => {
-                            // M1: Das Mehrkonten-Katalogformat ist die primaere
-                            // Boot-Quelle. GUA1 bleibt der autoritative Username->UserId
-                            // Index; GAC1 bindet je UserId genau einen ATID-Verifier.
-                            let account_catalog = shivacore::ramdisk::lookup(
+                            // M1: Beide kernelgeschuetzten Eintraege sind erforderlich.
+                            // GUA1 ist die Verzeichnisprojektion; GCR1 enthaelt ATID-Verifier
+                            // mit vollstaendiger UserId-Bindung. Keine Einzeldatei pro UserId.
+                            let account_directory = shivacore::ramdisk::lookup(
                                 &entries,
                                 "sys.accounts",
+                                shivacore::ramdisk::Reader::Kernel,
+                            );
+                            let credential_catalog = shivacore::ramdisk::lookup(
+                                &entries,
+                                "sys.credentials",
                                 shivacore::ramdisk::Reader::Kernel,
                             );
                             let legacy_identity = shivacore::ramdisk::lookup(
@@ -449,35 +454,39 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                                 "sys.identity",
                                 shivacore::ramdisk::Reader::Kernel,
                             );
-                            match (account_catalog, legacy_identity) {
-                                (Some(_), Some(_)) => {
-                                    serial_println!(
-                                        "ShivaCore: IDENT-M1 Mehrkonten-Katalog und Legacy-Einzelkonto gleichzeitig vorhanden — mehrdeutig, fail-closed"
-                                    );
-                                }
-                                (Some(entry), None) => {
-                                    match entry.data(bytes) {
-                                        Some(catalog_bytes) => {
-                                            match shivacore::identity_catalog::publish(catalog_bytes) {
+                            match (account_directory, credential_catalog, legacy_identity) {
+                                (Some(_), Some(_), None) => {
+                                    let directory_bytes = account_directory
+                                        .and_then(|entry| entry.data(bytes));
+                                    let credential_bytes = credential_catalog
+                                        .and_then(|entry| entry.data(bytes));
+                                    match (directory_bytes, credential_bytes) {
+                                        (Some(directory), Some(credentials)) => {
+                                            match shivacore::identity_catalog::publish(directory, credentials) {
                                                 Ok(count) => serial_println!(
-                                                    "ShivaCore: IDENT-M1 Mehrkonten-Boot-Katalog geladen ({} Konten, GUA1 + ATID/GAC1)",
+                                                    "ShivaCore: IDENT-M1 Mehrkonten-Katalog geladen ({} Konten, GUA1 + GCR1/ATID)",
                                                     count
                                                 ),
                                                 Err(error) => serial_println!(
-                                                    "ShivaCore: IDENT-M1 Mehrkonten-Boot-Katalog ungueltig: {:?} — fail-closed",
+                                                    "ShivaCore: IDENT-M1 Konten-/Credential-Katalog ungueltig: {:?} — gesamter Satz fail-closed",
                                                     error
                                                 ),
                                             }
                                         }
-                                        None => serial_println!(
-                                            "ShivaCore: IDENT-M1 Mehrkonten-Boot-Katalog nicht lesbar — fail-closed"
+                                        _ => serial_println!(
+                                            "ShivaCore: IDENT-M1 Konten- oder Credential-Eintrag nicht lesbar — fail-closed"
                                         ),
                                     }
                                 }
-                                (None, Some(_)) => {
-                                    // Uebergangsleser fuer bestehende Einzelkonto-Images.
-                                    // Sobald M1-Images ausgerollt sind, wird dieser Pfad
-                                    // in einem separaten Kompatibilitaetsschritt entfernt.
+                                (Some(_), Some(_), Some(_)) => {
+                                    serial_println!(
+                                        "ShivaCore: IDENT-M1 Mehrkonten-Katalog und Legacy-Einzelkonto gleichzeitig vorhanden — mehrdeutig, fail-closed"
+                                    );
+                                }
+                                (None, None, Some(_)) => {
+                                    // Zeitlich begrenzter Kompatibilitaetsleser fuer
+                                    // bestehende Einzelkonto-Images. M1-Images verwenden
+                                    // ausschliesslich sys.accounts + sys.credentials.
                                     match shivacore::identity_file::load(&entries, bytes) {
                                         Ok(record) => {
                                             serial_println!(
@@ -499,8 +508,11 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                                         ),
                                     }
                                 }
-                                (None, None) => serial_println!(
-                                    "ShivaCore: IDENT-M1 kein Mehrkonten-Katalog vorhanden — fail-closed, keine Anmeldung"
+                                (None, None, None) => serial_println!(
+                                    "ShivaCore: IDENT-M1 Mehrkonten-Verzeichnis und Credential-Katalog fehlen — fail-closed"
+                                ),
+                                _ => serial_println!(
+                                    "ShivaCore: IDENT-M1 unvollstaendiger Mehrkonten-Katalog — beide sys.accounts und sys.credentials sind erforderlich, fail-closed"
                                 ),
                             }
                             // Gezaehlt und gezeigt werden nur Eintraege, die
