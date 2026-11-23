@@ -111,7 +111,7 @@ The `AccountStateRepository::export_credential_snapshot()` API produces that eph
 
 1. `IdentityService` currently creates and stores Argon2id PHC strings in `IdentityRecord`.
 2. The kernel verifier consumes fixed 64-byte `ATID` records through `globus-identity-core`.
-3. `AccountStateRepository` persists the existing PHC representation and now exposes an ephemeral GCR1 export. Conversion is limited to PHC Argon2id v19 records with supported ATID parameters, a 16-byte salt, and a 32-byte output; salt and hash are copied without re-hashing. Unsupported records fail closed. CI verifier-equivalence tests are still required before calling this migration verified.
+3. `AccountStateRepository` persists the existing PHC representation and now exposes an ephemeral GCR1 export. Conversion is limited to PHC Argon2id v19 records with the canonical owner KDF profile (19 MiB, t=2, p=1), a 16-byte salt, and a 32-byte output; salt and hash are copied without re-hashing. Unsupported or non-default profiles fail closed. The boot packer and kernel loader enforce the same KDF profile so account verification costs remain uniform. CI verifier-equivalence tests are still required before calling this migration verified.
 4. `AccountStateRepository` exposes generation-bound atomic account insertion, identity replacement (profile/UserId binding preserved), and account removal. `MultiAccountIdentityService` orchestrates registration, restore, username-bound login, credential rotation, and removal through these commits. The returned session remains an in-process userspace object, not the kernel-owned session required by M3.
 5. A production ShivaCore key-provider binding and target-filesystem reopen/crash tests are not yet evidenced.
 6. The example packer accepts both per-account ATID files and a validated GCR1 snapshot via `--gcr1`. The repository export API and packaging path exist; automated production orchestration and signed boot-catalogue provenance remain open.
@@ -137,7 +137,7 @@ Successful credential verification still does not create a kernel-owned session 
 - [x] Versioned encrypted account-state repository primitive.
 - [x] Read-only AccountDirectoryStore projection over AccountState.
 - [x] Ephemeral GUA1 export from AccountStateRepository.
-- [x] Strict PHC Argon2id v19 → ATID conversion and GCR1 snapshot API (implementation present; CI verification pending).
+- [x] Strict PHC Argon2id v19 → ATID conversion and GCR1 snapshot API with canonical owner KDF profile (implementation present; CI verification pending).
 - [ ] Production key-provider integration and filesystem crash/reopen tests.
 - [x] Ephemeral GCR1 export from `AccountStateRepository` (CI verification pending).
 - [ ] Two-account BIOS and UEFI QEMU test reaching account-specific login verification.
