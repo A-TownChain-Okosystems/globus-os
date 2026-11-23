@@ -6,12 +6,22 @@ on:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
+      - "modules/atc-shivacore/greeter/**"
+      - "modules/atc-shivacore/init_program/**"
+      - "system/shivacore-api/**"
+      - "system/identity-core/**"
+      - "scripts/qemu_boot.sh"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
   pull_request:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
+      - "modules/atc-shivacore/greeter/**"
+      - "modules/atc-shivacore/init_program/**"
+      - "system/shivacore-api/**"
+      - "system/identity-core/**"
+      - "scripts/qemu_boot.sh"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
   workflow_dispatch:
@@ -66,6 +76,11 @@ jobs:
           # RUSTFLAGS-Variable wuerde diese Einstellungen ersetzen.
           ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo build --release )
 
+      - name: Build greeter (Ring-3 login payload)
+        id: build_greeter
+        run: |
+          ( cd modules/atc-shivacore/greeter && env -u RUSTFLAGS cargo build --release )
+
       - name: Build BIOS and UEFI images
         id: build_images
         run: |
@@ -75,7 +90,8 @@ jobs:
           ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
             "$GITHUB_WORKSPACE/target/x86_64-unknown-none/release/shivacore" \
             "$GITHUB_WORKSPACE/target/boot-images" \
-            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" )
+            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+            "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
 
       - name: Install QEMU
         run: |
@@ -117,6 +133,21 @@ jobs:
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
           if ! grep -q "Programm 'init' aus Ramdisk" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Das Ramdisk-Programm init wurde nicht aus dem Image geladen."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -q "Ramdisk-Verzeichnis: 2 Programme (init, greeter)" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Greeter wurde nicht in die Ramdisk aufgenommen."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -q "vierter Prozess PID=1003 aus Ramdisk-Programm 'greeter'" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Greeter wurde nicht als Ring-3-Prozess gestartet."
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
+          if ! grep -q "Konsole an Ring 3 uebergeben (PID=1003)" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+            echo "Greeter hat die Console-Capability nicht erfolgreich verwendet."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
             exit 1
           fi
@@ -211,6 +242,9 @@ jobs:
             "ShivaCore: USER-001 mapped PID=1000" \
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
             "ShivaCore: USER-001 entering PID=1000" \
+            "ShivaCore: Ramdisk-Verzeichnis: 2 Programme (init, greeter)" \
+            "ShivaCore: vierter Prozess PID=1003 aus Ramdisk-Programm 'greeter'" \
+            "ShivaCore: Konsole an Ring 3 uebergeben (PID=1003)" \
             "ShivaCore: scheduler preemption -> context switch to PID=1001" \
             "ShivaCore: scheduler preemption -> context switch to PID=1000" \
             "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
@@ -233,6 +267,7 @@ jobs:
         env:
           BUILD_KERNEL_OUTCOME: ${{ steps.build_kernel.outcome || 'unknown' }}
           BUILD_IMAGES_OUTCOME: ${{ steps.build_images.outcome || 'unknown' }}
+          BUILD_GREETER_OUTCOME: ${{ steps.build_greeter.outcome || 'unknown' }}
           BIOS_SMOKE_OUTCOME: ${{ steps.bios_smoke.outcome || 'unknown' }}
           BIOS_QEMU_EXIT_CODE: ${{ steps.bios_smoke.outputs.qemu_exit_code || 'not-recorded' }}
           UEFI_SMOKE_OUTCOME: ${{ steps.uefi_smoke.outcome || 'unknown' }}
@@ -254,6 +289,7 @@ jobs:
             echo "runner_os=${RUNNER_OS:-unknown}"
             echo "build_kernel_outcome=$BUILD_KERNEL_OUTCOME"
             echo "build_images_outcome=$BUILD_IMAGES_OUTCOME"
+            echo "build_greeter_outcome=$BUILD_GREETER_OUTCOME"
             echo "bios_smoke_outcome=$BIOS_SMOKE_OUTCOME"
             echo "bios_qemu_exit_code=$BIOS_QEMU_EXIT_CODE"
             echo "uefi_smoke_outcome=$UEFI_SMOKE_OUTCOME"
@@ -265,6 +301,7 @@ jobs:
             for artifact in \
               target/boot-images/shivacore-bios.img \
               target/boot-images/shivacore-uefi.img \
+              modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter \
               "target/shivacore-qemu-${{ matrix.cpu }}.log" \
               "target/shivacore-uefi-${{ matrix.cpu }}.log"; do
               if [ -f "$artifact" ]; then
