@@ -44,7 +44,22 @@ impl CheckOutcome {
 /// verify only that account's credential. The catalog lock is released before Argon2id.
 pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
     let Some(account) = crate::identity_catalog::account_for_username(username) else {
-        return CheckOutcome::NoRecord;
+        // Keep unknown-user timing close to a real password verification. The
+        // derived output is discarded and can never authenticate an account.
+        let mut dummy_hash = [0u8; globus_identity_core::HASH_LEN];
+        let dummy_salt = [0xA5u8; globus_identity_core::SALT_LEN];
+        let result = globus_identity_core::hash_into(
+            globus_identity_core::KdfParams::OWNER_DEFAULT,
+            password,
+            &dummy_salt,
+            &mut dummy_hash,
+        );
+        dummy_hash.fill(0);
+        return if result.is_ok() {
+            CheckOutcome::WrongPassword
+        } else {
+            CheckOutcome::Unavailable
+        };
     };
     match account.credential.verify(password) {
         Ok(()) => CheckOutcome::Ok,
