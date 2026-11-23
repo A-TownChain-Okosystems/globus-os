@@ -18,6 +18,7 @@ mod service;
 pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
+#[allow(deprecated)]
 pub use account_registry::{
     AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
     MutableAccountDirectoryStore,
