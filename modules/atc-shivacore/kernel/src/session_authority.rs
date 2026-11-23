@@ -22,20 +22,31 @@ pub const DEFAULT_SESSION_TTL_TICKS: u64 = 5 * 60 * 100;
 static NEXT_SESSION_ID: AtomicU64 = AtomicU64::new(1);
 static SESSIONS: Mutex<BTreeMap<u64, KernelSession>> = Mutex::new(BTreeMap::new());
 
+/// Fehler beim Ausstellen, Aufloesen oder Verwalten einer Kernel-Session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionError {
+    /// Die Session-Laufzeit ist null oder die Identitaet ungueltig.
     InvalidLifetime,
+    /// Der monotone Session-Bezeichner kann nicht weiter erhoeht werden.
     Exhausted,
+    /// Das uebergebene Handle besitzt kein gueltiges Session-Tag.
     InvalidHandle,
+    /// Zum Handle existiert kein registrierter Session-Datensatz.
     NotFound,
+    /// Der aufrufende Prozess ist nicht der Eigentuemmer der Session.
     WrongOwner,
+    /// Die Session wurde durch die Kernel-Autoritaet gesperrt.
     Locked,
+    /// Die Session hat ihren Ablaufzeitpunkt ueberschritten.
     Expired,
 }
 
+/// Kernel-seitiger Lebenszykluszustand einer authentifizierten Session.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SessionState {
+    /// Die Session ist gueltig und kann fuer autorisierte Operationen verwendet werden.
     Active,
+    /// Die Session ist gesperrt und darf keine autorisierten Operationen ausfuehren.
     Locked,
 }
 
