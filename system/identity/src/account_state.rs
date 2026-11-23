@@ -65,7 +65,7 @@ impl From<PersistenceError> for AccountStateError {
 impl AccountState {
     /// Validate and canonicalize a complete account set.
     pub fn new(mut accounts: Vec<AccountStateEntry>) -> Result<Self, AccountStateError> {
-        if accounts.is_empty() || accounts.len() > MAX_ACCOUNTS {
+        if accounts.len() > MAX_ACCOUNTS {
             return Err(AccountStateError::InvalidState);
         }
         accounts.sort_by(|left, right| left.username.as_str().cmp(right.username.as_str()));
@@ -109,11 +109,12 @@ impl AccountState {
     }
 
     fn encode(&self) -> Result<Vec<u8>, AccountStateError> {
+        let validated = Self::new(self.accounts.clone())?;
         let mut out = Vec::new();
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&VERSION.to_be_bytes());
-        out.extend_from_slice(&(self.accounts.len() as u32).to_be_bytes());
-        for entry in &self.accounts {
+        out.extend_from_slice(&(validated.accounts.len() as u32).to_be_bytes());
+        for entry in &validated.accounts {
             let profile = &entry.identity.profile;
             put_u8_string(&mut out, entry.username.as_str(), MAX_USERNAME)?;
             put_u16_string(&mut out, profile.user_id.as_str(), MAX_USER_ID)?;
@@ -136,7 +137,7 @@ impl AccountState {
             return Err(AccountStateError::UnsupportedVersion);
         }
         let count = u32::from_be_bytes(bytes[6..10].try_into().map_err(|_| AccountStateError::Truncated)?) as usize;
-        if count == 0 || count > MAX_ACCOUNTS { return Err(AccountStateError::InvalidState); }
+        if count > MAX_ACCOUNTS { return Err(AccountStateError::InvalidState); }
         let mut cursor = Cursor { bytes, offset: HEADER_LEN };
         let mut accounts = Vec::with_capacity(count);
         for _ in 0..count {
@@ -286,6 +287,12 @@ mod tests {
             username: AccountUsername::parse(username).unwrap(),
             identity: IdentityRecord::new(profile, CredentialRecord::argon2id(hash)),
         }
+    }
+
+    #[test]
+    fn empty_repository_state_is_valid_before_first_account() {
+        let state = AccountState::default();
+        assert_eq!(AccountState::decode(&state.encode().unwrap()).unwrap(), state);
     }
 
     #[test]
