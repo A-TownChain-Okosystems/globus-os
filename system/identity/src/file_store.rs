@@ -143,11 +143,14 @@ impl BlobStore for FileBlobStore {
         let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
         let expected = current.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
-        if generation < expected {
+        if current != 0 && generation < expected {
             return Err(SecureStoreError::RollbackDetected { stored: current, incoming: generation });
         }
-        if generation != expected {
+        if current != 0 && generation != expected {
             return Err(SecureStoreError::Conflict);
+        }
+        if generation == 0 {
+            return Err(SecureStoreError::RollbackDetected { stored: current, incoming: generation });
         }
         self.atomic_write(PRESENT, generation, blob)
     }
