@@ -12,7 +12,7 @@
 // Laufzeitkontext. Er steht jetzt in `build_space` und benutzt dieselben
 // Bausteine wie der Bootpfad — kein zweiter Weg zum selben Ziel. Der Aufruf
 // ueber die ABI (SpawnProcess) ist als fail-closed Opcode registriert; die Runtime-
-// // Integration (ELF-Laden, PID/Slot, Scheduler, CR3 und Session-Uebergabe) fehlt noch.
+// Integration (ELF-Laden, PID/Slot, Scheduler, CR3 und Session-Uebergabe) fehlt noch.
 // ─────────────────────────────────────────────────────────────────────────
 
 use crate::elf_loader::ElfParser;
