@@ -7,7 +7,7 @@
 //! catalogue until the credential-format migration is implemented and verified.
 
 use crate::{
-    AccountProfile, AccountUsername, CredentialRecord, EncryptedBlobStore, IdentityBinding,
+    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, AccountProfile, AccountUsername, CredentialRecord, EncryptedBlobStore, IdentityBinding,
     IdentityKeyProvider, IdentityRecord, SecureStoreError, UserId, WalletAddress,
     BlobStore, PersistenceError,
 };
@@ -244,6 +244,24 @@ pub struct AccountStateRepository<B, K> {
 impl<B, K> AccountStateRepository<B, K> {
     pub fn new(encrypted: EncryptedBlobStore<B, K>) -> Self { Self { encrypted } }
     pub fn into_inner(self) -> EncryptedBlobStore<B, K> { self.encrypted }
+}
+
+impl<B: BlobStore, K: IdentityKeyProvider> AccountDirectoryStore for AccountStateRepository<B, K> {
+    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
+        self.load_state()
+            .map_err(|_| AccountDirectoryError::Corrupt)?
+            .ok_or(AccountDirectoryError::NotFound)?
+            .lookup(username)
+            .map_err(|_| AccountDirectoryError::NotFound)
+    }
+
+    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
+        self.load_state()
+            .map_err(|_| AccountDirectoryError::Corrupt)?
+            .ok_or(AccountDirectoryError::NotFound)?
+            .entries()
+            .map_err(|_| AccountDirectoryError::Corrupt)
+    }
 }
 
 impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
