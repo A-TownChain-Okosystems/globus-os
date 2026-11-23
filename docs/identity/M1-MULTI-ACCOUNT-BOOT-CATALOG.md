@@ -55,6 +55,7 @@ The kernel does not publish a partial account set. A malformed entry clears the 
    - Username mapping and IdentityRecord are committed in one encrypted state object.
    - Exposes ephemeral GUA1 and GCR1 snapshots directly from encrypted state; no plaintext sidecar is persisted.
    - Provides generation-bound `insert_account`, `replace_identity`, and `remove_account` operations. Credential rotation cannot change the stable UserId or profile binding.
+   - `MultiAccountIdentityService` now orchestrates repository-backed registration, restore, username login, credential rotation, and account removal. It updates its in-memory coordinator only after successful durable commits.
 4. `system/identity/src/file_store.rs` and `secure_store.rs`
    - File writers use a fail-closed lock.
    - Generation advancement is serialized and encrypted commits can be bound to an expected generation.
@@ -111,7 +112,7 @@ The `AccountStateRepository::export_credential_snapshot()` API produces that eph
 1. `IdentityService` currently creates and stores Argon2id PHC strings in `IdentityRecord`.
 2. The kernel verifier consumes fixed 64-byte `ATID` records through `globus-identity-core`.
 3. `AccountStateRepository` persists the existing PHC representation and now exposes an ephemeral GCR1 export. Conversion is limited to PHC Argon2id v19 records with supported ATID parameters, a 16-byte salt, and a 32-byte output; salt and hash are copied without re-hashing. Unsupported records fail closed. CI verifier-equivalence tests are still required before calling this migration verified.
-4. The repository now exposes generation-bound atomic account insertion, identity replacement (profile/UserId binding preserved), and account removal. These are persistence primitives; `IdentityService` / `MultiAccountIdentityService` registration, password-change, recovery, and deletion workflows are not yet orchestrated through them.
+4. `AccountStateRepository` exposes generation-bound atomic account insertion, identity replacement (profile/UserId binding preserved), and account removal. `MultiAccountIdentityService` now orchestrates registration, restore, username-bound login, credential rotation, and removal through these commits. The returned session remains an in-process userspace object, not the kernel-owned session required by M3.
 5. A production ShivaCore key-provider binding and target-filesystem reopen/crash tests are not yet evidenced.
 6. The example packer accepts both per-account ATID files and a validated GCR1 snapshot via `--gcr1`. The repository export API and packaging path exist; automated production orchestration and signed boot-catalogue provenance remain open.
 7. GUA1/GCR1 are not signed. The Ramdisk must be treated as trusted input until secure-boot signature verification is separately demonstrated.
@@ -130,9 +131,8 @@ Never reinterpret PHC bytes as ATID or introduce a second verifier. The converte
 - [x] Ephemeral GUA1 export from AccountStateRepository.
 - [x] Strict PHC Argon2id v19 → ATID conversion and GCR1 snapshot API (implementation present; CI verification pending).
 - [ ] Production key-provider integration and filesystem crash/reopen tests.
-- [ ] Production key-provider integration and filesystem crash/reopen tests.
 - [x] Ephemeral GCR1 export from `AccountStateRepository` (CI verification pending).
 - [ ] Two-account BIOS and UEFI QEMU test reaching account-specific login verification.
 - [ ] Exact-HEAD Actions and artifact SHA-256 evidence.
 
-**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, PHC→ATID export implementation, GUA1/GCR1 codecs, kernel loader, packaging boundary); RESIDUAL/BLOCKED (service lifecycle orchestration, production key custody, signed catalogue provenance, QEMU). CI_VERIFIED and E2E_VERIFIED are not claimed until exact-HEAD workflow and BIOS/UEFI evidence is available.
+**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, repository-backed multi-account lifecycle orchestration, PHC→ATID export implementation, GUA1/GCR1 codecs, kernel loader, packaging boundary); RESIDUAL/BLOCKED (production key custody, signed catalogue provenance, kernel login/session/process transition, QEMU). No TESTED / CI_VERIFIED / E2E_VERIFIED claim until exact-HEAD workflow and BIOS/UEFI evidence is available.
