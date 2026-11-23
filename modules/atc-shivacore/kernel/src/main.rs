@@ -436,31 +436,71 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 if shivacore::ramdisk::is_container(bytes) {
                     match shivacore::ramdisk::parse(bytes) {
                         Ok(entries) => {
-                            // IDENT-002: Der Anmeldedatensatz kommt aus einer
-                            // eigenen Datei im Systemnamensraum, nicht aus dem
-                            // Programm. Fehlt oder passt er nicht, wird das
-                            // gesagt — eine Anmeldung gibt es dann nicht.
-                            match shivacore::identity_file::load(&entries, bytes) {
-                                Ok(record) => {
+                            // M1: Das Mehrkonten-Katalogformat ist die primaere
+                            // Boot-Quelle. GUA1 bleibt der autoritative Username->UserId
+                            // Index; GAC1 bindet je UserId genau einen ATID-Verifier.
+                            let account_catalog = shivacore::ramdisk::lookup(
+                                &entries,
+                                "sys.accounts",
+                                shivacore::ramdisk::Reader::Kernel,
+                            );
+                            let legacy_identity = shivacore::ramdisk::lookup(
+                                &entries,
+                                "sys.identity",
+                                shivacore::ramdisk::Reader::Kernel,
+                            );
+                            match (account_catalog, legacy_identity) {
+                                (Some(_), Some(_)) => {
                                     serial_println!(
-                                        "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: gelesen ({} Byte, Argon2id {} KiB t={} p={})",
-                                        globus_identity_core::RECORD_LEN,
-                                        record.params.memory_kib,
-                                        record.params.iterations,
-                                        record.params.parallelism
-                                    );
-                                    // IDENT-003: Der Datensatz geht an das
-                                    // Prueftor; ab hier prueft der Kernel, nicht
-                                    // das Fenster.
-                                    identity_gate::publish(record);
-                                    serial_println!(
-                                        "ShivaCore: IDENT-003 Prueftor bereit (Syscall {:#06X}, nur der Konsolenbesitzer)",
-                                        libshivacore::Syscall::IdentityCheck.id()
+                                        "ShivaCore: IDENT-M1 Mehrkonten-Katalog und Legacy-Einzelkonto gleichzeitig vorhanden — mehrdeutig, fail-closed"
                                     );
                                 }
-                                Err(error) => serial_println!(
-                                    "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: {:?} — fail-closed, keine Anmeldung",
-                                    error
+                                (Some(entry), None) => {
+                                    match entry.data(bytes) {
+                                        Some(catalog_bytes) => {
+                                            match shivacore::identity_catalog::publish(catalog_bytes) {
+                                                Ok(count) => serial_println!(
+                                                    "ShivaCore: IDENT-M1 Mehrkonten-Boot-Katalog geladen ({} Konten, GUA1 + ATID/GAC1)",
+                                                    count
+                                                ),
+                                                Err(error) => serial_println!(
+                                                    "ShivaCore: IDENT-M1 Mehrkonten-Boot-Katalog ungueltig: {:?} — fail-closed",
+                                                    error
+                                                ),
+                                            }
+                                        }
+                                        None => serial_println!(
+                                            "ShivaCore: IDENT-M1 Mehrkonten-Boot-Katalog nicht lesbar — fail-closed"
+                                        ),
+                                    }
+                                }
+                                (None, Some(_)) => {
+                                    // Uebergangsleser fuer bestehende Einzelkonto-Images.
+                                    // Sobald M1-Images ausgerollt sind, wird dieser Pfad
+                                    // in einem separaten Kompatibilitaetsschritt entfernt.
+                                    match shivacore::identity_file::load(&entries, bytes) {
+                                        Ok(record) => {
+                                            serial_println!(
+                                                "ShivaCore: IDENT-002 Legacy-Einzelkonto-Datensatz gelesen ({} Byte, Argon2id {} KiB t={} p={})",
+                                                globus_identity_core::RECORD_LEN,
+                                                record.params.memory_kib,
+                                                record.params.iterations,
+                                                record.params.parallelism
+                                            );
+                                            identity_gate::publish(record);
+                                            serial_println!(
+                                                "ShivaCore: IDENT-003 Legacy-Prueftor bereit (Syscall {:#06X})",
+                                                libshivacore::Syscall::IdentityCheck.id()
+                                            );
+                                        }
+                                        Err(error) => serial_println!(
+                                            "ShivaCore: IDENT-002 Legacy-Einzelkonto-Datensatz {:?} — fail-closed, keine Anmeldung",
+                                            error
+                                        ),
+                                    }
+                                }
+                                (None, None) => serial_println!(
+                                    "ShivaCore: IDENT-M1 kein Mehrkonten-Katalog vorhanden — fail-closed, keine Anmeldung"
                                 ),
                             }
                             // Gezaehlt und gezeigt werden nur Eintraege, die
