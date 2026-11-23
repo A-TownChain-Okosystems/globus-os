@@ -67,6 +67,7 @@ pub trait MutableAccountDirectoryStore: AccountDirectoryStore {
 #[deprecated(
     note = "legacy standalone directory; use AccountStateRepository as the canonical account store"
 )]
+/// Legacy GUA1 directory reader/writer retained for import and migration only.
 pub struct FileAccountDirectory {
     path: PathBuf,
     lock_path: PathBuf,
