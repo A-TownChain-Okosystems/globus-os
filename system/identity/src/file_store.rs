@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn persists_blob_and_generation_across_instances() {
         let path = path();
-        let first = FileBlobStore::open(&path);
+        let mut first = FileBlobStore::open(&path);
         first.replace(b"encrypted", 1).unwrap();
         drop(first);
         let second = FileBlobStore::open(&path);
@@ -239,7 +239,7 @@ mod tests {
     #[test]
     fn concurrent_writer_lock_is_fail_closed() {
         let path = path();
-        let mut first = FileBlobStore::open(&path);
+        let first = FileBlobStore::open(&path);
         let mut second = FileBlobStore::open(&path);
         let _lock = first.acquire_lock().unwrap();
         assert_eq!(second.replace(b"other", 1), Err(SecureStoreError::Conflict));
