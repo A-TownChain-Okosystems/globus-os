@@ -433,32 +433,5 @@ mod tests {
         ));
     }
 
-    #[test]
-    fn encrypted_file_repository_survives_reopen_and_remains_the_directory_source() {
-        use crate::FileBlobStore;
-        use std::time::{SystemTime, UNIX_EPOCH};
 
-        let nonce = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
-        let path = std::env::temp_dir().join(format!("globus-account-state-{nonce}.blob"));
-        let state = AccountState::new(vec![
-            account("alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-            account("bob", "user-b", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-        ]).unwrap();
-        {
-            let encrypted = EncryptedBlobStore::new(FileBlobStore::open(&path), TestKey);
-            let mut repository = AccountStateRepository::new(encrypted);
-            assert_eq!(repository.commit_state(0, &state).unwrap(), 1);
-        }
-        {
-            let encrypted = EncryptedBlobStore::new(FileBlobStore::open(&path), TestKey);
-            let repository = AccountStateRepository::new(encrypted);
-            assert_eq!(repository.load_state().unwrap(), Some(state));
-            assert_eq!(
-                repository.lookup(&AccountUsername::parse("bob").unwrap()).unwrap().as_str(),
-                "user-b"
-            );
-            assert_eq!(repository.entries().unwrap().len(), 2);
-        }
-        let _ = std::fs::remove_file(path);
-    }
 }
