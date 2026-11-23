@@ -518,10 +518,7 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
                 actual,
             });
         }
-        let mut accounts = self
-            .load_state()?
-            .unwrap_or_default()
-            .accounts;
+        let mut accounts = self.load_state()?.unwrap_or_default().accounts;
         if accounts.iter().any(|existing| {
             existing.username == entry.username
                 || existing.identity.profile.user_id == entry.identity.profile.user_id
@@ -657,13 +654,13 @@ mod tests {
             3
         );
         let loaded = repository.load_state().unwrap().unwrap();
-        assert_eq!(loaded.by_username(&alice.username).unwrap().identity, rotated);
+        assert_eq!(
+            loaded.by_username(&alice.username).unwrap().identity,
+            rotated
+        );
         assert_eq!(loaded.len(), 2);
 
-        assert_eq!(
-            repository.remove_account(3, &alice.username).unwrap(),
-            4
-        );
+        assert_eq!(repository.remove_account(3, &alice.username).unwrap(), 4);
         let loaded = repository.load_state().unwrap().unwrap();
         assert_eq!(loaded.len(), 1);
         assert!(loaded.by_username(&alice.username).is_none());
