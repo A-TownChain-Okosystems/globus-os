@@ -109,6 +109,22 @@ mod tests {
         assert_eq!(alice.user_id, "id-alice");
         assert_eq!(bob.credential.verify(b"bob-secret"), Ok(()));
         assert!(alice.credential.verify(b"bob-secret").is_err());
+        assert_eq!(
+            crate::identity_check::check_catalog("alice", b"alice-secret"),
+            crate::identity_check::CheckOutcome::Ok
+        );
+        assert_eq!(
+            crate::identity_check::check_catalog("alice", b"bob-secret"),
+            crate::identity_check::CheckOutcome::WrongPassword
+        );
+        assert_eq!(
+            crate::identity_check::check_catalog("bob", b"bob-secret"),
+            crate::identity_check::CheckOutcome::Ok
+        );
+        assert_eq!(
+            crate::identity_check::check_catalog("unknown", b"alice-secret"),
+            crate::identity_check::CheckOutcome::NoRecord
+        );
         assert_eq!(snapshot().unwrap().len(), 2);
     }
 
