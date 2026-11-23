@@ -3,8 +3,8 @@
 //! This repository is the durable authority for username-to-UserId mappings and their
 //! corresponding identity records. The account directory is a projection of this state;
 //! it is not persisted as a second file. The current record schema preserves the existing
-//! PHC credential representation. It is deliberately not exported to the kernel ATID
-//! catalogue until the credential-format migration is implemented and verified.
+//! PHC credential representation and provides a strict, ephemeral PHC-to-ATID/GCR1 export.
+//! Unsupported Argon2id parameters or encodings fail closed; CI equivalence remains required.
 
 use argon2::password_hash::PasswordHash;
 
