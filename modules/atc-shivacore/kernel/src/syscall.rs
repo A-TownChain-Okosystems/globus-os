@@ -427,7 +427,10 @@ mod tests {
             &mut CapabilityTable::new(),
         );
         assert_eq!(response.error, Some(AbiError::EndpointUnavailable));
-        assert_eq!(response.value, 0, "kein Prozess darf vor dem Runtime-Pfad starten");
+        assert_eq!(
+            response.value, 0,
+            "kein Prozess darf vor dem Runtime-Pfad starten"
+        );
     }
 
     #[test]
