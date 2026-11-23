@@ -16,9 +16,6 @@ use std::{
 
 use crate::{AccountUsername, UserId};
 
-const MAGIC: &[u8; 4] = b"GUA1";
-const VERSION: u8 = 1;
-const MAX_ENTRIES: usize = 1_000_000;
 const MAX_FIELD: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -203,99 +200,29 @@ impl AccountDirectoryStore for FileAccountDirectory {
 }
 
 fn encode_entries(entries: &[AccountDirectoryEntry]) -> Result<Vec<u8>, AccountDirectoryError> {
-    if entries.len() > MAX_ENTRIES {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(MAGIC);
-    bytes.push(VERSION);
-    bytes.extend_from_slice(&(entries.len() as u32).to_be_bytes());
-    for entry in entries {
-        let username = entry.username.as_str().as_bytes();
-        let user_id = entry.user_id.as_str().as_bytes();
-        if username.len() > 32
-            || user_id.is_empty()
-            || user_id.len() > MAX_FIELD
-            || username.len() > u8::MAX as usize
-        {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        bytes.push(username.len() as u8);
-        bytes.extend_from_slice(username);
-        bytes.extend_from_slice(&(user_id.len() as u16).to_be_bytes());
-        bytes.extend_from_slice(user_id);
-    }
-    Ok(bytes)
+    let raw: Vec<globus_identity_core::catalog::DirectoryEntry> = entries
+        .iter()
+        .map(|entry| globus_identity_core::catalog::DirectoryEntry {
+            username: entry.username.as_str().to_owned(),
+            user_id: entry.user_id.as_str().to_owned(),
+        })
+        .collect();
+    globus_identity_core::catalog::encode_directory(&raw)
+        .map_err(|_| AccountDirectoryError::Corrupt)
 }
 
 fn decode_entries(bytes: &[u8]) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
-    if bytes.len() < 9 || &bytes[..4] != MAGIC || bytes[4] != VERSION {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    let count = u32::from_be_bytes(
-        bytes[5..9]
-            .try_into()
-            .map_err(|_| AccountDirectoryError::Corrupt)?,
-    ) as usize;
-    if count > MAX_ENTRIES {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    let mut cursor = 9usize;
-    let mut entries = Vec::with_capacity(count);
-    for _ in 0..count {
-        let name_len = *bytes.get(cursor).ok_or(AccountDirectoryError::Corrupt)? as usize;
-        cursor += 1;
-        let name_end = cursor
-            .checked_add(name_len)
-            .ok_or(AccountDirectoryError::Corrupt)?;
-        let name = std::str::from_utf8(
-            bytes
-                .get(cursor..name_end)
-                .ok_or(AccountDirectoryError::Corrupt)?,
-        )
-        .map_err(|_| AccountDirectoryError::Corrupt)?;
-        cursor = name_end;
-        let id_len_end = cursor
-            .checked_add(2)
-            .ok_or(AccountDirectoryError::Corrupt)?;
-        let id_len = u16::from_be_bytes(
-            bytes
-                .get(cursor..id_len_end)
-                .ok_or(AccountDirectoryError::Corrupt)?
-                .try_into()
-                .map_err(|_| AccountDirectoryError::Corrupt)?,
-        ) as usize;
-        cursor = id_len_end;
-        if id_len == 0 || id_len > MAX_FIELD {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        let id_end = cursor
-            .checked_add(id_len)
-            .ok_or(AccountDirectoryError::Corrupt)?;
-        let id = std::str::from_utf8(
-            bytes
-                .get(cursor..id_end)
-                .ok_or(AccountDirectoryError::Corrupt)?,
-        )
-        .map_err(|_| AccountDirectoryError::Corrupt)?;
-        cursor = id_end;
-        if id.as_bytes().contains(&0) {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        let username = AccountUsername::parse(name).map_err(|_| AccountDirectoryError::Corrupt)?;
-        let user_id = UserId::new(id.to_owned()).map_err(|_| AccountDirectoryError::Corrupt)?;
-        if entries
-            .iter()
-            .any(|e: &AccountDirectoryEntry| e.username == username || e.user_id == user_id)
-        {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        entries.push(AccountDirectoryEntry { username, user_id });
-    }
-    if cursor != bytes.len() {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    Ok(entries)
+    globus_identity_core::catalog::parse_directory(bytes)
+        .map_err(|_| AccountDirectoryError::Corrupt)?
+        .into_iter()
+        .map(|entry| {
+            let username =
+                AccountUsername::parse(&entry.username).map_err(|_| AccountDirectoryError::Corrupt)?;
+            let user_id =
+                UserId::new(entry.user_id).map_err(|_| AccountDirectoryError::Corrupt)?;
+            Ok(AccountDirectoryEntry { username, user_id })
+        })
+        .collect()
 }
 
 #[cfg(test)]
