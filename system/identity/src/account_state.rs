@@ -251,11 +251,9 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
             return Err(AccountStateError::GenerationConflict { expected: expected_generation, actual });
         }
         let encoded = next_state.encode()?;
-        let generation = self.encrypted.replace_plaintext(&encoded)?;
-        if generation != expected_generation.checked_add(1).ok_or(AccountStateError::GenerationOverflow)? {
-            return Err(AccountStateError::GenerationConflict { expected: expected_generation, actual: generation });
-        }
-        Ok(generation)
+        self.encrypted
+            .replace_plaintext_at_generation(expected_generation, &encoded)
+            .map_err(AccountStateError::Storage)
     }
 }
 
