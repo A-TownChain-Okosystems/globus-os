@@ -11,7 +11,7 @@ use super::{
 };
 use argon2::password_hash::SaltString;
 use argon2::password_hash::rand_core::OsRng;
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use argon2::{Argon2, PasswordHasher};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Fehler des Identitaetsdienstes.
@@ -267,10 +267,17 @@ fn verify_credential(stored: &str, credential: &[u8]) -> Result<(), IdentityServ
     if credential.is_empty() {
         return Err(IdentityServiceError::InvalidCredentials);
     }
-    let parsed = PasswordHash::new(stored).map_err(|_| IdentityServiceError::InvalidCredentials)?;
-    Argon2::default()
-        .verify_password(credential, &parsed)
-        .map_err(|_| IdentityServiceError::InvalidCredentials)
+    let bytes = crate::account_state::phc_to_atid(stored)
+        .map_err(|_| IdentityServiceError::InvalidCredentials)?;
+    let record = globus_identity_core::CredentialRecord::parse(&bytes)
+        .map_err(|_| IdentityServiceError::InvalidCredentials)?;
+    match record.verify(credential) {
+        Ok(()) => Ok(()),
+        Err(globus_identity_core::VerifyError::WrongPassword) => {
+            Err(IdentityServiceError::InvalidCredentials)
+        }
+        Err(_) => Err(IdentityServiceError::CredentialHashFailed),
+    }
 }
 
 impl Default for IdentityService {
