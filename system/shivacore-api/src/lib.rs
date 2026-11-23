@@ -145,9 +145,7 @@ pub fn encode_identity_login_payload(
 }
 
 /// Parse an LGN1 request, rejecting malformed, non-canonical, truncated, or trailing data.
-pub fn parse_identity_login_payload(
-    bytes: &[u8],
-) -> Result<IdentityLoginPayload<'_>, AbiError> {
+pub fn parse_identity_login_payload(bytes: &[u8]) -> Result<IdentityLoginPayload<'_>, AbiError> {
     if bytes.len() < IDENTITY_LOGIN_HEADER_BYTES
         || &bytes[..4] != IDENTITY_LOGIN_MAGIC
         || bytes[4] != IDENTITY_LOGIN_VERSION
@@ -164,11 +162,10 @@ pub fn parse_identity_login_payload(
     {
         return Err(AbiError::InvalidPayload);
     }
-    let username_bytes = &bytes[IDENTITY_LOGIN_HEADER_BYTES..IDENTITY_LOGIN_HEADER_BYTES + username_len];
+    let username_bytes =
+        &bytes[IDENTITY_LOGIN_HEADER_BYTES..IDENTITY_LOGIN_HEADER_BYTES + username_len];
     if !username_bytes.iter().all(|byte| {
-        byte.is_ascii_lowercase()
-            || byte.is_ascii_digit()
-            || matches!(*byte, b'_' | b'.' | b'-')
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(*byte, b'_' | b'.' | b'-')
     }) || !username_bytes[0].is_ascii_alphanumeric()
         || !username_bytes[username_len - 1].is_ascii_alphanumeric()
     {

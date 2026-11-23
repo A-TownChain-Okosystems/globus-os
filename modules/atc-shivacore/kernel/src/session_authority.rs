@@ -106,9 +106,7 @@ fn capability_for(
         return Err(SessionError::InvalidHandle);
     }
     let cap_id = CapId(opaque_handle & !SESSION_HANDLE_TAG);
-    let capability = authority
-        .capability(cap_id)
-        .ok_or(SessionError::NotFound)?;
+    let capability = authority.capability(cap_id).ok_or(SessionError::NotFound)?;
     if capability.owner != caller_pid {
         return Err(SessionError::WrongOwner);
     }
@@ -159,7 +157,9 @@ pub fn lock(
 ) -> Result<(), SessionError> {
     let (_, session_id) = capability_for(authority, caller_pid, opaque_handle)?;
     let mut sessions = SESSIONS.lock();
-    let session = sessions.get_mut(&session_id).ok_or(SessionError::NotFound)?;
+    let session = sessions
+        .get_mut(&session_id)
+        .ok_or(SessionError::NotFound)?;
     session.state = SessionState::Locked;
     Ok(())
 }

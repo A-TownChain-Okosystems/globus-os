@@ -81,7 +81,9 @@ pub enum AccountStateError {
 
 /// Convert a PHC Argon2id verifier to the existing fixed-width ATID record.
 /// The salt and output hash are copied unchanged; no password or re-hashing is involved.
-pub(crate) fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], AccountStateError> {
+pub(crate) fn phc_to_atid(
+    phc: &str,
+) -> Result<[u8; globus_identity_core::RECORD_LEN], AccountStateError> {
     let parsed = PasswordHash::new(phc).map_err(|_| AccountStateError::CredentialFormatRejected)?;
     if parsed.algorithm.as_str() != "argon2id"
         || parsed.version.map(|v| v.to_string()).as_deref() != Some("19")

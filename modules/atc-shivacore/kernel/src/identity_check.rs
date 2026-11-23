@@ -42,10 +42,7 @@ impl CheckOutcome {
 
 /// Resolve the canonical username and verify its credential. Returns the stable UserId
 /// only on success; the catalog lock is released before Argon2id.
-pub fn authenticate_catalog(
-    username: &str,
-    password: &[u8],
-) -> Result<String, CheckOutcome> {
+pub fn authenticate_catalog(username: &str, password: &[u8]) -> Result<String, CheckOutcome> {
     let Some(account) = crate::identity_catalog::account_for_username(username) else {
         // Keep unknown-user timing close to a real password verification. The
         // derived output is discarded and can never authenticate an account.

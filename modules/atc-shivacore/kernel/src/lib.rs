@@ -87,10 +87,10 @@ pub mod reclaim;
 pub mod scheduler;
 /// Mehrfachsignatur, Schluessel und Sicherheitspruefungen.
 pub mod security;
-/// Stabile Systemaufruf-Grenze.
-pub mod syscall;
 /// Kernel-owned authenticated sessions and session-capability lifecycle.
 pub mod session_authority;
+/// Stabile Systemaufruf-Grenze.
+pub mod syscall;
 /// Der einzige Uebergang vom Userspace in den Kernel.
 pub mod syscall_gate;
 /// Systemstart in Phasen, mit Zustand und Auswertung.
