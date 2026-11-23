@@ -112,12 +112,20 @@ The `AccountStateRepository::export_credential_snapshot()` API produces that eph
 1. `IdentityService` currently creates and stores Argon2id PHC strings in `IdentityRecord`.
 2. The kernel verifier consumes fixed 64-byte `ATID` records through `globus-identity-core`.
 3. `AccountStateRepository` persists the existing PHC representation and now exposes an ephemeral GCR1 export. Conversion is limited to PHC Argon2id v19 records with supported ATID parameters, a 16-byte salt, and a 32-byte output; salt and hash are copied without re-hashing. Unsupported records fail closed. CI verifier-equivalence tests are still required before calling this migration verified.
-4. `AccountStateRepository` exposes generation-bound atomic account insertion, identity replacement (profile/UserId binding preserved), and account removal. `MultiAccountIdentityService` now orchestrates registration, restore, username-bound login, credential rotation, and removal through these commits. The returned session remains an in-process userspace object, not the kernel-owned session required by M3.
+4. `AccountStateRepository` exposes generation-bound atomic account insertion, identity replacement (profile/UserId binding preserved), and account removal. `MultiAccountIdentityService` orchestrates registration, restore, username-bound login, credential rotation, and removal through these commits. The returned session remains an in-process userspace object, not the kernel-owned session required by M3.
 5. A production ShivaCore key-provider binding and target-filesystem reopen/crash tests are not yet evidenced.
 6. The example packer accepts both per-account ATID files and a validated GCR1 snapshot via `--gcr1`. The repository export API and packaging path exist; automated production orchestration and signed boot-catalogue provenance remain open.
 7. GUA1/GCR1 are not signed. The Ramdisk must be treated as trusted input until secure-boot signature verification is separately demonstrated.
 
-Never reinterpret PHC bytes as ATID or introduce a second verifier. The converter parses the PHC structure and copies only validated salt/hash/parameter fields into ATID without re-hashing. The shared `globus-identity-core` verifier remains the sole ATID verifier. Conversion is not considered verified until the generated ATID record passes same-password and wrong-password tests on the current CI head.
+Never reinterpret PHC bytes as ATID or introduce a second verifier. The converter parses the PHC structure, requires Argon2id v19 with the canonical owner KDF profile, and copies only validated salt/hash fields into ATID without re-hashing. `IdentityService` and the kernel both verify through `globus-identity-core`. Conversion is not considered verified until the generated ATID record passes same-password and wrong-password tests on the current CI head.
+
+## M2 username-bound authentication
+
+The existing `IdentityCheck = 0x0070` syscall number is unchanged; ABI minor is 2.1. Multi-account images require the versioned `LGN1` payload containing both canonical username and password. The kernel resolves the username through the published GUA1/GCR1 catalog and verifies only the corresponding ATID record through `globus-identity-core`. The legacy password-only payload is accepted only when the boot path loaded the explicit singleton `sys.identity` compatibility record.
+
+Unknown users are processed with a dummy Argon2id operation and return the same credential-failure result as a wrong password. The Greeter displays one generic failure message. Password and copied payload buffers are cleared after verification. This source implementation is not yet CI_VERIFIED; malformed-pointer, malformed-payload, and cross-account tests must pass on the exact current HEAD.
+
+Successful credential verification still does not create a kernel-owned session or launch a shell. Those are M3 and M4 gates, respectively.
 
 ## Acceptance status
 
@@ -135,4 +143,4 @@ Never reinterpret PHC bytes as ATID or introduce a second verifier. The converte
 - [ ] Two-account BIOS and UEFI QEMU test reaching account-specific login verification.
 - [ ] Exact-HEAD Actions and artifact SHA-256 evidence.
 
-**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, repository-backed multi-account lifecycle orchestration, PHC→ATID export implementation, GUA1/GCR1 codecs, kernel loader, packaging boundary); RESIDUAL/BLOCKED (production key custody, signed catalogue provenance, kernel login/session/process transition, QEMU). No TESTED / CI_VERIFIED / E2E_VERIFIED claim until exact-HEAD workflow and BIOS/UEFI evidence is available.
+**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, repository-backed multi-account lifecycle orchestration, shared credential verifier adapter, PHC→ATID export, GUA1/GCR1 codecs, kernel loader, packaging boundary, username-bound LGN1 authentication source path); RESIDUAL/BLOCKED (production key custody, signed catalogue provenance, kernel-owned session/process transition, rate limiting, QEMU). No TESTED / CI_VERIFIED / E2E_VERIFIED claim until exact-HEAD workflow and BIOS/UEFI evidence is available.
