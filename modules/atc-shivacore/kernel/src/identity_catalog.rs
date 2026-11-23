@@ -119,6 +119,21 @@ mod tests {
             crate::identity_check::authenticate_catalog("alice", b"alice-secret"),
             Ok(String::from("id-alice"))
         );
+        let user_id = crate::identity_check::authenticate_catalog("alice", b"alice-secret")
+            .expect("authentifizierte stabile UserId");
+        let authority = crate::cap_authority::CapabilityAuthority::new();
+        let handle = crate::session_authority::issue(
+            &authority,
+            crate::ats1000::Pid(4242),
+            user_id,
+            100,
+            crate::session_authority::DEFAULT_SESSION_TTL_TICKS,
+        )
+        .expect("Kernel-Sitzung");
+        assert_eq!(
+            crate::session_authority::resolve(&authority, crate::ats1000::Pid(4242), handle, 101),
+            Ok(String::from("id-alice"))
+        );
         assert_eq!(
             crate::identity_check::check_catalog("alice", b"alice-secret"),
             crate::identity_check::CheckOutcome::Ok
