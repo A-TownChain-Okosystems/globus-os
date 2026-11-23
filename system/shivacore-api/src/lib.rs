@@ -66,8 +66,9 @@ pub enum Syscall {
     /// Payload mit kanonischem Benutzernamen und Passwort. Im expliziten
     /// Legacy-Einzelkonto-Image bleibt das alte Passwort-Payload lesbar.
     /// Berechtigt ist nur der Besitzer der Konsolen-Capability.
-    /// Rueckgabe: `0` bestanden, `1` falsch, `2` Konto/Datensatz fehlt,
-    /// `4` KDF nicht verfuegbar.
+    /// Rueckgabe: Legacy-Erfolg `0`; Mehrkonten-Erfolg = getaggtes,
+    /// PID-gebundenes Session-Capability-Handle; `1` falsch, `2` Datensatz
+    /// fehlt, `4` KDF nicht verfuegbar.
     ///
     /// Die Nummer `0x0060` bleibt fuer `SpawnProcess` reserviert (Vorgabe des
     /// Owners); die Pruefung liegt deshalb auf dem naechsten Schritt der
