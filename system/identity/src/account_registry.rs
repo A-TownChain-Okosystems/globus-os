@@ -167,6 +167,7 @@ impl Drop for DirectoryLock {
     }
 }
 
+#[allow(deprecated)]
 impl AccountDirectoryStore for FileAccountDirectory {
     fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
         self.read_entries()?
@@ -181,6 +182,7 @@ impl AccountDirectoryStore for FileAccountDirectory {
     }
 }
 
+#[allow(deprecated)]
 impl MutableAccountDirectoryStore for FileAccountDirectory {
     fn insert_if_absent(
         &mut self,
@@ -248,6 +250,7 @@ fn decode_entries(bytes: &[u8]) -> Result<Vec<AccountDirectoryEntry>, AccountDir
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
