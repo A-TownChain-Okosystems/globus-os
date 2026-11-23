@@ -6,8 +6,9 @@
 
 ## Canonical ownership
 
-- `FileAccountDirectory` / `AccountDirectoryStore` remains the persistent authority for canonical username → stable `UserId`.
-- The existing `GUA1` byte format remains unchanged. Its encoder/parser now lives in `globus-identity-core` as a shared `no_std` codec; `system/identity` delegates to that codec rather than maintaining another interpretation.
+- `AccountStateRepository` is the target single encrypted persistence authority for the complete account set and its credentials. It uses the existing `EncryptedBlobStore` + `FileBlobStore` boundary.
+- `AccountDirectoryStore` is now a read-only projection trait. `AccountState` implements it directly; the legacy `FileAccountDirectory` writer is exposed separately as `MutableAccountDirectoryStore` for import/migration only and must not be used as a second production source of truth.
+- The existing `GUA1` byte format remains unchanged. Its encoder/parser lives in `globus-identity-core` as a shared `no_std` codec; `system/identity` delegates to that codec rather than maintaining another interpretation.
 - `globus-identity-core::CredentialRecord` remains the credential authority: fixed 64-byte `ATID` Argon2id records.
 - `GAC1` is a boot-image envelope only. It embeds the GUA1 directory snapshot and binds exactly one ATID record to each directory `UserId`. It is not persistent account storage.
 - The kernel reads the envelope only from the protected Ramdisk namespace entry `sys.accounts`. User programs and services cannot read `sys.*`.
@@ -38,13 +39,20 @@ The directory is sorted by canonical lowercase username. The parser rejects dupl
 2. `system/identity/src/account_registry.rs`
    - GUA1 encode/decode delegated to identity-core; no second format implementation.
 3. `system/identity/src/boot_catalog.rs`
-   - `build_boot_catalog(AccountDirectoryStore, AccountCredential[])` reads the canonical directory and validates one ATID record per UserId.
+   - `build_boot_catalog(AccountDirectoryStore, AccountCredential[])` reads the canonical directory projection and validates one ATID record per UserId.
 4. `system/identity/examples/build-boot-catalog.rs`
    - Host-side packaging command for an existing GUA1 directory and per-account ATID files.
 5. `modules/atc-shivacore/kernel/src/identity_catalog.rs`
    - Kernel-side atomic parse-and-publish of the complete catalog; no filesystem account database.
 6. `modules/atc-shivacore/kernel/src/main.rs`
    - Loads `sys.accounts`; rejects simultaneous `sys.accounts` and legacy `sys.identity` as ambiguous. The old singleton path remains a compatibility fallback only when no multi-account catalog is present.
+7. `system/identity/src/account_state.rs`
+   - Adds a versioned canonical account-state codec and repository over the existing encrypted blob boundary.
+   - Persists username-to-UserId mapping and IdentityRecord together in one encrypted state object; exposes AccountState as the AccountDirectoryStore read-only projection.
+   - Validates duplicate usernames/UserIds, field bounds, record versions, truncation, and trailing bytes.
+8. `system/identity/src/file_store.rs` and `secure_store.rs`
+   - Serializes writers with a fail-closed lock file and exact generation advancement.
+   - Adds expected-generation commits to prevent stale writers from overwriting newer state.
 7. `scripts/qemu_boot.sh`
    - Accepts an explicit prebuilt catalog via `GLOBUS_ACCOUNT_CATALOG` and places it in the protected Ramdisk namespace. Without it, the script states that multi-account login remains unavailable.
 
@@ -70,12 +78,15 @@ The packer rejects any mismatch between the directory and supplied credential re
 
 ## Remaining M1 integration blockers
 
-**M1 is not yet production-complete.** The catalog codec and kernel loader are implemented, but two existing host/kernel credential contracts are not yet unified:
+**M1 is not yet production-complete.** The catalog codec, kernel loader, and encrypted repository primitive are implemented, but the production account-registration path is not yet wired to the repository and the host/kernel credential contracts remain incompatible:
 
-1. `system/identity::IdentityService` currently stores an Argon2id PHC string in `IdentityRecord`.
+1. `system/identity::IdentityService` currently creates and stores an Argon2id PHC string in `IdentityRecord`.
 2. The kernel's existing `globus-identity-core` verifier consumes the fixed 64-byte `ATID` record.
+3. `AccountStateRepository` currently serializes the PHC-based `IdentityRecord`; it cannot export a valid ATID record without a reviewed credential migration or a credential re-entry ceremony.
+4. The host packaging example still accepts a legacy GUA1 directory file plus external ATID files. It is a transitional tool, not proof that account registration persists directly to the encrypted repository.
+5. The repository uses the existing encrypted-blob/key-provider abstraction, but the production key provider and account lifecycle integration are not yet wired end-to-end.
 
-There is no approved conversion/migration contract between these representations, and the current `IdentityStore` API is a trait with an in-memory implementation rather than a durable per-account backend. The boot packer therefore currently consumes existing ATID files explicitly; it must not silently reinterpret PHC strings or invent a second credential authority.
+There is no approved conversion/migration contract between PHC and ATID. Never reinterpret PHC bytes as ATID, derive ATID from the PHC string, or introduce a parallel verifier. The migration must be explicitly specified and tested before the boot catalog can be generated from production account state.
 
 Additional boundaries:
 - The kernel loads and validates the catalog, but M2 must bind the Greeter username to the selected account and verify that account's ATID record.
@@ -89,9 +100,13 @@ Additional boundaries:
 - [x] Kernel-only Ramdisk entry `sys.accounts`.
 - [x] Fail-closed whole-catalog validation.
 - [x] Explicit QEMU boot-script input.
-- [ ] Durable credential export from the existing production IdentityStore.
+- [x] Versioned encrypted account-state repository primitive over EncryptedBlobStore/FileBlobStore.
+- [x] AccountDirectoryStore read-only projection over AccountState; legacy standalone writer separated.
+- [ ] Wire account registration, password changes, deletion, and recovery to AccountStateRepository commits.
+- [ ] Bind a production ShivaCore key provider and verify persistent reopen on the target filesystem.
 - [ ] Resolve PHC versus ATID as one normative credential representation.
+- [ ] Export boot catalog directly from the unified encrypted repository without external credential sidecars.
 - [ ] QEMU BIOS/UEFI test with two real catalog accounts.
 - [ ] Workflow evidence bound to the resulting exact commit.
 
-**Status:** IMPLEMENTED (catalog codec and loader); RESIDUAL/BLOCKED (production credential-source integration and QEMU evidence). Not E2E_VERIFIED.
+**Status:** IMPLEMENTED (GUA1/GAC1 codecs, kernel catalog loader, encrypted repository primitive, and directory projection); RESIDUAL/BLOCKED (account lifecycle wiring, PHC/ATID migration, production key-provider binding, and QEMU evidence). The current branch head has no completed system CI or QEMU run; this work is not TESTED, CI_VERIFIED, or E2E_VERIFIED.
