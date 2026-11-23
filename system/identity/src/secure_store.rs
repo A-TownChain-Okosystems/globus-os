@@ -91,6 +91,11 @@ impl<B: BlobStore, K: IdentityKeyProvider> EncryptedBlobStore<B, K> {
         decrypt(&blob, &self.keys, current)
     }
 
+    /// Aktuelle Generation des zugrunde liegenden atomaren Backends.
+    pub fn generation(&self) -> Result<u64, SecureStoreError> {
+        self.backend.generation()
+    }
+
     /// Verschluesselt mit der naechsten Generation und schreibt atomar.
     pub fn replace_plaintext(&mut self, plaintext: &[u8]) -> Result<u64, SecureStoreError> {
         let current = self.backend.generation()?;
