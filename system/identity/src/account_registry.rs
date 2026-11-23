@@ -63,7 +63,8 @@ pub trait MutableAccountDirectoryStore: AccountDirectoryStore {
     ) -> Result<(), AccountDirectoryError>;
 }
 
-/// Filesystem-backed username index. Use a path under a trusted, access-controlled data directory.
+/// Legacy filesystem-backed GUA1 index. Production mutations must use AccountStateRepository.
+#[deprecated(note = "legacy standalone directory; use AccountStateRepository as the canonical account store")]
 pub struct FileAccountDirectory {
     path: PathBuf,
     lock_path: PathBuf,
