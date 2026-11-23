@@ -4,7 +4,7 @@
 //! identity-core codec used by the host packer. Both must validate and cross-bind
 //! completely before the catalog becomes visible to any kernel consumer.
 
-use globus_identity_core::catalog::{BootAccountCatalog, CatalogError};
+use globus_identity_core::catalog::{BootAccount, BootAccountCatalog, CatalogError};
 use spin::Mutex;
 
 static CATALOG: Mutex<Option<BootAccountCatalog>> = Mutex::new(None);
@@ -31,10 +31,15 @@ pub fn account_count() -> usize {
 /// Whether a complete catalog was published successfully.
 pub fn is_loaded() -> bool { CATALOG.lock().is_some() }
 
-/// Execute a read-only callback while holding the catalog lock.
-pub fn with_catalog<R>(callback: impl FnOnce(Option<&BootAccountCatalog>) -> R) -> R {
-    let guard = CATALOG.lock();
-    callback(guard.as_ref())
+/// Clone the immutable validated snapshot and release the spin lock immediately.
+/// Callers must not hold the kernel catalog lock while running Argon2id or other slow work.
+pub fn snapshot() -> Option<BootAccountCatalog> {
+    CATALOG.lock().clone()
+}
+
+/// Clone one account entry so credential verification runs outside the spin lock.
+pub fn account_for_username(username: &str) -> Option<BootAccount> {
+    CATALOG.lock().as_ref()?.by_username(username).cloned()
 }
 
 #[cfg(test)]
@@ -74,12 +79,12 @@ mod tests {
         assert_eq!(publish(&directory, &credentials), Ok(2));
         assert_eq!(account_count(), 2);
         assert!(is_loaded());
-        with_catalog(|catalog| {
-            let catalog = catalog.unwrap();
-            assert_eq!(catalog.by_username("alice").unwrap().user_id, "id-alice");
-            assert_eq!(catalog.by_username("bob").unwrap().credential.verify(b"bob-secret"), Ok(()));
-            assert!(catalog.by_username("alice").unwrap().credential.verify(b"bob-secret").is_err());
-        });
+        let alice = account_for_username("alice").unwrap();
+        let bob = account_for_username("bob").unwrap();
+        assert_eq!(alice.user_id, "id-alice");
+        assert_eq!(bob.credential.verify(b"bob-secret"), Ok(()));
+        assert!(alice.credential.verify(b"bob-secret").is_err());
+        assert_eq!(snapshot().unwrap().len(), 2);
     }
 
     #[test]
