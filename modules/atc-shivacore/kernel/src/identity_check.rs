@@ -13,6 +13,7 @@
 // Passwort eine Eingabe.
 // ─────────────────────────────────────────────────────────────────────────
 
+use alloc::string::String;
 use globus_identity_core::{CredentialRecord, VerifyError};
 
 /// Ergebnis einer Pruefung.
@@ -40,9 +41,12 @@ impl CheckOutcome {
     }
 }
 
-/// Resolve the canonical username from the validated multi-account catalog and
-/// verify only that account's credential. The catalog lock is released before Argon2id.
-pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
+/// Resolve the canonical username and verify its credential. Returns the stable UserId
+/// only on success; the catalog lock is released before Argon2id.
+pub fn authenticate_catalog(
+    username: &str,
+    password: &[u8],
+) -> Result<String, CheckOutcome> {
     let Some(account) = crate::identity_catalog::account_for_username(username) else {
         // Keep unknown-user timing close to a real password verification. The
         // derived output is discarded and can never authenticate an account.
@@ -55,17 +59,25 @@ pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
             &mut dummy_hash,
         );
         dummy_hash.fill(0);
-        return if result.is_ok() {
+        return Err(if result.is_ok() {
             CheckOutcome::WrongPassword
         } else {
             CheckOutcome::Unavailable
-        };
+        });
     };
     match account.credential.verify(password) {
-        Ok(()) => CheckOutcome::Ok,
-        Err(VerifyError::WrongPassword) => CheckOutcome::WrongPassword,
-        Err(VerifyError::KdfUnavailable) => CheckOutcome::Unavailable,
-        Err(_) => CheckOutcome::Unavailable,
+        Ok(()) => Ok(account.user_id),
+        Err(VerifyError::WrongPassword) => Err(CheckOutcome::WrongPassword),
+        Err(VerifyError::KdfUnavailable) => Err(CheckOutcome::Unavailable),
+        Err(_) => Err(CheckOutcome::Unavailable),
+    }
+}
+
+/// Compatibility projection for callers that need only a result code.
+pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
+    match authenticate_catalog(username, password) {
+        Ok(_) => CheckOutcome::Ok,
+        Err(outcome) => outcome,
     }
 }
 
