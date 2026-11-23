@@ -12,7 +12,7 @@ use crate::{
     BlobStore, PersistenceError,
 };
 
-use std::{string::String, vec::Vec};
+use std::vec::Vec;
 use core::convert::TryInto;
 
 const MAGIC: &[u8; 4] = b"GAS1";
