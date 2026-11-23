@@ -53,7 +53,8 @@ The kernel does not publish a partial account set. A malformed entry clears the 
 3. `system/identity/src/account_state.rs`
    - Versioned `GAS1` account-state codec and encrypted repository over the existing encrypted blob boundary.
    - Username mapping and IdentityRecord are committed in one encrypted state object.
-   - Exposes an ephemeral GUA1 snapshot directly from the encrypted state; no plaintext sidecar is persisted.
+   - Exposes ephemeral GUA1 and GCR1 snapshots directly from encrypted state; no plaintext sidecar is persisted.
+   - Provides generation-bound `insert_account`, `replace_identity`, and `remove_account` operations. Credential rotation cannot change the stable UserId or profile binding.
 4. `system/identity/src/file_store.rs` and `secure_store.rs`
    - File writers use a fail-closed lock.
    - Generation advancement is serialized and encrypted commits can be bound to an expected generation.
@@ -101,7 +102,7 @@ cargo run -p globus-identity --example build-boot-catalog -- \\
   --gcr1=/run/identity/credentials.gcr
 ```
 
-The `AccountStateRepository::export_credential_snapshot()` API produces that ephemeral GCR1 projection. The packer validates the GUA1/GCR1 one-to-one binding before publishing either output file.
+The `AccountStateRepository::export_credential_snapshot()` API produces that ephemeral GCR1 projection. The packer's `--gcr1` mode validates the GUA1/GCR1 one-to-one binding before publishing either output file. This is implemented at the packaging boundary; production orchestration from the live repository to the image build remains a separate integration step.
 
 ## Remaining M1 blockers
 
@@ -110,9 +111,9 @@ The `AccountStateRepository::export_credential_snapshot()` API produces that eph
 1. `IdentityService` currently creates and stores Argon2id PHC strings in `IdentityRecord`.
 2. The kernel verifier consumes fixed 64-byte `ATID` records through `globus-identity-core`.
 3. `AccountStateRepository` persists the existing PHC representation and now exposes an ephemeral GCR1 export. Conversion is limited to PHC Argon2id v19 records with supported ATID parameters, a 16-byte salt, and a 32-byte output; salt and hash are copied without re-hashing. Unsupported records fail closed. CI verifier-equivalence tests are still required before calling this migration verified.
-4. Registration, password changes, account deletion, and recovery are not yet wired to atomic `AccountStateRepository` commits.
+4. The repository now exposes generation-bound atomic account insertion, identity replacement (profile/UserId binding preserved), and account removal. These are persistence primitives; `IdentityService` / `MultiAccountIdentityService` registration, password-change, recovery, and deletion workflows are not yet orchestrated through them.
 5. A production ShivaCore key-provider binding and target-filesystem reopen/crash tests are not yet evidenced.
-6. The existing example packer still accepts per-account ATID files. The repository export API is available, but the example/production boot-image pipeline is not yet wired to consume the encrypted repository's GCR1 snapshot directly.
+6. The example packer accepts both per-account ATID files and a validated GCR1 snapshot via `--gcr1`. The repository export API and packaging path exist; automated production orchestration and signed boot-catalogue provenance remain open.
 7. GUA1/GCR1 are not signed. The Ramdisk must be treated as trusted input until secure-boot signature verification is separately demonstrated.
 
 Never reinterpret PHC bytes as ATID or introduce a second verifier. The converter parses the PHC structure and copies only validated salt/hash/parameter fields into ATID without re-hashing. The shared `globus-identity-core` verifier remains the sole ATID verifier. Conversion is not considered verified until the generated ATID record passes same-password and wrong-password tests on the current CI head.
@@ -128,10 +129,10 @@ Never reinterpret PHC bytes as ATID or introduce a second verifier. The converte
 - [x] Read-only AccountDirectoryStore projection over AccountState.
 - [x] Ephemeral GUA1 export from AccountStateRepository.
 - [x] Strict PHC Argon2id v19 → ATID conversion and GCR1 snapshot API (implementation present; CI verification pending).
-- [ ] Production account lifecycle wired to AccountStateRepository.
+- [ ] Production key-provider integration and filesystem crash/reopen tests.
 - [ ] Production key-provider integration and filesystem crash/reopen tests.
 - [x] Ephemeral GCR1 export from `AccountStateRepository` (CI verification pending).
 - [ ] Two-account BIOS and UEFI QEMU test reaching account-specific login verification.
 - [ ] Exact-HEAD Actions and artifact SHA-256 evidence.
 
-**Status:** IMPLEMENTED (repository primitive, GUA1/GCR1 codecs, kernel loader, packaging boundary); RESIDUAL/BLOCKED (credential migration, lifecycle integration, production key custody, QEMU). Not TESTED, CI_VERIFIED, or E2E_VERIFIED until current-head workflow evidence is available.
+**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, PHC→ATID export implementation, GUA1/GCR1 codecs, kernel loader, packaging boundary); RESIDUAL/BLOCKED (service lifecycle orchestration, production key custody, signed catalogue provenance, QEMU). CI_VERIFIED and E2E_VERIFIED are not claimed until exact-HEAD workflow and BIOS/UEFI evidence is available.
