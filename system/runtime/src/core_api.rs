@@ -112,7 +112,6 @@ mod tests {
         assert!(!RuntimeCore::new().syscall_supported(Syscall::SpawnProcess));
     }
 
-
     #[test]
     fn runtime_core_uses_kernel_abi_version() {
         assert_eq!(RuntimeCore::new().abi_version(), ABI_VERSION);
