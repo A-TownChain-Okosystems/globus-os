@@ -93,3 +93,72 @@ pub fn build_boot_catalog<D: AccountDirectoryStore>(
         .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
     Ok(BootCatalogImages { accounts, credentials: credential_bytes })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use globus_identity_core::{hash_into, KdfParams, HASH_LEN, RECORD_LEN, SALT_LEN};
+
+    fn atid(password: &[u8], salt_byte: u8) -> Vec<u8> {
+        let params = KdfParams { memory_kib: 8 * 1024, iterations: 1, parallelism: 1 };
+        let salt = [salt_byte; SALT_LEN];
+        let mut hash = [0; HASH_LEN];
+        hash_into(params, password, &salt, &mut hash).unwrap();
+        let mut record = Vec::from(*b"ATID");
+        record.push(1);
+        record.push(1);
+        record.extend_from_slice(&(params.memory_kib as u16).to_le_bytes());
+        record.extend_from_slice(&params.iterations.to_le_bytes());
+        record.push(params.parallelism as u8);
+        record.extend_from_slice(&[0, 0, 0]);
+        record.extend_from_slice(&salt);
+        record.extend_from_slice(&hash);
+        assert_eq!(record.len(), RECORD_LEN);
+        record
+    }
+
+    #[test]
+    fn account_state_directory_view_packages_two_separate_ramdisk_entries() {
+        let directory_bytes = globus_identity_core::catalog::encode_directory(&[
+            globus_identity_core::catalog::DirectoryEntry {
+                username: "alice".into(),
+                user_id: "id-alice".into(),
+            },
+            globus_identity_core::catalog::DirectoryEntry {
+                username: "bob".into(),
+                user_id: "id-bob".into(),
+            },
+        ]).unwrap();
+        let directory = AccountDirectorySnapshot::from_bytes(&directory_bytes).unwrap();
+        let credentials = vec![
+            AccountCredential { user_id: UserId::new("id-bob").unwrap(), record: atid(b"bob-secret", 0x22) },
+            AccountCredential { user_id: UserId::new("id-alice").unwrap(), record: atid(b"alice-secret", 0x11) },
+        ];
+        let images = build_boot_catalog(&directory, &credentials).unwrap();
+        let parsed = globus_identity_core::catalog::parse_boot_catalog(
+            &images.accounts,
+            &images.credentials,
+        ).unwrap();
+        assert_eq!(parsed.len(), 2);
+        assert_eq!(parsed.by_username("alice").unwrap().credential.verify(b"alice-secret"), Ok(()));
+        assert_eq!(parsed.by_username("bob").unwrap().credential.verify(b"bob-secret"), Ok(()));
+    }
+
+    #[test]
+    fn boot_packaging_rejects_missing_or_orphaned_user_credentials() {
+        let directory_bytes = globus_identity_core::catalog::encode_directory(&[
+            globus_identity_core::catalog::DirectoryEntry {
+                username: "alice".into(),
+                user_id: "id-alice".into(),
+            },
+        ]).unwrap();
+        let directory = AccountDirectorySnapshot::from_bytes(&directory_bytes).unwrap();
+        let credentials = vec![
+            AccountCredential { user_id: UserId::new("id-bob").unwrap(), record: atid(b"bob-secret", 0x22) },
+        ];
+        assert_eq!(
+            build_boot_catalog(&directory, &credentials).unwrap_err(),
+            BootCatalogBuildError::InvalidCatalog
+        );
+    }
+}
