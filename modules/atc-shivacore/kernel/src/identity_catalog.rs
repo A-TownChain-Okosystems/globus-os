@@ -11,7 +11,13 @@ static CATALOG: Mutex<Option<BootAccountCatalog>> = Mutex::new(None);
 
 /// Parse and publish the complete catalog atomically. A failed parse leaves it unavailable.
 pub fn publish(bytes: &[u8]) -> Result<usize, CatalogError> {
-    let parsed = globus_identity_core::catalog::parse_boot_catalog(bytes)?;
+    let parsed = match globus_identity_core::catalog::parse_boot_catalog(bytes) {
+        Ok(parsed) => parsed,
+        Err(error) => {
+            *CATALOG.lock() = None;
+            return Err(error);
+        }
+    };
     let count = parsed.len();
     *CATALOG.lock() = Some(parsed);
     Ok(count)
