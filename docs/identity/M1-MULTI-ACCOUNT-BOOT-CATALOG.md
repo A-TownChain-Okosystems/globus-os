@@ -125,7 +125,7 @@ The existing `IdentityCheck = 0x0070` syscall number is unchanged; ABI minor is 
 
 Unknown users are processed with a dummy Argon2id operation and return the same credential-failure result as a wrong password. The Greeter displays one generic failure message. Password and copied payload buffers are cleared after verification. This source implementation is not yet CI_VERIFIED; malformed-pointer, malformed-payload, and cross-account tests must pass on the exact current HEAD.
 
-Successful credential verification still does not create a kernel-owned session or launch a shell. Those are M3 and M4 gates, respectively.
+Successful multi-account credential verification now issues a kernel-owned PID-bound session capability through the existing CapabilityAuthority. The Greeter retains the opaque handle; shell process admission and transfer to the shell remain M4 gates.
 
 ## Acceptance status
 
@@ -143,4 +143,4 @@ Successful credential verification still does not create a kernel-owned session 
 - [ ] Two-account BIOS and UEFI QEMU test reaching account-specific login verification.
 - [ ] Exact-HEAD Actions and artifact SHA-256 evidence.
 
-**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, repository-backed multi-account lifecycle orchestration, shared credential verifier adapter, PHC→ATID export, GUA1/GCR1 codecs, kernel loader, packaging boundary, username-bound LGN1 authentication source path); RESIDUAL/BLOCKED (production key custody, signed catalogue provenance, kernel-owned session/process transition, rate limiting, QEMU). No TESTED / CI_VERIFIED / E2E_VERIFIED claim until exact-HEAD workflow and BIOS/UEFI evidence is available.
+**Status:** IMPLEMENTED (encrypted repository primitive, generation-bound account mutation operations, repository-backed multi-account lifecycle orchestration, shared credential verifier adapter, PHC→ATID export, GUA1/GCR1 codecs, kernel loader, packaging boundary, username-bound LGN1 authentication, kernel-owned PID-bound session capability source path); RESIDUAL/BLOCKED (production key custody, signed catalogue provenance, rate limiting, authorized shell admission/transfer, QEMU). No TESTED / CI_VERIFIED / E2E_VERIFIED claim until exact-HEAD workflow and BIOS/UEFI evidence is available.
