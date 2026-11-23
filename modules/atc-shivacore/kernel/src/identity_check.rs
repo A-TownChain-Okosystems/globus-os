@@ -40,6 +40,20 @@ impl CheckOutcome {
     }
 }
 
+/// Resolve the canonical username from the validated multi-account catalog and
+/// verify only that account's credential. The catalog lock is released before Argon2id.
+pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
+    let Some(account) = crate::identity_catalog::account_for_username(username) else {
+        return CheckOutcome::NoRecord;
+    };
+    match account.credential.verify(password) {
+        Ok(()) => CheckOutcome::Ok,
+        Err(VerifyError::WrongPassword) => CheckOutcome::WrongPassword,
+        Err(VerifyError::KdfUnavailable) => CheckOutcome::Unavailable,
+        Err(_) => CheckOutcome::Unavailable,
+    }
+}
+
 /// Haelt den Datensatz und prueft gegen ihn.
 #[derive(Debug, Default)]
 pub struct IdentityGate {
