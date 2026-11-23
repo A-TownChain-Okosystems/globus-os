@@ -87,7 +87,7 @@ fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], Acco
     let read_param = |name: &str| {
         parsed
             .params
-            .get(name)
+            .get_str(name)
             .and_then(|v| v.parse::<u32>().ok())
             .ok_or(AccountStateError::CredentialFormatRejected)
     };
@@ -109,7 +109,8 @@ fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], Acco
     let mut salt_bytes = [0u8; globus_identity_core::SALT_LEN];
     let salt_len = salt
         .decode_b64(&mut salt_bytes)
-        .map_err(|_| AccountStateError::CredentialFormatRejected)?;
+        .map_err(|_| AccountStateError::CredentialFormatRejected)?
+        .len();
     if salt_len != globus_identity_core::SALT_LEN
         || salt_bytes == [0; globus_identity_core::SALT_LEN]
     {
@@ -119,8 +120,8 @@ fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], Acco
         .hash
         .as_ref()
         .ok_or(AccountStateError::CredentialFormatRejected)?;
-    if hash.as_bytes().len() != globus_identity_core::HASH_LEN
-        || hash.as_bytes().iter().all(|b| *b == 0)
+    if hash.as_ref().len() != globus_identity_core::HASH_LEN
+        || hash.as_ref().iter().all(|b| *b == 0)
         || memory_kib > u16::MAX as u32
     {
         return Err(AccountStateError::CredentialFormatRejected);
@@ -133,7 +134,7 @@ fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], Acco
     record[8..12].copy_from_slice(&iterations.to_le_bytes());
     record[12] = parallelism as u8;
     record[16..32].copy_from_slice(&salt_bytes);
-    record[32..64].copy_from_slice(hash.as_bytes());
+    record[32..64].copy_from_slice(hash.as_ref());
     globus_identity_core::CredentialRecord::parse(&record)
         .map_err(|_| AccountStateError::CredentialFormatRejected)?;
     Ok(record)
