@@ -97,13 +97,13 @@ The packaging tool does not create credentials, derive wallet keys, or mutate pe
 
 1. `IdentityService` currently creates and stores Argon2id PHC strings in `IdentityRecord`.
 2. The kernel verifier consumes fixed 64-byte `ATID` records through `globus-identity-core`.
-3. `AccountStateRepository` currently persists the PHC representation. It can export GUA1, but cannot export valid ATID credentials without a reviewed migration or credential re-entry ceremony.
+3. `AccountStateRepository` persists the existing PHC representation and now exposes an ephemeral GCR1 export. Conversion is limited to PHC Argon2id v19 records with supported ATID parameters, a 16-byte salt, and a 32-byte output; salt and hash are copied without re-hashing. Unsupported records fail closed. CI verifier-equivalence tests are still required before calling this migration verified.
 4. Registration, password changes, account deletion, and recovery are not yet wired to atomic `AccountStateRepository` commits.
 5. A production ShivaCore key-provider binding and target-filesystem reopen/crash tests are not yet evidenced.
-6. The boot packer still receives ATID files as external inputs. It is transitional packaging, not proof that production account state is the source of all boot credentials.
+6. The existing example packer still accepts per-account ATID files. The repository export API is available, but the example/production boot-image pipeline is not yet wired to consume the encrypted repository's GCR1 snapshot directly.
 7. GUA1/GCR1 are not signed. The Ramdisk must be treated as trusted input until secure-boot signature verification is separately demonstrated.
 
-Never reinterpret PHC bytes as ATID, derive ATID from a PHC string, or introduce a second verifier. The PHC/ATID migration must be explicit, reviewed, and tested.
+Never reinterpret PHC bytes as ATID or introduce a second verifier. The converter parses the PHC structure and copies only validated salt/hash/parameter fields into ATID without re-hashing. The shared `globus-identity-core` verifier remains the sole ATID verifier. Conversion is not considered verified until the generated ATID record passes same-password and wrong-password tests on the current CI head.
 
 ## Acceptance status
 
@@ -115,10 +115,10 @@ Never reinterpret PHC bytes as ATID, derive ATID from a PHC string, or introduce
 - [x] Versioned encrypted account-state repository primitive.
 - [x] Read-only AccountDirectoryStore projection over AccountState.
 - [x] Ephemeral GUA1 export from AccountStateRepository.
-- [ ] Credential migration / one normative PHC-or-ATID representation.
+- [x] Strict PHC Argon2id v19 → ATID conversion and GCR1 snapshot API (implementation present; CI verification pending).
 - [ ] Production account lifecycle wired to AccountStateRepository.
 - [ ] Production key-provider integration and filesystem crash/reopen tests.
-- [ ] Direct ATID/GCR1 export from the canonical encrypted repository.
+- [x] Ephemeral GCR1 export from `AccountStateRepository` (CI verification pending).
 - [ ] Two-account BIOS and UEFI QEMU test reaching account-specific login verification.
 - [ ] Exact-HEAD Actions and artifact SHA-256 evidence.
 
