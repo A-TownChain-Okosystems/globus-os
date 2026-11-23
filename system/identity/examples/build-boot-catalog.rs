@@ -39,13 +39,15 @@ fn main() {
     } else {
         let mut credentials = Vec::new();
         for argument in remaining {
-        let (user_id, path) = argument
-            .split_once('=')
-            .unwrap_or_else(|| panic!("credential argument must be <user-id>=<path>"));
-        let user_id = UserId::new(user_id.to_owned()).unwrap_or_else(|_| panic!("invalid UserId"));
-        let record = fs::read(path).unwrap_or_else(|error| panic!("cannot read {path}: {error}"));
-        credentials.push(AccountCredential { user_id, record });
-    }
+            let (user_id, path) = argument
+                .split_once('=')
+                .unwrap_or_else(|| panic!("credential argument must be <user-id>=<path>"));
+            let user_id =
+                UserId::new(user_id.to_owned()).unwrap_or_else(|_| panic!("invalid UserId"));
+            let record =
+                fs::read(path).unwrap_or_else(|error| panic!("cannot read {path}: {error}"));
+            credentials.push(AccountCredential { user_id, record });
+        }
 
         build_boot_catalog(&directory, &credentials)
             .unwrap_or_else(|error| panic!("boot catalog rejected (fail-closed): {error:?}"))
@@ -89,7 +91,7 @@ fn write_atomic(path: &Path, bytes: &[u8]) {
 
 fn usage() -> ! {
     eprintln!(
-        "usage: build-boot-catalog <account-directory.gua> <sys.accounts> <sys.credentials> <user-id>=<credential.atid> [...]"
+        "usage: build-boot-catalog <account-directory.gua> <sys.accounts> <sys.credentials> <user-id>=<credential.atid> [...] | --gcr1=<credential-catalog.gcr>"
     );
     std::process::exit(2);
 }
