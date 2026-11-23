@@ -780,6 +780,11 @@ mod tests {
             phc_to_atid(&extra_parameter),
             Err(AccountStateError::CredentialFormatRejected)
         );
+        let non_default_cost = phc.replace("$m=19456,t=2,p=1$", "$m=8192,t=1,p=1$");
+        assert_eq!(
+            phc_to_atid(&non_default_cost),
+            Err(AccountStateError::CredentialFormatRejected)
+        );
     }
 
     #[test]
