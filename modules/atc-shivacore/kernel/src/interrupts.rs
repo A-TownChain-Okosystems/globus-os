@@ -773,10 +773,14 @@ fn handle_console(pid: Pid, request: SyscallRequest) -> shivacore::syscall::Sysc
     }
 }
 
-/// Prueft einen versionierten Benutzernamen-/Passwort-Request gegen den
-/// kernel-eigenen Mehrkonten-Katalog. Nur der Konsolenbesitzer darf anmelden.
+/// Prueft Zugangsdaten gegen den aktiven Identitaetsmodus.
+/// Mehrkonten-Images verlangen LGN1 (Benutzername + Passwort); nur explizite
+/// Legacy-Einzelkonto-Images akzeptieren weiterhin das alte Passwort-Payload.
 fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscall::SyscallResponse {
-    use libshivacore::{AbiError, IDENTITY_LOGIN_MAX_BYTES, parse_identity_login_payload};
+    use libshivacore::{
+        AbiError, IDENTITY_LOGIN_MAX_BYTES, IDENTITY_MAX_PASSWORD_BYTES,
+        parse_identity_login_payload,
+    };
     use shivacore::capability::{CapId, ResourceType, Rights};
     use shivacore::identity_check::CheckOutcome;
     use shivacore::syscall::SyscallResponse;
@@ -808,7 +812,7 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
     }
 
     let length = request.buffer_len;
-    if length < libshivacore::IDENTITY_LOGIN_HEADER_BYTES || length > IDENTITY_LOGIN_MAX_BYTES {
+    if length == 0 || length > IDENTITY_LOGIN_MAX_BYTES {
         return SyscallResponse::err(AbiError::InvalidPayload);
     }
     let space = USER_SCHEDULER
@@ -832,16 +836,23 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
         );
     }
     let started = unsafe { core::arch::x86_64::_rdtsc() };
-    let parsed = match parse_identity_login_payload(&payload[..length]) {
-        Ok(login) => Some(login),
-        Err(_) => {
+    let outcome = if shivacore::identity_catalog::is_loaded() {
+        match parse_identity_login_payload(&payload[..length]) {
+            Ok(login) => {
+                shivacore::identity_check::check_catalog(login.username, login.password)
+            }
+            Err(_) => {
+                payload.fill(0);
+                return SyscallResponse::err(AbiError::InvalidPayload);
+            }
+        }
+    } else {
+        // Compatibility is restricted to the boot path that loaded only sys.identity.
+        if length > IDENTITY_MAX_PASSWORD_BYTES {
             payload.fill(0);
             return SyscallResponse::err(AbiError::InvalidPayload);
         }
-    };
-    let outcome = {
-        let login = parsed.expect("validated login payload");
-        shivacore::identity_check::check_catalog(login.username, login.password)
+        crate::identity_gate::check(&payload[..length])
     };
     let cycles = unsafe { core::arch::x86_64::_rdtsc() }.saturating_sub(started);
     // Wipe both username and password copies after verification.
