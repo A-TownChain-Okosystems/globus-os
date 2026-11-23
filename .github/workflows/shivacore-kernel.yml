@@ -54,7 +54,9 @@ jobs:
         env:
           RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
         run: |
-          cargo build -p shivacore --release \
+          # The repository root pins stable 1.100.0; the kernel's build-std
+          # target is installed on nightly by dtolnay/rust-toolchain above.
+          cargo +nightly build -p shivacore --release \
             --target x86_64-unknown-none \
             --features x86-boot
 
