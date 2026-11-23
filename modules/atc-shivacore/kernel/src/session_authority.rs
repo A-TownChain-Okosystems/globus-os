@@ -228,8 +228,13 @@ pub fn transfer(
         let mut sessions = SESSIONS.lock();
         sessions
             .remove(&session_id)
-            .ok_or(SessionError::NotFound)?
-            .root_capability
+            .map(|session| session.root_capability)
+    };
+    let Some(root) = root else {
+        // Concurrent source revocation won the race: do not leave an orphaned
+        // target session behind after reporting transfer failure.
+        let _ = revoke(authority, target_pid, replacement);
+        return Err(SessionError::NotFound);
     };
     authority.revoke(root);
     Ok(replacement)
