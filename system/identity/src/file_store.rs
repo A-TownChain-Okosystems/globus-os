@@ -40,6 +40,8 @@ impl FileBlobStore {
     }
 
     fn acquire_lock(&self) -> Result<BlobLock, SecureStoreError> {
+        let parent = self.path.parent().filter(|path| !path.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        fs::create_dir_all(parent).map_err(|_| SecureStoreError::BackendUnavailable)?;
         match OpenOptions::new().write(true).create_new(true).open(&self.lock_path) {
             Ok(mut file) => {
                 let _ = writeln!(file, "pid={}", std::process::id());
