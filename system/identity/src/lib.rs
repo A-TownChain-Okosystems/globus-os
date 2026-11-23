@@ -19,7 +19,7 @@ pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
 pub use account_state::{AccountState, AccountStateEntry, AccountStateError, AccountStateRepository};
-pub use boot_catalog::{AccountCredential, BootCatalogBuildError, BootCatalogImages, build_boot_catalog};
+pub use boot_catalog::{AccountCredential, AccountDirectorySnapshot, BootCatalogBuildError, BootCatalogImages, build_boot_catalog};
 pub use account_registry::{
     AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory, MutableAccountDirectoryStore,
 };
