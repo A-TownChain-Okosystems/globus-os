@@ -60,12 +60,12 @@ pub enum Syscall {
     /// seine Ausgabe geht weiter auf die serielle Schnittstelle. Zwei
     /// Schreiber auf dieselbe Flaeche wuerden sich gegenseitig ueberschreiben.
     Console = 0x0050,
-    /// Prueft ein Passwort gegen den Anmeldedatensatz (IDENT-003).
+    /// Prueft Benutzername und Passwort gegen den Mehrkonten-Katalog (IDENT-M2).
     ///
-    /// Das Passwort steht im Puffer (`buffer_ptr`, `buffer_len`, hoechstens
-    /// `IDENTITY_MAX_PASSWORD_BYTES`). Berechtigt ist nur der Besitzer der
-    /// Konsole — das Anmeldefenster. Rueckgabe: `0` bestanden, `1` falsch,
-    /// `2` kein Datensatz, `3` nicht berechtigt.
+    /// Der Puffer enthaelt ein versioniertes `LGN1`-Payload aus kanonischem
+    /// Benutzernamen und Passwort. Berechtigt ist nur der Konsolenbesitzer.
+    /// Rueckgabe: `0` bestanden, `1` Zugangsdaten falsch, `2` Konto/Katalog
+    /// nicht verfuegbar, `4` KDF nicht verfuegbar.
     ///
     /// Die Nummer `0x0060` bleibt fuer `SpawnProcess` reserviert (Vorgabe des
     /// Owners); die Pruefung liegt deshalb auf dem naechsten Schritt der
@@ -73,8 +73,106 @@ pub enum Syscall {
     IdentityCheck = 0x0070,
 }
 
+/// Laengster kanonischer Benutzername im Login-Payload.
+pub const IDENTITY_MAX_USERNAME_BYTES: usize = 32;
 /// Laengste Passworteingabe, die die Pruefung annimmt.
 pub const IDENTITY_MAX_PASSWORD_BYTES: usize = 64;
+/// Headerlaenge des versionierten Identity-Login-Payloads.
+pub const IDENTITY_LOGIN_HEADER_BYTES: usize = 8;
+/// Groesstes LGN1-Payload: Header + Benutzername + Passwort.
+pub const IDENTITY_LOGIN_MAX_BYTES: usize =
+    IDENTITY_LOGIN_HEADER_BYTES + IDENTITY_MAX_USERNAME_BYTES + IDENTITY_MAX_PASSWORD_BYTES;
+const IDENTITY_LOGIN_MAGIC: &[u8; 4] = b"LGN1";
+const IDENTITY_LOGIN_VERSION: u8 = 1;
+
+/// Parsed, bounded login request. The slices borrow only from the validated payload buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityLoginPayload<'a> {
+    /// Canonical lowercase ASCII username.
+    pub username: &'a str,
+    /// Password bytes; may contain arbitrary non-NUL bytes.
+    pub password: &'a [u8],
+}
+
+/// Encode a versioned username/password request into a caller-owned bounded buffer.
+/// Uppercase ASCII usernames are normalized to lowercase before transmission.
+pub fn encode_identity_login_payload(
+    username: &[u8],
+    password: &[u8],
+    output: &mut [u8],
+) -> Result<usize, AbiError> {
+    if !(3..=IDENTITY_MAX_USERNAME_BYTES).contains(&username.len())
+        || password.is_empty()
+        || password.len() > IDENTITY_MAX_PASSWORD_BYTES
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let total = IDENTITY_LOGIN_HEADER_BYTES + username.len() + password.len();
+    if output.len() < total {
+        return Err(AbiError::InvalidPayload);
+    }
+    let mut canonical = [0u8; IDENTITY_MAX_USERNAME_BYTES];
+    for (index, byte) in username.iter().copied().enumerate() {
+        let byte = byte.to_ascii_lowercase();
+        if !(byte.is_ascii_lowercase()
+            || byte.is_ascii_digit()
+            || matches!(byte, b'_' | b'.' | b'-'))
+        {
+            return Err(AbiError::InvalidPayload);
+        }
+        canonical[index] = byte;
+    }
+    if !canonical[0].is_ascii_alphanumeric()
+        || !canonical[username.len() - 1].is_ascii_alphanumeric()
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    output[..total].fill(0);
+    output[..4].copy_from_slice(IDENTITY_LOGIN_MAGIC);
+    output[4] = IDENTITY_LOGIN_VERSION;
+    output[5] = username.len() as u8;
+    output[6] = password.len() as u8;
+    output[7] = 0;
+    output[IDENTITY_LOGIN_HEADER_BYTES..IDENTITY_LOGIN_HEADER_BYTES + username.len()]
+        .copy_from_slice(&canonical[..username.len()]);
+    output[IDENTITY_LOGIN_HEADER_BYTES + username.len()..total].copy_from_slice(password);
+    Ok(total)
+}
+
+/// Parse an LGN1 request, rejecting malformed, non-canonical, truncated, or trailing data.
+pub fn parse_identity_login_payload(
+    bytes: &[u8],
+) -> Result<IdentityLoginPayload<'_>, AbiError> {
+    if bytes.len() < IDENTITY_LOGIN_HEADER_BYTES
+        || &bytes[..4] != IDENTITY_LOGIN_MAGIC
+        || bytes[4] != IDENTITY_LOGIN_VERSION
+        || bytes[7] != 0
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let username_len = bytes[5] as usize;
+    let password_len = bytes[6] as usize;
+    if !(3..=IDENTITY_MAX_USERNAME_BYTES).contains(&username_len)
+        || password_len == 0
+        || password_len > IDENTITY_MAX_PASSWORD_BYTES
+        || bytes.len() != IDENTITY_LOGIN_HEADER_BYTES + username_len + password_len
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let username_bytes = &bytes[IDENTITY_LOGIN_HEADER_BYTES..IDENTITY_LOGIN_HEADER_BYTES + username_len];
+    if !username_bytes.iter().all(|byte| {
+        byte.is_ascii_lowercase()
+            || byte.is_ascii_digit()
+            || matches!(*byte, b'_' | b'.' | b'-')
+    }) || !username_bytes[0].is_ascii_alphanumeric()
+        || !username_bytes[username_len - 1].is_ascii_alphanumeric()
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let username = core::str::from_utf8(username_bytes).map_err(|_| AbiError::InvalidPayload)?;
+    let password = &bytes[IDENTITY_LOGIN_HEADER_BYTES + username_len..];
+    Ok(IdentityLoginPayload { username, password })
+}
 
 impl Syscall {
     /// Numerische Syscall-Kennung, wie sie im Argumentblock steht.
@@ -628,6 +726,61 @@ mod tests {
         assert_ne!(CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE);
         assert_eq!(CONSOLE_OP_CLEAR, 0);
         assert_eq!(CONSOLE_OP_WRITE, 1);
+    }
+
+    #[test]
+    fn identity_login_payload_round_trips_and_normalizes_username() {
+        let mut bytes = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        let len = encode_identity_login_payload(b"Alice_01", b"secret", &mut bytes).unwrap();
+        let parsed = parse_identity_login_payload(&bytes[..len]).unwrap();
+        assert_eq!(parsed.username, "alice_01");
+        assert_eq!(parsed.password, b"secret");
+    }
+
+    #[test]
+    fn identity_login_payload_rejects_malformed_and_trailing_data() {
+        let mut bytes = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        let len = encode_identity_login_payload(b"alice", b"secret", &mut bytes).unwrap();
+        let mut trailing = bytes;
+        trailing[len] = 1;
+        assert_eq!(
+            parse_identity_login_payload(&trailing[..len + 1]),
+            Err(AbiError::InvalidPayload)
+        );
+        bytes[7] = 1;
+        assert_eq!(
+            parse_identity_login_payload(&bytes[..len]),
+            Err(AbiError::InvalidPayload)
+        );
+        bytes[7] = 0;
+        bytes[4] = 2;
+        assert_eq!(
+            parse_identity_login_payload(&bytes[..len]),
+            Err(AbiError::InvalidPayload)
+        );
+    }
+
+    #[test]
+    fn identity_login_payload_rejects_noncanonical_names_and_bounds() {
+        let mut bytes = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        assert_eq!(
+            encode_identity_login_payload(b"ab", b"secret", &mut bytes),
+            Err(AbiError::InvalidPayload)
+        );
+        assert_eq!(
+            encode_identity_login_payload(b"alice!", b"secret", &mut bytes),
+            Err(AbiError::InvalidPayload)
+        );
+        assert_eq!(
+            encode_identity_login_payload(b"alice", b"", &mut bytes),
+            Err(AbiError::InvalidPayload)
+        );
+        let len = encode_identity_login_payload(b"alice", b"secret", &mut bytes).unwrap();
+        bytes[IDENTITY_LOGIN_HEADER_BYTES] = b'A';
+        assert_eq!(
+            parse_identity_login_payload(&bytes[..len]),
+            Err(AbiError::InvalidPayload)
+        );
     }
 
     #[test]
