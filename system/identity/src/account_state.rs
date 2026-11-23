@@ -108,6 +108,20 @@ impl AccountState {
         self.accounts.iter().find(|entry| &entry.identity.profile.user_id == user_id)
     }
 
+    /// Export only the canonical GUA1 username-to-UserId projection for the boot image.
+    /// Credentials are intentionally excluded and must be exported through the separate
+    /// reviewed ATID/GCR1 credential contract.
+    pub fn directory_snapshot(&self) -> Result<Vec<u8>, AccountStateError> {
+        let entries: Vec<globus_identity_core::catalog::DirectoryEntry> = self.accounts.iter()
+            .map(|entry| globus_identity_core::catalog::DirectoryEntry {
+                username: entry.username.as_str().to_owned(),
+                user_id: entry.identity.profile.user_id.as_str().to_owned(),
+            })
+            .collect();
+        globus_identity_core::catalog::encode_directory(&entries)
+            .map_err(|_| AccountStateError::InvalidField)
+    }
+
     fn encode(&self) -> Result<Vec<u8>, AccountStateError> {
         let validated = Self::new(self.accounts.clone())?;
         let mut out = Vec::new();
@@ -239,6 +253,12 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
         AccountState::decode(&plaintext).map(Some)
     }
 
+    /// Export the ephemeral GUA1 directory projection from the encrypted source of truth.
+    /// No plaintext sidecar is persisted by this operation.
+    pub fn export_directory_snapshot(&self) -> Result<Option<Vec<u8>>, AccountStateError> {
+        self.load_state()?.map(|state| state.directory_snapshot()).transpose()
+    }
+
     /// Commit the complete next state against an expected durable generation.
     /// A stale writer is rejected; callers must reload and reconcile rather than overwrite.
     pub fn commit_state(
@@ -303,6 +323,19 @@ mod tests {
         assert_eq!(decoded.accounts()[0].username.as_str(), "alice");
         assert_eq!(decoded.accounts()[1].username.as_str(), "bob");
         assert_eq!(decoded, state);
+    }
+
+    #[test]
+    fn directory_snapshot_is_exported_from_encrypted_account_state() {
+        let state = AccountState::new(vec![
+            account("bob", "user-bob", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+            account("alice", "user-alice", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+        ]).unwrap();
+        let bytes = state.directory_snapshot().unwrap();
+        let entries = globus_identity_core::catalog::parse_directory(&bytes).unwrap();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].username, "alice");
+        assert_eq!(entries[0].user_id, "user-alice");
     }
 
     #[test]
