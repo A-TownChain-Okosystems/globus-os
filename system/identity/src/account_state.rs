@@ -6,6 +6,8 @@
 //! PHC credential representation. It is deliberately not exported to the kernel ATID
 //! catalogue until the credential-format migration is implemented and verified.
 
+use argon2::password_hash::PasswordHash;
+
 use crate::{
     AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, AccountProfile,
     AccountUsername, BlobStore, CredentialRecord, EncryptedBlobStore, IdentityBinding,
@@ -69,6 +71,44 @@ pub enum AccountStateError {
     },
     /// The durable generation cannot be incremented safely.
     GenerationOverflow,
+    /// A PHC credential cannot be represented by the canonical ATID kernel record.
+    CredentialFormatRejected,
+}
+
+/// Convert a PHC Argon2id verifier to the existing fixed-width ATID record.
+/// The salt and output hash are copied unchanged; no password or re-hashing is involved.
+fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], AccountStateError> {
+    let parsed = PasswordHash::new(phc).map_err(|_| AccountStateError::CredentialFormatRejected)?;
+    if parsed.algorithm.as_str() != "argon2id" || parsed.version.map(|v| v.to_string()).as_deref() != Some("19") {
+        return Err(AccountStateError::CredentialFormatRejected);
+    }
+    let read_param = |name: &str| parsed.params.get(name).and_then(|v| v.parse::<u32>().ok()).ok_or(AccountStateError::CredentialFormatRejected);
+    let memory_kib = read_param("m")?;
+    let iterations = read_param("t")?;
+    let parallelism = read_param("p")?;
+    let params = globus_identity_core::KdfParams { memory_kib, iterations, parallelism };
+    params.validate().map_err(|_| AccountStateError::CredentialFormatRejected)?;
+    let salt = parsed.salt.as_ref().ok_or(AccountStateError::CredentialFormatRejected)?;
+    let mut salt_bytes = [0u8; globus_identity_core::SALT_LEN];
+    let salt_len = salt.decode_b64(&mut salt_bytes).map_err(|_| AccountStateError::CredentialFormatRejected)?;
+    if salt_len != globus_identity_core::SALT_LEN || salt_bytes == [0; globus_identity_core::SALT_LEN] {
+        return Err(AccountStateError::CredentialFormatRejected);
+    }
+    let hash = parsed.hash.as_ref().ok_or(AccountStateError::CredentialFormatRejected)?;
+    if hash.as_bytes().len() != globus_identity_core::HASH_LEN || hash.as_bytes().iter().all(|b| *b == 0) || memory_kib > u16::MAX as u32 {
+        return Err(AccountStateError::CredentialFormatRejected);
+    }
+    let mut record = [0u8; globus_identity_core::RECORD_LEN];
+    record[0..4].copy_from_slice(&globus_identity_core::MAGIC);
+    record[4] = globus_identity_core::FORMAT_VERSION;
+    record[5] = globus_identity_core::KDF_ARGON2ID;
+    record[6..8].copy_from_slice(&(memory_kib as u16).to_le_bytes());
+    record[8..12].copy_from_slice(&iterations.to_le_bytes());
+    record[12] = parallelism as u8;
+    record[16..32].copy_from_slice(&salt_bytes);
+    record[32..64].copy_from_slice(hash.as_bytes());
+    globus_identity_core::CredentialRecord::parse(&record).map_err(|_| AccountStateError::CredentialFormatRejected)?;
+    Ok(record)
 }
 
 impl From<SecureStoreError> for AccountStateError {
@@ -164,6 +204,21 @@ impl AccountState {
             .collect();
         globus_identity_core::catalog::encode_directory(&entries)
             .map_err(|_| AccountStateError::InvalidField)
+    }
+
+    /// Export existing PHC verifiers as canonical ATID records in a GCR1 catalog.
+    /// Conversion copies salt and hash unchanged; unsupported PHC records fail closed.
+    pub fn credential_snapshot(&self) -> Result<Vec<u8>, AccountStateError> {
+        let mut credentials = Vec::with_capacity(self.accounts.len());
+        for entry in &self.accounts {
+            if entry.identity.credential.scheme != "argon2id" {
+                return Err(AccountStateError::CredentialFormatRejected);
+            }
+            let record = phc_to_atid(&entry.identity.credential.phc_hash)?;
+            credentials.push((entry.identity.profile.user_id.as_str().to_owned(), record.to_vec()));
+        }
+        globus_identity_core::catalog::encode_credential_catalog(&credentials)
+            .map_err(|_| AccountStateError::CredentialFormatRejected)
     }
 
     fn encode(&self) -> Result<Vec<u8>, AccountStateError> {
@@ -382,6 +437,12 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
             .transpose()
     }
 
+    /// Export the ephemeral GCR1 credential projection from encrypted canonical state.
+    /// No plaintext credential sidecar is persisted by this operation.
+    pub fn export_credential_snapshot(&self) -> Result<Option<Vec<u8>>, AccountStateError> {
+        self.load_state()?.map(|state| state.credential_snapshot()).transpose()
+    }
+
     /// Commit the complete next state against an expected durable generation.
     /// A stale writer is rejected; callers must reload and reconcile rather than overwrite.
     pub fn commit_state(
@@ -461,6 +522,22 @@ mod tests {
         assert_eq!(decoded.accounts()[0].username.as_str(), "alice");
         assert_eq!(decoded.accounts()[1].username.as_str(), "bob");
         assert_eq!(decoded, state);
+    }
+
+    #[test]
+    fn phc_credentials_export_losslessly_to_kernel_atid_catalog() {
+        let user_id = UserId::new("alice").unwrap();
+        let mut service = crate::IdentityService::new();
+        service.register(user_id, "Alice", b"correct horse battery", 658467, "devnet", 1).unwrap();
+        let state = AccountState::new(vec![AccountStateEntry {
+            username: AccountUsername::parse("alice").unwrap(),
+            identity: service.snapshot().unwrap(),
+        }]).unwrap();
+        let bytes = state.credential_snapshot().unwrap();
+        let catalog = globus_identity_core::catalog::parse_credential_catalog(&bytes).unwrap();
+        let record = &catalog.by_user_id("alice").unwrap().credential;
+        assert_eq!(record.verify(b"correct horse battery"), Ok(()));
+        assert_eq!(record.verify(b"incorrect horse battery"), Err(globus_identity_core::VerifyError::WrongPassword));
     }
 
     #[test]
