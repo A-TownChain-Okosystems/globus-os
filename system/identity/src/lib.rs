@@ -21,7 +21,7 @@ pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConf
 pub use account_state::{AccountState, AccountStateEntry, AccountStateError, AccountStateRepository};
 pub use boot_catalog::{AccountCredential, BootCatalogBuildError, build_boot_catalog};
 pub use account_registry::{
-    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
+    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory, MutableAccountDirectoryStore,
 };
 use bip39::{Language, Mnemonic};
 pub use entropy::{EntropyGate, OsEntropy};
