@@ -103,7 +103,7 @@ The first M1 code slice is gated by a concrete mismatch in the current tree. Do 
 - Ramdisk: kernel can read both `sys.accounts` and `sys.credentials`; Service/Program readers cannot see either.
 - No account becomes visible until the complete catalogue passes validation.
 
-**Current M1 status: BLOCKED — architecture and storage adapters are not yet implemented.** The existing `GUA1` index, PHC credential model, `ATID` kernel record, and singleton ramdisk loader are evidence of partial components, not an integrated multi-account boot catalogue. Do not mark M1 IMPLEMENTED or TESTED until the above gates pass at an exact branch HEAD.
+**Current M1 status: PARTIALLY IMPLEMENTED; production gate remains BLOCKED.** The branch now contains an encrypted `AccountStateRepository` codec/repository over the existing `EncryptedBlobStore` and `FileBlobStore`, and `AccountDirectoryStore` is a read-only projection over `AccountState` / `AccountStateRepository`; the detached `FileAccountDirectory` writer is deprecated. The shared no_std codec now exports separate `sys.accounts` (GUA1) and `sys.credentials` (GCR1 containing existing ATID records) entries, and the kernel validates the pair before publication. The PHC-versus-ATID migration, production `IdentityKeyProvider`, credential export from the encrypted repository, and exact-HEAD QEMU/CI evidence remain open. Therefore M1 is not yet production IMPLEMENTED, TESTED, or E2E_VERIFIED.
 
 ### M2 — Username-bound login ABI
 - Extend the existing ABI without renumbering frozen syscall IDs.
