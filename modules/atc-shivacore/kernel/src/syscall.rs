@@ -178,6 +178,7 @@ impl SyscallDispatcher {
             x if x == Syscall::Exit.id() => Syscall::Exit,
             x if x == Syscall::Console.id() => Syscall::Console,
             x if x == Syscall::IdentityCheck.id() => Syscall::IdentityCheck,
+            x if x == Syscall::SpawnProcess.id() => Syscall::SpawnProcess,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
@@ -195,6 +196,10 @@ impl SyscallDispatcher {
             // Die Anmeldepruefung braucht den Bildschirmbesitz und eine Kopie
             // aus dem Prozessspeicher; der Trampolin faengt sie ab.
             Syscall::IdentityCheck => SyscallResponse::err(AbiError::InvalidPayload),
+            // Der ABI-Vertrag ist registriert, aber der dynamische Ramdisk-Start
+            // samt atomarer Session-Uebertragung ist noch nicht implementiert.
+            // Bis dahin keine Teilwirkung und kein Erfolgsschein: fail-closed.
+            Syscall::SpawnProcess => SyscallResponse::err(AbiError::EndpointUnavailable),
             Syscall::IpcSend => {
                 if !self.check_capability(
                     pid,
