@@ -64,7 +64,9 @@ pub trait MutableAccountDirectoryStore: AccountDirectoryStore {
 }
 
 /// Legacy filesystem-backed GUA1 index. Production mutations must use AccountStateRepository.
-#[deprecated(note = "legacy standalone directory; use AccountStateRepository as the canonical account store")]
+#[deprecated(
+    note = "legacy standalone directory; use AccountStateRepository as the canonical account store"
+)]
 pub struct FileAccountDirectory {
     path: PathBuf,
     lock_path: PathBuf,
@@ -197,7 +199,10 @@ impl MutableAccountDirectoryStore for FileAccountDirectory {
         }
         let _lock = self.acquire_lock()?;
         let mut entries = self.read_entries()?;
-        if entries.iter().any(|entry| entry.username == username || entry.user_id == user_id) {
+        if entries
+            .iter()
+            .any(|entry| entry.username == username || entry.user_id == user_id)
+        {
             return Err(AccountDirectoryError::AlreadyExists);
         }
         entries.push(AccountDirectoryEntry { username, user_id });
@@ -216,10 +221,14 @@ impl AccountDirectoryStore for crate::AccountState {
     }
 
     fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
-        Ok(self.accounts().iter().map(|entry| AccountDirectoryEntry {
-            username: entry.username.clone(),
-            user_id: entry.identity.profile.user_id.clone(),
-        }).collect())
+        Ok(self
+            .accounts()
+            .iter()
+            .map(|entry| AccountDirectoryEntry {
+                username: entry.username.clone(),
+                user_id: entry.identity.profile.user_id.clone(),
+            })
+            .collect())
     }
 }
 
@@ -240,10 +249,9 @@ fn decode_entries(bytes: &[u8]) -> Result<Vec<AccountDirectoryEntry>, AccountDir
         .map_err(|_| AccountDirectoryError::Corrupt)?
         .into_iter()
         .map(|entry| {
-            let username =
-                AccountUsername::parse(&entry.username).map_err(|_| AccountDirectoryError::Corrupt)?;
-            let user_id =
-                UserId::new(entry.user_id).map_err(|_| AccountDirectoryError::Corrupt)?;
+            let username = AccountUsername::parse(&entry.username)
+                .map_err(|_| AccountDirectoryError::Corrupt)?;
+            let user_id = UserId::new(entry.user_id).map_err(|_| AccountDirectoryError::Corrupt)?;
             Ok(AccountDirectoryEntry { username, user_id })
         })
         .collect()

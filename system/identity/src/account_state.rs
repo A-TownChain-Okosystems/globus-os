@@ -7,13 +7,13 @@
 //! catalogue until the credential-format migration is implemented and verified.
 
 use crate::{
-    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, AccountProfile, AccountUsername, CredentialRecord, EncryptedBlobStore, IdentityBinding,
-    IdentityKeyProvider, IdentityRecord, SecureStoreError, UserId, WalletAddress,
-    BlobStore, PersistenceError,
+    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, AccountProfile,
+    AccountUsername, BlobStore, CredentialRecord, EncryptedBlobStore, IdentityBinding,
+    IdentityKeyProvider, IdentityRecord, PersistenceError, SecureStoreError, UserId, WalletAddress,
 };
 
-use std::vec::Vec;
 use core::convert::TryInto;
+use std::vec::Vec;
 
 const MAGIC: &[u8; 4] = b"GAS1";
 const VERSION: u16 = 1;
@@ -56,10 +56,14 @@ pub enum AccountStateError {
 }
 
 impl From<SecureStoreError> for AccountStateError {
-    fn from(value: SecureStoreError) -> Self { Self::Storage(value) }
+    fn from(value: SecureStoreError) -> Self {
+        Self::Storage(value)
+    }
 }
 impl From<PersistenceError> for AccountStateError {
-    fn from(value: PersistenceError) -> Self { Self::Persistence(value) }
+    fn from(value: PersistenceError) -> Self {
+        Self::Persistence(value)
+    }
 }
 
 impl AccountState {
@@ -84,7 +88,13 @@ impl AccountState {
                 return Err(AccountStateError::InvalidField);
             }
             if account.username.as_str().len() > MAX_USERNAME
-                || account.identity.profile.user_id.as_str().as_bytes().contains(&0)
+                || account
+                    .identity
+                    .profile
+                    .user_id
+                    .as_str()
+                    .as_bytes()
+                    .contains(&0)
                 || accounts[..index].iter().any(|previous| {
                     previous.username == account.username
                         || previous.identity.profile.user_id == account.identity.profile.user_id
@@ -96,24 +106,36 @@ impl AccountState {
         Ok(Self { accounts })
     }
 
-    pub fn accounts(&self) -> &[AccountStateEntry] { &self.accounts }
-    pub fn len(&self) -> usize { self.accounts.len() }
-    pub fn is_empty(&self) -> bool { self.accounts.is_empty() }
+    pub fn accounts(&self) -> &[AccountStateEntry] {
+        &self.accounts
+    }
+    pub fn len(&self) -> usize {
+        self.accounts.len()
+    }
+    pub fn is_empty(&self) -> bool {
+        self.accounts.is_empty()
+    }
 
     pub fn by_username(&self, username: &AccountUsername) -> Option<&AccountStateEntry> {
-        self.accounts.binary_search_by(|entry| entry.username.as_str().cmp(username.as_str()))
-            .ok().map(|index| &self.accounts[index])
+        self.accounts
+            .binary_search_by(|entry| entry.username.as_str().cmp(username.as_str()))
+            .ok()
+            .map(|index| &self.accounts[index])
     }
 
     pub fn by_user_id(&self, user_id: &UserId) -> Option<&AccountStateEntry> {
-        self.accounts.iter().find(|entry| &entry.identity.profile.user_id == user_id)
+        self.accounts
+            .iter()
+            .find(|entry| &entry.identity.profile.user_id == user_id)
     }
 
     /// Export only the canonical GUA1 username-to-UserId projection for the boot image.
     /// Credentials are intentionally excluded and must be exported through the separate
     /// reviewed ATID/GCR1 credential contract.
     pub fn directory_snapshot(&self) -> Result<Vec<u8>, AccountStateError> {
-        let entries: Vec<globus_identity_core::catalog::DirectoryEntry> = self.accounts.iter()
+        let entries: Vec<globus_identity_core::catalog::DirectoryEntry> = self
+            .accounts
+            .iter()
             .map(|entry| globus_identity_core::catalog::DirectoryEntry {
                 username: entry.username.as_str().to_owned(),
                 user_id: entry.identity.profile.user_id.as_str().to_owned(),
@@ -134,26 +156,52 @@ impl AccountState {
             put_u8_string(&mut out, entry.username.as_str(), MAX_USERNAME)?;
             put_u16_string(&mut out, profile.user_id.as_str(), MAX_USER_ID)?;
             put_u16_string(&mut out, &profile.display_name, MAX_DISPLAY_NAME)?;
-            put_u16_string(&mut out, profile.wallet_address.as_str(), MAX_WALLET_ADDRESS)?;
+            put_u16_string(
+                &mut out,
+                profile.wallet_address.as_str(),
+                MAX_WALLET_ADDRESS,
+            )?;
             out.extend_from_slice(&profile.binding.chain_id.to_be_bytes());
             put_u16_string(&mut out, &profile.binding.network, MAX_NETWORK)?;
             out.extend_from_slice(&profile.binding.key_version.to_be_bytes());
             out.extend_from_slice(&entry.identity.version.to_be_bytes());
             out.extend_from_slice(&entry.identity.credential.version.to_be_bytes());
-            put_u16_string(&mut out, &entry.identity.credential.phc_hash, MAX_CREDENTIAL)?;
+            put_u16_string(
+                &mut out,
+                &entry.identity.credential.phc_hash,
+                MAX_CREDENTIAL,
+            )?;
         }
         Ok(out)
     }
 
     fn decode(bytes: &[u8]) -> Result<Self, AccountStateError> {
-        if bytes.len() < HEADER_LEN { return Err(AccountStateError::Truncated); }
-        if &bytes[..4] != MAGIC { return Err(AccountStateError::InvalidState); }
-        if u16::from_be_bytes(bytes[4..6].try_into().map_err(|_| AccountStateError::Truncated)?) != VERSION {
+        if bytes.len() < HEADER_LEN {
+            return Err(AccountStateError::Truncated);
+        }
+        if &bytes[..4] != MAGIC {
+            return Err(AccountStateError::InvalidState);
+        }
+        if u16::from_be_bytes(
+            bytes[4..6]
+                .try_into()
+                .map_err(|_| AccountStateError::Truncated)?,
+        ) != VERSION
+        {
             return Err(AccountStateError::UnsupportedVersion);
         }
-        let count = u32::from_be_bytes(bytes[6..10].try_into().map_err(|_| AccountStateError::Truncated)?) as usize;
-        if count > MAX_ACCOUNTS { return Err(AccountStateError::InvalidState); }
-        let mut cursor = Cursor { bytes, offset: HEADER_LEN };
+        let count = u32::from_be_bytes(
+            bytes[6..10]
+                .try_into()
+                .map_err(|_| AccountStateError::Truncated)?,
+        ) as usize;
+        if count > MAX_ACCOUNTS {
+            return Err(AccountStateError::InvalidState);
+        }
+        let mut cursor = Cursor {
+            bytes,
+            offset: HEADER_LEN,
+        };
         let mut accounts = Vec::with_capacity(count);
         for _ in 0..count {
             let username = AccountUsername::parse(cursor.u8_string(MAX_USERNAME)?)
@@ -189,34 +237,59 @@ impl AccountState {
             identity.validate()?;
             accounts.push(AccountStateEntry { username, identity });
         }
-        if cursor.offset != bytes.len() { return Err(AccountStateError::TrailingData); }
+        if cursor.offset != bytes.len() {
+            return Err(AccountStateError::TrailingData);
+        }
         Self::new(accounts)
     }
 }
 
-struct Cursor<'a> { bytes: &'a [u8], offset: usize }
+struct Cursor<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+}
 impl<'a> Cursor<'a> {
     fn take(&mut self, len: usize) -> Result<&'a [u8], AccountStateError> {
-        let end = self.offset.checked_add(len).ok_or(AccountStateError::InvalidField)?;
-        let value = self.bytes.get(self.offset..end).ok_or(AccountStateError::Truncated)?;
+        let end = self
+            .offset
+            .checked_add(len)
+            .ok_or(AccountStateError::InvalidField)?;
+        let value = self
+            .bytes
+            .get(self.offset..end)
+            .ok_or(AccountStateError::Truncated)?;
         self.offset = end;
         Ok(value)
     }
-    fn u8(&mut self) -> Result<u8, AccountStateError> { Ok(self.take(1)?[0]) }
+    fn u8(&mut self) -> Result<u8, AccountStateError> {
+        Ok(self.take(1)?[0])
+    }
     fn u16(&mut self) -> Result<u16, AccountStateError> {
-        Ok(u16::from_be_bytes(self.take(2)?.try_into().map_err(|_| AccountStateError::Truncated)?))
+        Ok(u16::from_be_bytes(
+            self.take(2)?
+                .try_into()
+                .map_err(|_| AccountStateError::Truncated)?,
+        ))
     }
     fn u64(&mut self) -> Result<u64, AccountStateError> {
-        Ok(u64::from_be_bytes(self.take(8)?.try_into().map_err(|_| AccountStateError::Truncated)?))
+        Ok(u64::from_be_bytes(
+            self.take(8)?
+                .try_into()
+                .map_err(|_| AccountStateError::Truncated)?,
+        ))
     }
     fn u8_string(&mut self, max: usize) -> Result<&'a str, AccountStateError> {
         let len = self.u8()? as usize;
-        if len == 0 || len > max { return Err(AccountStateError::InvalidField); }
+        if len == 0 || len > max {
+            return Err(AccountStateError::InvalidField);
+        }
         core::str::from_utf8(self.take(len)?).map_err(|_| AccountStateError::InvalidField)
     }
     fn u16_string(&mut self, max: usize) -> Result<&'a str, AccountStateError> {
         let len = self.u16()? as usize;
-        if len == 0 || len > max { return Err(AccountStateError::InvalidField); }
+        if len == 0 || len > max {
+            return Err(AccountStateError::InvalidField);
+        }
         core::str::from_utf8(self.take(len)?).map_err(|_| AccountStateError::InvalidField)
     }
 }
@@ -243,8 +316,12 @@ pub struct AccountStateRepository<B, K> {
 }
 
 impl<B, K> AccountStateRepository<B, K> {
-    pub fn new(encrypted: EncryptedBlobStore<B, K>) -> Self { Self { encrypted } }
-    pub fn into_inner(self) -> EncryptedBlobStore<B, K> { self.encrypted }
+    pub fn new(encrypted: EncryptedBlobStore<B, K>) -> Self {
+        Self { encrypted }
+    }
+    pub fn into_inner(self) -> EncryptedBlobStore<B, K> {
+        self.encrypted
+    }
 }
 
 impl<B: BlobStore, K: IdentityKeyProvider> AccountDirectoryStore for AccountStateRepository<B, K> {
@@ -268,14 +345,18 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountDirectoryStore for AccountStat
 impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
     /// Load and validate the complete account state. No partial state is returned.
     pub fn load_state(&self) -> Result<Option<AccountState>, AccountStateError> {
-        let Some(plaintext) = self.encrypted.load_plaintext()? else { return Ok(None); };
+        let Some(plaintext) = self.encrypted.load_plaintext()? else {
+            return Ok(None);
+        };
         AccountState::decode(&plaintext).map(Some)
     }
 
     /// Export the ephemeral GUA1 directory projection from the encrypted source of truth.
     /// No plaintext sidecar is persisted by this operation.
     pub fn export_directory_snapshot(&self) -> Result<Option<Vec<u8>>, AccountStateError> {
-        self.load_state()?.map(|state| state.directory_snapshot()).transpose()
+        self.load_state()?
+            .map(|state| state.directory_snapshot())
+            .transpose()
     }
 
     /// Commit the complete next state against an expected durable generation.
@@ -287,7 +368,10 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
     ) -> Result<u64, AccountStateError> {
         let actual = self.encrypted.generation()?;
         if actual != expected_generation {
-            return Err(AccountStateError::GenerationConflict { expected: expected_generation, actual });
+            return Err(AccountStateError::GenerationConflict {
+                expected: expected_generation,
+                actual,
+            });
         }
         let encoded = next_state.encode()?;
         self.encrypted
@@ -299,7 +383,7 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{InMemoryBlobStore, IdentityKeyProvider, SecureStoreError};
+    use crate::{IdentityKeyProvider, InMemoryBlobStore, SecureStoreError};
     use zeroize::Zeroizing;
 
     struct TestKey;
@@ -329,15 +413,27 @@ mod tests {
     #[test]
     fn empty_repository_state_is_valid_before_first_account() {
         let state = AccountState::default();
-        assert_eq!(AccountState::decode(&state.encode().unwrap()).unwrap(), state);
+        assert_eq!(
+            AccountState::decode(&state.encode().unwrap()).unwrap(),
+            state
+        );
     }
 
     #[test]
     fn canonical_state_round_trips_multiple_accounts() {
         let state = AccountState::new(vec![
-            account("bob", "user-bob", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-            account("alice", "user-alice", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-        ]).unwrap();
+            account(
+                "bob",
+                "user-bob",
+                "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+            ),
+            account(
+                "alice",
+                "user-alice",
+                "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+            ),
+        ])
+        .unwrap();
         let decoded = AccountState::decode(&state.encode().unwrap()).unwrap();
         assert_eq!(decoded.accounts()[0].username.as_str(), "alice");
         assert_eq!(decoded.accounts()[1].username.as_str(), "bob");
@@ -347,9 +443,18 @@ mod tests {
     #[test]
     fn directory_snapshot_is_exported_from_encrypted_account_state() {
         let state = AccountState::new(vec![
-            account("bob", "user-bob", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-            account("alice", "user-alice", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-        ]).unwrap();
+            account(
+                "bob",
+                "user-bob",
+                "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+            ),
+            account(
+                "alice",
+                "user-alice",
+                "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+            ),
+        ])
+        .unwrap();
         let bytes = state.directory_snapshot().unwrap();
         let entries = globus_identity_core::catalog::parse_directory(&bytes).unwrap();
         assert_eq!(entries.len(), 2);
@@ -361,8 +466,16 @@ mod tests {
     fn duplicate_username_or_user_id_is_rejected() {
         assert_eq!(
             AccountState::new(vec![
-                account("alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-                account("alice", "user-b", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+                account(
+                    "alice",
+                    "user-a",
+                    "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"
+                ),
+                account(
+                    "alice",
+                    "user-b",
+                    "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"
+                ),
             ]),
             Err(AccountStateError::DuplicateAccount)
         );
@@ -371,22 +484,36 @@ mod tests {
     #[test]
     fn trailing_bytes_are_rejected() {
         let state = AccountState::new(vec![account(
-            "alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"
-        )]).unwrap();
+            "alice",
+            "user-a",
+            "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+        )])
+        .unwrap();
         let mut bytes = state.encode().unwrap();
         bytes.push(0);
-        assert_eq!(AccountState::decode(&bytes), Err(AccountStateError::TrailingData));
+        assert_eq!(
+            AccountState::decode(&bytes),
+            Err(AccountStateError::TrailingData)
+        );
     }
 
     #[test]
     fn encrypted_file_repository_reopens_with_complete_account_state() {
         use std::time::{SystemTime, UNIX_EPOCH};
-        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let unique = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
         let path = std::env::temp_dir().join(format!("globus-account-state-{unique}.blob"));
         let state = AccountState::new(vec![
-            account("alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+            account(
+                "alice",
+                "user-a",
+                "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+            ),
             account("bob", "user-b", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-        ]).unwrap();
+        ])
+        .unwrap();
         {
             let encrypted = EncryptedBlobStore::new(crate::FileBlobStore::open(&path), TestKey);
             let mut repository = AccountStateRepository::new(encrypted);
@@ -398,11 +525,18 @@ mod tests {
             assert_eq!(repository.load_state().unwrap(), Some(state));
             let username = AccountUsername::parse("alice").unwrap();
             assert_eq!(
-                AccountDirectoryStore::lookup(&repository, &username).unwrap().as_str(),
+                AccountDirectoryStore::lookup(&repository, &username)
+                    .unwrap()
+                    .as_str(),
                 "user-a"
             );
             let snapshot = repository.export_directory_snapshot().unwrap().unwrap();
-            assert_eq!(globus_identity_core::catalog::parse_directory(&snapshot).unwrap().len(), 2);
+            assert_eq!(
+                globus_identity_core::catalog::parse_directory(&snapshot)
+                    .unwrap()
+                    .len(),
+                2
+            );
         }
         let _ = std::fs::remove_file(&path);
         let mut lock = path.as_os_str().to_os_string();
@@ -415,23 +549,38 @@ mod tests {
         let encrypted = EncryptedBlobStore::new(InMemoryBlobStore::default(), TestKey);
         let mut repository = AccountStateRepository::new(encrypted);
         let state = AccountState::new(vec![
-            account("alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+            account(
+                "alice",
+                "user-a",
+                "$argon2id$v=19$m=19456,t=2,p=1$salt$hash",
+            ),
             account("bob", "user-b", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-        ]).unwrap();
+        ])
+        .unwrap();
         assert_eq!(repository.commit_state(0, &state).unwrap(), 1);
         assert_eq!(repository.load_state().unwrap(), Some(state));
         assert_eq!(
-            repository.lookup(&AccountUsername::parse("alice").unwrap()).unwrap().as_str(),
+            repository
+                .lookup(&AccountUsername::parse("alice").unwrap())
+                .unwrap()
+                .as_str(),
             "user-a"
         );
         assert_eq!(repository.entries().unwrap().len(), 2);
         assert!(matches!(
-            repository.commit_state(0, &AccountState::new(vec![
-                account("alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
-            ]).unwrap()),
-            Err(AccountStateError::GenerationConflict { expected: 0, actual: 1 })
+            repository.commit_state(
+                0,
+                &AccountState::new(vec![account(
+                    "alice",
+                    "user-a",
+                    "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"
+                ),])
+                .unwrap()
+            ),
+            Err(AccountStateError::GenerationConflict {
+                expected: 0,
+                actual: 1
+            })
         ));
     }
-
-
 }

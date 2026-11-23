@@ -39,8 +39,11 @@ impl AccountDirectorySnapshot {
 
 impl AccountDirectoryStore for AccountDirectorySnapshot {
     fn lookup(&self, username: &crate::AccountUsername) -> Result<UserId, AccountDirectoryError> {
-        self.entries.iter().find(|entry| &entry.username == username)
-            .map(|entry| entry.user_id.clone()).ok_or(AccountDirectoryError::NotFound)
+        self.entries
+            .iter()
+            .find(|entry| &entry.username == username)
+            .map(|entry| entry.user_id.clone())
+            .ok_or(AccountDirectoryError::NotFound)
     }
 
     fn entries(&self) -> Result<Vec<crate::AccountDirectoryEntry>, AccountDirectoryError> {
@@ -73,7 +76,9 @@ pub fn build_boot_catalog<D: AccountDirectoryStore>(
     directory: &D,
     credentials: &[AccountCredential],
 ) -> Result<BootCatalogImages, BootCatalogBuildError> {
-    let entries = directory.entries().map_err(BootCatalogBuildError::Directory)?;
+    let entries = directory
+        .entries()
+        .map_err(BootCatalogBuildError::Directory)?;
     let raw_entries: Vec<globus_identity_core::catalog::DirectoryEntry> = entries
         .into_iter()
         .map(|entry| globus_identity_core::catalog::DirectoryEntry {
@@ -85,22 +90,35 @@ pub fn build_boot_catalog<D: AccountDirectoryStore>(
         .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
     let raw_credentials: Vec<(String, Vec<u8>)> = credentials
         .iter()
-        .map(|credential| (credential.user_id.as_str().to_owned(), credential.record.clone()))
+        .map(|credential| {
+            (
+                credential.user_id.as_str().to_owned(),
+                credential.record.clone(),
+            )
+        })
         .collect();
-    let credential_bytes = globus_identity_core::catalog::encode_credential_catalog(&raw_credentials)
-        .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+    let credential_bytes =
+        globus_identity_core::catalog::encode_credential_catalog(&raw_credentials)
+            .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
     globus_identity_core::catalog::parse_boot_catalog(&accounts, &credential_bytes)
         .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
-    Ok(BootCatalogImages { accounts, credentials: credential_bytes })
+    Ok(BootCatalogImages {
+        accounts,
+        credentials: credential_bytes,
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use globus_identity_core::{hash_into, KdfParams, HASH_LEN, RECORD_LEN, SALT_LEN};
+    use globus_identity_core::{HASH_LEN, KdfParams, RECORD_LEN, SALT_LEN, hash_into};
 
     fn atid(password: &[u8], salt_byte: u8) -> Vec<u8> {
-        let params = KdfParams { memory_kib: 8 * 1024, iterations: 1, parallelism: 1 };
+        let params = KdfParams {
+            memory_kib: 8 * 1024,
+            iterations: 1,
+            parallelism: 1,
+        };
         let salt = [salt_byte; SALT_LEN];
         let mut hash = [0; HASH_LEN];
         hash_into(params, password, &salt, &mut hash).unwrap();
@@ -128,20 +146,42 @@ mod tests {
                 username: "bob".into(),
                 user_id: "id-bob".into(),
             },
-        ]).unwrap();
+        ])
+        .unwrap();
         let directory = AccountDirectorySnapshot::from_bytes(&directory_bytes).unwrap();
         let credentials = vec![
-            AccountCredential { user_id: UserId::new("id-bob").unwrap(), record: atid(b"bob-secret", 0x22) },
-            AccountCredential { user_id: UserId::new("id-alice").unwrap(), record: atid(b"alice-secret", 0x11) },
+            AccountCredential {
+                user_id: UserId::new("id-bob").unwrap(),
+                record: atid(b"bob-secret", 0x22),
+            },
+            AccountCredential {
+                user_id: UserId::new("id-alice").unwrap(),
+                record: atid(b"alice-secret", 0x11),
+            },
         ];
         let images = build_boot_catalog(&directory, &credentials).unwrap();
         let parsed = globus_identity_core::catalog::parse_boot_catalog(
             &images.accounts,
             &images.credentials,
-        ).unwrap();
+        )
+        .unwrap();
         assert_eq!(parsed.len(), 2);
-        assert_eq!(parsed.by_username("alice").unwrap().credential.verify(b"alice-secret"), Ok(()));
-        assert_eq!(parsed.by_username("bob").unwrap().credential.verify(b"bob-secret"), Ok(()));
+        assert_eq!(
+            parsed
+                .by_username("alice")
+                .unwrap()
+                .credential
+                .verify(b"alice-secret"),
+            Ok(())
+        );
+        assert_eq!(
+            parsed
+                .by_username("bob")
+                .unwrap()
+                .credential
+                .verify(b"bob-secret"),
+            Ok(())
+        );
     }
 
     #[test]
@@ -151,11 +191,13 @@ mod tests {
                 username: "alice".into(),
                 user_id: "id-alice".into(),
             },
-        ]).unwrap();
+        ])
+        .unwrap();
         let directory = AccountDirectorySnapshot::from_bytes(&directory_bytes).unwrap();
-        let credentials = vec![
-            AccountCredential { user_id: UserId::new("id-bob").unwrap(), record: atid(b"bob-secret", 0x22) },
-        ];
+        let credentials = vec![AccountCredential {
+            user_id: UserId::new("id-bob").unwrap(),
+            record: atid(b"bob-secret", 0x22),
+        }];
         assert!(matches!(
             build_boot_catalog(&directory, &credentials),
             Err(BootCatalogBuildError::InvalidCatalog)

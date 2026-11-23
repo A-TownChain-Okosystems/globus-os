@@ -32,7 +32,10 @@ impl FileBlobStore {
         let path = path.into();
         let mut lock_name = path.as_os_str().to_os_string();
         lock_name.push(".lock");
-        Self { path, lock_path: PathBuf::from(lock_name) }
+        Self {
+            path,
+            lock_path: PathBuf::from(lock_name),
+        }
     }
     /// Pfad der Zustandsdatei.
     pub fn path(&self) -> &Path {
@@ -40,9 +43,17 @@ impl FileBlobStore {
     }
 
     fn acquire_lock(&self) -> Result<BlobLock, SecureStoreError> {
-        let parent = self.path.parent().filter(|path| !path.as_os_str().is_empty()).unwrap_or(Path::new("."));
+        let parent = self
+            .path
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
         fs::create_dir_all(parent).map_err(|_| SecureStoreError::BackendUnavailable)?;
-        match OpenOptions::new().write(true).create_new(true).open(&self.lock_path) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&self.lock_path)
+        {
             Ok(mut file) => {
                 let _ = writeln!(file, "pid={}", std::process::id());
                 if file.sync_all().is_err() {
@@ -50,9 +61,13 @@ impl FileBlobStore {
                     let _ = fs::remove_file(&self.lock_path);
                     return Err(SecureStoreError::BackendUnavailable);
                 }
-                Ok(BlobLock { path: self.lock_path.clone() })
+                Ok(BlobLock {
+                    path: self.lock_path.clone(),
+                })
             }
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Err(SecureStoreError::Conflict),
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                Err(SecureStoreError::Conflict)
+            }
             Err(_) => Err(SecureStoreError::BackendUnavailable),
         }
     }
@@ -134,9 +149,13 @@ impl FileBlobStore {
     }
 }
 
-struct BlobLock { path: PathBuf }
+struct BlobLock {
+    path: PathBuf,
+}
 impl Drop for BlobLock {
-    fn drop(&mut self) { let _ = fs::remove_file(&self.path); }
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
 }
 
 impl BlobStore for FileBlobStore {
@@ -148,15 +167,23 @@ impl BlobStore for FileBlobStore {
     fn replace(&mut self, blob: &[u8], generation: u64) -> Result<(), SecureStoreError> {
         let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
-        let expected = current.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
+        let expected = current
+            .checked_add(1)
+            .ok_or(SecureStoreError::GenerationOverflow)?;
         if current != 0 && generation < expected {
-            return Err(SecureStoreError::RollbackDetected { stored: current, incoming: generation });
+            return Err(SecureStoreError::RollbackDetected {
+                stored: current,
+                incoming: generation,
+            });
         }
         if current != 0 && generation != expected {
             return Err(SecureStoreError::Conflict);
         }
         if generation == 0 {
-            return Err(SecureStoreError::RollbackDetected { stored: current, incoming: generation });
+            return Err(SecureStoreError::RollbackDetected {
+                stored: current,
+                incoming: generation,
+            });
         }
         self.atomic_write(PRESENT, generation, blob)
     }
@@ -168,7 +195,9 @@ impl BlobStore for FileBlobStore {
     fn delete(&mut self) -> Result<(), SecureStoreError> {
         let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
-        let generation = current.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
+        let generation = current
+            .checked_add(1)
+            .ok_or(SecureStoreError::GenerationOverflow)?;
         self.atomic_write(DELETED, generation, &[])
     }
 }

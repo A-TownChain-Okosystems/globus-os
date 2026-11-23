@@ -456,13 +456,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                             );
                             match (account_directory, credential_catalog, legacy_identity) {
                                 (Some(_), Some(_), None) => {
-                                    let directory_bytes = account_directory
-                                        .and_then(|entry| entry.data(bytes));
-                                    let credential_bytes = credential_catalog
-                                        .and_then(|entry| entry.data(bytes));
+                                    let directory_bytes =
+                                        account_directory.and_then(|entry| entry.data(bytes));
+                                    let credential_bytes =
+                                        credential_catalog.and_then(|entry| entry.data(bytes));
                                     match (directory_bytes, credential_bytes) {
                                         (Some(directory), Some(credentials)) => {
-                                            match shivacore::identity_catalog::publish(directory, credentials) {
+                                            match shivacore::identity_catalog::publish(
+                                                directory,
+                                                credentials,
+                                            ) {
                                                 Ok(count) => serial_println!(
                                                     "ShivaCore: IDENT-M1 Mehrkonten-Katalog geladen ({} Konten, GUA1 + GCR1/ATID)",
                                                     count

@@ -16,17 +16,16 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use globus_identity::{
-    build_boot_catalog, AccountCredential, AccountDirectorySnapshot, UserId,
-};
+use globus_identity::{AccountCredential, AccountDirectorySnapshot, UserId, build_boot_catalog};
 
 fn main() {
     let mut args = env::args().skip(1);
     let directory_path = args.next().unwrap_or_else(|| usage());
     let accounts_path = PathBuf::from(args.next().unwrap_or_else(|| usage()));
     let credentials_path = PathBuf::from(args.next().unwrap_or_else(|| usage()));
-    let directory_bytes = fs::read(&directory_path)
-        .unwrap_or_else(|error| panic!("cannot read exported GUA1 snapshot {directory_path}: {error}"));
+    let directory_bytes = fs::read(&directory_path).unwrap_or_else(|error| {
+        panic!("cannot read exported GUA1 snapshot {directory_path}: {error}")
+    });
     let directory = AccountDirectorySnapshot::from_bytes(&directory_bytes)
         .unwrap_or_else(|error| panic!("exported GUA1 snapshot rejected: {error:?}"));
     let mut credentials = Vec::new();
@@ -44,17 +43,31 @@ fn main() {
         .unwrap_or_else(|error| panic!("boot catalog rejected (fail-closed): {error:?}"));
     write_atomic(&accounts_path, &images.accounts);
     write_atomic(&credentials_path, &images.credentials);
-    println!("GUA1 sys.accounts: {} bytes -> {}", images.accounts.len(), accounts_path.display());
-    println!("GCR1 sys.credentials: {} bytes -> {}", images.credentials.len(), credentials_path.display());
+    println!(
+        "GUA1 sys.accounts: {} bytes -> {}",
+        images.accounts.len(),
+        accounts_path.display()
+    );
+    println!(
+        "GCR1 sys.credentials: {} bytes -> {}",
+        images.credentials.len(),
+        credentials_path.display()
+    );
 }
 
 fn write_atomic(path: &Path, bytes: &[u8]) {
-    let parent = path.parent().filter(|value| !value.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    let parent = path
+        .parent()
+        .filter(|value| !value.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
     fs::create_dir_all(parent).expect("cannot create output directory");
     let mut temporary = path.as_os_str().to_os_string();
     temporary.push(format!(".tmp.{}", std::process::id()));
     let temporary = PathBuf::from(temporary);
-    let mut file = OpenOptions::new().write(true).create_new(true).open(&temporary)
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)
         .expect("temporary output exists or cannot be created");
     file.write_all(bytes).expect("cannot write output");
     file.sync_all().expect("cannot sync output");
@@ -66,6 +79,8 @@ fn write_atomic(path: &Path, bytes: &[u8]) {
 }
 
 fn usage() -> ! {
-    eprintln!("usage: build-boot-catalog <account-directory.gua> <sys.accounts> <sys.credentials> <user-id>=<credential.atid> [...]");
+    eprintln!(
+        "usage: build-boot-catalog <account-directory.gua> <sys.accounts> <sys.credentials> <user-id>=<credential.atid> [...]"
+    );
     std::process::exit(2);
 }

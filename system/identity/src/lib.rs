@@ -18,12 +18,18 @@ mod service;
 pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
-pub use account_state::{AccountState, AccountStateEntry, AccountStateError, AccountStateRepository};
-pub use boot_catalog::{AccountCredential, AccountDirectorySnapshot, BootCatalogBuildError, BootCatalogImages, build_boot_catalog};
 pub use account_registry::{
-    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory, MutableAccountDirectoryStore,
+    AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
+    MutableAccountDirectoryStore,
+};
+pub use account_state::{
+    AccountState, AccountStateEntry, AccountStateError, AccountStateRepository,
 };
 use bip39::{Language, Mnemonic};
+pub use boot_catalog::{
+    AccountCredential, AccountDirectorySnapshot, BootCatalogBuildError, BootCatalogImages,
+    build_boot_catalog,
+};
 pub use entropy::{EntropyGate, OsEntropy};
 pub use file_store::FileBlobStore;
 use hmac::{Hmac, Mac};

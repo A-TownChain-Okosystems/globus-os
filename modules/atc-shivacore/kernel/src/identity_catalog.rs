@@ -11,7 +11,10 @@ static CATALOG: Mutex<Option<BootAccountCatalog>> = Mutex::new(None);
 
 /// Parse and publish both Ramdisk entries atomically. Any error clears the published snapshot.
 pub fn publish(directory_bytes: &[u8], credential_bytes: &[u8]) -> Result<usize, CatalogError> {
-    let parsed = match globus_identity_core::catalog::parse_boot_catalog(directory_bytes, credential_bytes) {
+    let parsed = match globus_identity_core::catalog::parse_boot_catalog(
+        directory_bytes,
+        credential_bytes,
+    ) {
         Ok(parsed) => parsed,
         Err(error) => {
             *CATALOG.lock() = None;
@@ -29,7 +32,9 @@ pub fn account_count() -> usize {
 }
 
 /// Whether a complete catalog was published successfully.
-pub fn is_loaded() -> bool { CATALOG.lock().is_some() }
+pub fn is_loaded() -> bool {
+    CATALOG.lock().is_some()
+}
 
 /// Clone the immutable validated snapshot and release the spin lock immediately.
 /// Callers must not hold the kernel catalog lock while running Argon2id or other slow work.
@@ -45,12 +50,18 @@ pub fn account_for_username(username: &str) -> Option<BootAccount> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use globus_identity_core::catalog::{encode_credential_catalog, encode_directory, DirectoryEntry};
-    use globus_identity_core::{hash_into, KdfParams, HASH_LEN, RECORD_LEN, SALT_LEN};
     use alloc::{string::String, vec::Vec};
+    use globus_identity_core::catalog::{
+        DirectoryEntry, encode_credential_catalog, encode_directory,
+    };
+    use globus_identity_core::{HASH_LEN, KdfParams, RECORD_LEN, SALT_LEN, hash_into};
 
     fn record(password: &[u8], salt_byte: u8) -> [u8; RECORD_LEN] {
-        let params = KdfParams { memory_kib: 8 * 1024, iterations: 1, parallelism: 1 };
+        let params = KdfParams {
+            memory_kib: 8 * 1024,
+            iterations: 1,
+            parallelism: 1,
+        };
         let salt = [salt_byte; SALT_LEN];
         let mut hash = [0; HASH_LEN];
         hash_into(params, password, &salt, &mut hash).unwrap();
@@ -69,13 +80,27 @@ mod tests {
     #[test]
     fn kernel_publishes_only_a_complete_two_entry_catalog() {
         let directory = encode_directory(&[
-            DirectoryEntry { username: String::from("alice"), user_id: String::from("id-alice") },
-            DirectoryEntry { username: String::from("bob"), user_id: String::from("id-bob") },
-        ]).unwrap();
+            DirectoryEntry {
+                username: String::from("alice"),
+                user_id: String::from("id-alice"),
+            },
+            DirectoryEntry {
+                username: String::from("bob"),
+                user_id: String::from("id-bob"),
+            },
+        ])
+        .unwrap();
         let credentials = encode_credential_catalog(&[
-            (String::from("id-alice"), Vec::from(record(b"alice-secret", 0x11))),
-            (String::from("id-bob"), Vec::from(record(b"bob-secret", 0x22))),
-        ]).unwrap();
+            (
+                String::from("id-alice"),
+                Vec::from(record(b"alice-secret", 0x11)),
+            ),
+            (
+                String::from("id-bob"),
+                Vec::from(record(b"bob-secret", 0x22)),
+            ),
+        ])
+        .unwrap();
         assert_eq!(publish(&directory, &credentials), Ok(2));
         assert_eq!(account_count(), 2);
         assert!(is_loaded());
@@ -89,12 +114,16 @@ mod tests {
 
     #[test]
     fn invalid_cross_reference_is_rejected_by_shared_codec() {
-        let directory = encode_directory(&[
-            DirectoryEntry { username: String::from("alice"), user_id: String::from("id-alice") },
-        ]).unwrap();
-        let credentials = encode_credential_catalog(&[
-            (String::from("id-bob"), Vec::from(record(b"bob-secret", 0x22))),
-        ]).unwrap();
+        let directory = encode_directory(&[DirectoryEntry {
+            username: String::from("alice"),
+            user_id: String::from("id-alice"),
+        }])
+        .unwrap();
+        let credentials = encode_credential_catalog(&[(
+            String::from("id-bob"),
+            Vec::from(record(b"bob-secret", 0x22)),
+        )])
+        .unwrap();
         assert_eq!(
             globus_identity_core::catalog::parse_boot_catalog(&directory, &credentials),
             Err(CatalogError::MissingCredential)
