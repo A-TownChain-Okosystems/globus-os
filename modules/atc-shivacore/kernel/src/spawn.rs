@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ─────────────────────────────────────────────────────────────────────────
-// Spawn-Annahme (ABI 2.1): Init beantragt ein Programm aus dem Ramdisk-Verzeichnis.
+// Spawn-Annahme (ABI 2.2): Init beantragt ein Programm aus dem Ramdisk-Verzeichnis.
 //
 // Der Kernel liest das Verzeichnis heute selbst und startet, was er findet. Damit
 // entscheidet der Kernel statt des Init. Dieser Pfad dreht es um: der Aufruf kommt
@@ -11,7 +11,8 @@
 // fehlte, war der aufbauende Weg: Wurzel, Mapper und Abbildung aus dem
 // Laufzeitkontext. Er steht jetzt in `build_space` und benutzt dieselben
 // Bausteine wie der Bootpfad — kein zweiter Weg zum selben Ziel. Der Aufruf
-// ueber die ABI (SpawnProcess) ist noch nicht verdrahtet.
+// ueber die ABI (SpawnProcess) ist als fail-closed Opcode registriert; die Runtime-
+// // Integration (ELF-Laden, PID/Slot, Scheduler, CR3 und Session-Uebergabe) fehlt noch.
 // ─────────────────────────────────────────────────────────────────────────
 
 use crate::elf_loader::ElfParser;
