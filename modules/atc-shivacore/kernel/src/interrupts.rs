@@ -773,14 +773,12 @@ fn handle_console(pid: Pid, request: SyscallRequest) -> shivacore::syscall::Sysc
     }
 }
 
-/// Prueft ein Passwort aus dem Anmeldefenster.
-///
-/// Berechtigt ist nur der Besitzer der Konsole: das Anmeldefenster haelt die
-/// Konsolen-Capability, ein beliebiges Programm nicht. Der Nachweis laeuft
-/// ueber dieselbe Capability wie das Schreiben auf den Bildschirm.
+/// Prueft einen versionierten Benutzernamen-/Passwort-Request gegen den
+/// kernel-eigenen Mehrkonten-Katalog. Nur der Konsolenbesitzer darf anmelden.
 fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscall::SyscallResponse {
-    use libshivacore::{AbiError, IDENTITY_MAX_PASSWORD_BYTES};
+    use libshivacore::{AbiError, IDENTITY_LOGIN_MAX_BYTES, parse_identity_login_payload};
     use shivacore::capability::{CapId, ResourceType, Rights};
+    use shivacore::identity_check::CheckOutcome;
     use shivacore::syscall::SyscallResponse;
 
     let Some(handle) = request.capability else {
@@ -810,7 +808,7 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
     }
 
     let length = request.buffer_len;
-    if length == 0 || length > IDENTITY_MAX_PASSWORD_BYTES {
+    if length < libshivacore::IDENTITY_LOGIN_HEADER_BYTES || length > IDENTITY_LOGIN_MAX_BYTES {
         return SyscallResponse::err(AbiError::InvalidPayload);
     }
     let space = USER_SCHEDULER
@@ -824,20 +822,30 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
         return SyscallResponse::err(AbiError::InvalidPayload);
     }
 
-    // Kopie in den Kernel, danach wird nur noch Kernspeicher gelesen.
-    let mut password = [0u8; IDENTITY_MAX_PASSWORD_BYTES];
+    // Copy the complete bounded request into kernel-owned memory before parsing.
+    let mut payload = [0u8; IDENTITY_LOGIN_MAX_BYTES];
     unsafe {
         core::ptr::copy_nonoverlapping(
             request.buffer_ptr as *const u8,
-            password.as_mut_ptr(),
+            payload.as_mut_ptr(),
             length,
         );
     }
     let started = unsafe { core::arch::x86_64::_rdtsc() };
-    let outcome = crate::identity_gate::check(&password[..length]);
+    let parsed = match parse_identity_login_payload(&payload[..length]) {
+        Ok(login) => Some(login),
+        Err(_) => {
+            payload.fill(0);
+            return SyscallResponse::err(AbiError::InvalidPayload);
+        }
+    };
+    let outcome = {
+        let login = parsed.expect("validated login payload");
+        shivacore::identity_check::check_catalog(login.username, login.password)
+    };
     let cycles = unsafe { core::arch::x86_64::_rdtsc() }.saturating_sub(started);
-    // Das Passwort bleibt nicht im Kernspeicher liegen.
-    password.fill(0);
+    // Wipe both username and password copies after verification.
+    payload.fill(0);
 
     serial_println!(
         "ShivaCore: Anmeldepruefung: PID={} Ergebnis={:?} ({} TSC-Zyklen, {} Byte)",
@@ -851,12 +859,8 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
         "identity.checked",
         &alloc::format!("pid={:?} outcome={:?}", pid, outcome),
         match outcome {
-            shivacore::identity_check::CheckOutcome::Ok => {
-                shivacore::security::AuditResult::Allowed
-            }
-            shivacore::identity_check::CheckOutcome::WrongPassword => {
-                shivacore::security::AuditResult::Denied
-            }
+            CheckOutcome::Ok => shivacore::security::AuditResult::Allowed,
+            CheckOutcome::WrongPassword => shivacore::security::AuditResult::Denied,
             _ => shivacore::security::AuditResult::Error,
         },
     );
