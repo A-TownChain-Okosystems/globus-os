@@ -156,9 +156,9 @@ mod tests {
         let credentials = vec![
             AccountCredential { user_id: UserId::new("id-bob").unwrap(), record: atid(b"bob-secret", 0x22) },
         ];
-        assert_eq!(
-            build_boot_catalog(&directory, &credentials).unwrap_err(),
-            BootCatalogBuildError::InvalidCatalog
-        );
+        assert!(matches!(
+            build_boot_catalog(&directory, &credentials),
+            Err(BootCatalogBuildError::InvalidCatalog)
+        ));
     }
 }
