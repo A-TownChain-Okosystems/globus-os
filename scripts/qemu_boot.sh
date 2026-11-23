@@ -58,8 +58,17 @@ GREETER_ELF="$ROOT/modules/atc-shivacore/greeter/target/x86_64-unknown-none/rele
 echo "== 4/5 Disk-Image erzeugen =="
 # Zwei Eintraege: das Init bleibt Prozess 1 (Messprogramm), das Anmeldefenster
 # wird der vierte Prozess. Der Kernel waehlt nach Namen, nicht nach Reihenfolge.
+RAMDISK_ENTRIES=("init=$INIT_ELF" "greeter=$GREETER_ELF")
+if [ -n "${GLOBUS_ACCOUNT_CATALOG:-}" ]; then
+  [ -f "$GLOBUS_ACCOUNT_CATALOG" ] || die "Mehrkonten-Katalog fehlt: $GLOBUS_ACCOUNT_CATALOG"
+  RAMDISK_ENTRIES+=("sys.accounts=$GLOBUS_ACCOUNT_CATALOG")
+  echo "Mehrkonten-Katalog: $GLOBUS_ACCOUNT_CATALOG"
+else
+  echo "WARNUNG: GLOBUS_ACCOUNT_CATALOG nicht gesetzt — Mehrkonten-Login wird fail-closed bleiben."
+fi
+
 "$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images" \
-  "init=$INIT_ELF" "greeter=$GREETER_ELF"
+  "${RAMDISK_ENTRIES[@]}"
 
 echo "== 5/5 QEMU $RUN_SECONDS s (Log: $LOG) =="
 set +e
