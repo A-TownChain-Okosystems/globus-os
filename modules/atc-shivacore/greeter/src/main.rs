@@ -194,7 +194,8 @@ impl Login {
     /// der Bildschirm in dieser Zeit nicht steht, wird VOR dem Aufruf
     /// gezeichnet; der Aufruf blockiert das Programm, die Anzeige bleibt.
     fn verify(&mut self, console: u64) {
-        self.session_handle = 0;
+        // A failed re-authentication does not silently destroy an already
+        // authenticated session. A successful new login replaces it in-kernel.
         let mut payload = [0u8; IDENTITY_LOGIN_MAX_BYTES];
         let payload_len = match encode_identity_login_payload(
             &self.user[..self.user_len],
