@@ -15,7 +15,7 @@ use crate::cap_authority::CapabilityAuthority;
 use crate::capability::{CapId, ResourceType, Rights};
 
 /// Marker distinguishing an opaque session capability from ordinary result codes.
-pub const SESSION_HANDLE_TAG: u64 = 1 << 63;
+pub const SESSION_HANDLE_TAG: u64 = libshivacore::IDENTITY_SESSION_HANDLE_TAG;
 /// Default five-minute session lifetime at the 100 Hz kernel timer rate.
 pub const DEFAULT_SESSION_TTL_TICKS: u64 = 5 * 60 * 100;
 
