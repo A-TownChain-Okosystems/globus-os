@@ -23,16 +23,32 @@ const HEADER_LEN: usize = 4 + 1 + 1 + 8 + 8;
 /// Atomarer Einzeldatei-Speicher fuer einen verschluesselten Identity-Blob.
 pub struct FileBlobStore {
     path: PathBuf,
+    lock_path: PathBuf,
 }
 
 impl FileBlobStore {
     /// Bindet den Speicher an einen Pfad, ohne das Dateisystem anzufassen.
     pub fn open(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        let path = path.into();
+        let mut lock_name = path.as_os_str().to_os_string();
+        lock_name.push(".lock");
+        Self { path, lock_path: PathBuf::from(lock_name) }
     }
     /// Pfad der Zustandsdatei.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn acquire_lock(&self) -> Result<BlobLock, SecureStoreError> {
+        match OpenOptions::new().write(true).create_new(true).open(&self.lock_path) {
+            Ok(mut file) => {
+                let _ = writeln!(file, "pid={}", std::process::id());
+                file.sync_all().map_err(|_| SecureStoreError::BackendUnavailable)?;
+                Ok(BlobLock { path: self.lock_path.clone() })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Err(SecureStoreError::Conflict),
+            Err(_) => Err(SecureStoreError::BackendUnavailable),
+        }
     }
 
     fn read_state(&self) -> Result<(u8, u64, Vec<u8>), SecureStoreError> {
@@ -112,6 +128,11 @@ impl FileBlobStore {
     }
 }
 
+struct BlobLock { path: PathBuf }
+impl Drop for BlobLock {
+    fn drop(&mut self) { let _ = fs::remove_file(&self.path); }
+}
+
 impl BlobStore for FileBlobStore {
     fn load(&self) -> Result<Option<Vec<u8>>, SecureStoreError> {
         let (state, _, blob) = self.read_state()?;
@@ -119,12 +140,14 @@ impl BlobStore for FileBlobStore {
     }
 
     fn replace(&mut self, blob: &[u8], generation: u64) -> Result<(), SecureStoreError> {
+        let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
-        if generation <= current && current != 0 {
-            return Err(SecureStoreError::RollbackDetected {
-                stored: current,
-                incoming: generation,
-            });
+        let expected = current.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
+        if generation < expected {
+            return Err(SecureStoreError::RollbackDetected { stored: current, incoming: generation });
+        }
+        if generation != expected {
+            return Err(SecureStoreError::Conflict);
         }
         self.atomic_write(PRESENT, generation, blob)
     }
@@ -134,10 +157,9 @@ impl BlobStore for FileBlobStore {
     }
 
     fn delete(&mut self) -> Result<(), SecureStoreError> {
+        let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
-        let generation = current
-            .checked_add(1)
-            .ok_or(SecureStoreError::GenerationOverflow)?;
+        let generation = current.checked_add(1).ok_or(SecureStoreError::GenerationOverflow)?;
         self.atomic_write(DELETED, generation, &[])
     }
 }
