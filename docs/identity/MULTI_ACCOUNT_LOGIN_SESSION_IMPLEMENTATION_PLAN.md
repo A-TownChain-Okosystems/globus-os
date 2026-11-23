@@ -104,13 +104,21 @@ The first M1 code slice is gated by a concrete mismatch in the current tree. Do 
 - Ramdisk: kernel can read both `sys.accounts` and `sys.credentials`; Service/Program readers cannot see either.
 - No account becomes visible until the complete catalogue passes validation.
 
-**Current M1 status: IMPLEMENTED at the repository/codec/kernel-loader boundary; production gate remains BLOCKED.** The branch contains the encrypted `AccountStateRepository` over the existing `EncryptedBlobStore` and `FileBlobStore`; `AccountDirectoryStore` is a read-only projection and the detached `FileAccountDirectory` writer is deprecated. Generation-bound repository operations now support atomic account insertion, profile-preserving identity replacement, and account removal. The PHC→ATID bridge and ephemeral GUA1/GCR1 exports are implemented; the `--gcr1` packer path validates the pair. Exact-HEAD CI, production key-provider binding, orchestration of `IdentityService` lifecycle through the repository, signed catalogue provenance, and QEMU evidence remain open. M1 is not yet TESTED, CI_VERIFIED, or E2E_VERIFIED.
+**Current M1 status: IMPLEMENTED at the repository, service-orchestration, codec, and kernel-loader source boundaries; production gate remains BLOCKED.** The branch contains the encrypted `AccountStateRepository` over the existing `EncryptedBlobStore` and `FileBlobStore`; `AccountDirectoryStore` is a read-only projection and the detached `FileAccountDirectory` writer is deprecated. Generation-bound operations support atomic account insertion, profile-preserving identity replacement, and account removal. `MultiAccountIdentityService` now orchestrates registration, restore, username login, credential rotation, and removal through those commits. PHC Argon2id v19 conversion is strict and uses the shared `globus-identity-core` verifier for userspace and kernel verification; GUA1/GCR1 exports and the `--gcr1` packer path are implemented. Production key custody, signed catalogue provenance, exact-HEAD CI, crash/reopen evidence, and BIOS/UEFI QEMU remain open. M1 is not TESTED, CI_VERIFIED, or E2E_VERIFIED.
 
 ### M2 — Username-bound login ABI
-- Extend the existing ABI without renumbering frozen syscall IDs.
-- Add bounded user-memory copy and zeroization.
-- Bind the Greeter username field to the actual authentication decision.
-- Add unknown-user, wrong-password, cross-account, and malformed-pointer tests.
+
+**Implemented on the branch; exact-HEAD verification pending.**
+
+- ABI minor version is now 2.1. The frozen `IdentityCheck = 0x0070` number remains unchanged; `0x0060` remains reserved for `SpawnProcess`.
+- Multi-account mode uses an 8-byte `LGN1` header: magic, payload version, username length, password length, and a zero reserved byte; bounded username and password bytes follow.
+- The Greeter sends both fields. The encoder canonicalizes ASCII usernames to lowercase and rejects invalid names and lengths.
+- The kernel validates the request and user-memory range, copies the bounded payload into kernel memory, resolves the username through the published `identity_catalog`, and verifies only that account's ATID record outside the catalogue lock.
+- Unknown usernames use a dummy Argon2id operation and return the same failure code as a wrong password. The Greeter presents one generic credential-failure message.
+- The old password-only request remains restricted to the explicit legacy `sys.identity` single-account boot path. A multi-account image requires LGN1; it does not fall back to the singleton verifier.
+- `IdentityService` now uses the same `globus-identity-core` verifier through the strict PHC→ATID adapter.
+
+**M2 remaining:** exact-HEAD tests for malformed pointers, malformed payloads, username normalization, wrong-password and cross-account denial; rate limiting / lockout policy; successful authentication still does not issue a kernel-owned session. Session creation belongs to M3.
 
 ### M3 — Session authority
 - Create a kernel-owned opaque session handle after successful identity verification.
