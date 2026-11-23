@@ -61,9 +61,49 @@ The current kernel `IdentityGate` remains the security enforcement boundary for 
 ## 6. Implementation sequence
 
 ### M1 — Multi-account boot credential catalogue
-- Replace the singleton boot credential fixture with a validated account catalogue using existing account IDs and credential record formats.
-- Define and test the on-image layout and account-directory-to-record binding.
-- Add duplicate, missing, corrupt, mismatched-ID, and oversized-record rejection tests.
+- Implement one encrypted account-state repository by reusing the existing encrypted-blob and file-blob boundaries.
+- Make the existing AccountDirectoryStore behavior a view over that repository; do not create a second persistent account store.
+- Reconcile PHC and ATID credential formats; use globus-identity-core as the sole credential creation/verification authority.
+- Export the validated account directory and per-account ATID records into reserved kernel-only ramdisk catalogue entries.
+- Validate the complete catalogue and all cross-references before publishing any account.
+
+### M1 implementation gate — storage and format reconciliation
+
+The first M1 code slice is gated by a concrete mismatch in the current tree. Do not wire the existing files together by copying records or creating a second account database.
+
+**Observed at the audited base commit** `4c62f28fe28fbd4de6053e99a4622406d1c33626`:
+
+| Existing component | Actual contract | Integration limitation |
+|---|---|---|
+| `FileAccountDirectory` | Filesystem-backed `GUA1` username → `UserId` index; atomic single-file replacement | Plain index is a separate file; not atomic with account credentials |
+| `IdentityStore` | One `IdentityRecord` per store; credential is a PHC Argon2id string | No concrete durable multi-account adapter/codec is wired |
+| `MultiAccountIdentityService` | Per-`UserId` in-memory map of `IdentityService` | Restart loses all accounts and sessions |
+| `EncryptedBlobStore<FileBlobStore, ...>` | Encrypted opaque blob with generation/rollback checks | No serializer/repository adapter for the complete account state |
+| `transaction_journal` | Journal codec/state machine plus abstract `JournalBackend` | No durable backend/replay coordinator is wired |
+| Kernel `globus-identity-core` | Canonical fixed-size 64-byte `ATID` Argon2id record | Not byte-compatible with the userspace PHC credential field |
+| Ramdisk `SRAM` | Entry names limited to 16 ASCII bytes; count is u16 | A separate entry per arbitrary `UserId` is not a safe catalogue format |
+| Kernel `identity_file` | Loads only `sys.identity` | Singleton gate cannot represent multiple accounts |
+
+**Important correction:** the existing `AccountDirectoryStore` interface and `FileAccountDirectory` implementation do not, by themselves, provide a durable multi-account identity database. The existing `MULTI_ACCOUNT_TRANSACTION_MODEL.md` already requires one encrypted account-state blob as the single commit point. M1 must implement that repository boundary by reusing `EncryptedBlobStore` and `FileBlobStore`, not by adding a second database or a plaintext sidecar.
+
+**M1 order of work:**
+
+1. Implement the single encrypted account-state repository described in `MULTI_ACCOUNT_TRANSACTION_MODEL.md`. It owns the existing username directory and per-account identity records in one versioned state object. Expose the existing `AccountDirectoryStore` behavior as a view/adapter over this repository; do not make `FileAccountDirectory` a second production source of truth.
+2. Reconcile credential representation. The userspace `system/identity` currently stores PHC strings and uses its own Argon2id calls; the kernel uses the 64-byte `ATID` record and `globus-identity-core`. Select `ATID` as the shared login credential representation and move credential creation/verification behind `globus-identity-core`. Preserve an explicit, tested migration path for any existing PHC records; never reinterpret PHC bytes as ATID.
+3. Add a bounded, versioned boot export from the unified repository. The export is a read-only projection, not persistent storage.
+4. Use two reserved kernel-only SRAM entries: `sys.accounts` (the existing canonical username → `UserId` directory encoding) and `sys.credentials` (a versioned credential catalogue keyed by full `UserId`, each value containing exactly one 64-byte ATID record). This avoids SRAM's 16-byte entry-name limit and does not expose account records to Ring 3.
+5. Kernel validates both entries, canonical username rules, unique usernames, unique UserIds, one-to-one directory/credential membership, all ATID records, maximum count/size, and absence of trailing bytes before publishing any account. Any error rejects the entire catalogue (fail closed); no partial account set is published.
+6. Remove the production dependency on singleton `sys.identity`. A temporary compatibility path is allowed only behind an explicit migration flag and must never silently become the default when the multi-account catalogue is malformed or absent.
+
+**M1 tests required before completion:**
+
+- Unified repository: reopen after restart; two or more accounts; atomic commit; rollback/generation rejection; injected failures; username/record cross-reference invariants.
+- Credential contract: identical test vectors in host and kernel for ATID issue/parse/verify; wrong password; malformed PHC migration; invalid parameters; salt/hash zeroization; no plaintext credentials in storage or logs.
+- Boot catalogue: empty, missing, duplicate, mismatched, corrupt, truncated, oversized, unsupported-version, unknown-user, extra-credential, and trailing-byte cases.
+- Ramdisk: kernel can read both `sys.accounts` and `sys.credentials`; Service/Program readers cannot see either.
+- No account becomes visible until the complete catalogue passes validation.
+
+**Current M1 status: BLOCKED — architecture and storage adapters are not yet implemented.** The existing `GUA1` index, PHC credential model, `ATID` kernel record, and singleton ramdisk loader are evidence of partial components, not an integrated multi-account boot catalogue. Do not mark M1 IMPLEMENTED or TESTED until the above gates pass at an exact branch HEAD.
 
 ### M2 — Username-bound login ABI
 - Extend the existing ABI without renumbering frozen syscall IDs.
