@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ─────────────────────────────────────────────────────────────────────────
-// IDENT-003 — das Prueftor des Anmeldefensters
+// IDENT-003 / IDENT-M2 — kernel-owned credential verification
 //
-// Der Datensatz gehoert dem Kernel (Ramdisk, `sys.identity`), das Passwort
-// kommt aus dem Fenster. Geprueft wird hier: eine Stelle fuer die Frage
-// "stimmt dieses Passwort", damit Fenster und Kernel nicht zwei Wahrheiten
-// haben.
+// Multi-account authentication resolves the canonical username through the
+// validated GUA1/GCR1 catalog and verifies the matching ATID record. The old
+// singleton IdentityGate remains only for the explicit legacy sys.identity path.
 //
 // Der Datensatz wird beim Boot einmal gelesen und hier abgelegt. Fehlt er,
 // antwortet das Tor mit `NoRecord` und nicht mit "falsch" — der Unterschied
@@ -81,7 +80,7 @@ pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
     }
 }
 
-/// Haelt den Datensatz und prueft gegen ihn.
+/// Legacy-only singleton gate for boot images that still carry sys.identity.
 #[derive(Debug, Default)]
 pub struct IdentityGate {
     record: Option<CredentialRecord>,
