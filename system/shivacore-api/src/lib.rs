@@ -84,6 +84,8 @@ pub const IDENTITY_LOGIN_HEADER_BYTES: usize = 8;
 /// Groesstes LGN1-Payload: Header + Benutzername + Passwort.
 pub const IDENTITY_LOGIN_MAX_BYTES: usize =
     IDENTITY_LOGIN_HEADER_BYTES + IDENTITY_MAX_USERNAME_BYTES + IDENTITY_MAX_PASSWORD_BYTES;
+/// High-bit tag on an IdentityCheck success value carrying a session capability.
+pub const IDENTITY_SESSION_HANDLE_TAG: u64 = 1 << 63;
 const IDENTITY_LOGIN_MAGIC: &[u8; 4] = b"LGN1";
 const IDENTITY_LOGIN_VERSION: u8 = 1;
 
