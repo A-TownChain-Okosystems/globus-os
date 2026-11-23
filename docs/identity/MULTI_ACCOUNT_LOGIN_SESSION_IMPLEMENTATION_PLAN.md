@@ -121,9 +121,17 @@ The first M1 code slice is gated by a concrete mismatch in the current tree. Do 
 **M2 remaining:** exact-HEAD tests for malformed pointers, malformed payloads, username normalization, wrong-password and cross-account denial; rate limiting / lockout policy; successful authentication still does not issue a kernel-owned session. Session creation belongs to M3.
 
 ### M3 — Session authority
-- Create a kernel-owned opaque session handle after successful identity verification.
-- Bind it to canonical UserId, expiry, lock state, and revocation.
-- Integrate with the existing CapabilityAuthority; test cross-session isolation and revocation.
+
+**Kernel session source path implemented; shell handoff and exact-HEAD verification remain open.**
+
+- Successful multi-account IdentityCheck now returns a tagged opaque session-capability handle rather than a boolean success code.
+- A kernel-owned session registry binds the handle to the stable UserId, owner PID, issue tick, expiry tick, root capability, and Active/Locked state.
+- The existing CapabilityAuthority creates the minimal READ-only IdentitySession capability. Handles are PID-bound and are not bearer tokens.
+- Session resolution validates the live capability and expiry; lock and revoke operations are kernel-owned. Expiry revokes the root capability and descendants.
+- Process exit cleanup revokes sessions owned by the exiting PID. The Greeter retains the handle only in its process state.
+- A transfer primitive reissues a new root session capability for a kernel-created target PID and revokes the Greeter's prior root; M4 must call this only after trusted process creation.
+
+**M3 remaining:** invoke lock/logout explicitly where required, wire session resolution into process admission, test delegated-session isolation and BIOS/UEFI lifecycle, and obtain exact-HEAD CI evidence. Session creation is not yet E2E_VERIFIED.
 
 ### M4 — Authorized process transition
 - Add a process-start contract through the existing syscall gate and process manager.
