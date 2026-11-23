@@ -65,13 +65,13 @@ pub fn issue(
         .checked_add(ttl_ticks)
         .ok_or(SessionError::InvalidLifetime)?;
 
-    // A Greeter process may hold at most one live login session.
-    revoke_for_pid(owner_pid, authority);
-
     let session_id = NEXT_SESSION_ID.fetch_add(1, Ordering::Relaxed);
     if session_id == 0 || session_id >= SESSION_HANDLE_TAG {
         return Err(SessionError::Exhausted);
     }
+
+    // A Greeter process may hold at most one live login session.
+    revoke_for_pid(owner_pid, authority);
     let capability = authority.create(
         owner_pid,
         ResourceType::IdentitySession,
