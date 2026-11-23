@@ -571,7 +571,11 @@ pub fn cleanup_process(pid: Pid) -> usize {
     let revoked = {
         let mut guard = SYSCALL_GATE.lock();
         match guard.as_mut() {
-            Some(gate) => gate.revoke_all_for(pid),
+            Some(gate) => {
+                let sessions =
+                    shivacore::session_authority::revoke_for_pid(pid, gate.authority());
+                sessions + gate.revoke_all_for(pid)
+            }
             None => 0,
         }
     };
