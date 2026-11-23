@@ -836,11 +836,15 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
         );
     }
     let started = unsafe { core::arch::x86_64::_rdtsc() };
-    let outcome = if shivacore::identity_catalog::is_loaded() {
+    let (outcome, authenticated_user) = if shivacore::identity_catalog::is_loaded() {
         match parse_identity_login_payload(&payload[..length]) {
-            Ok(login) => {
-                shivacore::identity_check::check_catalog(login.username, login.password)
-            }
+            Ok(login) => match shivacore::identity_check::authenticate_catalog(
+                login.username,
+                login.password,
+            ) {
+                Ok(user_id) => (CheckOutcome::Ok, Some(user_id)),
+                Err(outcome) => (outcome, None),
+            },
             Err(_) => {
                 payload.fill(0);
                 return SyscallResponse::err(AbiError::InvalidPayload);
@@ -852,11 +856,30 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
             payload.fill(0);
             return SyscallResponse::err(AbiError::InvalidPayload);
         }
-        crate::identity_gate::check(&payload[..length])
+        (crate::identity_gate::check(&payload[..length]), None)
     };
     let cycles = unsafe { core::arch::x86_64::_rdtsc() }.saturating_sub(started);
     // Wipe both username and password copies after verification.
     payload.fill(0);
+
+    let response_value = if let Some(user_id) = authenticated_user {
+        let mut guard = SYSCALL_GATE.lock();
+        let Some(gate) = guard.as_mut() else {
+            return SyscallResponse::err(AbiError::ResourceExhausted);
+        };
+        match shivacore::session_authority::issue(
+            gate.authority(),
+            pid,
+            user_id,
+            gate.ticks(),
+            shivacore::session_authority::DEFAULT_SESSION_TTL_TICKS,
+        ) {
+            Ok(handle) => handle,
+            Err(_) => return SyscallResponse::err(AbiError::ResourceExhausted),
+        }
+    } else {
+        outcome.code()
+    };
 
     serial_println!(
         "ShivaCore: Anmeldepruefung: PID={} Ergebnis={:?} ({} TSC-Zyklen, {} Byte)",
@@ -875,7 +898,7 @@ fn handle_identity_check(pid: Pid, request: SyscallRequest) -> shivacore::syscal
             _ => shivacore::security::AuditResult::Error,
         },
     );
-    SyscallResponse::ok(outcome.code())
+    SyscallResponse::ok(response_value)
 }
 
 /// Gibt einem Prozess Leserecht auf den Kernel-Eingabekanal und merkt, dass der Userspace liest.
