@@ -107,6 +107,11 @@ pub(crate) fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD
     params
         .validate()
         .map_err(|_| AccountStateError::CredentialFormatRejected)?;
+    // A uniform KDF profile prevents account-specific verifier cost from
+    // becoming a username-enumeration timing signal.
+    if params != globus_identity_core::KdfParams::OWNER_DEFAULT {
+        return Err(AccountStateError::CredentialFormatRejected);
+    }
     let salt = parsed
         .salt
         .as_ref()
