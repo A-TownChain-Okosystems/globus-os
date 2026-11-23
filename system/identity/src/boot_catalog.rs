@@ -68,6 +68,22 @@ pub enum BootCatalogBuildError {
     InvalidCatalog,
 }
 
+fn validate_catalog_kdf_profile(
+    accounts: &[u8],
+    credentials: &[u8],
+) -> Result<(), BootCatalogBuildError> {
+    let catalog = globus_identity_core::catalog::parse_boot_catalog(accounts, credentials)
+        .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+    if catalog
+        .accounts()
+        .iter()
+        .any(|account| account.credential.params != globus_identity_core::KdfParams::OWNER_DEFAULT)
+    {
+        return Err(BootCatalogBuildError::InvalidCatalog);
+    }
+    Ok(())
+}
+
 /// Validate and package exported GUA1/GCR1 snapshots without rebuilding either catalog.
 ///
 /// This is the direct path for ephemeral exports from AccountStateRepository.
@@ -75,8 +91,7 @@ pub fn build_boot_catalog_from_snapshots(
     accounts: &[u8],
     credentials: &[u8],
 ) -> Result<BootCatalogImages, BootCatalogBuildError> {
-    globus_identity_core::catalog::parse_boot_catalog(accounts, credentials)
-        .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+    validate_catalog_kdf_profile(accounts, credentials)?;
     Ok(BootCatalogImages {
         accounts: accounts.to_vec(),
         credentials: credentials.to_vec(),
@@ -115,8 +130,7 @@ pub fn build_boot_catalog<D: AccountDirectoryStore>(
     let credential_bytes =
         globus_identity_core::catalog::encode_credential_catalog(&raw_credentials)
             .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
-    globus_identity_core::catalog::parse_boot_catalog(&accounts, &credential_bytes)
-        .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+    validate_catalog_kdf_profile(&accounts, &credential_bytes)?;
     Ok(BootCatalogImages {
         accounts,
         credentials: credential_bytes,
@@ -129,11 +143,7 @@ mod tests {
     use globus_identity_core::{HASH_LEN, KdfParams, RECORD_LEN, SALT_LEN, hash_into};
 
     fn atid(password: &[u8], salt_byte: u8) -> Vec<u8> {
-        let params = KdfParams {
-            memory_kib: 8 * 1024,
-            iterations: 1,
-            parallelism: 1,
-        };
+        let params = KdfParams::OWNER_DEFAULT;
         let salt = [salt_byte; SALT_LEN];
         let mut hash = [0; HASH_LEN];
         hash_into(params, password, &salt, &mut hash).unwrap();
