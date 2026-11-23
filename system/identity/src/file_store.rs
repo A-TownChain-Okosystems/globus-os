@@ -43,7 +43,11 @@ impl FileBlobStore {
         match OpenOptions::new().write(true).create_new(true).open(&self.lock_path) {
             Ok(mut file) => {
                 let _ = writeln!(file, "pid={}", std::process::id());
-                file.sync_all().map_err(|_| SecureStoreError::BackendUnavailable)?;
+                if file.sync_all().is_err() {
+                    drop(file);
+                    let _ = fs::remove_file(&self.lock_path);
+                    return Err(SecureStoreError::BackendUnavailable);
+                }
                 Ok(BlobLock { path: self.lock_path.clone() })
             }
             Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => Err(SecureStoreError::Conflict),
@@ -199,6 +203,27 @@ mod tests {
         assert_eq!(second.generation().unwrap(), 1);
         assert_eq!(second.load().unwrap(), Some(b"encrypted".to_vec()));
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_writer_lock_is_fail_closed() {
+        let path = path();
+        let mut first = FileBlobStore::open(&path);
+        let mut second = FileBlobStore::open(&path);
+        let _lock = first.acquire_lock().unwrap();
+        assert_eq!(second.replace(b"other", 1), Err(SecureStoreError::Conflict));
+        drop(_lock);
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn generation_must_advance_exactly_once_after_initial_commit() {
+        let path = path();
+        let mut store = FileBlobStore::open(&path);
+        store.replace(b"first", 1).unwrap();
+        assert_eq!(store.replace(b"skip", 3), Err(SecureStoreError::Conflict));
+        assert_eq!(store.generation().unwrap(), 1);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]
