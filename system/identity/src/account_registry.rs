@@ -44,18 +44,23 @@ pub struct AccountDirectoryEntry {
     pub user_id: UserId,
 }
 
-/// A durable directory backend. Implementations must make insert_if_absent atomic and durable.
+/// Read-only view of the canonical username-to-UserId mapping.
 pub trait AccountDirectoryStore {
-    /// Fuegt atomar ein und schlaegt fehl, wenn der Name schon existiert.
+    /// Resolve a canonical username to its stable UserId.
+    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError>;
+    /// Return the complete canonical directory projection.
+    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError>;
+}
+
+/// Legacy standalone directory writer. Production account mutations must commit
+/// through AccountStateRepository so username and credential state remain atomic.
+pub trait MutableAccountDirectoryStore: AccountDirectoryStore {
+    /// Legacy atomic insertion into the standalone GUA1 file.
     fn insert_if_absent(
         &mut self,
         username: AccountUsername,
         user_id: UserId,
     ) -> Result<(), AccountDirectoryError>;
-    /// Liefert die Benutzer-ID zu einem Namen.
-    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError>;
-    /// Alle Eintraege des Verzeichnisses.
-    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError>;
 }
 
 /// Filesystem-backed username index. Use a path under a trusted, access-controlled data directory.
@@ -162,6 +167,20 @@ impl Drop for DirectoryLock {
 }
 
 impl AccountDirectoryStore for FileAccountDirectory {
+    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
+        self.read_entries()?
+            .into_iter()
+            .find(|entry| &entry.username == username)
+            .map(|entry| entry.user_id)
+            .ok_or(AccountDirectoryError::NotFound)
+    }
+
+    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
+        self.read_entries()
+    }
+}
+
+impl MutableAccountDirectoryStore for FileAccountDirectory {
     fn insert_if_absent(
         &mut self,
         username: AccountUsername,
@@ -175,27 +194,29 @@ impl AccountDirectoryStore for FileAccountDirectory {
         }
         let _lock = self.acquire_lock()?;
         let mut entries = self.read_entries()?;
-        if entries.iter().any(|entry| entry.username == username) {
-            return Err(AccountDirectoryError::AlreadyExists);
-        }
-        if entries.iter().any(|entry| entry.user_id == user_id) {
+        if entries.iter().any(|entry| entry.username == username || entry.user_id == user_id) {
             return Err(AccountDirectoryError::AlreadyExists);
         }
         entries.push(AccountDirectoryEntry { username, user_id });
         entries.sort_by(|a, b| a.username.as_str().cmp(b.username.as_str()));
         self.write_entries(&entries)
     }
+}
 
+/// AccountState is the canonical production source; this implementation exposes
+/// its username index as a read-only view and cannot commit a detached directory entry.
+impl AccountDirectoryStore for crate::AccountState {
     fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
-        self.read_entries()?
-            .into_iter()
-            .find(|entry| &entry.username == username)
-            .map(|entry| entry.user_id)
+        self.by_username(username)
+            .map(|entry| entry.identity.profile.user_id.clone())
             .ok_or(AccountDirectoryError::NotFound)
     }
 
     fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
-        self.read_entries()
+        Ok(self.accounts().iter().map(|entry| AccountDirectoryEntry {
+            username: entry.username.clone(),
+            user_id: entry.identity.profile.user_id.clone(),
+        }).collect())
     }
 }
 
