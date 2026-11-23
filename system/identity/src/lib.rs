@@ -1,5 +1,7 @@
 //! GlobusOS identity and wallet boundary.
 
+pub mod account_state;
+
 mod account_lifecycle;
 mod account_registry;
 mod boot_catalog;
@@ -16,6 +18,7 @@ mod service;
 pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
+pub use account_state::{AccountState, AccountStateEntry, AccountStateError, AccountStateRepository};
 pub use boot_catalog::{AccountCredential, BootCatalogBuildError, build_boot_catalog};
 pub use account_registry::{
     AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
