@@ -49,7 +49,8 @@ use core::fmt::{self, Write};
 use core::panic::PanicInfo;
 use libshivacore::{
     ABI_VERSION, CONSOLE_MAX_BYTES, CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE, CapabilityHandle,
-    KERNEL_INPUT_CHANNEL, SYSCALL_BLOCK_MAX_SIZE, Syscall, SyscallBlock,
+    IDENTITY_LOGIN_MAX_BYTES, KERNEL_INPUT_CHANNEL, SYSCALL_BLOCK_MAX_SIZE, Syscall,
+    SyscallBlock, encode_identity_login_payload,
 };
 
 /// Vorbelegter statischer Wert: liegt im Datensegment, nicht im Codesegment.
@@ -188,20 +189,35 @@ impl Login {
     /// der Bildschirm in dieser Zeit nicht steht, wird VOR dem Aufruf
     /// gezeichnet; der Aufruf blockiert das Programm, die Anzeige bleibt.
     fn verify(&mut self, console: u64) {
+        let mut payload = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        let payload_len = match encode_identity_login_payload(
+            &self.user[..self.user_len],
+            &self.password[..self.password_len],
+            &mut payload,
+        ) {
+            Ok(length) => length,
+            Err(_) => {
+                self.password.fill(0);
+                self.password_len = 0;
+                self.status = "Benutzername oder Passwortformat ungueltig.";
+                return;
+            }
+        };
         let mut block =
             SyscallBlock::new(Syscall::IdentityCheck, Some(CapabilityHandle(console)));
-        block.buffer_ptr = self.password.as_ptr() as u64;
-        block.buffer_len = self.password_len;
+        block.buffer_ptr = payload.as_ptr() as u64;
+        block.buffer_len = payload_len;
         let (value, error) = call(&block);
-        // Das Passwort bleibt nicht im Programm liegen.
-        self.password = [0u8; MAX_PASSWORD_BYTES];
+        // Klartextpasswort und gesamtes Login-Payload bleiben nicht im Programm liegen.
+        payload.fill(0);
+        self.password.fill(0);
+        self.password_len = 0;
         self.status = if error != 0 {
             "Pruefung nicht moeglich (ABI-Ablehnung)."
         } else {
             match value {
-                0 => "Pruefung bestanden - Sitzung folgt.",
-                1 => "Pruefung fehlgeschlagen.",
-                2 => "Kein Anmeldedatensatz vorhanden - keine Anmeldung.",
+                0 => "Zugangsdaten bestaetigt - Sitzung folgt.",
+                1 | 2 => "Benutzername oder Passwort falsch.",
                 4 => "Pruefung nicht rechenbar (Speicher) - keine Anmeldung.",
                 _ => "Pruefung ohne Ergebnis.",
             }
