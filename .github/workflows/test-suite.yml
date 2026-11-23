@@ -27,10 +27,14 @@ jobs:
           FAIL=0
           while IFS= read -r f; do
             d="$(dirname "$f")"
-            if [ "$d" = "./modules/atc-shivacore/boot" ]; then
-              echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
-              continue
-            fi
+            case "$d" in
+              "./modules/atc-shivacore/boot"|\
+              "./modules/atc-shivacore/greeter"|\
+              "./modules/atc-shivacore/init_program")
+                echo "SKIP $d: bare-metal payload is built and exercised by the dedicated ShivaCore boot workflow."
+                continue
+                ;;
+            esac
             echo "=== cargo test in $d"
             if ! (cd "$d" && cargo test --quiet); then
               echo "cargo test FAILED in $d"
