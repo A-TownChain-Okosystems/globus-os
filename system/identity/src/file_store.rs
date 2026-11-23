@@ -227,7 +227,7 @@ mod tests {
     #[test]
     fn persists_blob_and_generation_across_instances() {
         let path = path();
-        let mut first = FileBlobStore::open(&path);
+        let first = FileBlobStore::open(&path);
         first.replace(b"encrypted", 1).unwrap();
         drop(first);
         let second = FileBlobStore::open(&path);
