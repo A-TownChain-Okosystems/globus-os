@@ -589,6 +589,18 @@ mod tests {
     }
 
     #[test]
+    fn phc_export_rejects_wrong_version_and_unrepresentable_parameters() {
+        let user_id = UserId::new("alice").unwrap();
+        let mut service = crate::IdentityService::new();
+        service.register(user_id, "Alice", b"credential", 658467, "devnet", 1).unwrap();
+        let phc = service.snapshot().unwrap().credential.phc_hash;
+        let wrong_version = phc.replace("$v=19$", "$v=16$");
+        assert_eq!(phc_to_atid(&wrong_version), Err(AccountStateError::CredentialFormatRejected));
+        let extra_parameter = phc.replace("$m=19456,t=2,p=1$", "$m=19456,t=2,p=1,keyid=YQ$");
+        assert_eq!(phc_to_atid(&extra_parameter), Err(AccountStateError::CredentialFormatRejected));
+    }
+
+    #[test]
     fn directory_snapshot_is_exported_from_encrypted_account_state() {
         let state = AccountState::new(vec![
             account(
