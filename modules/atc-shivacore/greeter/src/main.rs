@@ -50,7 +50,8 @@ use core::fmt::{self, Write};
 use core::panic::PanicInfo;
 use libshivacore::{
     ABI_VERSION, CONSOLE_MAX_BYTES, CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE, CapabilityHandle,
-    IDENTITY_LOGIN_MAX_BYTES, KERNEL_INPUT_CHANNEL, SYSCALL_BLOCK_MAX_SIZE, Syscall,
+    IDENTITY_LOGIN_MAX_BYTES, IDENTITY_SESSION_HANDLE_TAG, KERNEL_INPUT_CHANNEL,
+    SYSCALL_BLOCK_MAX_SIZE, Syscall,
     SyscallBlock, encode_identity_login_payload,
 };
 
@@ -131,6 +132,8 @@ struct Login {
     /// danach ueberschrieben; angezeigt wird nie ein Byte, nur die Laenge.
     password: [u8; MAX_PASSWORD_BYTES],
     password_len: usize,
+    /// Opaque PID-bound session capability returned by the kernel.
+    session_handle: u64,
     active: Active,
     status: &'static str,
 }
@@ -142,6 +145,7 @@ impl Login {
             user_len: 0,
             password: [0u8; MAX_PASSWORD_BYTES],
             password_len: 0,
+            session_handle: 0,
             active: Active::User,
             status: "Bitte Benutzer und Passwort eingeben.",
         }
@@ -190,6 +194,7 @@ impl Login {
     /// der Bildschirm in dieser Zeit nicht steht, wird VOR dem Aufruf
     /// gezeichnet; der Aufruf blockiert das Programm, die Anzeige bleibt.
     fn verify(&mut self, console: u64) {
+        self.session_handle = 0;
         let mut payload = [0u8; IDENTITY_LOGIN_MAX_BYTES];
         let payload_len = match encode_identity_login_payload(
             &self.user[..self.user_len],
@@ -215,9 +220,12 @@ impl Login {
         self.password_len = 0;
         self.status = if error != 0 {
             "Pruefung nicht moeglich (ABI-Ablehnung)."
+        } else if value & IDENTITY_SESSION_HANDLE_TAG != 0 {
+            self.session_handle = value;
+            "Anmeldung erfolgreich - Sitzung im Kernel angelegt."
         } else {
             match value {
-                0 => "Zugangsdaten bestaetigt - Shellstart noch nicht verfuegbar.",
+                0 => "Legacy-Zugangsdaten bestaetigt - keine Sitzung angelegt.",
                 1 | 2 => "Benutzername oder Passwort falsch.",
                 4 => "Pruefung nicht rechenbar (Speicher) - keine Anmeldung.",
                 _ => "Pruefung ohne Ergebnis.",
@@ -377,8 +385,9 @@ fn render(console: u64, login: &Login) {
     }
     let _ = write!(
         screen,
-        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {}   ({})\n",
+        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {} · {}   ({})\n",
         login.status,
+        if login.session_handle & IDENTITY_SESSION_HANDLE_TAG != 0 { "Sitzung aktiv" } else { "Keine Sitzung" },
         scratch_state(console as u8 | 1)
     );
     // Erst leeren, dann schreiben: die Maske wird als Ganzes gezeichnet, damit
