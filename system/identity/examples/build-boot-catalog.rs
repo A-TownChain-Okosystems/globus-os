@@ -7,7 +7,7 @@
 //! Usage:
 //! cargo run -p globus-identity --example build-boot-catalog -- \\
 //!   <account-directory.gua> <sys.accounts> <sys.credentials> \\
-//!   <user-id>=<credential.atid> [...]
+//!   <user-id>=<credential.atid> [...] | --gcr1=<credential-catalog.gcr>
 
 use std::{
     env,
@@ -28,9 +28,17 @@ fn main() {
     });
     let directory = AccountDirectorySnapshot::from_bytes(&directory_bytes)
         .unwrap_or_else(|error| panic!("exported GUA1 snapshot rejected: {error:?}"));
-    let mut credentials = Vec::new();
-
-    for argument in args {
+    let remaining: Vec<String> = args.collect();
+    let images = if remaining.len() == 1 && remaining[0].starts_with("--gcr1=") {
+        let catalog_path = remaining[0].trim_start_matches("--gcr1=");
+        let credential_bytes = fs::read(catalog_path).unwrap_or_else(|error| {
+            panic!("cannot read exported GCR1 snapshot {catalog_path}: {error}")
+        });
+        globus_identity::build_boot_catalog_from_snapshots(&directory_bytes, &credential_bytes)
+            .unwrap_or_else(|error| panic!("exported GUA1/GCR1 snapshots rejected: {error:?}"))
+    } else {
+        let mut credentials = Vec::new();
+        for argument in remaining {
         let (user_id, path) = argument
             .split_once('=')
             .unwrap_or_else(|| panic!("credential argument must be <user-id>=<path>"));
@@ -39,8 +47,9 @@ fn main() {
         credentials.push(AccountCredential { user_id, record });
     }
 
-    let images = build_boot_catalog(&directory, &credentials)
-        .unwrap_or_else(|error| panic!("boot catalog rejected (fail-closed): {error:?}"));
+        build_boot_catalog(&directory, &credentials)
+            .unwrap_or_else(|error| panic!("boot catalog rejected (fail-closed): {error:?}"))
+    };
     write_atomic(&accounts_path, &images.accounts);
     write_atomic(&credentials_path, &images.credentials);
     println!(
