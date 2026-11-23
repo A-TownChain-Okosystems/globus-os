@@ -466,6 +466,11 @@ impl<B: BlobStore, K: IdentityKeyProvider> AccountStateRepository<B, K> {
         AccountState::decode(&plaintext).map(Some)
     }
 
+    /// Return the current durable generation used for optimistic account-state transactions.
+    pub fn generation(&self) -> Result<u64, AccountStateError> {
+        self.encrypted.generation().map_err(AccountStateError::Storage)
+    }
+
     /// Export the ephemeral GUA1 directory projection from the encrypted source of truth.
     /// No plaintext sidecar is persisted by this operation.
     pub fn export_directory_snapshot(&self) -> Result<Option<Vec<u8>>, AccountStateError> {
