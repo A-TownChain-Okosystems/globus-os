@@ -78,8 +78,7 @@ pub enum AccountStateError {
 /// Convert a PHC Argon2id verifier to the existing fixed-width ATID record.
 /// The salt and output hash are copied unchanged; no password or re-hashing is involved.
 fn phc_to_atid(phc: &str) -> Result<[u8; globus_identity_core::RECORD_LEN], AccountStateError> {
-    let parsed = PasswordHash::new(phc)
-        .map_err(|_| AccountStateError::CredentialFormatRejected)?;
+    let parsed = PasswordHash::new(phc).map_err(|_| AccountStateError::CredentialFormatRejected)?;
     if parsed.algorithm.as_str() != "argon2id"
         || parsed.version.map(|v| v.to_string()).as_deref() != Some("19")
         || parsed.params.iter().count() != 3
@@ -593,12 +592,20 @@ mod tests {
     fn phc_export_rejects_wrong_version_and_unrepresentable_parameters() {
         let user_id = UserId::new("alice").unwrap();
         let mut service = crate::IdentityService::new();
-        service.register(user_id, "Alice", b"credential", 658467, "devnet", 1).unwrap();
+        service
+            .register(user_id, "Alice", b"credential", 658467, "devnet", 1)
+            .unwrap();
         let phc = service.snapshot().unwrap().credential.phc_hash;
         let wrong_version = phc.replace("$v=19$", "$v=16$");
-        assert_eq!(phc_to_atid(&wrong_version), Err(AccountStateError::CredentialFormatRejected));
+        assert_eq!(
+            phc_to_atid(&wrong_version),
+            Err(AccountStateError::CredentialFormatRejected)
+        );
         let extra_parameter = phc.replace("$m=19456,t=2,p=1$", "$m=19456,t=2,p=1,keyid=YQ$");
-        assert_eq!(phc_to_atid(&extra_parameter), Err(AccountStateError::CredentialFormatRejected));
+        assert_eq!(
+            phc_to_atid(&extra_parameter),
+            Err(AccountStateError::CredentialFormatRejected)
+        );
     }
 
     #[test]

@@ -218,8 +218,7 @@ mod tests {
         )
         .unwrap();
         let packaged =
-            build_boot_catalog_from_snapshots(&generated.accounts, &generated.credentials)
-                .unwrap();
+            build_boot_catalog_from_snapshots(&generated.accounts, &generated.credentials).unwrap();
         assert_eq!(packaged.accounts, generated.accounts);
         assert_eq!(packaged.credentials, generated.credentials);
     }
