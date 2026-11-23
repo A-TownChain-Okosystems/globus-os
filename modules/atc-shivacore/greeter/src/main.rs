@@ -10,8 +10,9 @@
 //! Was hier steht, ist die Maske: Titel, Benutzerfeld, Passwortfeld mit
 //! Maskierung, Feldwechsel mit Tab, Loeschen mit Backspace, Absenden mit Enter.
 //!
-//! Die Pruefung selbst steht NICHT hier: das Fenster schickt die Eingabe an den
-//! Kernel (`IdentityCheck`, `0x0070`) und zeigt, was zurueckkommt. Der
+//! Die Pruefung selbst steht NICHT hier: das Fenster schickt Benutzername
+//! und Passwort als versioniertes LGN1-Payload an den Kernel
+//! (`IdentityCheck`, `0x0070`) und zeigt, was zurueckkommt. Der
 //! Anmeldedatensatz liegt in der Ramdisk im Systemnamensraum und ist fuer
 //! Programme nicht vorhanden; gerechnet wird im Kernel, weil nur er ihn lesen
 //! darf. Das Passwort wird nach dem Aufruf im Programm ueberschrieben, und das
@@ -216,7 +217,7 @@ impl Login {
             "Pruefung nicht moeglich (ABI-Ablehnung)."
         } else {
             match value {
-                0 => "Zugangsdaten bestaetigt - Sitzung folgt.",
+                0 => "Zugangsdaten bestaetigt - Shellstart noch nicht verfuegbar.",
                 1 | 2 => "Benutzername oder Passwort falsch.",
                 4 => "Pruefung nicht rechenbar (Speicher) - keine Anmeldung.",
                 _ => "Pruefung ohne Ergebnis.",
