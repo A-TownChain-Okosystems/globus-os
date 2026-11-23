@@ -206,7 +206,8 @@ mod tests {
                 username: "alice".into(),
                 user_id: "id-alice".into(),
             },
-        ]).unwrap();
+        ])
+        .unwrap();
         let credentials = vec![AccountCredential {
             user_id: UserId::new("id-alice").unwrap(),
             record: atid(b"alice-secret", 0x11),
@@ -214,8 +215,11 @@ mod tests {
         let generated = build_boot_catalog(
             &AccountDirectorySnapshot::from_bytes(&directory_bytes).unwrap(),
             &credentials,
-        ).unwrap();
-        let packaged = build_boot_catalog_from_snapshots(&generated.accounts, &generated.credentials).unwrap();
+        )
+        .unwrap();
+        let packaged =
+            build_boot_catalog_from_snapshots(&generated.accounts, &generated.credentials)
+                .unwrap();
         assert_eq!(packaged.accounts, generated.accounts);
         assert_eq!(packaged.credentials, generated.credentials);
     }
