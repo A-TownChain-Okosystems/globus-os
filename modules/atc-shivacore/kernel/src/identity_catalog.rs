@@ -116,6 +116,10 @@ mod tests {
         assert_eq!(bob.credential.verify(b"bob-secret"), Ok(()));
         assert!(alice.credential.verify(b"bob-secret").is_err());
         assert_eq!(
+            crate::identity_check::authenticate_catalog("alice", b"alice-secret"),
+            Ok(String::from("id-alice"))
+        );
+        assert_eq!(
             crate::identity_check::check_catalog("alice", b"alice-secret"),
             crate::identity_check::CheckOutcome::Ok
         );
