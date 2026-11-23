@@ -73,6 +73,7 @@ pub struct FileAccountDirectory {
     lock_path: PathBuf,
 }
 
+#[allow(deprecated)]
 impl FileAccountDirectory {
     /// Bindet das Verzeichnis an einen Pfad und leitet den Lock-Pfad daraus ab.
     pub fn open(path: impl Into<PathBuf>) -> Self {
