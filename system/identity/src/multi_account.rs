@@ -9,8 +9,9 @@
 use std::collections::HashMap;
 
 use super::{
-    IdentityService, IdentityServiceError, IdentitySession, LoginResult, RegistrationResult,
-    UserId, WalletCreation,
+    AccountStateEntry, AccountStateError, AccountStateRepository, AccountUsername, BlobStore,
+    IdentityKeyProvider, IdentityService, IdentityServiceError, IdentitySession, LoginResult,
+    RegistrationResult, UserId, WalletCreation,
 };
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -22,11 +23,19 @@ pub enum MultiAccountError {
     AccountNotFound,
     /// Der Identitaetsdienst hat einen Fehler gemeldet.
     Identity(IdentityServiceError),
+    /// Das kanonische verschluesselte Account-Repository hat abgelehnt.
+    AccountState(AccountStateError),
 }
 
 impl From<IdentityServiceError> for MultiAccountError {
     fn from(value: IdentityServiceError) -> Self {
         Self::Identity(value)
+    }
+}
+
+impl From<AccountStateError> for MultiAccountError {
+    fn from(value: AccountStateError) -> Self {
+        Self::AccountState(value)
     }
 }
 
@@ -111,6 +120,163 @@ impl MultiAccountIdentityService {
         Ok(result)
     }
 
+    /// Register an account and persist its username, profile, and credential in one
+    /// generation-bound encrypted repository commit. The in-memory coordinator is updated
+    /// only after the durable commit succeeds.
+    #[allow(clippy::too_many_arguments)]
+    pub fn register_persisted<B, K>(
+        &mut self,
+        repository: &mut AccountStateRepository<B, K>,
+        username: AccountUsername,
+        user_id: UserId,
+        display_name: impl Into<String>,
+        credential: &[u8],
+        chain_id: u64,
+        network: impl Into<String>,
+        key_version: u16,
+    ) -> Result<(RegistrationResult, WalletCreation), MultiAccountError>
+    where
+        B: BlobStore,
+        K: IdentityKeyProvider,
+    {
+        let expected_generation = repository.generation()?;
+        let mut account = IdentityService::new();
+        let (registration, wallet) = account.register(
+            user_id.clone(),
+            display_name,
+            credential,
+            chain_id,
+            network,
+            key_version,
+        )?;
+        let identity = account.snapshot()?;
+        repository.insert_account(
+            expected_generation,
+            AccountStateEntry { username, identity },
+        )?;
+        self.accounts.insert(user_id.as_str().to_owned(), account);
+        Ok((registration, wallet))
+    }
+
+    /// Restore and persist an account through the same canonical repository transaction.
+    #[allow(clippy::too_many_arguments)]
+    pub fn restore_persisted<B, K>(
+        &mut self,
+        repository: &mut AccountStateRepository<B, K>,
+        username: AccountUsername,
+        user_id: UserId,
+        display_name: impl Into<String>,
+        phrase: &str,
+        credential: &[u8],
+        chain_id: u64,
+        network: impl Into<String>,
+        key_version: u16,
+    ) -> Result<RegistrationResult, MultiAccountError>
+    where
+        B: BlobStore,
+        K: IdentityKeyProvider,
+    {
+        let expected_generation = repository.generation()?;
+        let mut account = IdentityService::new();
+        let registration = account.restore(
+            user_id.clone(),
+            display_name,
+            phrase,
+            credential,
+            chain_id,
+            network,
+            key_version,
+        )?;
+        let identity = account.snapshot()?;
+        repository.insert_account(
+            expected_generation,
+            AccountStateEntry { username, identity },
+        )?;
+        self.accounts.insert(user_id.as_str().to_owned(), account);
+        Ok(registration)
+    }
+
+    /// Authenticate by canonical username using the durable account repository.
+    /// Unknown usernames and invalid credentials must be normalized to one UI response.
+    pub fn login_persisted<B, K>(
+        &mut self,
+        repository: &AccountStateRepository<B, K>,
+        username: &AccountUsername,
+        credential: &[u8],
+        now_unix: u64,
+        ttl_seconds: u64,
+    ) -> Result<LoginResult, MultiAccountError>
+    where
+        B: BlobStore,
+        K: IdentityKeyProvider,
+    {
+        let state = repository
+            .load_state()?
+            .ok_or(MultiAccountError::AccountNotFound)?;
+        let entry = state
+            .by_username(username)
+            .ok_or(MultiAccountError::AccountNotFound)?;
+        let user_id = entry.identity.profile.user_id.clone();
+        let mut account = IdentityService::new();
+        account.load_record(entry.identity.clone())?;
+        let result = account.login(credential, now_unix, ttl_seconds)?;
+        self.accounts.insert(user_id.as_str().to_owned(), account);
+        Ok(result)
+    }
+
+    /// Change a credential and commit it atomically while preserving the account binding.
+    /// The generation is captured before the read so a concurrent writer cannot be overwritten.
+    pub fn change_credential_persisted<B, K>(
+        &mut self,
+        repository: &mut AccountStateRepository<B, K>,
+        username: &AccountUsername,
+        new_credential: &[u8],
+    ) -> Result<u64, MultiAccountError>
+    where
+        B: BlobStore,
+        K: IdentityKeyProvider,
+    {
+        let expected_generation = repository.generation()?;
+        let state = repository
+            .load_state()?
+            .ok_or(MultiAccountError::AccountNotFound)?;
+        let entry = state
+            .by_username(username)
+            .ok_or(MultiAccountError::AccountNotFound)?;
+        let user_id = entry.identity.profile.user_id.clone();
+        let mut account = IdentityService::new();
+        account.load_record(entry.identity.clone())?;
+        account.change_credential(new_credential)?;
+        let replacement = account.snapshot()?;
+        let generation =
+            repository.replace_identity(expected_generation, username, replacement)?;
+        self.accounts.insert(user_id.as_str().to_owned(), account);
+        Ok(generation)
+    }
+
+    /// Remove an account durably first, then drop its in-memory session coordinator entry.
+    pub fn remove_persisted<B, K>(
+        &mut self,
+        repository: &mut AccountStateRepository<B, K>,
+        username: &AccountUsername,
+    ) -> Result<u64, MultiAccountError>
+    where
+        B: BlobStore,
+        K: IdentityKeyProvider,
+    {
+        let expected_generation = repository.generation()?;
+        let state = repository
+            .load_state()?
+            .ok_or(MultiAccountError::AccountNotFound)?;
+        let entry = state
+            .by_username(username)
+            .ok_or(MultiAccountError::AccountNotFound)?;
+        let user_id = entry.identity.profile.user_id.clone();
+        let generation = repository.remove_account(expected_generation, username)?;
+        self.accounts.remove(user_id.as_str());
+        Ok(generation)
+    }
+
     /// Meldet ein Konto an und liefert die Sitzung.
     pub fn login(
         &mut self,
@@ -157,6 +323,89 @@ impl MultiAccountIdentityService {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    struct TestKey;
+    impl IdentityKeyProvider for TestKey {
+        fn load_key(
+            &self,
+        ) -> Result<zeroize::Zeroizing<[u8; 32]>, super::super::SecureStoreError> {
+            Ok(zeroize::Zeroizing::new([0x42; 32]))
+        }
+    }
+
+    #[test]
+    fn persisted_lifecycle_uses_one_encrypted_repository() {
+        let encrypted = super::super::EncryptedBlobStore::new(
+            super::super::InMemoryBlobStore::default(),
+            TestKey,
+        );
+        let mut repository = AccountStateRepository::new(encrypted);
+        let mut service = MultiAccountIdentityService::new();
+        let alice_id = UserId::new("user-alice").unwrap();
+        let bob_id = UserId::new("user-bob").unwrap();
+        service
+            .register_persisted(
+                &mut repository,
+                AccountUsername::parse("alice").unwrap(),
+                alice_id.clone(),
+                "Alice",
+                b"alice-secret",
+                658467,
+                "devnet",
+                1,
+            )
+            .unwrap();
+        service
+            .register_persisted(
+                &mut repository,
+                AccountUsername::parse("bob").unwrap(),
+                bob_id.clone(),
+                "Bob",
+                b"bob-secret",
+                658467,
+                "devnet",
+                1,
+            )
+            .unwrap();
+        assert_eq!(repository.load_state().unwrap().unwrap().len(), 2);
+
+        let mut after_restart = MultiAccountIdentityService::new();
+        assert!(after_restart
+            .login_persisted(
+                &repository,
+                &AccountUsername::parse("alice").unwrap(),
+                b"alice-secret",
+                100,
+                300,
+            )
+            .is_ok());
+        assert!(after_restart
+            .login_persisted(
+                &repository,
+                &AccountUsername::parse("bob").unwrap(),
+                b"alice-secret",
+                100,
+                300,
+            )
+            .is_err());
+
+        let alice = AccountUsername::parse("alice").unwrap();
+        after_restart
+            .change_credential_persisted(&mut repository, &alice, b"alice-new-secret")
+            .unwrap();
+        assert!(after_restart
+            .login_persisted(&repository, &alice, b"alice-secret", 101, 300)
+            .is_err());
+        assert!(after_restart
+            .login_persisted(&repository, &alice, b"alice-new-secret", 101, 300)
+            .is_ok());
+
+        after_restart.remove_persisted(&mut repository, &alice).unwrap();
+        assert_eq!(repository.load_state().unwrap().unwrap().len(), 1);
+        assert!(after_restart
+            .login_persisted(&repository, &alice, b"alice-new-secret", 102, 300)
+            .is_err());
+    }
 
     #[test]
     fn accounts_have_independent_credentials_and_sessions() {
