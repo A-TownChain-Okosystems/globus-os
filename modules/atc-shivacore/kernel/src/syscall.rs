@@ -412,6 +412,25 @@ mod tests {
     }
 
     #[test]
+    fn spawn_process_is_registered_but_fails_closed_until_runtime_is_wired() {
+        let mut dispatcher = SyscallDispatcher::new();
+        let response = dispatcher.dispatch(
+            pid(1003),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(
+                    libshivacore::IDENTITY_SESSION_HANDLE_TAG | 7,
+                )),
+                buffer_ptr: 0x0040_0000,
+                buffer_len: 5,
+                ..request(Syscall::SpawnProcess)
+            },
+            &mut CapabilityTable::new(),
+        );
+        assert_eq!(response.error, Some(AbiError::EndpointUnavailable));
+        assert_eq!(response.value, 0, "kein Prozess darf vor dem Runtime-Pfad starten");
+    }
+
+    #[test]
     fn rejects_unknown_syscall() {
         let mut d = SyscallDispatcher::new();
         let r = d.dispatch(
