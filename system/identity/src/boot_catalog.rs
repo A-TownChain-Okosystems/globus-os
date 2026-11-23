@@ -13,6 +13,41 @@ pub struct AccountCredential {
     pub record: Vec<u8>,
 }
 
+/// Ephemeral read-only GUA1 projection exported from AccountStateRepository.
+/// This type is a build-time snapshot, not a persistent account store.
+pub struct AccountDirectorySnapshot {
+    entries: Vec<crate::AccountDirectoryEntry>,
+}
+
+impl AccountDirectorySnapshot {
+    /// Parse a canonical GUA1 snapshot produced from the encrypted AccountStateRepository.
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, BootCatalogBuildError> {
+        let entries = globus_identity_core::catalog::parse_directory(bytes)
+            .map_err(|_| BootCatalogBuildError::InvalidCatalog)?
+            .into_iter()
+            .map(|entry| {
+                let username = crate::AccountUsername::parse(&entry.username)
+                    .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+                let user_id = UserId::new(entry.user_id)
+                    .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+                Ok(crate::AccountDirectoryEntry { username, user_id })
+            })
+            .collect::<Result<Vec<_>, BootCatalogBuildError>>()?;
+        Ok(Self { entries })
+    }
+}
+
+impl AccountDirectoryStore for AccountDirectorySnapshot {
+    fn lookup(&self, username: &crate::AccountUsername) -> Result<UserId, AccountDirectoryError> {
+        self.entries.iter().find(|entry| &entry.username == username)
+            .map(|entry| entry.user_id.clone()).ok_or(AccountDirectoryError::NotFound)
+    }
+
+    fn entries(&self) -> Result<Vec<crate::AccountDirectoryEntry>, AccountDirectoryError> {
+        Ok(self.entries.clone())
+    }
+}
+
 /// Two independent protected Ramdisk entries produced from one account snapshot.
 pub struct BootCatalogImages {
     /// Existing GUA1 username-to-UserId directory bytes for `sys.accounts`.
