@@ -80,6 +80,12 @@ pub enum ElfParseError {
     InvalidOffset,
     /// Kein Segment ist zum Laden markiert.
     NoLoadableSegments,
+    /// Die ELF-Programmkopftabelle hat ein nicht unterstuetztes Format.
+    InvalidProgramHeaderSize,
+    /// Ein PT_LOAD-Segment enthaelt ungueltige Groessen oder Bereichsangaben.
+    InvalidSegment,
+    /// Der ELF-Einstieg liegt in keinem ausfuehrbaren PT_LOAD-Segment.
+    InvalidEntry,
 }
 
 impl core::fmt::Display for ElfParseError {
@@ -93,6 +99,9 @@ impl core::fmt::Display for ElfParseError {
             ElfParseError::Truncated => write!(f, "file truncated"),
             ElfParseError::InvalidOffset => write!(f, "invalid header offset"),
             ElfParseError::NoLoadableSegments => write!(f, "no loadable segments"),
+            ElfParseError::InvalidProgramHeaderSize => write!(f, "invalid ELF program header size"),
+            ElfParseError::InvalidSegment => write!(f, "invalid ELF load segment"),
+            ElfParseError::InvalidEntry => write!(f, "entry is outside executable load segments"),
         }
     }
 }
@@ -195,8 +204,13 @@ impl<'a> ElfParser<'a> {
         let e_entry = u64::from_le_bytes(data[24..32].try_into().unwrap());
         let e_phoff = u64::from_le_bytes(data[32..40].try_into().unwrap());
         let e_shoff = u64::from_le_bytes(data[40..48].try_into().unwrap());
+        let e_ehsize = u16::from_le_bytes([data[52], data[53]]);
+        let e_phentsize = u16::from_le_bytes([data[54], data[55]]);
         let e_phnum = u16::from_le_bytes([data[56], data[57]]);
         let e_shnum = u16::from_le_bytes([data[60], data[61]]);
+        if e_ehsize != 64 || e_phentsize != 56 {
+            return Err(ElfParseError::InvalidProgramHeaderSize);
+        }
         let e_shstrndx = u16::from_le_bytes([data[62], data[63]]);
 
         let header = Elf64Header {
@@ -212,15 +226,27 @@ impl<'a> ElfParser<'a> {
             e_shstrndx,
         };
 
-        // Parse program headers
+        // Die gesamte Tabelle vor dem ersten Slice validieren. Alle
+        // Umrechnungen und Additionen sind geprueft; ELF-Werte sind Eingaben,
+        // keine vertrauenswuerdigen Kernel-Groessen.
         let mut program_headers = Vec::new();
         let phdr_size = 56; // sizeof(Elf64_Phdr) = 56 bytes
+        let table_start =
+            usize::try_from(e_phoff).map_err(|_| ElfParseError::InvalidOffset)?;
+        let table_len = (e_phnum as usize)
+            .checked_mul(phdr_size)
+            .ok_or(ElfParseError::InvalidOffset)?;
+        let table_end = table_start
+            .checked_add(table_len)
+            .ok_or(ElfParseError::InvalidOffset)?;
+        if table_end > data.len() {
+            return Err(ElfParseError::Truncated);
+        }
 
         for i in 0..e_phnum as usize {
-            let offset = e_phoff as usize + i * phdr_size;
-            if offset + phdr_size > data.len() {
-                return Err(ElfParseError::Truncated);
-            }
+            let offset = table_start
+                .checked_add(i.checked_mul(phdr_size).ok_or(ElfParseError::InvalidOffset)?)
+                .ok_or(ElfParseError::InvalidOffset)?;
             let phdr = Elf64ProgramHeader {
                 p_type: u32::from_le_bytes(data[offset..offset + 4].try_into().unwrap()),
                 p_flags: u32::from_le_bytes(data[offset + 4..offset + 8].try_into().unwrap()),
@@ -231,12 +257,40 @@ impl<'a> ElfParser<'a> {
                 p_memsz: u64::from_le_bytes(data[offset + 40..offset + 48].try_into().unwrap()),
                 p_align: u64::from_le_bytes(data[offset + 48..offset + 56].try_into().unwrap()),
             };
+            if phdr.is_loadable() {
+                if phdr.p_filesz > phdr.p_memsz
+                    || phdr.p_vaddr.checked_add(phdr.p_memsz).is_none()
+                    || (phdr.p_align > 1 && !phdr.p_align.is_power_of_two())
+                {
+                    return Err(ElfParseError::InvalidSegment);
+                }
+                let file_start = usize::try_from(phdr.p_offset)
+                    .map_err(|_| ElfParseError::InvalidOffset)?;
+                let file_len = usize::try_from(phdr.p_filesz)
+                    .map_err(|_| ElfParseError::InvalidOffset)?;
+                let file_end = file_start
+                    .checked_add(file_len)
+                    .ok_or(ElfParseError::InvalidOffset)?;
+                if file_end > data.len() {
+                    return Err(ElfParseError::Truncated);
+                }
+            }
             program_headers.push(phdr);
         }
 
         let has_loadable = program_headers.iter().any(|p| p.is_loadable());
         if !has_loadable {
             return Err(ElfParseError::NoLoadableSegments);
+        }
+        let entry_is_executable = program_headers.iter().any(|p| {
+            p.is_loadable()
+                && p.is_executable()
+                && p.p_memsz > 0
+                && p.p_vaddr <= e_entry
+                && p.p_vaddr.checked_add(p.p_memsz).is_some_and(|end| e_entry < end)
+        });
+        if !entry_is_executable {
+            return Err(ElfParseError::InvalidEntry);
         }
 
         Ok(Self {
@@ -275,8 +329,9 @@ impl<'a> ElfParser<'a> {
 
     /// Get raw bytes for a segment
     pub fn segment_data(&self, phdr: &Elf64ProgramHeader) -> Result<&[u8], ElfParseError> {
-        let start = phdr.p_offset as usize;
-        let end = start + phdr.p_filesz as usize;
+        let start = usize::try_from(phdr.p_offset).map_err(|_| ElfParseError::InvalidOffset)?;
+        let len = usize::try_from(phdr.p_filesz).map_err(|_| ElfParseError::InvalidOffset)?;
+        let end = start.checked_add(len).ok_or(ElfParseError::InvalidOffset)?;
         if end > self.data.len() {
             return Err(ElfParseError::Truncated);
         }
@@ -969,6 +1024,47 @@ mod tests {
         let seg = &parser.program_headers()[0];
         assert!(seg.needs_bss());
         assert_eq!(seg.bss_size(), 99); // 100 - 1 byte code
+    }
+
+    #[test]
+    fn rejects_noncanonical_program_header_size() {
+        let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
+        elf[54..56].copy_from_slice(&48u16.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidProgramHeaderSize)
+        ));
+    }
+
+    #[test]
+    fn rejects_load_segment_file_range_outside_image() {
+        let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
+        let offset = 64 + 8;
+        elf[offset..offset + 8].copy_from_slice(&u64::MAX.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidOffset)
+        ));
+    }
+
+    #[test]
+    fn rejects_load_segment_filesz_larger_than_memsz() {
+        let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
+        let offset = 64 + 40;
+        elf[offset..offset + 8].copy_from_slice(&0u64.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidSegment)
+        ));
+    }
+
+    #[test]
+    fn rejects_entry_outside_executable_segment() {
+        let elf = ElfLoader::create_minimal_elf(0x500000, &[0xF4]);
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidEntry)
+        ));
     }
 
     #[test]
