@@ -42,16 +42,27 @@ pub struct AccountState {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
+/// Errors returned while validating, decoding, or persisting the canonical account state.
 pub enum AccountStateError {
+    /// The account set violates the repository's structural or size constraints.
     InvalidState,
+    /// The stored GAS1 schema version is not supported.
     UnsupportedVersion,
+    /// The encoded state ends before a required field is complete.
     Truncated,
+    /// The encoded state contains bytes after the final account record.
     TrailingData,
+    /// Two entries share a username or stable UserId.
     DuplicateAccount,
+    /// A field is empty, malformed, or outside its permitted bounds.
     InvalidField,
+    /// The encrypted storage boundary failed or rejected the operation.
     Storage(SecureStoreError),
+    /// The underlying blob persistence operation failed.
     Persistence(PersistenceError),
+    /// The durable generation changed since the caller's state was loaded.
     GenerationConflict { expected: u64, actual: u64 },
+    /// The durable generation cannot be incremented safely.
     GenerationOverflow,
 }
 
@@ -106,16 +117,20 @@ impl AccountState {
         Ok(Self { accounts })
     }
 
+    /// Return all validated accounts in canonical username order.
     pub fn accounts(&self) -> &[AccountStateEntry] {
         &self.accounts
     }
+    /// Return the number of accounts in this state.
     pub fn len(&self) -> usize {
         self.accounts.len()
     }
+    /// Return whether the state contains no accounts.
     pub fn is_empty(&self) -> bool {
         self.accounts.is_empty()
     }
 
+    /// Find an account by its canonical username.
     pub fn by_username(&self, username: &AccountUsername) -> Option<&AccountStateEntry> {
         self.accounts
             .binary_search_by(|entry| entry.username.as_str().cmp(username.as_str()))
@@ -123,6 +138,7 @@ impl AccountState {
             .map(|index| &self.accounts[index])
     }
 
+    /// Find an account by its stable identity-layer UserId.
     pub fn by_user_id(&self, user_id: &UserId) -> Option<&AccountStateEntry> {
         self.accounts
             .iter()
@@ -316,9 +332,11 @@ pub struct AccountStateRepository<B, K> {
 }
 
 impl<B, K> AccountStateRepository<B, K> {
+    /// Create a repository over the existing encrypted blob store.
     pub fn new(encrypted: EncryptedBlobStore<B, K>) -> Self {
         Self { encrypted }
     }
+    /// Consume the repository and return its underlying encrypted store.
     pub fn into_inner(self) -> EncryptedBlobStore<B, K> {
         self.encrypted
     }
