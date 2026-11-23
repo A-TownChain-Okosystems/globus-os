@@ -29,7 +29,7 @@ pub use account_state::{
 use bip39::{Language, Mnemonic};
 pub use boot_catalog::{
     AccountCredential, AccountDirectorySnapshot, BootCatalogBuildError, BootCatalogImages,
-    build_boot_catalog,
+    build_boot_catalog, build_boot_catalog_from_snapshots,
 };
 pub use entropy::{EntropyGate, OsEntropy};
 pub use file_store::FileBlobStore;
