@@ -133,13 +133,12 @@ pub fn resolve(
     let result = {
         let mut sessions = SESSIONS.lock();
         let session = sessions.get(&session_id).ok_or(SessionError::NotFound)?;
-        if session.state == SessionState::Locked {
-            return Err(SessionError::Locked);
-        }
         if now_tick >= session.expires_at_tick {
             expired_root = Some(session.root_capability);
             sessions.remove(&session_id);
             Err(SessionError::Expired)
+        } else if session.state == SessionState::Locked {
+            Err(SessionError::Locked)
         } else if session.session_id != session_id || session_id == 0 {
             Err(SessionError::NotFound)
         } else {
