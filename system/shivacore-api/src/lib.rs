@@ -570,7 +570,7 @@ mod tests {
 
     #[test]
     fn abi_version_is_stable() {
-        assert_eq!(ABI_VERSION, 0x0002_0000);
+        assert_eq!(ABI_VERSION, 0x0002_0001);
         // Minor bleibt kompatibel, Major nicht.
         assert!(validate_abi_version(0x0002_ffff));
         assert!(!validate_abi_version(0x0001_0000));
