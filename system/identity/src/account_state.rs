@@ -12,9 +12,8 @@ use crate::{
     BlobStore, PersistenceError,
 };
 
-use alloc::{string::String, vec::Vec};
+use std::{string::String, vec::Vec};
 use core::convert::TryInto;
-use zeroize::Zeroizing;
 
 const MAGIC: &[u8; 4] = b"GAS1";
 const VERSION: u16 = 1;
