@@ -21,6 +21,16 @@ pub fn publish(directory_bytes: &[u8], credential_bytes: &[u8]) -> Result<usize,
             return Err(error);
         }
     };
+    // A single KDF profile keeps real-account and dummy unknown-user work
+    // comparable and prevents account-specific verifier-cost fingerprinting.
+    if parsed
+        .accounts()
+        .iter()
+        .any(|account| account.credential.params != globus_identity_core::KdfParams::OWNER_DEFAULT)
+    {
+        *CATALOG.lock() = None;
+        return Err(CatalogError::InvalidCredential);
+    }
     let count = parsed.len();
     *CATALOG.lock() = Some(parsed);
     Ok(count)
@@ -57,11 +67,7 @@ mod tests {
     use globus_identity_core::{HASH_LEN, KdfParams, RECORD_LEN, SALT_LEN, hash_into};
 
     fn record(password: &[u8], salt_byte: u8) -> [u8; RECORD_LEN] {
-        let params = KdfParams {
-            memory_kib: 8 * 1024,
-            iterations: 1,
-            parallelism: 1,
-        };
+        let params = KdfParams::OWNER_DEFAULT;
         let salt = [salt_byte; SALT_LEN];
         let mut hash = [0; HASH_LEN];
         hash_into(params, password, &salt, &mut hash).unwrap();
