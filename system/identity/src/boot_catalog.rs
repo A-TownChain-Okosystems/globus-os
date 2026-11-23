@@ -68,6 +68,21 @@ pub enum BootCatalogBuildError {
     InvalidCatalog,
 }
 
+/// Validate and package already-exported GUA1 and GCR1 snapshots without rebuilding either catalog.
+///
+/// This is the direct path for ephemeral exports from AccountStateRepository.
+pub fn build_boot_catalog_from_snapshots(
+    accounts: &[u8],
+    credentials: &[u8],
+) -> Result<BootCatalogImages, BootCatalogBuildError> {
+    globus_identity_core::catalog::parse_boot_catalog(accounts, credentials)
+        .map_err(|_| BootCatalogBuildError::InvalidCatalog)?;
+    Ok(BootCatalogImages {
+        accounts: accounts.to_vec(),
+        credentials: credentials.to_vec(),
+    })
+}
+
 /// Build GUA1 + GCR1 from the canonical AccountDirectoryStore view.
 ///
 /// Every directory entry must have exactly one ATID record keyed by its full UserId;
@@ -182,6 +197,27 @@ mod tests {
                 .verify(b"bob-secret"),
             Ok(())
         );
+    }
+
+    #[test]
+    fn repository_snapshots_are_validated_without_rebuilding_gcr1() {
+        let directory_bytes = globus_identity_core::catalog::encode_directory(&[
+            globus_identity_core::catalog::DirectoryEntry {
+                username: "alice".into(),
+                user_id: "id-alice".into(),
+            },
+        ]).unwrap();
+        let credentials = vec![AccountCredential {
+            user_id: UserId::new("id-alice").unwrap(),
+            record: atid(b"alice-secret", 0x11),
+        }];
+        let generated = build_boot_catalog(
+            &AccountDirectorySnapshot::from_bytes(&directory_bytes).unwrap(),
+            &credentials,
+        ).unwrap();
+        let packaged = build_boot_catalog_from_snapshots(&generated.accounts, &generated.credentials).unwrap();
+        assert_eq!(packaged.accounts, generated.accounts);
+        assert_eq!(packaged.credentials, generated.credentials);
     }
 
     #[test]
