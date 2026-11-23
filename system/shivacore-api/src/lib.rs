@@ -24,7 +24,7 @@ pub use globus_ipc::{Endpoint, Message, MessageHeader};
 /// nur die Felder, die er kennt.
 pub const ABI_MAJOR: u16 = 2;
 /// Minor-Stand 1: versioniertes LGN1-Payload fuer den Mehrkonten-IdentityCheck.
-pub const ABI_MINOR: u16 = 1;
+pub const ABI_MINOR: u16 = 2;
 /// Gepackte ABI-Version, Major in den oberen 16 Bit.
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
@@ -46,6 +46,17 @@ pub enum Syscall {
     CapabilityQuery = 0x0020,
     /// Gibt ein Handle frei.
     HandleClose = 0x0030,
+    /// Startet einen Ramdisk-Prozess unter Uebertragung der authentifizierten Session.
+    ///
+    /// `capability` muss das getaggte Session-Handle des aufrufenden Prozesses
+    /// enthalten. `buffer_ptr`/`buffer_len` zeigen auf den ASCII-Namen eines
+    /// Ramdisk-Programms (1 bis 16 Bytes); `arg0` und `arg1` muessen null sein.
+    /// Der Kernel muss Session-Eigentum, Ablauf, Katalogeintrag und ELF-Layout
+    /// pruefen, bevor er einen Prozess anlegt. Erfolg liefert die neue PID;
+    /// die Session wird an den gestarteten Prozess uebertragen. Bis der Kernel
+    /// diesen vollstaendigen Pfad bereitstellt, muss der Aufruf fail-closed
+    /// mit `EndpointUnavailable` enden.
+    SpawnProcess = 0x0060,
     /// Liest die monotone Zeit.
     MonotonicTime = 0x0040,
     /// Schreibt auf die Systemkonsole.
@@ -337,6 +348,7 @@ impl SyscallBlock {
             x if x == Syscall::IpcReceive.id() => Syscall::IpcReceive,
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
+            x if x == Syscall::SpawnProcess.id() => Syscall::SpawnProcess,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             x if x == Syscall::Exit.id() => Syscall::Exit,
             x if x == Syscall::Console.id() => Syscall::Console,
@@ -570,11 +582,25 @@ mod tests {
 
     #[test]
     fn abi_version_is_stable() {
-        assert_eq!(ABI_VERSION, 0x0002_0001);
+        assert_eq!(ABI_VERSION, 0x0002_0002);
         // Minor bleibt kompatibel, Major nicht.
         assert!(validate_abi_version(0x0002_ffff));
         assert!(!validate_abi_version(0x0001_0000));
         assert!(!validate_abi_version(0x0003_0000));
+    }
+
+    #[test]
+    fn spawn_process_opcode_is_stable_and_round_trips_with_session_handle() {
+        assert_eq!(Syscall::SpawnProcess.id(), 0x0060);
+        let mut block = SyscallBlock::new(
+            Syscall::SpawnProcess,
+            Some(CapabilityHandle(IDENTITY_SESSION_HANDLE_TAG | 7)),
+        );
+        block.buffer_ptr = 0x400000;
+        block.buffer_len = 5;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        let written = block.write_to(&mut bytes).expect("Spawn-Block schreiben");
+        assert_eq!(SyscallBlock::parse(&bytes[..written]), Ok(block));
     }
 
     #[test]
