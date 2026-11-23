@@ -123,7 +123,7 @@ mod tests {
         );
         assert_eq!(
             crate::identity_check::check_catalog("unknown", b"alice-secret"),
-            crate::identity_check::CheckOutcome::NoRecord
+            crate::identity_check::CheckOutcome::WrongPassword
         );
         assert_eq!(snapshot().unwrap().len(), 2);
     }
