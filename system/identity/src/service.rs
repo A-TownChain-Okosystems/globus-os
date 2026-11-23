@@ -132,10 +132,7 @@ impl IdentityService {
     }
 
     /// Rotate the account credential and invalidate its current in-memory session.
-    pub fn change_credential(
-        &mut self,
-        new_credential: &[u8],
-    ) -> Result<(), IdentityServiceError> {
+    pub fn change_credential(&mut self, new_credential: &[u8]) -> Result<(), IdentityServiceError> {
         if self.profile.is_none() {
             return Err(IdentityServiceError::NotRegistered);
         }

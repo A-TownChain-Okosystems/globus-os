@@ -248,8 +248,7 @@ impl MultiAccountIdentityService {
         account.load_record(entry.identity.clone())?;
         account.change_credential(new_credential)?;
         let replacement = account.snapshot()?;
-        let generation =
-            repository.replace_identity(expected_generation, username, replacement)?;
+        let generation = repository.replace_identity(expected_generation, username, replacement)?;
         self.accounts.insert(user_id.as_str().to_owned(), account);
         Ok(generation)
     }
@@ -326,9 +325,7 @@ mod tests {
 
     struct TestKey;
     impl IdentityKeyProvider for TestKey {
-        fn load_key(
-            &self,
-        ) -> Result<zeroize::Zeroizing<[u8; 32]>, super::super::SecureStoreError> {
+        fn load_key(&self) -> Result<zeroize::Zeroizing<[u8; 32]>, super::super::SecureStoreError> {
             Ok(zeroize::Zeroizing::new([0x42; 32]))
         }
     }
@@ -370,41 +367,53 @@ mod tests {
         assert_eq!(repository.load_state().unwrap().unwrap().len(), 2);
 
         let mut after_restart = MultiAccountIdentityService::new();
-        assert!(after_restart
-            .login_persisted(
-                &repository,
-                &AccountUsername::parse("alice").unwrap(),
-                b"alice-secret",
-                100,
-                300,
-            )
-            .is_ok());
-        assert!(after_restart
-            .login_persisted(
-                &repository,
-                &AccountUsername::parse("bob").unwrap(),
-                b"alice-secret",
-                100,
-                300,
-            )
-            .is_err());
+        assert!(
+            after_restart
+                .login_persisted(
+                    &repository,
+                    &AccountUsername::parse("alice").unwrap(),
+                    b"alice-secret",
+                    100,
+                    300,
+                )
+                .is_ok()
+        );
+        assert!(
+            after_restart
+                .login_persisted(
+                    &repository,
+                    &AccountUsername::parse("bob").unwrap(),
+                    b"alice-secret",
+                    100,
+                    300,
+                )
+                .is_err()
+        );
 
         let alice = AccountUsername::parse("alice").unwrap();
         after_restart
             .change_credential_persisted(&mut repository, &alice, b"alice-new-secret")
             .unwrap();
-        assert!(after_restart
-            .login_persisted(&repository, &alice, b"alice-secret", 101, 300)
-            .is_err());
-        assert!(after_restart
-            .login_persisted(&repository, &alice, b"alice-new-secret", 101, 300)
-            .is_ok());
+        assert!(
+            after_restart
+                .login_persisted(&repository, &alice, b"alice-secret", 101, 300)
+                .is_err()
+        );
+        assert!(
+            after_restart
+                .login_persisted(&repository, &alice, b"alice-new-secret", 101, 300)
+                .is_ok()
+        );
 
-        after_restart.remove_persisted(&mut repository, &alice).unwrap();
+        after_restart
+            .remove_persisted(&mut repository, &alice)
+            .unwrap();
         assert_eq!(repository.load_state().unwrap().unwrap().len(), 1);
-        assert!(after_restart
-            .login_persisted(&repository, &alice, b"alice-new-secret", 102, 300)
-            .is_err());
+        assert!(
+            after_restart
+                .login_persisted(&repository, &alice, b"alice-new-secret", 102, 300)
+                .is_err()
+        );
     }
 
     #[test]
