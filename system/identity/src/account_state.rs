@@ -84,6 +84,7 @@ impl AccountState {
                 return Err(AccountStateError::InvalidField);
             }
             if account.username.as_str().len() > MAX_USERNAME
+                || account.identity.profile.user_id.as_str().as_bytes().contains(&0)
                 || accounts[..index].iter().any(|previous| {
                     previous.username == account.username
                         || previous.identity.profile.user_id == account.identity.profile.user_id
@@ -375,6 +376,38 @@ mod tests {
         let mut bytes = state.encode().unwrap();
         bytes.push(0);
         assert_eq!(AccountState::decode(&bytes), Err(AccountStateError::TrailingData));
+    }
+
+    #[test]
+    fn encrypted_file_repository_reopens_with_complete_account_state() {
+        use std::time::{SystemTime, UNIX_EPOCH};
+        let unique = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
+        let path = std::env::temp_dir().join(format!("globus-account-state-{unique}.blob"));
+        let state = AccountState::new(vec![
+            account("alice", "user-a", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+            account("bob", "user-b", "$argon2id$v=19$m=19456,t=2,p=1$salt$hash"),
+        ]).unwrap();
+        {
+            let encrypted = EncryptedBlobStore::new(crate::FileBlobStore::open(&path), TestKey);
+            let mut repository = AccountStateRepository::new(encrypted);
+            assert_eq!(repository.commit_state(0, &state).unwrap(), 1);
+        }
+        {
+            let encrypted = EncryptedBlobStore::new(crate::FileBlobStore::open(&path), TestKey);
+            let repository = AccountStateRepository::new(encrypted);
+            assert_eq!(repository.load_state().unwrap(), Some(state));
+            let username = AccountUsername::parse("alice").unwrap();
+            assert_eq!(
+                AccountDirectoryStore::lookup(&repository, &username).unwrap().as_str(),
+                "user-a"
+            );
+            let snapshot = repository.export_directory_snapshot().unwrap().unwrap();
+            assert_eq!(globus_identity_core::catalog::parse_directory(&snapshot).unwrap().len(), 2);
+        }
+        let _ = std::fs::remove_file(&path);
+        let mut lock = path.as_os_str().to_os_string();
+        lock.push(".lock");
+        let _ = std::fs::remove_file(std::path::PathBuf::from(lock));
     }
 
     #[test]
