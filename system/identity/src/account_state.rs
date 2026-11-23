@@ -61,7 +61,12 @@ pub enum AccountStateError {
     /// The underlying blob persistence operation failed.
     Persistence(PersistenceError),
     /// The durable generation changed since the caller's state was loaded.
-    GenerationConflict { expected: u64, actual: u64 },
+    GenerationConflict {
+        /// Generation the caller originally loaded.
+        expected: u64,
+        /// Generation currently stored by the repository.
+        actual: u64,
+    },
     /// The durable generation cannot be incremented safely.
     GenerationOverflow,
 }
