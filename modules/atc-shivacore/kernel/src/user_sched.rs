@@ -962,7 +962,11 @@ mod tests {
             sched.register_spawned_process(ctx.pid, &ctx, cr3, 0),
             Err(ProcessRegistrationError::DuplicatePid)
         );
-        assert_eq!(sched.entry_count(), 1, "Duplikat darf keinen zweiten Eintrag erzeugen");
+        assert_eq!(
+            sched.entry_count(),
+            1,
+            "Duplikat darf keinen zweiten Eintrag erzeugen"
+        );
 
         assert_eq!(
             sched.register_spawned_process(Pid(2001), &ctx, cr3, 0),
@@ -976,7 +980,11 @@ mod tests {
             sched.register_spawned_process(Pid(0), &make_context(0), cr3, 0),
             Err(ProcessRegistrationError::InvalidPid)
         );
-        assert_eq!(sched.entry_count(), 1, "Fehler duerfen keinen Teilzustand hinterlassen");
+        assert_eq!(
+            sched.entry_count(),
+            1,
+            "Fehler duerfen keinen Teilzustand hinterlassen"
+        );
     }
 
     // --- Kernel-Tick ---
