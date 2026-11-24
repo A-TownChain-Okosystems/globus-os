@@ -23,7 +23,10 @@ SECTIONS
         *(.data .data.*)
     }
 
-    .bss : ALIGN(16) {
+    /* PT_LOAD permissions are applied at 4-KiB page granularity.
+     * Keep writable BSS pages separate from the executable text page.
+     */
+    .bss : ALIGN(4096) {
         *(.bss .bss.*)
         *(COMMON)
     }
