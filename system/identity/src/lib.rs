@@ -41,7 +41,9 @@ pub use key_provider::{
 pub use keystore::{
     KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature,
 };
-pub use multi_account::{MultiAccountError, MultiAccountIdentityService};
+pub use multi_account::{
+    MultiAccountError, MultiAccountIdentityService, PendingAccountRegistration,
+};
 pub use persistence::{
     CredentialRecord, IDENTITY_RECORD_VERSION, IdentityRecord, IdentityStore,
     InMemoryIdentityStore, PersistenceError,
