@@ -85,6 +85,9 @@ pub trait BlockDevice {
     fn read(&mut self, request: BlockRequest, destination: &mut [u8]) -> Result<(), BlockError>;
     /// Schreibt den Puffer in die angeforderten Bloecke.
     fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError>;
+    /// Wartet, bis zuvor bestaetigte Schreibauftraege gemaess Geraetevertrag dauerhaft sind.
+    /// Ein erfolgreicher Rueckgabewert ist die Persistenzbarriere fuer hoehere Schichten.
+    fn flush(&mut self) -> Result<(), BlockError>;
 }
 
 /// Deterministic in-memory block device used for tests and as a HAL adapter target.
@@ -147,6 +150,10 @@ impl BlockDevice for MemoryBlockDevice {
             source.len(),
         )?;
         self.storage[range].copy_from_slice(source);
+        Ok(())
+    }
+    fn flush(&mut self) -> Result<(), BlockError> {
+        // MemoryBlockDevice writes are immediately visible in its backing store.
         Ok(())
     }
 }
