@@ -1288,7 +1288,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         stack_size: 0x0001_0000,
         heap_base: 0x0160_0000,
         heap_size: 0x0020_0000,
-            memory_layout: None,
+        memory_layout: None,
     };
     let user_binary_2 = userspace::UserBinary {
         entry_point: 0x0140_0000,
