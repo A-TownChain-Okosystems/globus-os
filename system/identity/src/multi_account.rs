@@ -62,6 +62,7 @@ pub struct PendingAccountRegistration {
     recovery_phrase: Zeroizing<String>,
     confirmation: RecoveryConfirmation,
     confirmed: bool,
+    committed: bool,
 }
 
 impl PendingAccountRegistration {
@@ -205,6 +206,7 @@ impl MultiAccountIdentityService {
             recovery_phrase,
             confirmation,
             confirmed: false,
+            committed: false,
         })
     }
 
@@ -255,12 +257,15 @@ impl MultiAccountIdentityService {
     pub fn commit_registration_persisted<B, K>(
         &mut self,
         repository: &mut AccountStateRepository<B, K>,
-        pending: PendingAccountRegistration,
+        pending: &mut PendingAccountRegistration,
     ) -> Result<RegistrationResult, MultiAccountError>
     where
         B: BlobStore,
         K: IdentityKeyProvider,
     {
+        if pending.committed {
+            return Err(MultiAccountError::DuplicateAccount);
+        }
         if !pending.confirmed {
             return Err(MultiAccountError::RecoveryConfirmationRequired);
         }
@@ -271,13 +276,14 @@ impl MultiAccountIdentityService {
         repository.insert_account(
             expected_generation,
             AccountStateEntry {
-                username: pending.username,
-                identity: pending.identity,
+                username: pending.username.clone(),
+                identity: pending.identity.clone(),
             },
         )?;
-        self.accounts
-            .insert(pending.user_id.as_str().to_owned(), pending.account);
-        Ok(pending.registration)
+        let account = core::mem::replace(&mut pending.account, IdentityService::new());
+        self.accounts.insert(pending.user_id.as_str().to_owned(), account);
+        pending.committed = true;
+        Ok(pending.registration.clone())
     }
 
     /// Authenticate by canonical username using the durable account repository.
@@ -479,10 +485,11 @@ mod tests {
             .unwrap();
         assert!(repository.load_state().unwrap().is_none());
         assert_eq!(
-            service.commit_registration_persisted(&mut repository, pending_alice),
+            service.commit_registration_persisted(&mut repository, &mut pending_alice),
             Err(MultiAccountError::RecoveryConfirmationRequired)
         );
-        // Failed confirmation must not consume or persist the pending account.
+        // An unconfirmed pending account cannot be committed; it remains available for retry.
+        assert!(repository.load_state().unwrap().is_none());
         pending_alice = service
             .prepare_registration_persisted(
                 AccountUsername::parse("alice").unwrap(),
@@ -505,7 +512,7 @@ mod tests {
             .confirm_recovery([&alice_answers[0], &alice_answers[1], &alice_answers[2]])
             .unwrap();
         service
-            .commit_registration_persisted(&mut repository, pending_alice)
+            .commit_registration_persisted(&mut repository, &mut pending_alice)
             .unwrap();
 
         let mut pending_bob = service
@@ -524,7 +531,7 @@ mod tests {
             .confirm_recovery([&bob_answers[0], &bob_answers[1], &bob_answers[2]])
             .unwrap();
         service
-            .commit_registration_persisted(&mut repository, pending_bob)
+            .commit_registration_persisted(&mut repository, &mut pending_bob)
             .unwrap();
         assert_eq!(repository.load_state().unwrap().unwrap().len(), 2);
 
