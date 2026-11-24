@@ -260,19 +260,30 @@ impl UserBinary {
 /// are selected around those ranges; the process slot is deliberately absent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserSegmentMapping {
+    /// Original ELF segment start address (p_vaddr).
     pub virtual_start: u64,
+    /// Exclusive end of the original in-memory segment range.
     pub virtual_end: u64,
+    /// Page-aligned start used by the future page mapper.
     pub page_start: u64,
+    /// Page-aligned exclusive end used by the future page mapper.
     pub page_end: u64,
+    /// Original ELF PF_R/PF_W/PF_X permission bits.
     pub flags: u32,
 }
 
+/// Complete process memory placement calculated from one validated ELF image.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct UserMemoryLayout {
+    /// Original-address mappings for every loadable ELF segment.
     pub segments: Vec<UserSegmentMapping>,
+    /// First virtual address of the private heap region.
     pub heap_base: u64,
+    /// Reserved heap capacity in bytes.
     pub heap_size: u64,
+    /// Exclusive upper boundary of the downward-growing stack.
     pub stack_base: u64,
+    /// Reserved stack capacity in bytes.
     pub stack_size: u64,
 }
 
