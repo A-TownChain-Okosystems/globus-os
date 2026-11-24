@@ -349,12 +349,10 @@ mod tests {
     #[test]
     fn account_revocation_removes_all_sessions_for_only_that_user() {
         let authority = CapabilityAuthority::new();
-        let alice_first =
-            issue(&authority, pid(70), String::from("user-alice"), 100, 500).unwrap();
+        let alice_first = issue(&authority, pid(70), String::from("user-alice"), 100, 500).unwrap();
         let alice_second =
             issue(&authority, pid(71), String::from("user-alice"), 100, 500).unwrap();
-        let bob =
-            issue(&authority, pid(72), String::from("user-bob"), 100, 500).unwrap();
+        let bob = issue(&authority, pid(72), String::from("user-bob"), 100, 500).unwrap();
 
         assert_eq!(revoke_for_user("user-alice", &authority), 2);
         assert_eq!(
