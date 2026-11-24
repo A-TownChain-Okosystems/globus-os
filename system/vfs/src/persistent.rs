@@ -287,9 +287,13 @@ impl<D: BlockDevice> PersistentFs<D> {
         if start < self.layout.data_start {
             return Err(FsError::InvalidSuperblock);
         }
-        self.bitmap
+        // Validate and mutate a candidate first: a range error must not leave
+        // the live in-memory bitmap partially released.
+        let mut candidate = self.bitmap.clone();
+        candidate
             .release(start, count)
             .map_err(|_| FsError::Bitmap)?;
+        self.bitmap = candidate;
         if self.persist_bitmap().is_err() || self.device.flush().is_err() {
             self.poisoned = true;
             return Err(FsError::Io);
@@ -369,6 +373,22 @@ mod tests {
         assert_eq!(fs.allocate_blocks(1), Err(FsError::Io));
         let data_start = fs.layout.data_start;
         assert_eq!(fs.release_blocks(data_start, 1), Err(FsError::Io));
+    }
+
+    #[test]
+    fn failed_partial_release_does_not_mutate_live_bitmap() {
+        let d = MemoryBlockDevice::new(BlockGeometry {
+            block_size: 512,
+            block_count: 64,
+        })
+        .unwrap();
+        let mut fs = PersistentFs::format(d, 8).unwrap();
+        let allocated = fs.allocate_blocks(1).unwrap();
+
+        // First block is allocated; the second is already free. The operation
+        // must fail without freeing the first block in memory.
+        assert_eq!(fs.release_blocks(allocated, 2), Err(FsError::Bitmap));
+        assert!(!fs.bitmap.is_free(allocated).unwrap());
     }
 
     #[test]
