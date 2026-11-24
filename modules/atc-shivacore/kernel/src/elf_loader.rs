@@ -1111,8 +1111,7 @@ mod tests {
     fn parser_rejects_byte_overlapping_load_segments() {
         let mut elf = two_segment_elf(0x01C0_0000, &[0x90; 16], b"DATA", 0);
         // Second PT_LOAD begins inside the first code segment.
-        elf[64 + 56 + 16..64 + 56 + 24]
-            .copy_from_slice(&0x01C0_0008u64.to_le_bytes());
+        elf[64 + 56 + 16..64 + 56 + 24].copy_from_slice(&0x01C0_0008u64.to_le_bytes());
         assert!(matches!(
             ElfParser::parse(&elf),
             Err(ElfParseError::OverlappingSegments)
@@ -1124,8 +1123,7 @@ mod tests {
         let mut elf = two_segment_elf(0x01C0_0000, &[0x90; 16], b"DATA", 0);
         // Distinct byte ranges, but both PT_LOADs would occupy the same page
         // with RX and RW permissions respectively.
-        elf[64 + 56 + 16..64 + 56 + 24]
-            .copy_from_slice(&0x01C0_0800u64.to_le_bytes());
+        elf[64 + 56 + 16..64 + 56 + 24].copy_from_slice(&0x01C0_0800u64.to_le_bytes());
         assert!(matches!(
             ElfParser::parse(&elf),
             Err(ElfParseError::OverlappingSegments)
