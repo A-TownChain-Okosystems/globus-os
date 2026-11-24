@@ -95,7 +95,7 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
         device.write(request, source).map_err(BlockManagerError::Io)
     }
 
-    /// Wartet auf die dauerhafte Speicherung aller vorherigen Schreibauftraege.
+    /// Leitet die Abschluss- und Persistenzbarriere an das Geraet weiter.
     pub fn flush(&mut self, id: BlockDeviceId) -> Result<(), BlockManagerError> {
         let (_, device) = self.devices.iter_mut()
             .find(|(existing, _)| *existing == id)
@@ -139,5 +139,6 @@ mod tests {
             r.ids().collect::<Vec<_>>(),
             vec![BlockDeviceId(1), BlockDeviceId(2)]
         );
+        r.flush(BlockDeviceId(1)).unwrap();
     }
 }
