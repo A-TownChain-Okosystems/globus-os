@@ -133,6 +133,32 @@ mod tests {
     }
 
     #[test]
+    fn first_free_slot_is_taken() {
+        let (slot, space) = allocate_slot(&[0, 1]).expect("Platz 2 frei");
+        assert_eq!(slot, 2);
+        assert_eq!(space.code_base, SPAWN_WINDOW_BASE + 2 * SPAWN_WINDOW_STRIDE);
+    }
+
+    #[test]
+    fn earlier_gap_is_reused_before_later_slot() {
+        let (slot, _) = allocate_slot(&[1, 2]).expect("Platz 0 frei");
+        assert_eq!(slot, 0);
+    }
+
+    #[test]
+    fn full_window_set_fails_closed() {
+        let all: [u64; 12] = core::array::from_fn(|i| i as u64);
+        assert_eq!(allocate_slot(&all), Err(SpawnError::NoFreeSlot));
+    }
+
+    #[test]
+    fn out_of_range_occupation_does_not_block_a_slot() {
+        // Plaetze ausserhalb des Bereichs haben kein Fenster und belegen nichts.
+        let (slot, _) = allocate_slot(&[SPAWN_MAX_SLOTS + 5]).expect("Platz 0 frei");
+        assert_eq!(slot, 0);
+    }
+
+    #[test]
     fn plan_image_without_directory_fails_closed() {
         // Ohne retain() gibt es kein Verzeichnis im Speicher. Die Transaktion
         // darf daraus keinen Spawn ableiten, sondern nur diesen Fehler.
@@ -294,6 +320,26 @@ pub const SPAWN_WINDOW_STRIDE: u64 = 0x0040_0000;
 pub const SPAWN_MAX_SLOTS: u64 = 12;
 
 /// Fenster eines Spawn-Platzes.
+/// Sucht den ersten freien Platz und liefert Platznummer und Fenster.
+///
+/// `occupied` sind die Plaetze, die bereits einem Prozess gehoeren. Plaetze
+/// ausserhalb des gueltigen Bereichs koennen kein Fenster belegen und werden
+/// deshalb nicht als Belegung gezaehlt. Ist jeder Platz belegt, gibt es keinen
+/// Teil-Erfolg: der Aufruf endet mit `NoFreeSlot`.
+pub fn allocate_slot(occupied: &[u64]) -> Result<(u64, UserAddressSpace), SpawnError> {
+    for slot in 0..SPAWN_MAX_SLOTS {
+        if occupied.contains(&slot) {
+            continue;
+        }
+        return match layout_for_slot(slot) {
+            Some(space) => Ok((slot, space)),
+            None => Err(SpawnError::NoFreeSlot),
+        };
+    }
+    Err(SpawnError::NoFreeSlot)
+}
+
+/// Fenster eines Spawn-Platzes. None, wenn der Platz ausserhalb liegt.
 pub fn layout_for_slot(slot: u64) -> Option<UserAddressSpace> {
     if slot >= SPAWN_MAX_SLOTS {
         return None;
