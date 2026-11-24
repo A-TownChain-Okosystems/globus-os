@@ -20,6 +20,8 @@ jobs:
           rustc -vV | grep -qx 'release: 1.100.0'
           rustc -Vv
           cargo -V
+      - name: Install Bare-Metal-Testtarget
+        run: rustup target add x86_64-unknown-none
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
