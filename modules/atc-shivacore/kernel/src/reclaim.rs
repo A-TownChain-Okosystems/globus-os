@@ -148,7 +148,6 @@ impl FrameReclaimer {
         count
     }
 
-
     /// Haengt Frames eines fehlgeschlagenen Adressraum-Aufbaus ohne PID an.
     ///
     /// Die Seitentabellenwurzel wurde noch nie installiert; der normale
@@ -331,10 +330,7 @@ mod tests {
     fn orphan_frames_are_queued_and_drained_without_a_pid() {
         let reclaimer = FrameReclaimer::new();
         assert_eq!(
-            reclaimer.queue_orphan_frames(alloc::vec![
-                frame(0x18_0000),
-                frame(0x18_1000),
-            ]),
+            reclaimer.queue_orphan_frames(alloc::vec![frame(0x18_0000), frame(0x18_1000),]),
             2
         );
         assert_eq!(reclaimer.pending_len(), 1);
