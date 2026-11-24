@@ -80,8 +80,8 @@ jobs:
           readelf -lW "$elf" | tee target/elf-evidence/init-elf-program-headers.txt
           python3 - "$elf" <<'PY'
           import json
+          import os
           import pathlib
-          import re
           import sys
 
           elf = pathlib.Path(sys.argv[1])
@@ -173,7 +173,7 @@ jobs:
                   )
               for issue in issues:
                   out.write(f"ISSUE: {issue}\n")
-          with open(pathlib.os.environ["GITHUB_OUTPUT"], "a") as output:
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
               output.write(f"contract_status={report['contract_status']}\n")
           print(pathlib.Path("target/elf-evidence/init-elf-contract-report.txt").read_text())
           PY
