@@ -1064,11 +1064,22 @@ mod tests {
 
     #[test]
     fn rejects_entry_outside_executable_segment() {
-        let elf = ElfLoader::create_minimal_elf(0x500000, &[0xF4]);
+        // create_minimal_elf legt p_vaddr auf den Einstieg, der Einstieg liegt
+        // damit immer im Segment. Der Einstieg muss hier gezielt aus dem
+        // Segment herausgeschoben werden, sonst prueft der Test nichts.
+        let mut elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
+        elf[24..32].copy_from_slice(&0x500000u64.to_le_bytes());
         assert!(matches!(
             ElfParser::parse(&elf),
             Err(ElfParseError::InvalidEntry)
         ));
+    }
+
+    #[test]
+    fn accepts_entry_at_segment_start() {
+        // Gegenprobe: Einstieg genau am Segmentanfang bleibt gueltig.
+        let elf = ElfLoader::create_minimal_elf(0x400000, &[0xF4]);
+        assert!(ElfParser::parse(&elf).is_ok());
     }
 
     #[test]
