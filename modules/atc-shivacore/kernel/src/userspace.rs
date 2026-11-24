@@ -93,8 +93,12 @@ impl UserAddressSpace {
     /// Check if an address falls within any user region
     pub fn contains(&self, addr: u64) -> bool {
         if let Some(layout) = &self.memory_layout {
-            return layout.segments.iter().any(|s| addr >= s.virtual_start && addr < s.virtual_end)
-                || self.in_stack(addr) || self.in_heap(addr);
+            return layout
+                .segments
+                .iter()
+                .any(|s| addr >= s.virtual_start && addr < s.virtual_end)
+                || self.in_stack(addr)
+                || self.in_heap(addr);
         }
         self.in_code(addr) || self.in_data(addr) || self.in_stack(addr) || self.in_heap(addr)
     }
@@ -531,14 +535,22 @@ unsafe fn map_user_memory_layout(
         base: u64,
         size: u64,
     ) -> Result<(), UserspaceError> {
-        if size == 0 { return Ok(()); }
-        let end = base.checked_add(size).ok_or(UserspaceError::InvalidAddress)?;
+        if size == 0 {
+            return Ok(());
+        }
+        let end = base
+            .checked_add(size)
+            .ok_or(UserspaceError::InvalidAddress)?;
         let first = Page::<Size4KiB>::containing_address(VirtAddr::new(base));
         let last = Page::<Size4KiB>::containing_address(VirtAddr::new(end - 1));
-        let loading_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE
-            | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+        let loading_flags = PageTableFlags::PRESENT
+            | PageTableFlags::USER_ACCESSIBLE
+            | PageTableFlags::WRITABLE
+            | PageTableFlags::NO_EXECUTE;
         for page in Page::range_inclusive(first, last) {
-            let frame = frame_allocator.allocate_frame().ok_or(UserspaceError::InvalidAddress)?;
+            let frame = frame_allocator
+                .allocate_frame()
+                .ok_or(UserspaceError::InvalidAddress)?;
             let flush = unsafe { mapper.map_to(page, frame, loading_flags, frame_allocator) }
                 .map_err(|_| UserspaceError::InvalidAddress)?;
             unsafe { flush.flush() };
@@ -552,32 +564,70 @@ unsafe fn map_user_memory_layout(
     if plan_user_memory(binary)? != *layout {
         return Err(UserspaceError::InvalidBinary);
     }
-    if layout.segments.is_empty() || !layout.segments.iter().any(|s| {
-        s.flags & 0x1 != 0 && binary.entry_point >= s.virtual_start && binary.entry_point < s.virtual_end
-    }) { return Err(UserspaceError::InvalidBinary); }
-    for segment in &layout.segments {
-        map_zeroed_region(mapper, frame_allocator, physical_memory_offset,
-            segment.page_start, segment.page_end - segment.page_start)?;
+    if layout.segments.is_empty()
+        || !layout.segments.iter().any(|s| {
+            s.flags & 0x1 != 0
+                && binary.entry_point >= s.virtual_start
+                && binary.entry_point < s.virtual_end
+        })
+    {
+        return Err(UserspaceError::InvalidBinary);
     }
-    map_zeroed_region(mapper, frame_allocator, physical_memory_offset, layout.heap_base, layout.heap_size)?;
-    map_zeroed_region(mapper, frame_allocator, physical_memory_offset,
-        layout.stack_base.checked_sub(layout.stack_size).ok_or(UserspaceError::InvalidAddress)?,
-        layout.stack_size)?;
     for segment in &layout.segments {
-        let source = binary.segments.iter().find(|source| {
-            source.virtual_address == segment.virtual_start
-                && source.memory_size == segment.virtual_end - segment.virtual_start
-                && source.flags == segment.flags
-        }).ok_or(UserspaceError::InvalidBinary)?;
+        map_zeroed_region(
+            mapper,
+            frame_allocator,
+            physical_memory_offset,
+            segment.page_start,
+            segment.page_end - segment.page_start,
+        )?;
+    }
+    map_zeroed_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        layout.heap_base,
+        layout.heap_size,
+    )?;
+    map_zeroed_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        layout
+            .stack_base
+            .checked_sub(layout.stack_size)
+            .ok_or(UserspaceError::InvalidAddress)?,
+        layout.stack_size,
+    )?;
+    for segment in &layout.segments {
+        let source = binary
+            .segments
+            .iter()
+            .find(|source| {
+                source.virtual_address == segment.virtual_start
+                    && source.memory_size == segment.virtual_end - segment.virtual_start
+                    && source.flags == segment.flags
+            })
+            .ok_or(UserspaceError::InvalidBinary)?;
         if source.bytes.len() as u64 != source.file_size || source.file_size > source.memory_size {
             return Err(UserspaceError::InvalidBinary);
         }
         if !source.bytes.is_empty() {
-            unsafe { core::ptr::copy_nonoverlapping(source.bytes.as_ptr(), segment.virtual_start as *mut u8, source.bytes.len()); }
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    source.bytes.as_ptr(),
+                    segment.virtual_start as *mut u8,
+                    source.bytes.len(),
+                );
+            }
         }
         let mut final_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
-        if segment.flags & 0x2 != 0 { final_flags |= PageTableFlags::WRITABLE; }
-        if segment.flags & 0x1 == 0 { final_flags |= PageTableFlags::NO_EXECUTE; }
+        if segment.flags & 0x2 != 0 {
+            final_flags |= PageTableFlags::WRITABLE;
+        }
+        if segment.flags & 0x1 == 0 {
+            final_flags |= PageTableFlags::NO_EXECUTE;
+        }
         let first = Page::<Size4KiB>::containing_address(VirtAddr::new(segment.page_start));
         let last = Page::<Size4KiB>::containing_address(VirtAddr::new(segment.page_end - 1));
         for page in Page::range_inclusive(first, last) {
