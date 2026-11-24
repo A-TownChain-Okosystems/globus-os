@@ -561,8 +561,8 @@ impl ElfLoader {
         elf[phdr_off + 32..phdr_off + 40].copy_from_slice(&(code.len() as u64).to_le_bytes());
         // p_memsz = code.len()
         elf[phdr_off + 40..phdr_off + 48].copy_from_slice(&(code.len() as u64).to_le_bytes());
-        // p_align = 0x1000
-        elf[phdr_off + 48..phdr_off + 56].copy_from_slice(&0x1000u64.to_le_bytes());
+        // Synthetic fixture has no page-alignment requirement; dedicated tests cover p_align.
+        elf[phdr_off + 48..phdr_off + 56].copy_from_slice(&1u64.to_le_bytes());
 
         // Append code at offset 120
         elf.extend_from_slice(code);
@@ -1572,7 +1572,8 @@ mod tests {
             elf[base + 24..base + 32].copy_from_slice(&vaddr.to_le_bytes());
             elf[base + 32..base + 40].copy_from_slice(&filesz.to_le_bytes());
             elf[base + 40..base + 48].copy_from_slice(&memsz.to_le_bytes());
-            elf[base + 48..base + 56].copy_from_slice(&0x1000u64.to_le_bytes());
+            // File offsets are compact in this fixture; p_align=1 keeps ELF congruence valid.
+            elf[base + 48..base + 56].copy_from_slice(&1u64.to_le_bytes());
         }
         elf.extend_from_slice(code);
         elf.extend_from_slice(data);
