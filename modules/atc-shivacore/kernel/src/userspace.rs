@@ -507,6 +507,80 @@ pub fn is_write_execute(flags: PageTableFlags) -> bool {
     flags.contains(PageTableFlags::WRITABLE) && !flags.contains(PageTableFlags::NO_EXECUTE)
 }
 
+/// Installs the authoritative ELF layout at its original virtual addresses.
+///
+/// Every page is zeroed before file bytes are copied, so the p_memsz-p_filesz
+/// tail (BSS) is guaranteed zero. Segment permissions are applied only after
+/// population; the final PTEs enforce PF_W/PF_X and never permit W+X.
+#[cfg(feature = "x86-boot")]
+unsafe fn map_user_memory_layout(
+    mapper: &mut OffsetPageTable<'static>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    physical_memory_offset: VirtAddr,
+    binary: &UserBinary,
+    layout: &UserMemoryLayout,
+) -> Result<(), UserspaceError> {
+    fn map_zeroed_region(
+        mapper: &mut OffsetPageTable<'static>,
+        frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+        physical_memory_offset: VirtAddr,
+        base: u64,
+        size: u64,
+    ) -> Result<(), UserspaceError> {
+        if size == 0 { return Ok(()); }
+        let end = base.checked_add(size).ok_or(UserspaceError::InvalidAddress)?;
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(base));
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(end - 1));
+        let loading_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE
+            | PageTableFlags::WRITABLE | PageTableFlags::NO_EXECUTE;
+        for page in Page::range_inclusive(first, last) {
+            let frame = frame_allocator.allocate_frame().ok_or(UserspaceError::InvalidAddress)?;
+            let flush = unsafe { mapper.map_to(page, frame, loading_flags, frame_allocator) }
+                .map_err(|_| UserspaceError::InvalidAddress)?;
+            unsafe { flush.flush() };
+            let phys = physical_memory_offset + frame.start_address().as_u64();
+            unsafe { core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize) };
+        }
+        Ok(())
+    }
+
+    if layout.segments.is_empty() || !layout.segments.iter().any(|s| {
+        s.flags & 0x1 != 0 && binary.entry_point >= s.virtual_start && binary.entry_point < s.virtual_end
+    }) { return Err(UserspaceError::InvalidBinary); }
+    for segment in &layout.segments {
+        map_zeroed_region(mapper, frame_allocator, physical_memory_offset,
+            segment.page_start, segment.page_end - segment.page_start)?;
+    }
+    map_zeroed_region(mapper, frame_allocator, physical_memory_offset, layout.heap_base, layout.heap_size)?;
+    map_zeroed_region(mapper, frame_allocator, physical_memory_offset,
+        layout.stack_base.checked_sub(layout.stack_size).ok_or(UserspaceError::InvalidAddress)?,
+        layout.stack_size)?;
+    for segment in &layout.segments {
+        let source = binary.segments.iter().find(|source| {
+            source.virtual_address == segment.virtual_start
+                && source.memory_size == segment.virtual_end - segment.virtual_start
+                && source.flags == segment.flags
+        }).ok_or(UserspaceError::InvalidBinary)?;
+        if source.bytes.len() as u64 != source.file_size || source.file_size > source.memory_size {
+            return Err(UserspaceError::InvalidBinary);
+        }
+        if !source.bytes.is_empty() {
+            unsafe { core::ptr::copy_nonoverlapping(source.bytes.as_ptr(), segment.virtual_start as *mut u8, source.bytes.len()); }
+        }
+        let mut final_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        if segment.flags & 0x2 != 0 { final_flags |= PageTableFlags::WRITABLE; }
+        if segment.flags & 0x1 == 0 { final_flags |= PageTableFlags::NO_EXECUTE; }
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(segment.page_start));
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(segment.page_end - 1));
+        for page in Page::range_inclusive(first, last) {
+            let flush = unsafe { mapper.update_flags(page, final_flags) }
+                .map_err(|_| UserspaceError::InvalidAddress)?;
+            unsafe { flush.flush() };
+        }
+    }
+    Ok(())
+}
+
 /// Map a user binary into the active x86-64 page table.
 ///
 /// This is the first real bridge from the modelled UserAddressSpace to CPU-visible
@@ -523,6 +597,9 @@ pub unsafe fn map_user_binary(
     binary: &UserBinary,
     addr_space: &UserAddressSpace,
 ) -> Result<(), UserspaceError> {
+    if let Some(layout) = &addr_space.memory_layout {
+        return unsafe { map_user_memory_layout(mapper, frame_allocator, physical_memory_offset, binary, layout) };
+    }
     if binary.code.is_empty()
         || binary.code.len() as u64 > addr_space.code_size
         || binary.entry_point < addr_space.code_base
