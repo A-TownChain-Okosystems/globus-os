@@ -281,7 +281,9 @@ impl<D: BlockDevice> PersistentFs<D> {
     }
     /// Gibt Bloecke frei; Bereiche vor dem Datenbereich werden abgelehnt.
     pub fn release_blocks(&mut self, start: u64, count: u64) -> Result<(), FsError> {
-        if self.poisoned { return Err(FsError::Io); }
+        if self.poisoned {
+            return Err(FsError::Io);
+        }
         if start < self.layout.data_start {
             return Err(FsError::InvalidSuperblock);
         }
