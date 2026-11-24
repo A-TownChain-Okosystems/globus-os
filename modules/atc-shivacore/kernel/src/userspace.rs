@@ -254,6 +254,122 @@ impl UserBinary {
     }
 }
 
+/// Page-granular placement of validated ELF PT_LOAD segments and private regions.
+///
+/// Segment virtual addresses remain the ELF's original addresses. Heap and stack
+/// are selected around those ranges; the process slot is deliberately absent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserSegmentMapping {
+    pub virtual_start: u64,
+    pub virtual_end: u64,
+    pub page_start: u64,
+    pub page_end: u64,
+    pub flags: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserMemoryLayout {
+    pub segments: Vec<UserSegmentMapping>,
+    pub heap_base: u64,
+    pub heap_size: u64,
+    pub stack_base: u64,
+    pub stack_size: u64,
+}
+
+const USER_PAGE_SIZE: u64 = 0x1000;
+const USER_MIN_ADDRESS: u64 = 0x10000;
+const USER_LAYOUT_CEILING: u64 = 0x0000_0000_8000_0000;
+const USER_DEFAULT_HEAP_SIZE: u64 = 0x20_0000;
+const USER_DEFAULT_STACK_SIZE: u64 = 0x1_0000;
+
+/// Plans an ELF image without rebasing its PT_LOAD virtual addresses.
+///
+/// The planner is intentionally pure: no frames or page tables are allocated.
+/// Page-rounded overlaps are rejected so a later mapper cannot accidentally
+/// map one virtual page twice with ambiguous ownership or permissions.
+pub fn plan_user_memory(binary: &UserBinary) -> Result<UserMemoryLayout, UserspaceError> {
+    if binary.segments.is_empty() {
+        return Err(UserspaceError::InvalidBinary);
+    }
+    let mut segments = Vec::with_capacity(binary.segments.len());
+    for segment in &binary.segments {
+        if segment.memory_size == 0
+            || segment.file_size > segment.memory_size
+            || segment.bytes.len() as u64 != segment.file_size
+            || segment.flags & !0x7 != 0
+            || segment.flags & 0x2 != 0 && segment.flags & 0x1 != 0
+        {
+            return Err(UserspaceError::InvalidBinary);
+        }
+        let end = segment.virtual_address.checked_add(segment.memory_size)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        if segment.virtual_address < USER_MIN_ADDRESS || end > USER_LAYOUT_CEILING {
+            return Err(UserspaceError::InvalidAddress);
+        }
+        let page_start = segment.virtual_address & !(USER_PAGE_SIZE - 1);
+        let page_end = end.checked_add(USER_PAGE_SIZE - 1)
+            .ok_or(UserspaceError::InvalidAddress)? & !(USER_PAGE_SIZE - 1);
+        segments.push(UserSegmentMapping {
+            virtual_start: segment.virtual_address,
+            virtual_end: end,
+            page_start,
+            page_end,
+            flags: segment.flags,
+        });
+    }
+    segments.sort_by_key(|segment| segment.page_start);
+    for pair in segments.windows(2) {
+        if pair[0].page_end > pair[1].page_start {
+            return Err(UserspaceError::InvalidAddress);
+        }
+    }
+    if !segments.iter().any(|segment| {
+        segment.flags & 0x1 != 0
+            && binary.entry_point >= segment.virtual_start
+            && binary.entry_point < segment.virtual_end
+    }) {
+        return Err(UserspaceError::InvalidBinary);
+    }
+
+    let heap_size = USER_DEFAULT_HEAP_SIZE;
+    let stack_size = USER_DEFAULT_STACK_SIZE;
+    let stack_pages = stack_size.div_ceil(USER_PAGE_SIZE) * USER_PAGE_SIZE;
+    let mut stack_base = USER_LAYOUT_CEILING - USER_PAGE_SIZE;
+    loop {
+        let stack_start = stack_base.checked_sub(stack_pages)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        let collides = segments.iter().any(|segment| {
+            stack_start < segment.page_end && segment.page_start < stack_base
+        });
+        if !collides { break; }
+        stack_base = stack_start.checked_sub(USER_PAGE_SIZE)
+            .ok_or(UserspaceError::InvalidAddress)?;
+    }
+
+    let heap_size = heap_size.div_ceil(USER_PAGE_SIZE) * USER_PAGE_SIZE;
+    let mut heap_base = USER_MIN_ADDRESS;
+    loop {
+        let heap_end = heap_base.checked_add(heap_size)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        if heap_end >= stack_base - stack_pages { return Err(UserspaceError::InvalidAddress); }
+        let collision = segments.iter().find(|segment| {
+            heap_base < segment.page_end && segment.page_start < heap_end
+        });
+        match collision {
+            Some(segment) => heap_base = segment.page_end,
+            None => break,
+        }
+    }
+
+    Ok(UserMemoryLayout {
+        segments,
+        heap_base,
+        heap_size,
+        stack_base,
+        stack_size: stack_pages,
+    })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Real user-page installation / CPL3 entry
 // ═══════════════════════════════════════════════════════════════════════════════
