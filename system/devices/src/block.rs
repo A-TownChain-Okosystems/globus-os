@@ -85,8 +85,8 @@ pub trait BlockDevice {
     fn read(&mut self, request: BlockRequest, destination: &mut [u8]) -> Result<(), BlockError>;
     /// Schreibt den Puffer in die angeforderten Bloecke.
     fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError>;
-    /// Wartet, bis zuvor bestaetigte Schreibauftraege gemaess Geraetevertrag dauerhaft sind.
-    /// Ein erfolgreicher Rueckgabewert ist die Persistenzbarriere fuer hoehere Schichten.
+    /// Wartet, bis vorherige Schreibauftraege gemaess Geraetevertrag abgeschlossen sind.
+    /// Hardwaregeraete muessen dabei erforderliche volatile Schreibcaches leeren.
     fn flush(&mut self) -> Result<(), BlockError>;
 }
 
@@ -207,6 +207,7 @@ mod tests {
         )
         .unwrap();
         assert_eq!(source, destination);
+        d.flush().unwrap();
     }
     #[test]
     fn buffer_size_is_exact() {
