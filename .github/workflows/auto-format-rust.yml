@@ -2,7 +2,7 @@ name: Auto Format Rust
 
 on:
   push:
-    branches: [main]
+    branches: [main, feature/multi-account-login-session]
     paths:
       - "**/*.rs"
       - "**/Cargo.toml"

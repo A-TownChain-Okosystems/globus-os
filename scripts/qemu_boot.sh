@@ -58,8 +58,23 @@ GREETER_ELF="$ROOT/modules/atc-shivacore/greeter/target/x86_64-unknown-none/rele
 echo "== 4/5 Disk-Image erzeugen =="
 # Zwei Eintraege: das Init bleibt Prozess 1 (Messprogramm), das Anmeldefenster
 # wird der vierte Prozess. Der Kernel waehlt nach Namen, nicht nach Reihenfolge.
+RAMDISK_ENTRIES=("init=$INIT_ELF" "greeter=$GREETER_ELF")
+ACCOUNT_DIRECTORY_IMAGE="${GLOBUS_ACCOUNT_DIRECTORY:-}"
+CREDENTIAL_CATALOG_IMAGE="${GLOBUS_CREDENTIAL_CATALOG:-}"
+if [ -n "$ACCOUNT_DIRECTORY_IMAGE" ] || [ -n "$CREDENTIAL_CATALOG_IMAGE" ]; then
+  [ -n "$ACCOUNT_DIRECTORY_IMAGE" ] || die "GLOBUS_ACCOUNT_DIRECTORY fehlt"
+  [ -n "$CREDENTIAL_CATALOG_IMAGE" ] || die "GLOBUS_CREDENTIAL_CATALOG fehlt"
+  [ -f "$ACCOUNT_DIRECTORY_IMAGE" ] || die "Kontenverzeichnis fehlt: $ACCOUNT_DIRECTORY_IMAGE"
+  [ -f "$CREDENTIAL_CATALOG_IMAGE" ] || die "Credential-Katalog fehlt: $CREDENTIAL_CATALOG_IMAGE"
+  RAMDISK_ENTRIES+=("sys.accounts=$ACCOUNT_DIRECTORY_IMAGE" "sys.credentials=$CREDENTIAL_CATALOG_IMAGE")
+  echo "Mehrkonten-Verzeichnis: $ACCOUNT_DIRECTORY_IMAGE"
+  echo "Mehrkonten-Credentials: $CREDENTIAL_CATALOG_IMAGE"
+else
+  echo "WARNUNG: Mehrkonten-Boot-Eintraege fehlen — Anmeldung bleibt fail-closed."
+fi
+
 "$ROOT/modules/atc-shivacore/boot/target/release/boot" "$KERNEL_ELF" "$ROOT/images" \
-  "init=$INIT_ELF" "greeter=$GREETER_ELF"
+  "${RAMDISK_ENTRIES[@]}"
 
 echo "== 5/5 QEMU $RUN_SECONDS s (Log: $LOG) =="
 set +e

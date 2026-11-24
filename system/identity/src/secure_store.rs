@@ -91,10 +91,31 @@ impl<B: BlobStore, K: IdentityKeyProvider> EncryptedBlobStore<B, K> {
         decrypt(&blob, &self.keys, current)
     }
 
+    /// Aktuelle Generation des zugrunde liegenden atomaren Backends.
+    pub fn generation(&self) -> Result<u64, SecureStoreError> {
+        self.backend.generation()
+    }
+
     /// Verschluesselt mit der naechsten Generation und schreibt atomar.
     pub fn replace_plaintext(&mut self, plaintext: &[u8]) -> Result<u64, SecureStoreError> {
+        let expected = self.backend.generation()?;
+        self.replace_plaintext_at_generation(expected, plaintext)
+    }
+
+    /// Commit only if the durable generation still equals the caller's snapshot.
+    ///
+    /// The backend must serialize replacement and reject a generation that is no longer
+    /// exactly the next generation. This closes the read-check-write race between processes.
+    pub fn replace_plaintext_at_generation(
+        &mut self,
+        expected_generation: u64,
+        plaintext: &[u8],
+    ) -> Result<u64, SecureStoreError> {
         let current = self.backend.generation()?;
-        let generation = current
+        if current != expected_generation {
+            return Err(SecureStoreError::Conflict);
+        }
+        let generation = expected_generation
             .checked_add(1)
             .ok_or(SecureStoreError::GenerationOverflow)?;
         let blob = encrypt(plaintext, &self.keys, generation)?;

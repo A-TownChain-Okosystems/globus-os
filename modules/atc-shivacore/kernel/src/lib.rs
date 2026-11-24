@@ -48,6 +48,8 @@ pub mod fault;
 /// Hardware-Abstraktion; derzeit die Prozessorinformation.
 pub mod hal;
 /// Pruefung des Identitaetsdatensatzes im Kernel: Ergebnis, Kennung und Gate.
+pub mod identity_catalog;
+/// Bootseitiger Mehrkonten-Katalog aus dem bestehenden Identity-Verzeichnis.
 pub mod identity_check;
 /// Lesen des Identitaetsdatensatzes aus Eintraegen und Abbild, mit Fehlerwegen.
 pub mod identity_file;
@@ -85,6 +87,8 @@ pub mod reclaim;
 pub mod scheduler;
 /// Mehrfachsignatur, Schluessel und Sicherheitspruefungen.
 pub mod security;
+/// Kernel-owned authenticated sessions and session-capability lifecycle.
+pub mod session_authority;
 /// Stabile Systemaufruf-Grenze.
 pub mod syscall;
 /// Der einzige Uebergang vom Userspace in den Kernel.

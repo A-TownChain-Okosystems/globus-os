@@ -16,9 +16,6 @@ use std::{
 
 use crate::{AccountUsername, UserId};
 
-const MAGIC: &[u8; 4] = b"GUA1";
-const VERSION: u8 = 1;
-const MAX_ENTRIES: usize = 1_000_000;
 const MAX_FIELD: usize = 128;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,26 +44,36 @@ pub struct AccountDirectoryEntry {
     pub user_id: UserId,
 }
 
-/// A durable directory backend. Implementations must make insert_if_absent atomic and durable.
+/// Read-only view of the canonical username-to-UserId mapping.
 pub trait AccountDirectoryStore {
-    /// Fuegt atomar ein und schlaegt fehl, wenn der Name schon existiert.
+    /// Resolve a canonical username to its stable UserId.
+    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError>;
+    /// Return the complete canonical directory projection.
+    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError>;
+}
+
+/// Legacy standalone directory writer. Production account mutations must commit
+/// through AccountStateRepository so username and credential state remain atomic.
+pub trait MutableAccountDirectoryStore: AccountDirectoryStore {
+    /// Legacy atomic insertion into the standalone GUA1 file.
     fn insert_if_absent(
         &mut self,
         username: AccountUsername,
         user_id: UserId,
     ) -> Result<(), AccountDirectoryError>;
-    /// Liefert die Benutzer-ID zu einem Namen.
-    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError>;
-    /// Alle Eintraege des Verzeichnisses.
-    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError>;
 }
 
-/// Filesystem-backed username index. Use a path under a trusted, access-controlled data directory.
+/// Legacy filesystem-backed GUA1 index. Production mutations must use AccountStateRepository.
+#[deprecated(
+    note = "legacy standalone directory; use AccountStateRepository as the canonical account store"
+)]
+/// Legacy GUA1 directory reader/writer retained for import and migration only.
 pub struct FileAccountDirectory {
     path: PathBuf,
     lock_path: PathBuf,
 }
 
+#[allow(deprecated)]
 impl FileAccountDirectory {
     /// Bindet das Verzeichnis an einen Pfad und leitet den Lock-Pfad daraus ab.
     pub fn open(path: impl Into<PathBuf>) -> Self {
@@ -164,31 +171,8 @@ impl Drop for DirectoryLock {
     }
 }
 
+#[allow(deprecated)]
 impl AccountDirectoryStore for FileAccountDirectory {
-    fn insert_if_absent(
-        &mut self,
-        username: AccountUsername,
-        user_id: UserId,
-    ) -> Result<(), AccountDirectoryError> {
-        if user_id.as_str().is_empty()
-            || user_id.as_str().len() > MAX_FIELD
-            || user_id.as_str().as_bytes().contains(&0)
-        {
-            return Err(AccountDirectoryError::InvalidAccountId);
-        }
-        let _lock = self.acquire_lock()?;
-        let mut entries = self.read_entries()?;
-        if entries.iter().any(|entry| entry.username == username) {
-            return Err(AccountDirectoryError::AlreadyExists);
-        }
-        if entries.iter().any(|entry| entry.user_id == user_id) {
-            return Err(AccountDirectoryError::AlreadyExists);
-        }
-        entries.push(AccountDirectoryEntry { username, user_id });
-        entries.sort_by(|a, b| a.username.as_str().cmp(b.username.as_str()));
-        self.write_entries(&entries)
-    }
-
     fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
         self.read_entries()?
             .into_iter()
@@ -202,103 +186,81 @@ impl AccountDirectoryStore for FileAccountDirectory {
     }
 }
 
-fn encode_entries(entries: &[AccountDirectoryEntry]) -> Result<Vec<u8>, AccountDirectoryError> {
-    if entries.len() > MAX_ENTRIES {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    let mut bytes = Vec::new();
-    bytes.extend_from_slice(MAGIC);
-    bytes.push(VERSION);
-    bytes.extend_from_slice(&(entries.len() as u32).to_be_bytes());
-    for entry in entries {
-        let username = entry.username.as_str().as_bytes();
-        let user_id = entry.user_id.as_str().as_bytes();
-        if username.len() > 32
-            || user_id.is_empty()
-            || user_id.len() > MAX_FIELD
-            || username.len() > u8::MAX as usize
+#[allow(deprecated)]
+impl MutableAccountDirectoryStore for FileAccountDirectory {
+    fn insert_if_absent(
+        &mut self,
+        username: AccountUsername,
+        user_id: UserId,
+    ) -> Result<(), AccountDirectoryError> {
+        if user_id.as_str().is_empty()
+            || user_id.as_str().len() > MAX_FIELD
+            || user_id.as_str().as_bytes().contains(&0)
         {
-            return Err(AccountDirectoryError::Corrupt);
+            return Err(AccountDirectoryError::InvalidAccountId);
         }
-        bytes.push(username.len() as u8);
-        bytes.extend_from_slice(username);
-        bytes.extend_from_slice(&(user_id.len() as u16).to_be_bytes());
-        bytes.extend_from_slice(user_id);
+        let _lock = self.acquire_lock()?;
+        let mut entries = self.read_entries()?;
+        if entries
+            .iter()
+            .any(|entry| entry.username == username || entry.user_id == user_id)
+        {
+            return Err(AccountDirectoryError::AlreadyExists);
+        }
+        entries.push(AccountDirectoryEntry { username, user_id });
+        entries.sort_by(|a, b| a.username.as_str().cmp(b.username.as_str()));
+        self.write_entries(&entries)
     }
-    Ok(bytes)
+}
+
+/// AccountState is the canonical production source; this implementation exposes
+/// its username index as a read-only view and cannot commit a detached directory entry.
+impl AccountDirectoryStore for crate::AccountState {
+    fn lookup(&self, username: &AccountUsername) -> Result<UserId, AccountDirectoryError> {
+        self.by_username(username)
+            .map(|entry| entry.identity.profile.user_id.clone())
+            .ok_or(AccountDirectoryError::NotFound)
+    }
+
+    fn entries(&self) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
+        Ok(self
+            .accounts()
+            .iter()
+            .map(|entry| AccountDirectoryEntry {
+                username: entry.username.clone(),
+                user_id: entry.identity.profile.user_id.clone(),
+            })
+            .collect())
+    }
+}
+
+fn encode_entries(entries: &[AccountDirectoryEntry]) -> Result<Vec<u8>, AccountDirectoryError> {
+    let raw: Vec<globus_identity_core::catalog::DirectoryEntry> = entries
+        .iter()
+        .map(|entry| globus_identity_core::catalog::DirectoryEntry {
+            username: entry.username.as_str().to_owned(),
+            user_id: entry.user_id.as_str().to_owned(),
+        })
+        .collect();
+    globus_identity_core::catalog::encode_directory(&raw)
+        .map_err(|_| AccountDirectoryError::Corrupt)
 }
 
 fn decode_entries(bytes: &[u8]) -> Result<Vec<AccountDirectoryEntry>, AccountDirectoryError> {
-    if bytes.len() < 9 || &bytes[..4] != MAGIC || bytes[4] != VERSION {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    let count = u32::from_be_bytes(
-        bytes[5..9]
-            .try_into()
-            .map_err(|_| AccountDirectoryError::Corrupt)?,
-    ) as usize;
-    if count > MAX_ENTRIES {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    let mut cursor = 9usize;
-    let mut entries = Vec::with_capacity(count);
-    for _ in 0..count {
-        let name_len = *bytes.get(cursor).ok_or(AccountDirectoryError::Corrupt)? as usize;
-        cursor += 1;
-        let name_end = cursor
-            .checked_add(name_len)
-            .ok_or(AccountDirectoryError::Corrupt)?;
-        let name = std::str::from_utf8(
-            bytes
-                .get(cursor..name_end)
-                .ok_or(AccountDirectoryError::Corrupt)?,
-        )
-        .map_err(|_| AccountDirectoryError::Corrupt)?;
-        cursor = name_end;
-        let id_len_end = cursor
-            .checked_add(2)
-            .ok_or(AccountDirectoryError::Corrupt)?;
-        let id_len = u16::from_be_bytes(
-            bytes
-                .get(cursor..id_len_end)
-                .ok_or(AccountDirectoryError::Corrupt)?
-                .try_into()
-                .map_err(|_| AccountDirectoryError::Corrupt)?,
-        ) as usize;
-        cursor = id_len_end;
-        if id_len == 0 || id_len > MAX_FIELD {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        let id_end = cursor
-            .checked_add(id_len)
-            .ok_or(AccountDirectoryError::Corrupt)?;
-        let id = std::str::from_utf8(
-            bytes
-                .get(cursor..id_end)
-                .ok_or(AccountDirectoryError::Corrupt)?,
-        )
-        .map_err(|_| AccountDirectoryError::Corrupt)?;
-        cursor = id_end;
-        if id.as_bytes().contains(&0) {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        let username = AccountUsername::parse(name).map_err(|_| AccountDirectoryError::Corrupt)?;
-        let user_id = UserId::new(id.to_owned()).map_err(|_| AccountDirectoryError::Corrupt)?;
-        if entries
-            .iter()
-            .any(|e: &AccountDirectoryEntry| e.username == username || e.user_id == user_id)
-        {
-            return Err(AccountDirectoryError::Corrupt);
-        }
-        entries.push(AccountDirectoryEntry { username, user_id });
-    }
-    if cursor != bytes.len() {
-        return Err(AccountDirectoryError::Corrupt);
-    }
-    Ok(entries)
+    globus_identity_core::catalog::parse_directory(bytes)
+        .map_err(|_| AccountDirectoryError::Corrupt)?
+        .into_iter()
+        .map(|entry| {
+            let username = AccountUsername::parse(&entry.username)
+                .map_err(|_| AccountDirectoryError::Corrupt)?;
+            let user_id = UserId::new(entry.user_id).map_err(|_| AccountDirectoryError::Corrupt)?;
+            Ok(AccountDirectoryEntry { username, user_id })
+        })
+        .collect()
 }
 
 #[cfg(test)]
+#[allow(deprecated)]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};

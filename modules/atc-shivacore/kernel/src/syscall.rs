@@ -178,6 +178,7 @@ impl SyscallDispatcher {
             x if x == Syscall::Exit.id() => Syscall::Exit,
             x if x == Syscall::Console.id() => Syscall::Console,
             x if x == Syscall::IdentityCheck.id() => Syscall::IdentityCheck,
+            x if x == Syscall::SpawnProcess.id() => Syscall::SpawnProcess,
             _ => return SyscallResponse::err(AbiError::InvalidSyscall),
         };
 
@@ -195,6 +196,10 @@ impl SyscallDispatcher {
             // Die Anmeldepruefung braucht den Bildschirmbesitz und eine Kopie
             // aus dem Prozessspeicher; der Trampolin faengt sie ab.
             Syscall::IdentityCheck => SyscallResponse::err(AbiError::InvalidPayload),
+            // Der ABI-Vertrag ist registriert, aber der dynamische Ramdisk-Start
+            // samt atomarer Session-Uebertragung ist noch nicht implementiert.
+            // Bis dahin keine Teilwirkung und kein Erfolgsschein: fail-closed.
+            Syscall::SpawnProcess => SyscallResponse::err(AbiError::EndpointUnavailable),
             Syscall::IpcSend => {
                 if !self.check_capability(
                     pid,
@@ -404,6 +409,28 @@ mod tests {
             buffer_ptr: 0,
             buffer_len: 0,
         }
+    }
+
+    #[test]
+    fn spawn_process_is_registered_but_fails_closed_until_runtime_is_wired() {
+        let mut dispatcher = SyscallDispatcher::new();
+        let response = dispatcher.dispatch(
+            pid(1003),
+            SyscallRequest {
+                capability: Some(CapabilityHandle(
+                    libshivacore::IDENTITY_SESSION_HANDLE_TAG | 7,
+                )),
+                buffer_ptr: 0x0040_0000,
+                buffer_len: 5,
+                ..request(Syscall::SpawnProcess)
+            },
+            &mut CapabilityTable::new(),
+        );
+        assert_eq!(response.error, Some(AbiError::EndpointUnavailable));
+        assert_eq!(
+            response.value, 0,
+            "kein Prozess darf vor dem Runtime-Pfad starten"
+        );
     }
 
     #[test]

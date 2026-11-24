@@ -224,6 +224,19 @@ pub enum SchedState {
     Zombie(ExitCode),
 }
 
+/// Fehler bei der atomaren Registrierung eines neu aufgebauten User-Prozesses.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum ProcessRegistrationError {
+    /// PID 0 ist fuer den Kernel reserviert.
+    InvalidPid,
+    /// Die Seitentabellenwurzel ist null oder nicht 4-KiB-ausgerichtet.
+    InvalidCr3,
+    /// Der PID ist bereits im Scheduler vorhanden.
+    DuplicatePid,
+    /// Der Startkontext ist kein gueltiger Ring-3-Kontext fuer seinen Adressraum.
+    InvalidContext,
+}
+
 /// Why a process is blocked
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum BlockReason {
@@ -391,6 +404,43 @@ impl UserScheduler {
             .find(|e| e.pid == pid)
             .map(|e| e.cr3)
             .filter(|cr3| *cr3 != 0)
+    }
+
+    /// Traegt einen fertig aufgebauten Prozess samt CR3 atomar als bereit ein.
+    ///
+    /// Der Scheduler sieht entweder einen vollstaendigen Eintrag mit gueltiger
+    /// Seitentabellenwurzel oder gar keinen Eintrag. Ein halbfertiger Prozess
+    /// darf nicht durch einen Timer-Tick ausgewaehlt werden.
+    pub fn register_spawned_process(
+        &mut self,
+        pid: Pid,
+        ctx: &UserContext,
+        cr3: u64,
+        priority: u8,
+    ) -> Result<(), ProcessRegistrationError> {
+        if pid.0 == 0 {
+            return Err(ProcessRegistrationError::InvalidPid);
+        }
+        if cr3 == 0 || cr3 & 0xFFF != 0 {
+            return Err(ProcessRegistrationError::InvalidCr3);
+        }
+        if self.entries.iter().any(|entry| entry.pid == pid) {
+            return Err(ProcessRegistrationError::DuplicatePid);
+        }
+        if ctx.pid != pid
+            || ctx.privilege != PrivilegeLevel::User
+            || ctx.cs != 0x1B
+            || ctx.ss != 0x23
+            || !ctx.addr_space.in_code(ctx.rip)
+            || !ctx.addr_space.in_stack(ctx.rsp)
+        {
+            return Err(ProcessRegistrationError::InvalidContext);
+        }
+
+        let mut entry = SchedEntry::new(pid, ctx, priority);
+        entry.cr3 = cr3;
+        self.entries.push(entry);
+        Ok(())
     }
 
     /// Traegt einen Prozess als bereit ein.
@@ -892,6 +942,49 @@ mod tests {
         let bin = UserBinary::hello_world();
         let asp = UserAddressSpace::default();
         UserContext::new(Pid(pid), &bin, asp)
+    }
+
+    #[test]
+    fn spawned_process_registration_is_atomic_and_rejects_invalid_state() {
+        let mut sched = UserScheduler::new();
+        let ctx = make_context(2000);
+        let cr3 = 0x1234_5000;
+
+        assert_eq!(
+            sched.register_spawned_process(ctx.pid, &ctx, cr3, 0),
+            Ok(())
+        );
+        assert_eq!(sched.entry_count(), 1);
+        assert_eq!(sched.cr3_of(ctx.pid), Some(cr3));
+        assert_eq!(sched.get_entry(ctx.pid).unwrap().state, SchedState::Ready);
+
+        assert_eq!(
+            sched.register_spawned_process(ctx.pid, &ctx, cr3, 0),
+            Err(ProcessRegistrationError::DuplicatePid)
+        );
+        assert_eq!(
+            sched.entry_count(),
+            1,
+            "Duplikat darf keinen zweiten Eintrag erzeugen"
+        );
+
+        assert_eq!(
+            sched.register_spawned_process(Pid(2001), &ctx, cr3, 0),
+            Err(ProcessRegistrationError::InvalidContext)
+        );
+        assert_eq!(
+            sched.register_spawned_process(Pid(2001), &make_context(2001), cr3 + 1, 0),
+            Err(ProcessRegistrationError::InvalidCr3)
+        );
+        assert_eq!(
+            sched.register_spawned_process(Pid(0), &make_context(0), cr3, 0),
+            Err(ProcessRegistrationError::InvalidPid)
+        );
+        assert_eq!(
+            sched.entry_count(),
+            1,
+            "Fehler duerfen keinen Teilzustand hinterlassen"
+        );
     }
 
     // --- Kernel-Tick ---

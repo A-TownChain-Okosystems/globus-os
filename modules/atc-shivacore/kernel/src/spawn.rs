@@ -1,6 +1,6 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ─────────────────────────────────────────────────────────────────────────
-// Spawn-Annahme (ABI 2.1): Init beantragt ein Programm aus dem Ramdisk-Verzeichnis.
+// Spawn-Annahme (ABI 2.2): Init beantragt ein Programm aus dem Ramdisk-Verzeichnis.
 //
 // Der Kernel liest das Verzeichnis heute selbst und startet, was er findet. Damit
 // entscheidet der Kernel statt des Init. Dieser Pfad dreht es um: der Aufruf kommt
@@ -11,7 +11,8 @@
 // fehlte, war der aufbauende Weg: Wurzel, Mapper und Abbildung aus dem
 // Laufzeitkontext. Er steht jetzt in `build_space` und benutzt dieselben
 // Bausteine wie der Bootpfad — kein zweiter Weg zum selben Ziel. Der Aufruf
-// ueber die ABI (SpawnProcess) ist noch nicht verdrahtet.
+// ueber die ABI (SpawnProcess) ist als fail-closed Opcode registriert; die Runtime-
+// Integration (ELF-Laden, PID/Slot, Scheduler, CR3 und Session-Uebergabe) fehlt noch.
 // ─────────────────────────────────────────────────────────────────────────
 
 use crate::elf_loader::ElfParser;
@@ -75,8 +76,12 @@ pub fn plan(entries: &[Entry], image: &[u8], field: &[u8; 16]) -> Result<SpawnPl
     let name = name_from_field(field)?;
     let entry = ramdisk::find(entries, name).ok_or(SpawnError::NotFound)?;
     let bytes = entry.data(image).ok_or(SpawnError::NotFound)?;
+    // ElfParser prueft den Einstieg gegen alle ausfuehrbaren PT_LOAD-
+    // Segmente. Ein zweiter Vergleich mit UserAddressSpace::default() waere
+    // falsch: er bindet ELF-Adressen an das Legacy-4-MiB-Codefenster und
+    // verwirft damit gueltige statische ET_EXEC-Images (z. B. Greeter bei
+    // 0x01C00000). Slot-Identitaet und ELF-VA sind getrennte Dimensionen.
     let elf = ElfParser::parse(bytes).map_err(|_| SpawnError::NotExecutable)?;
-    validate_entry(elf.entry_point(), &UserAddressSpace::default())?;
     Ok(SpawnPlan {
         name_len: name.len(),
         elf_len: bytes.len(),
@@ -94,16 +99,31 @@ pub fn retain(image_ptr: usize, len: usize) {
 
 /// Annahme gegen das gemerkte Verzeichnis. None = kein Verzeichnis im Speicher.
 pub fn plan_retained(field: &[u8; 16]) -> Result<SpawnPlan, SpawnError> {
+    plan_image(field).map(|(plan, _)| plan)
+}
+
+/// Annahme samt Abbild.
+///
+/// Die Prozessstart-Transaktion braucht das ELF-Abbild selbst, nicht nur den
+/// Einstieg: `build_space` erwartet ein `UserBinary`, und `user_binary_from_elf`
+/// braucht die Bytes. Diese Funktion liefert beides aus derselben Lesart, damit
+/// niemand ein zweites Mal parst oder eine zweite Quelle erfindet.
+///
+/// Das Abbild liegt im Boot-Abbild und bleibt gemappt; die zurueckgegebene
+/// Scheibe hat deshalb die Lebensdauer des Kernels.
+pub fn plan_image(field: &[u8; 16]) -> Result<(SpawnPlan, &'static [u8]), SpawnError> {
     let retained = *DIRECTORY.lock();
     let (ptr, len) = retained.ok_or(SpawnError::NoDirectory)?;
     if ptr == 0 || len == 0 || len > 64 * 1024 * 1024 {
         return Err(SpawnError::NoDirectory);
     }
-    // Die Region liegt im Boot-Abbild und bleibt gemappt; dieselbe Lesart wie im
-    // Bootpfad (virtuelle Adresse, kein physical_memory_offset).
-    let image: &[u8] = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
+    // Dieselbe Lesart wie im Bootpfad (virtuelle Adresse, kein
+    // physical_memory_offset). Safety: Zeiger und Laenge stammen aus dem
+    // Bootpfad, die Region bleibt fuer die Lebensdauer des Kernels gemappt.
+    let image: &'static [u8] = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
     let entries = ramdisk::parse(image).map_err(|_| SpawnError::NoDirectory)?;
-    plan(&entries, image, field)
+    let plan = plan(&entries, image, field)?;
+    Ok((plan, image))
 }
 
 #[cfg(test)]
@@ -114,6 +134,42 @@ mod tests {
         let mut f = [0u8; 16];
         f[..name.len()].copy_from_slice(name.as_bytes());
         f
+    }
+
+    #[test]
+    fn first_free_slot_is_taken() {
+        let (slot, space) = allocate_slot(&[0, 1]).expect("Platz 2 frei");
+        assert_eq!(slot, 2);
+        assert_eq!(space.code_base, SPAWN_WINDOW_BASE + 2 * SPAWN_WINDOW_STRIDE);
+    }
+
+    #[test]
+    fn earlier_gap_is_reused_before_later_slot() {
+        let (slot, _) = allocate_slot(&[1, 2]).expect("Platz 0 frei");
+        assert_eq!(slot, 0);
+    }
+
+    #[test]
+    fn full_window_set_fails_closed() {
+        let all: [u64; 12] = core::array::from_fn(|i| i as u64);
+        assert_eq!(allocate_slot(&all), Err(SpawnError::NoFreeSlot));
+    }
+
+    #[test]
+    fn out_of_range_occupation_does_not_block_a_slot() {
+        // Plaetze ausserhalb des Bereichs haben kein Fenster und belegen nichts.
+        let (slot, _) = allocate_slot(&[SPAWN_MAX_SLOTS + 5]).expect("Platz 0 frei");
+        assert_eq!(slot, 0);
+    }
+
+    #[test]
+    fn plan_image_without_directory_fails_closed() {
+        // Ohne retain() gibt es kein Verzeichnis im Speicher. Die Transaktion
+        // darf daraus keinen Spawn ableiten, sondern nur diesen Fehler.
+        assert_eq!(
+            plan_image(&field("shell")).unwrap_err(),
+            SpawnError::NoDirectory
+        );
     }
 
     #[test]
@@ -150,6 +206,16 @@ mod tests {
             plan(&entries, &image, &field("probe")),
             Err(SpawnError::NotExecutable)
         );
+    }
+
+    #[test]
+    fn plan_akzeptiert_gueltige_elf_adresse_ausserhalb_des_legacy_fensters() {
+        let elf = crate::elf_loader::ElfLoader::create_minimal_elf(0x01C0_0000, &[0xF4]);
+        let image = ramdisk::build(&[("greeter", elf.as_slice())]).expect("Ramdisk");
+        let entries = ramdisk::parse(&image).expect("Verzeichnis");
+        let plan = plan(&entries, &image, &field("greeter"))
+            .expect("gueltiges ELF darf nicht am Legacy-Codefenster scheitern");
+        assert_eq!(plan.entry, 0x01C0_0000);
     }
 
     #[test]
@@ -268,6 +334,26 @@ pub const SPAWN_WINDOW_STRIDE: u64 = 0x0040_0000;
 pub const SPAWN_MAX_SLOTS: u64 = 12;
 
 /// Fenster eines Spawn-Platzes.
+/// Sucht den ersten freien Platz und liefert Platznummer und Fenster.
+///
+/// `occupied` sind die Plaetze, die bereits einem Prozess gehoeren. Plaetze
+/// ausserhalb des gueltigen Bereichs koennen kein Fenster belegen und werden
+/// deshalb nicht als Belegung gezaehlt. Ist jeder Platz belegt, gibt es keinen
+/// Teil-Erfolg: der Aufruf endet mit `NoFreeSlot`.
+pub fn allocate_slot(occupied: &[u64]) -> Result<(u64, UserAddressSpace), SpawnError> {
+    for slot in 0..SPAWN_MAX_SLOTS {
+        if occupied.contains(&slot) {
+            continue;
+        }
+        return match layout_for_slot(slot) {
+            Some(space) => Ok((slot, space)),
+            None => Err(SpawnError::NoFreeSlot),
+        };
+    }
+    Err(SpawnError::NoFreeSlot)
+}
+
+/// Fenster eines Spawn-Platzes. None, wenn der Platz ausserhalb liegt.
 pub fn layout_for_slot(slot: u64) -> Option<UserAddressSpace> {
     if slot >= SPAWN_MAX_SLOTS {
         return None;
@@ -282,6 +368,7 @@ pub fn layout_for_slot(slot: u64) -> Option<UserAddressSpace> {
         heap_size: 0x0010_0000,
         stack_base: base + 0x003E_0000,
         stack_size: 0x0001_0000,
+        memory_layout: None,
     })
 }
 

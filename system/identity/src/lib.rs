@@ -1,7 +1,10 @@
 //! GlobusOS identity and wallet boundary.
 
+pub mod account_state;
+
 mod account_lifecycle;
 mod account_registry;
+mod boot_catalog;
 mod entropy;
 mod file_store;
 mod ipc_key_provider;
@@ -15,10 +18,19 @@ mod service;
 pub mod transaction_journal;
 
 pub use account_lifecycle::{AccountLifecycleError, AccountUsername, RecoveryConfirmation};
+#[allow(deprecated)]
 pub use account_registry::{
     AccountDirectoryEntry, AccountDirectoryError, AccountDirectoryStore, FileAccountDirectory,
+    MutableAccountDirectoryStore,
+};
+pub use account_state::{
+    AccountState, AccountStateEntry, AccountStateError, AccountStateRepository,
 };
 use bip39::{Language, Mnemonic};
+pub use boot_catalog::{
+    AccountCredential, AccountDirectorySnapshot, BootCatalogBuildError, BootCatalogImages,
+    build_boot_catalog, build_boot_catalog_from_snapshots,
+};
 pub use entropy::{EntropyGate, OsEntropy};
 pub use file_store::FileBlobStore;
 use hmac::{Hmac, Mac};
@@ -29,7 +41,9 @@ pub use key_provider::{
 pub use keystore::{
     KeyId, KeyMetadata, KeyStore, KeystoreError, ProtectedKey, SignRequest, Signature,
 };
-pub use multi_account::{MultiAccountError, MultiAccountIdentityService};
+pub use multi_account::{
+    MultiAccountError, MultiAccountIdentityService, PendingAccountRegistration,
+};
 pub use persistence::{
     CredentialRecord, IDENTITY_RECORD_VERSION, IdentityRecord, IdentityStore,
     InMemoryIdentityStore, PersistenceError,

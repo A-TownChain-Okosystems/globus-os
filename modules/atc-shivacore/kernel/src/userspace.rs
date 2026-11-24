@@ -69,6 +69,8 @@ pub struct UserAddressSpace {
     pub heap_base: u64,
     /// Groesse des Haufens.
     pub heap_size: u64,
+    /// Autoritatives ELF-Speicherlayout; None bedeutet Legacy-Fenster.
+    pub memory_layout: Option<UserMemoryLayout>,
 }
 
 impl Default for UserAddressSpace {
@@ -82,6 +84,7 @@ impl Default for UserAddressSpace {
             stack_size: 0x00010000, // 64 KiB stack
             heap_base: 0x00600000,  // 6 MiB
             heap_size: 0x00200000,  // 2 MiB heap
+            memory_layout: None,
         }
     }
 }
@@ -89,45 +92,78 @@ impl Default for UserAddressSpace {
 impl UserAddressSpace {
     /// Check if an address falls within any user region
     pub fn contains(&self, addr: u64) -> bool {
+        if let Some(layout) = &self.memory_layout {
+            return layout
+                .segments
+                .iter()
+                .any(|s| addr >= s.virtual_start && addr < s.virtual_end)
+                || self.in_stack(addr)
+                || self.in_heap(addr);
+        }
         self.in_code(addr) || self.in_data(addr) || self.in_stack(addr) || self.in_heap(addr)
     }
-    /// True innerhalb des Codesegments; untere Grenze einbegriffen, obere nicht.
+    /// True innerhalb eines ausfuehrbaren ELF-Segments oder des Legacy-Codefensters.
     pub fn in_code(&self, addr: u64) -> bool {
-        addr >= self.code_base && addr < self.code_base + self.code_size
+        if let Some(layout) = &self.memory_layout {
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x1 != 0 && addr >= s.virtual_start && addr < s.virtual_end);
+        }
+        addr >= self.code_base && addr < self.code_base.saturating_add(self.code_size)
     }
-    /// True innerhalb des Datensegments; untere Grenze einbegriffen, obere nicht.
+    /// True innerhalb eines nicht ausfuehrbaren ELF-Segments oder des Legacy-Datenfensters.
     pub fn in_data(&self, addr: u64) -> bool {
-        addr >= self.data_base && addr < self.data_base + self.data_size
+        if let Some(layout) = &self.memory_layout {
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x1 == 0 && addr >= s.virtual_start && addr < s.virtual_end);
+        }
+        addr >= self.data_base && addr < self.data_base.saturating_add(self.data_size)
     }
-    /// True innerhalb des Stapels; obere Grenze einbegriffen, untere nicht, weil er nach unten waechst.
+    /// True innerhalb des Stapels; obere Grenze einbegriffen, untere nicht.
     pub fn in_stack(&self, addr: u64) -> bool {
-        addr > self.stack_base - self.stack_size && addr <= self.stack_base
+        addr > self.stack_base.saturating_sub(self.stack_size) && addr <= self.stack_base
     }
-    /// True innerhalb des Haufens; untere Grenze einbegriffen, obere nicht.
+    /// True innerhalb des reservierten Haufens.
     pub fn in_heap(&self, addr: u64) -> bool {
-        addr >= self.heap_base && addr < self.heap_base + self.heap_size
+        addr >= self.heap_base && addr < self.heap_base.saturating_add(self.heap_size)
     }
     /// Die tatsaechlich abgebildeten Regionen als [start, ende)-Paare.
     ///
     /// Der Adressraum-Bau braucht sie, um zu entscheiden, welche 1-GiB-Fenster
     /// er NICHT erben darf. Wichtig ist der Stack: er liegt standardmaessig
     /// knapp unter 2 GiB und damit nicht dort, wo man Nutzerseiten vermutet.
-    pub fn mapped_regions(&self) -> [(u64, u64); 4] {
+    pub fn mapped_regions(&self) -> Vec<(u64, u64)> {
+        if let Some(layout) = &self.memory_layout {
+            let mut regions = Vec::with_capacity(layout.segments.len() + 2);
+            regions.extend(layout.segments.iter().map(|s| (s.page_start, s.page_end)));
+            regions.push((
+                layout.heap_base,
+                layout.heap_base.saturating_add(layout.heap_size),
+            ));
+            regions.push((
+                layout.stack_base.saturating_sub(layout.stack_size),
+                layout.stack_base,
+            ));
+            return regions;
+        }
         let stack_pages = self.stack_size.div_ceil(0x1000);
-        let stack_start = self.stack_base - stack_pages * 0x1000;
-        [
+        let stack_start = self.stack_base.saturating_sub(stack_pages * 0x1000);
+        alloc::vec![
             (
                 self.code_base,
-                self.code_base.saturating_add(self.code_size),
+                self.code_base.saturating_add(self.code_size)
             ),
             (
                 self.data_base,
-                self.data_base.saturating_add(self.data_size),
+                self.data_base.saturating_add(self.data_size)
             ),
             (stack_start, self.stack_base),
             (
                 self.heap_base,
-                self.heap_base.saturating_add(self.heap_size),
+                self.heap_base.saturating_add(self.heap_size)
             ),
         ]
     }
@@ -152,6 +188,17 @@ impl UserAddressSpace {
             return false;
         };
         let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
+        if let Some(layout) = &self.memory_layout {
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x2 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
+                || in_region(layout.heap_base, layout.heap_size)
+                || in_region(
+                    layout.stack_base.saturating_sub(layout.stack_size),
+                    layout.stack_size,
+                );
+        }
         in_region(self.data_base, self.data_size)
             || in_region(self.heap_base, self.heap_size)
             || (ptr >= self.stack_base.saturating_sub(self.stack_size) && end <= self.stack_base)
@@ -172,6 +219,17 @@ impl UserAddressSpace {
             return false;
         };
         let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
+        if let Some(layout) = &self.memory_layout {
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x4 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
+                || in_region(layout.heap_base, layout.heap_size)
+                || in_region(
+                    layout.stack_base.saturating_sub(layout.stack_size),
+                    layout.stack_size,
+                );
+        }
         in_region(self.code_base, self.code_size)
             || in_region(self.data_base, self.data_size)
             || in_region(self.heap_base, self.heap_size)
@@ -183,15 +241,38 @@ impl UserAddressSpace {
 // User Binary (simplified ELF-like format for ShivaCore)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// A loadable user binary (simplified — code + data + entry point)
+/// Ein validiertes PT_LOAD-Abbild. `bytes` enthaelt exakt p_filesz Bytes;
+/// der Mapper muss den Bereich bis p_memsz anschliessend mit Null auffuellen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserLoadSegment {
+    /// Urspruenglicher ELF-Dateiversatz (p_offset).
+    pub file_offset: u64,
+    /// Urspruengliche virtuelle Ladeadresse (p_vaddr).
+    pub virtual_address: u64,
+    /// Dateigroesse (p_filesz).
+    pub file_size: u64,
+    /// Speicherbedarf einschliesslich BSS (p_memsz).
+    pub memory_size: u64,
+    /// ELF PF_R/PF_W/PF_X-Bits; keine bereits abgeleiteten PTE-Flags.
+    pub flags: u32,
+    /// ELF Alignment (p_align).
+    pub alignment: u64,
+    /// Unveraenderte Dateibytes des Segments.
+    pub bytes: Vec<u8>,
+}
+
+/// Loadable user image. `code` and `data` remain compatibility projections
+/// for existing manager/tests; `segments` is the authoritative ELF contract.
 #[derive(Clone, Debug)]
 pub struct UserBinary {
     /// Einsprungadresse.
     pub entry_point: u64,
-    /// Maschinenbefehle.
+    /// Kompatibilitaetsprojektion des ersten ausfuehrbaren Segments.
     pub code: Vec<u8>,
-    /// Vorbelegte Daten.
+    /// Kompatibilitaetsprojektion des ersten beschreibbaren Datensegments inkl. BSS.
     pub data: Vec<u8>,
+    /// Alle PT_LOAD-Segmente mit ihren urspruenglichen Adressen und Rechten.
+    pub segments: Vec<UserLoadSegment>,
     /// Anzeigename.
     pub name: String,
 }
@@ -199,19 +280,25 @@ pub struct UserBinary {
 impl UserBinary {
     /// Create a minimal "hello world" binary (just a HLT instruction)
     pub fn hello_world() -> Self {
-        Self {
-            entry_point: 0x00400000,
-            code: vec![0xF4], // HLT instruction
-            data: vec![],
-            name: "hello".to_string(),
-        }
+        Self::from_bytes("hello", vec![0xF4], 0x00400000)
     }
-    /// Create a binary from raw bytes
+    /// Create a binary from raw bytes. This compatibility constructor models
+    /// one RX segment at the supplied virtual address.
     pub fn from_bytes(name: &str, code: Vec<u8>, entry: u64) -> Self {
+        let segment = UserLoadSegment {
+            file_offset: 0,
+            virtual_address: entry,
+            file_size: code.len() as u64,
+            memory_size: code.len() as u64,
+            flags: 0x5, // PF_R | PF_X
+            alignment: 1,
+            bytes: code.clone(),
+        };
         Self {
             entry_point: entry,
             code,
             data: vec![],
+            segments: vec![segment],
             name: name.to_string(),
         }
     }
@@ -225,11 +312,173 @@ impl UserBinary {
     }
 }
 
+/// Page-granular placement of validated ELF PT_LOAD segments and private regions.
+///
+/// Segment virtual addresses remain the ELF's original addresses. Heap and stack
+/// are selected around those ranges; the process slot is deliberately absent.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserSegmentMapping {
+    /// Original ELF segment start address (p_vaddr).
+    pub virtual_start: u64,
+    /// Exclusive end of the original in-memory segment range.
+    pub virtual_end: u64,
+    /// Page-aligned start used by the future page mapper.
+    pub page_start: u64,
+    /// Page-aligned exclusive end used by the future page mapper.
+    pub page_end: u64,
+    /// Original ELF PF_R/PF_W/PF_X permission bits.
+    pub flags: u32,
+}
+
+/// Complete process memory placement calculated from one validated ELF image.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserMemoryLayout {
+    /// Original-address mappings for every loadable ELF segment.
+    pub segments: Vec<UserSegmentMapping>,
+    /// First virtual address of the private heap region.
+    pub heap_base: u64,
+    /// Reserved heap capacity in bytes.
+    pub heap_size: u64,
+    /// Exclusive upper boundary of the downward-growing stack.
+    pub stack_base: u64,
+    /// Reserved stack capacity in bytes.
+    pub stack_size: u64,
+}
+
+const USER_PAGE_SIZE: u64 = 0x1000;
+const USER_MIN_ADDRESS: u64 = 0x10000;
+// AddressSpace rebuilds PML4 entry 0 for user mappings: 0..512 GiB.
+const USER_LAYOUT_CEILING: u64 = 0x0000_0080_0000_0000;
+const USER_DEFAULT_HEAP_SIZE: u64 = 0x20_0000;
+const USER_DEFAULT_STACK_SIZE: u64 = 0x1_0000;
+
+/// Plans an ELF image without rebasing its PT_LOAD virtual addresses.
+///
+/// The planner is intentionally pure: no frames or page tables are allocated.
+/// Page-rounded overlaps are rejected so a later mapper cannot accidentally
+/// map one virtual page twice with ambiguous ownership or permissions.
+pub fn plan_user_memory(binary: &UserBinary) -> Result<UserMemoryLayout, UserspaceError> {
+    if binary.segments.is_empty() {
+        return Err(UserspaceError::InvalidBinary);
+    }
+    let mut segments = Vec::with_capacity(binary.segments.len());
+    for segment in &binary.segments {
+        if segment.memory_size == 0
+            || segment.file_size > segment.memory_size
+            || segment.bytes.len() as u64 != segment.file_size
+            || segment.flags & !0x7 != 0
+            // x86-64 PTEs cannot express execute-only or write-only user pages.
+            // Reject ELF segments without PF_R instead of silently granting reads.
+            || segment.flags & 0x4 == 0
+            || segment.flags & 0x2 != 0 && segment.flags & 0x1 != 0
+        {
+            return Err(UserspaceError::InvalidBinary);
+        }
+        let end = segment
+            .virtual_address
+            .checked_add(segment.memory_size)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        if segment.virtual_address < USER_MIN_ADDRESS || end > USER_LAYOUT_CEILING {
+            return Err(UserspaceError::InvalidAddress);
+        }
+        let page_start = segment.virtual_address & !(USER_PAGE_SIZE - 1);
+        let page_end = end
+            .checked_add(USER_PAGE_SIZE - 1)
+            .ok_or(UserspaceError::InvalidAddress)?
+            & !(USER_PAGE_SIZE - 1);
+        segments.push(UserSegmentMapping {
+            virtual_start: segment.virtual_address,
+            virtual_end: end,
+            page_start,
+            page_end,
+            flags: segment.flags,
+        });
+    }
+    segments.sort_by_key(|segment| segment.page_start);
+    for pair in segments.windows(2) {
+        if pair[0].page_end > pair[1].page_start {
+            return Err(UserspaceError::InvalidAddress);
+        }
+    }
+    if !segments.iter().any(|segment| {
+        segment.flags & 0x1 != 0
+            && binary.entry_point >= segment.virtual_start
+            && binary.entry_point < segment.virtual_end
+    }) {
+        return Err(UserspaceError::InvalidBinary);
+    }
+
+    let heap_size = USER_DEFAULT_HEAP_SIZE;
+    let stack_size = USER_DEFAULT_STACK_SIZE;
+    let stack_pages = stack_size.div_ceil(USER_PAGE_SIZE) * USER_PAGE_SIZE;
+    let mut stack_base = USER_LAYOUT_CEILING - USER_PAGE_SIZE;
+    loop {
+        let stack_start = stack_base
+            .checked_sub(stack_pages)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        let collides = segments
+            .iter()
+            .any(|segment| stack_start < segment.page_end && segment.page_start < stack_base);
+        if !collides {
+            break;
+        }
+        stack_base = stack_start
+            .checked_sub(USER_PAGE_SIZE)
+            .ok_or(UserspaceError::InvalidAddress)?;
+    }
+
+    let heap_size = heap_size.div_ceil(USER_PAGE_SIZE) * USER_PAGE_SIZE;
+    let mut heap_base = USER_MIN_ADDRESS;
+    loop {
+        let heap_end = heap_base
+            .checked_add(heap_size)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        if heap_end >= stack_base - stack_pages {
+            return Err(UserspaceError::InvalidAddress);
+        }
+        let collision = segments
+            .iter()
+            .find(|segment| heap_base < segment.page_end && segment.page_start < heap_end);
+        match collision {
+            Some(segment) => heap_base = segment.page_end,
+            None => break,
+        }
+    }
+
+    Ok(UserMemoryLayout {
+        segments,
+        heap_base,
+        heap_size,
+        stack_base,
+        stack_size: stack_pages,
+    })
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Real user-page installation / CPL3 entry
 // ═══════════════════════════════════════════════════════════════════════════════
 
 impl UserAddressSpace {
+    /// Builds the compatibility view and syscall-validation view from one ELF layout.
+    pub fn from_memory_layout(layout: UserMemoryLayout) -> Self {
+        let code = layout.segments.iter().find(|s| s.flags & 0x1 != 0);
+        let data = layout
+            .segments
+            .iter()
+            .find(|s| s.flags & 0x2 != 0 && s.flags & 0x1 == 0);
+        Self {
+            code_base: code.map_or(0, |s| s.virtual_start),
+            code_size: code.map_or(0, |s| s.virtual_end.saturating_sub(s.virtual_start)),
+            data_base: data.map_or(0, |s| s.virtual_start),
+            data_size: data.map_or(0, |s| s.virtual_end.saturating_sub(s.virtual_start)),
+            stack_base: layout.stack_base,
+            stack_size: layout.stack_size,
+            heap_base: layout.heap_base,
+            heap_size: layout.heap_size,
+            memory_layout: Some(layout),
+        }
+    }
+
     /// Passt ein Datenanteil dieser Groesse in das Datenfenster?
     ///
     /// Reine Rechnung, damit die Grenze ohne Paging pruefbar ist: `data_size`
@@ -269,6 +518,130 @@ pub fn is_write_execute(flags: PageTableFlags) -> bool {
     flags.contains(PageTableFlags::WRITABLE) && !flags.contains(PageTableFlags::NO_EXECUTE)
 }
 
+/// Installs the authoritative ELF layout at its original virtual addresses.
+///
+/// Every page is zeroed before file bytes are copied, so the p_memsz-p_filesz
+/// tail (BSS) is guaranteed zero. Segment permissions are applied only after
+/// population; the final PTEs enforce PF_W/PF_X and never permit W+X.
+#[cfg(feature = "x86-boot")]
+unsafe fn map_user_memory_layout(
+    mapper: &mut OffsetPageTable<'static>,
+    frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+    physical_memory_offset: VirtAddr,
+    binary: &UserBinary,
+    layout: &UserMemoryLayout,
+) -> Result<(), UserspaceError> {
+    fn map_zeroed_region(
+        mapper: &mut OffsetPageTable<'static>,
+        frame_allocator: &mut impl FrameAllocator<Size4KiB>,
+        physical_memory_offset: VirtAddr,
+        base: u64,
+        size: u64,
+    ) -> Result<(), UserspaceError> {
+        if size == 0 {
+            return Ok(());
+        }
+        let end = base
+            .checked_add(size)
+            .ok_or(UserspaceError::InvalidAddress)?;
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(base));
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(end - 1));
+        let loading_flags = PageTableFlags::PRESENT
+            | PageTableFlags::USER_ACCESSIBLE
+            | PageTableFlags::WRITABLE
+            | PageTableFlags::NO_EXECUTE;
+        for page in Page::range_inclusive(first, last) {
+            let frame = frame_allocator
+                .allocate_frame()
+                .ok_or(UserspaceError::InvalidAddress)?;
+            let flush = unsafe { mapper.map_to(page, frame, loading_flags, frame_allocator) }
+                .map_err(|_| UserspaceError::InvalidAddress)?;
+            unsafe { flush.flush() };
+            let phys = physical_memory_offset + frame.start_address().as_u64();
+            unsafe { core::ptr::write_bytes(phys.as_mut_ptr::<u8>(), 0, Size4KiB::SIZE as usize) };
+        }
+        Ok(())
+    }
+
+    // UserMemoryLayout is public data; never trust a caller-constructed or mutated plan.
+    if plan_user_memory(binary)? != *layout {
+        return Err(UserspaceError::InvalidBinary);
+    }
+    if layout.segments.is_empty()
+        || !layout.segments.iter().any(|s| {
+            s.flags & 0x1 != 0
+                && binary.entry_point >= s.virtual_start
+                && binary.entry_point < s.virtual_end
+        })
+    {
+        return Err(UserspaceError::InvalidBinary);
+    }
+    for segment in &layout.segments {
+        map_zeroed_region(
+            mapper,
+            frame_allocator,
+            physical_memory_offset,
+            segment.page_start,
+            segment.page_end - segment.page_start,
+        )?;
+    }
+    map_zeroed_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        layout.heap_base,
+        layout.heap_size,
+    )?;
+    map_zeroed_region(
+        mapper,
+        frame_allocator,
+        physical_memory_offset,
+        layout
+            .stack_base
+            .checked_sub(layout.stack_size)
+            .ok_or(UserspaceError::InvalidAddress)?,
+        layout.stack_size,
+    )?;
+    for segment in &layout.segments {
+        let source = binary
+            .segments
+            .iter()
+            .find(|source| {
+                source.virtual_address == segment.virtual_start
+                    && source.memory_size == segment.virtual_end - segment.virtual_start
+                    && source.flags == segment.flags
+            })
+            .ok_or(UserspaceError::InvalidBinary)?;
+        if source.bytes.len() as u64 != source.file_size || source.file_size > source.memory_size {
+            return Err(UserspaceError::InvalidBinary);
+        }
+        if !source.bytes.is_empty() {
+            unsafe {
+                core::ptr::copy_nonoverlapping(
+                    source.bytes.as_ptr(),
+                    segment.virtual_start as *mut u8,
+                    source.bytes.len(),
+                );
+            }
+        }
+        let mut final_flags = PageTableFlags::PRESENT | PageTableFlags::USER_ACCESSIBLE;
+        if segment.flags & 0x2 != 0 {
+            final_flags |= PageTableFlags::WRITABLE;
+        }
+        if segment.flags & 0x1 == 0 {
+            final_flags |= PageTableFlags::NO_EXECUTE;
+        }
+        let first = Page::<Size4KiB>::containing_address(VirtAddr::new(segment.page_start));
+        let last = Page::<Size4KiB>::containing_address(VirtAddr::new(segment.page_end - 1));
+        for page in Page::range_inclusive(first, last) {
+            let flush = unsafe { mapper.update_flags(page, final_flags) }
+                .map_err(|_| UserspaceError::InvalidAddress)?;
+            unsafe { flush.flush() };
+        }
+    }
+    Ok(())
+}
+
 /// Map a user binary into the active x86-64 page table.
 ///
 /// This is the first real bridge from the modelled UserAddressSpace to CPU-visible
@@ -285,6 +658,17 @@ pub unsafe fn map_user_binary(
     binary: &UserBinary,
     addr_space: &UserAddressSpace,
 ) -> Result<(), UserspaceError> {
+    if let Some(layout) = &addr_space.memory_layout {
+        return unsafe {
+            map_user_memory_layout(
+                mapper,
+                frame_allocator,
+                physical_memory_offset,
+                binary,
+                layout,
+            )
+        };
+    }
     if binary.code.is_empty()
         || binary.code.len() as u64 > addr_space.code_size
         || binary.entry_point < addr_space.code_base
@@ -970,6 +1354,126 @@ mod tests {
         assert!(!asp.contains(0x00000000));
         assert!(!asp.contains(0xFFFFFFFF));
         assert!(!asp.contains(0x003FFFFF));
+    }
+
+    #[test]
+    fn segment_layout_preserves_elf_addresses_and_places_private_regions() {
+        let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
+        binary.segments = vec![
+            UserLoadSegment {
+                file_offset: 0,
+                virtual_address: 0x01C0_0000,
+                file_size: 0x100,
+                memory_size: 0x1000,
+                flags: 0x5,
+                alignment: 0x1000,
+                bytes: vec![0x90; 0x100],
+            },
+            UserLoadSegment {
+                file_offset: 0x1000,
+                virtual_address: 0x01D0_0000,
+                file_size: 0x80,
+                memory_size: 0x2000,
+                flags: 0x6,
+                alignment: 0x1000,
+                bytes: vec![0; 0x80],
+            },
+        ];
+        let layout = plan_user_memory(&binary).unwrap();
+        assert_eq!(layout.segments[0].virtual_start, 0x01C0_0000);
+        assert_eq!(layout.segments[1].virtual_start, 0x01D0_0000);
+        assert!(layout.heap_base + layout.heap_size <= layout.stack_base - layout.stack_size);
+        assert!(layout.segments.iter().all(|segment| {
+            !(layout.heap_base < segment.page_end
+                && segment.page_start < layout.heap_base + layout.heap_size)
+                && !(layout.stack_base - layout.stack_size < segment.page_end
+                    && segment.page_start < layout.stack_base)
+        }));
+    }
+
+    #[test]
+    fn segment_layout_rejects_page_overlap_and_wx() {
+        let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
+        binary.segments = vec![
+            UserLoadSegment {
+                file_offset: 0,
+                virtual_address: 0x01C0_0000,
+                file_size: 0x100,
+                memory_size: 0x1000,
+                flags: 0x5,
+                alignment: 1,
+                bytes: vec![0x90; 0x100],
+            },
+            UserLoadSegment {
+                file_offset: 0x100,
+                virtual_address: 0x01C0_0800,
+                file_size: 0x100,
+                memory_size: 0x1000,
+                flags: 0x6,
+                alignment: 1,
+                bytes: vec![0; 0x100],
+            },
+        ];
+        assert_eq!(
+            plan_user_memory(&binary),
+            Err(UserspaceError::InvalidAddress)
+        );
+        binary.segments[1].virtual_address = 0x01D0_0000;
+        binary.segments[1].flags = 0x7;
+        assert_eq!(
+            plan_user_memory(&binary),
+            Err(UserspaceError::InvalidBinary)
+        );
+        // x86 cannot enforce execute-only or write-only user mappings.
+        binary.segments[1].flags = 0x2;
+        assert_eq!(
+            plan_user_memory(&binary),
+            Err(UserspaceError::InvalidBinary)
+        );
+        binary.segments[1].flags = 0x1;
+        assert_eq!(
+            plan_user_memory(&binary),
+            Err(UserspaceError::InvalidBinary)
+        );
+    }
+
+    #[test]
+    fn elf_layout_drives_address_and_syscall_range_checks() {
+        let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
+        binary.segments = vec![
+            UserLoadSegment {
+                file_offset: 0,
+                virtual_address: 0x01C0_0000,
+                file_size: 0x100,
+                memory_size: 0x1000,
+                flags: 0x5,
+                alignment: 0x1000,
+                bytes: vec![0x90; 0x100],
+            },
+            UserLoadSegment {
+                file_offset: 0x1000,
+                virtual_address: 0x01D0_0000,
+                file_size: 0x80,
+                memory_size: 0x2000,
+                flags: 0x6,
+                alignment: 0x1000,
+                bytes: vec![0; 0x80],
+            },
+        ];
+        let layout = plan_user_memory(&binary).unwrap();
+        let space = UserAddressSpace::from_memory_layout(layout.clone());
+        assert!(space.in_code(0x01C0_0000));
+        assert!(space.in_data(0x01D0_0000));
+        assert!(space.range_readable(0x01C0_0000, 0x100));
+        assert!(!space.range_writable(0x01C0_0000, 0x10));
+        assert!(space.range_writable(0x01D0_0000, 0x80));
+        assert!(!space.range_readable(0x01D0_2FF0, 0x20));
+        assert_eq!(space.initial_rsp(), layout.stack_base);
+        assert!(space.contains(layout.heap_base));
+        let regions = space.mapped_regions();
+        assert_eq!(regions.len(), 4);
+        assert!(regions.contains(&(layout.segments[0].page_start, layout.segments[0].page_end)));
+        assert!(regions.contains(&(layout.segments[1].page_start, layout.segments[1].page_end)));
     }
 
     // --- UserBinary tests ---

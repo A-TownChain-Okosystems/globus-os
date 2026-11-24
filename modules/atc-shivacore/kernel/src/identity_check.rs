@@ -1,11 +1,10 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 // ─────────────────────────────────────────────────────────────────────────
-// IDENT-003 — das Prueftor des Anmeldefensters
+// IDENT-003 / IDENT-M2 — kernel-owned credential verification
 //
-// Der Datensatz gehoert dem Kernel (Ramdisk, `sys.identity`), das Passwort
-// kommt aus dem Fenster. Geprueft wird hier: eine Stelle fuer die Frage
-// "stimmt dieses Passwort", damit Fenster und Kernel nicht zwei Wahrheiten
-// haben.
+// Multi-account authentication resolves the canonical username through the
+// validated GUA1/GCR1 catalog and verifies the matching ATID record. The old
+// singleton IdentityGate remains only for the explicit legacy sys.identity path.
 //
 // Der Datensatz wird beim Boot einmal gelesen und hier abgelegt. Fehlt er,
 // antwortet das Tor mit `NoRecord` und nicht mit "falsch" — der Unterschied
@@ -13,6 +12,7 @@
 // Passwort eine Eingabe.
 // ─────────────────────────────────────────────────────────────────────────
 
+use alloc::string::String;
 use globus_identity_core::{CredentialRecord, VerifyError};
 
 /// Ergebnis einer Pruefung.
@@ -40,7 +40,44 @@ impl CheckOutcome {
     }
 }
 
-/// Haelt den Datensatz und prueft gegen ihn.
+/// Resolve the canonical username and verify its credential. Returns the stable UserId
+/// only on success; the catalog lock is released before Argon2id.
+pub fn authenticate_catalog(username: &str, password: &[u8]) -> Result<String, CheckOutcome> {
+    let Some(account) = crate::identity_catalog::account_for_username(username) else {
+        // Keep unknown-user timing close to a real password verification. The
+        // derived output is discarded and can never authenticate an account.
+        let mut dummy_hash = [0u8; globus_identity_core::HASH_LEN];
+        let dummy_salt = [0xA5u8; globus_identity_core::SALT_LEN];
+        let result = globus_identity_core::hash_into(
+            globus_identity_core::KdfParams::OWNER_DEFAULT,
+            password,
+            &dummy_salt,
+            &mut dummy_hash,
+        );
+        dummy_hash.fill(0);
+        return Err(if result.is_ok() {
+            CheckOutcome::WrongPassword
+        } else {
+            CheckOutcome::Unavailable
+        });
+    };
+    match account.credential.verify(password) {
+        Ok(()) => Ok(account.user_id),
+        Err(VerifyError::WrongPassword) => Err(CheckOutcome::WrongPassword),
+        Err(VerifyError::KdfUnavailable) => Err(CheckOutcome::Unavailable),
+        Err(_) => Err(CheckOutcome::Unavailable),
+    }
+}
+
+/// Compatibility projection for callers that need only a result code.
+pub fn check_catalog(username: &str, password: &[u8]) -> CheckOutcome {
+    match authenticate_catalog(username, password) {
+        Ok(_) => CheckOutcome::Ok,
+        Err(outcome) => outcome,
+    }
+}
+
+/// Legacy-only singleton gate for boot images that still carry sys.identity.
 #[derive(Debug, Default)]
 pub struct IdentityGate {
     record: Option<CredentialRecord>,

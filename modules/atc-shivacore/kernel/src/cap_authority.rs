@@ -246,6 +246,12 @@ impl CapabilityAuthority {
         granted
     }
 
+    /// Read-only capability metadata for kernel-owned authorization services.
+    /// The returned clone does not expose or mutate the authority table.
+    pub fn capability(&self, cap_id: CapId) -> Option<Capability> {
+        self.table.lock().get(cap_id).cloned()
+    }
+
     /// Anzahl aller vergebenen Capabilities.
     pub fn count(&self) -> usize {
         self.table.lock().count()

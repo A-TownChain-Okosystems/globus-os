@@ -41,6 +41,8 @@ pub enum ResourceType {
     /// Console-Cap mit Schreibrecht; sie ist der einzige Weg, aus dem Ring 3
     /// Text auf den Bildschirm zu bringen.
     Console,
+    /// Kernel-owned authenticated identity session; handles are PID-bound.
+    IdentitySession,
 }
 
 impl ResourceType {

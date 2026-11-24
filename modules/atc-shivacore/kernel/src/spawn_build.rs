@@ -14,8 +14,8 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 use core::sync::atomic::{AtomicU64, Ordering};
-use shivacore::spawn::{SpawnError, layout_for_slot};
-use shivacore::userspace::UserBinary;
+use shivacore::spawn::{SPAWN_MAX_SLOTS, SpawnError};
+use shivacore::userspace::{UserAddressSpace, UserBinary, plan_user_memory};
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -44,6 +44,25 @@ fn kernel_root() -> Option<PhysFrame<Size4KiB>> {
     }
 }
 
+/// Gibt die Frames eines verworfenen Adressraums an den Reclaimer zurueck.
+///
+/// Reihenfolge der Starttransaktion und ihrer Ruecknahme:
+/// 1. `build_space` baut den Raum und registriert seine Frames unter `tag`.
+/// 2. `register_spawned_process` nimmt den Prozess in den Scheduler auf.
+/// 3. `session_authority::transfer` uebergibt die Sitzung an die neue PID.
+///
+/// Scheitert 2, ist nichts zu entfernen, aber der Raum muss weg: `abandon_space`.
+/// Scheitert 3, muss zuerst der Scheduler-Eintrag zurueckgenommen werden
+/// (`remove_process`), dann `abandon_space`. Umgekehrt bliebe ein Prozess ohne
+/// Frames im Scheduler stehen — ein Eintrag, der nie laufen kann.
+///
+/// Die Frames werden nur eingereiht, nicht freigegeben: das Abraeumen macht der
+/// bestehende Reclaimer-Pfad mit `drain_with`, damit es genau einen Ort gibt,
+/// an dem Frames tatsaechlich zurueckgehen.
+pub fn abandon_space(tag: u64) -> usize {
+    shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(tag as u32))
+}
+
 /// Ein gebauter, noch nicht gestarteter Adressraum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltSpace {
@@ -53,13 +72,19 @@ pub struct BuiltSpace {
     pub frames: usize,
 }
 
-/// Baut einen Adressraum fuer `binary` im Fenster von `slot`.
+/// Baut einen Adressraum fuer `binary`; `slot` begrenzt nur die Prozesskapazitaet.
+/// ELF-Segmentadressen bleiben unveraendert und sind nicht an den Slot gebunden.
 ///
 /// Reihenfolge wie beim Boot: Wurzel aus der Kernel-Wurzel erben, Programm
 /// abbilden, alle Frames beim Reclaimer anmelden. Der Raum wird **nicht**
 /// installiert — das tut der Aufrufer, wenn er den Prozess startet.
 pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpace, SpawnError> {
-    let layout = layout_for_slot(slot).ok_or(SpawnError::NoFreeSlot)?;
+    // Slot remains a scheduler/resource-capacity index, never a virtual-address selector.
+    if slot >= SPAWN_MAX_SLOTS {
+        return Err(SpawnError::NoFreeSlot);
+    }
+    let memory_layout = plan_user_memory(binary).map_err(|_| SpawnError::MapFailed)?;
+    let layout = UserAddressSpace::from_memory_layout(memory_layout);
     let offset = phys_offset().ok_or(SpawnError::NotReady)?;
     let root = kernel_root().ok_or(SpawnError::NotReady)?;
     let mut guard = crate::memory::FRAME_ALLOCATOR.lock();
@@ -91,10 +116,18 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
         shivacore::addr_space::restore(previous, flags);
         mapped
     });
-    mapped.map_err(|_| SpawnError::MapFailed)?;
     let frames = space.all_frames();
-    shivacore::reclaim::RECLAIMER
-        .register_tables(shivacore::ats1000::Pid(tag as u32), frames.clone());
+    let pid = shivacore::ats1000::Pid(tag as u32);
+    if mapped.is_err() {
+        // map_binary hat auch bei einem Teilfehler alle bereits allozierten
+        // Frames in space uebernommen. Der unvollstaendige Adressraum darf
+        // nicht unregistriert aus dem Scope fallen: erst registrieren, dann
+        // ueber denselben verzoegerten Reclaimer-Pfad zuruecknehmen.
+        shivacore::reclaim::RECLAIMER.register_tables(pid, frames);
+        shivacore::reclaim::RECLAIMER.queue_process(pid);
+        return Err(SpawnError::MapFailed);
+    }
+    shivacore::reclaim::RECLAIMER.register_tables(pid, frames.clone());
     Ok(BuiltSpace {
         cr3: space.frame().start_address().as_u64(),
         frames: frames.len(),

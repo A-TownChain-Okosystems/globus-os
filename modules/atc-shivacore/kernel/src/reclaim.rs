@@ -39,7 +39,9 @@ use crate::security::{AuditResult, record};
 
 /// Ein Auftrag: die Frames eines Adressraums, der niemandem mehr gehoert.
 struct PendingRelease {
-    pid: Pid,
+    /// Prozesszuordnung; `None` kennzeichnet Frames aus einer fehlgeschlagenen
+    /// Adressraum-Erzeugung, bevor eine PID existiert.
+    pid: Option<Pid>,
     root: u64,
     frames: Vec<PhysFrame>,
 }
@@ -127,16 +129,46 @@ impl FrameReclaimer {
         let count = frames.len();
         {
             let mut pending = self.pending.lock();
-            if pending.iter().any(|p| p.pid == pid) {
+            if pending.iter().any(|p| p.pid == Some(pid)) {
                 // Schon vorgemerkt: Registry bleibt geleert, kein zweiter Auftrag.
                 return 0;
             }
-            pending.push(PendingRelease { pid, root, frames });
+            pending.push(PendingRelease {
+                pid: Some(pid),
+                root,
+                frames,
+            });
         }
         record(
             "kernel",
             "memory.reclaim_queued",
             &alloc::format!("pid={:?} frames={} root={:#x}", pid, count, root),
+            AuditResult::Allowed,
+        );
+        count
+    }
+
+    /// Haengt Frames eines fehlgeschlagenen Adressraum-Aufbaus ohne PID an.
+    ///
+    /// Die Seitentabellenwurzel wurde noch nie installiert; der normale
+    /// Reclaimer prueft trotzdem CR3, CPU-Anzahl und Freigabereihenfolge.
+    /// Orphans besitzen absichtlich keine PID, damit sie keine Prozess-
+    /// Registrierung ueberschreiben oder mit einer echten PID kollidieren.
+    pub fn queue_orphan_frames(&self, frames: Vec<PhysFrame>) -> usize {
+        if frames.is_empty() {
+            return 0;
+        }
+        let root = frames[0].start_address().as_u64();
+        let count = frames.len();
+        self.pending.lock().push(PendingRelease {
+            pid: None,
+            root,
+            frames,
+        });
+        record(
+            "kernel",
+            "memory.reclaim_orphan_queued",
+            &alloc::format!("frames={} root={:#x}", count, root),
             AuditResult::Allowed,
         );
         count
@@ -234,9 +266,10 @@ impl FrameReclaimer {
                 }
             }
             freed += released;
+            let report_pid = job.pid.map_or(u64::MAX, |pid| pid.0 as u64);
             self.last_report
                 .lock()
-                .push((job.pid.0 as u64, job.frames.len(), released, rejected));
+                .push((report_pid, job.frames.len(), released, rejected));
             self.freed_frames.fetch_add(released, Ordering::Relaxed);
             record(
                 "kernel",
@@ -291,6 +324,29 @@ mod tests {
         // Zweiter Aufruf findet nichts mehr: Reaping ist idempotent.
         assert_eq!(reclaimer.queue_process(pid(7)), 0);
         assert_eq!(reclaimer.pending_len(), 1);
+    }
+
+    #[test]
+    fn orphan_frames_are_queued_and_drained_without_a_pid() {
+        let reclaimer = FrameReclaimer::new();
+        assert_eq!(
+            reclaimer.queue_orphan_frames(alloc::vec![frame(0x18_0000), frame(0x18_1000),]),
+            2
+        );
+        assert_eq!(reclaimer.pending_len(), 1);
+        let mut freed_now = Vec::new();
+        assert_eq!(
+            reclaimer.drain_with(|frame| {
+                freed_now.push(frame.start_address().as_u64());
+                true
+            }),
+            2
+        );
+        assert_eq!(freed_now, alloc::vec![0x18_1000, 0x18_0000]);
+        assert_eq!(
+            reclaimer.take_last_report(),
+            alloc::vec![(u64::MAX, 2, 2, 0)]
+        );
     }
 
     #[test]

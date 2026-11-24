@@ -23,8 +23,8 @@ pub use globus_ipc::{Endpoint, Message, MessageHeader};
 /// kann nicht wachsen. Der Block traegt seine eigene Groesse, der Kernel liest
 /// nur die Felder, die er kennt.
 pub const ABI_MAJOR: u16 = 2;
-/// Minor-Stand: vorwaertskompatibel, neue Felder werden angehaengt.
-pub const ABI_MINOR: u16 = 0;
+/// Minor-Stand 1: versioniertes LGN1-Payload fuer den Mehrkonten-IdentityCheck.
+pub const ABI_MINOR: u16 = 2;
 /// Gepackte ABI-Version, Major in den oberen 16 Bit.
 pub const ABI_VERSION: u32 = ((ABI_MAJOR as u32) << 16) | ABI_MINOR as u32;
 
@@ -46,6 +46,17 @@ pub enum Syscall {
     CapabilityQuery = 0x0020,
     /// Gibt ein Handle frei.
     HandleClose = 0x0030,
+    /// Startet einen Ramdisk-Prozess unter Uebertragung der authentifizierten Session.
+    ///
+    /// `capability` muss das getaggte Session-Handle des aufrufenden Prozesses
+    /// enthalten. `buffer_ptr`/`buffer_len` zeigen auf den ASCII-Namen eines
+    /// Ramdisk-Programms (1 bis 16 Bytes); `arg0` und `arg1` muessen null sein.
+    /// Der Kernel muss Session-Eigentum, Ablauf, Katalogeintrag und ELF-Layout
+    /// pruefen, bevor er einen Prozess anlegt. Erfolg liefert die neue PID;
+    /// die Session wird an den gestarteten Prozess uebertragen. Bis der Kernel
+    /// diesen vollstaendigen Pfad bereitstellt, muss der Aufruf fail-closed
+    /// mit `EndpointUnavailable` enden.
+    SpawnProcess = 0x0060,
     /// Liest die monotone Zeit.
     MonotonicTime = 0x0040,
     /// Schreibt auf die Systemkonsole.
@@ -60,12 +71,15 @@ pub enum Syscall {
     /// seine Ausgabe geht weiter auf die serielle Schnittstelle. Zwei
     /// Schreiber auf dieselbe Flaeche wuerden sich gegenseitig ueberschreiben.
     Console = 0x0050,
-    /// Prueft ein Passwort gegen den Anmeldedatensatz (IDENT-003).
+    /// Prueft Zugangsdaten (IDENT-003 / IDENT-M2).
     ///
-    /// Das Passwort steht im Puffer (`buffer_ptr`, `buffer_len`, hoechstens
-    /// `IDENTITY_MAX_PASSWORD_BYTES`). Berechtigt ist nur der Besitzer der
-    /// Konsole — das Anmeldefenster. Rueckgabe: `0` bestanden, `1` falsch,
-    /// `2` kein Datensatz, `3` nicht berechtigt.
+    /// In einem Mehrkonten-Image enthaelt der Puffer ein versioniertes `LGN1`
+    /// Payload mit kanonischem Benutzernamen und Passwort. Im expliziten
+    /// Legacy-Einzelkonto-Image bleibt das alte Passwort-Payload lesbar.
+    /// Berechtigt ist nur der Besitzer der Konsolen-Capability.
+    /// Rueckgabe: Legacy-Erfolg `0`; Mehrkonten-Erfolg = getaggtes,
+    /// PID-gebundenes Session-Capability-Handle; `1` falsch, `2` Datensatz
+    /// fehlt, `4` KDF nicht verfuegbar.
     ///
     /// Die Nummer `0x0060` bleibt fuer `SpawnProcess` reserviert (Vorgabe des
     /// Owners); die Pruefung liegt deshalb auf dem naechsten Schritt der
@@ -73,8 +87,105 @@ pub enum Syscall {
     IdentityCheck = 0x0070,
 }
 
+/// Laengster kanonischer Benutzername im Login-Payload.
+pub const IDENTITY_MAX_USERNAME_BYTES: usize = 32;
 /// Laengste Passworteingabe, die die Pruefung annimmt.
 pub const IDENTITY_MAX_PASSWORD_BYTES: usize = 64;
+/// Headerlaenge des versionierten Identity-Login-Payloads.
+pub const IDENTITY_LOGIN_HEADER_BYTES: usize = 8;
+/// Groesstes LGN1-Payload: Header + Benutzername + Passwort.
+pub const IDENTITY_LOGIN_MAX_BYTES: usize =
+    IDENTITY_LOGIN_HEADER_BYTES + IDENTITY_MAX_USERNAME_BYTES + IDENTITY_MAX_PASSWORD_BYTES;
+/// High-bit tag on an IdentityCheck success value carrying a session capability.
+pub const IDENTITY_SESSION_HANDLE_TAG: u64 = 1 << 63;
+const IDENTITY_LOGIN_MAGIC: &[u8; 4] = b"LGN1";
+const IDENTITY_LOGIN_VERSION: u8 = 1;
+
+/// Parsed, bounded login request. The slices borrow only from the validated payload buffer.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct IdentityLoginPayload<'a> {
+    /// Canonical lowercase ASCII username.
+    pub username: &'a str,
+    /// Password bytes; may contain arbitrary non-NUL bytes.
+    pub password: &'a [u8],
+}
+
+/// Encode a versioned username/password request into a caller-owned bounded buffer.
+/// Uppercase ASCII usernames are normalized to lowercase before transmission.
+pub fn encode_identity_login_payload(
+    username: &[u8],
+    password: &[u8],
+    output: &mut [u8],
+) -> Result<usize, AbiError> {
+    if !(3..=IDENTITY_MAX_USERNAME_BYTES).contains(&username.len())
+        || password.is_empty()
+        || password.len() > IDENTITY_MAX_PASSWORD_BYTES
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let total = IDENTITY_LOGIN_HEADER_BYTES + username.len() + password.len();
+    if output.len() < total {
+        return Err(AbiError::InvalidPayload);
+    }
+    let mut canonical = [0u8; IDENTITY_MAX_USERNAME_BYTES];
+    for (index, byte) in username.iter().copied().enumerate() {
+        let byte = byte.to_ascii_lowercase();
+        if !(byte.is_ascii_lowercase()
+            || byte.is_ascii_digit()
+            || matches!(byte, b'_' | b'.' | b'-'))
+        {
+            return Err(AbiError::InvalidPayload);
+        }
+        canonical[index] = byte;
+    }
+    if !canonical[0].is_ascii_alphanumeric()
+        || !canonical[username.len() - 1].is_ascii_alphanumeric()
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    output[..total].fill(0);
+    output[..4].copy_from_slice(IDENTITY_LOGIN_MAGIC);
+    output[4] = IDENTITY_LOGIN_VERSION;
+    output[5] = username.len() as u8;
+    output[6] = password.len() as u8;
+    output[7] = 0;
+    output[IDENTITY_LOGIN_HEADER_BYTES..IDENTITY_LOGIN_HEADER_BYTES + username.len()]
+        .copy_from_slice(&canonical[..username.len()]);
+    output[IDENTITY_LOGIN_HEADER_BYTES + username.len()..total].copy_from_slice(password);
+    Ok(total)
+}
+
+/// Parse an LGN1 request, rejecting malformed, non-canonical, truncated, or trailing data.
+pub fn parse_identity_login_payload(bytes: &[u8]) -> Result<IdentityLoginPayload<'_>, AbiError> {
+    if bytes.len() < IDENTITY_LOGIN_HEADER_BYTES
+        || &bytes[..4] != IDENTITY_LOGIN_MAGIC
+        || bytes[4] != IDENTITY_LOGIN_VERSION
+        || bytes[7] != 0
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let username_len = bytes[5] as usize;
+    let password_len = bytes[6] as usize;
+    if !(3..=IDENTITY_MAX_USERNAME_BYTES).contains(&username_len)
+        || password_len == 0
+        || password_len > IDENTITY_MAX_PASSWORD_BYTES
+        || bytes.len() != IDENTITY_LOGIN_HEADER_BYTES + username_len + password_len
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let username_bytes =
+        &bytes[IDENTITY_LOGIN_HEADER_BYTES..IDENTITY_LOGIN_HEADER_BYTES + username_len];
+    if !username_bytes.iter().all(|byte| {
+        byte.is_ascii_lowercase() || byte.is_ascii_digit() || matches!(*byte, b'_' | b'.' | b'-')
+    }) || !username_bytes[0].is_ascii_alphanumeric()
+        || !username_bytes[username_len - 1].is_ascii_alphanumeric()
+    {
+        return Err(AbiError::InvalidPayload);
+    }
+    let username = core::str::from_utf8(username_bytes).map_err(|_| AbiError::InvalidPayload)?;
+    let password = &bytes[IDENTITY_LOGIN_HEADER_BYTES + username_len..];
+    Ok(IdentityLoginPayload { username, password })
+}
 
 impl Syscall {
     /// Numerische Syscall-Kennung, wie sie im Argumentblock steht.
@@ -237,6 +348,7 @@ impl SyscallBlock {
             x if x == Syscall::IpcReceive.id() => Syscall::IpcReceive,
             x if x == Syscall::CapabilityQuery.id() => Syscall::CapabilityQuery,
             x if x == Syscall::HandleClose.id() => Syscall::HandleClose,
+            x if x == Syscall::SpawnProcess.id() => Syscall::SpawnProcess,
             x if x == Syscall::MonotonicTime.id() => Syscall::MonotonicTime,
             x if x == Syscall::Exit.id() => Syscall::Exit,
             x if x == Syscall::Console.id() => Syscall::Console,
@@ -470,11 +582,25 @@ mod tests {
 
     #[test]
     fn abi_version_is_stable() {
-        assert_eq!(ABI_VERSION, 0x0002_0000);
+        assert_eq!(ABI_VERSION, 0x0002_0002);
         // Minor bleibt kompatibel, Major nicht.
         assert!(validate_abi_version(0x0002_ffff));
         assert!(!validate_abi_version(0x0001_0000));
         assert!(!validate_abi_version(0x0003_0000));
+    }
+
+    #[test]
+    fn spawn_process_opcode_is_stable_and_round_trips_with_session_handle() {
+        assert_eq!(Syscall::SpawnProcess.id(), 0x0060);
+        let mut block = SyscallBlock::new(
+            Syscall::SpawnProcess,
+            Some(CapabilityHandle(IDENTITY_SESSION_HANDLE_TAG | 7)),
+        );
+        block.buffer_ptr = 0x400000;
+        block.buffer_len = 5;
+        let mut bytes = [0u8; SYSCALL_BLOCK_MAX_SIZE];
+        let written = block.write_to(&mut bytes).expect("Spawn-Block schreiben");
+        assert_eq!(SyscallBlock::parse(&bytes[..written]), Ok(block));
     }
 
     #[test]
@@ -628,6 +754,61 @@ mod tests {
         assert_ne!(CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE);
         assert_eq!(CONSOLE_OP_CLEAR, 0);
         assert_eq!(CONSOLE_OP_WRITE, 1);
+    }
+
+    #[test]
+    fn identity_login_payload_round_trips_and_normalizes_username() {
+        let mut bytes = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        let len = encode_identity_login_payload(b"Alice_01", b"secret", &mut bytes).unwrap();
+        let parsed = parse_identity_login_payload(&bytes[..len]).unwrap();
+        assert_eq!(parsed.username, "alice_01");
+        assert_eq!(parsed.password, b"secret");
+    }
+
+    #[test]
+    fn identity_login_payload_rejects_malformed_and_trailing_data() {
+        let mut bytes = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        let len = encode_identity_login_payload(b"alice", b"secret", &mut bytes).unwrap();
+        let mut trailing = bytes;
+        trailing[len] = 1;
+        assert_eq!(
+            parse_identity_login_payload(&trailing[..len + 1]),
+            Err(AbiError::InvalidPayload)
+        );
+        bytes[7] = 1;
+        assert_eq!(
+            parse_identity_login_payload(&bytes[..len]),
+            Err(AbiError::InvalidPayload)
+        );
+        bytes[7] = 0;
+        bytes[4] = 2;
+        assert_eq!(
+            parse_identity_login_payload(&bytes[..len]),
+            Err(AbiError::InvalidPayload)
+        );
+    }
+
+    #[test]
+    fn identity_login_payload_rejects_noncanonical_names_and_bounds() {
+        let mut bytes = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        assert_eq!(
+            encode_identity_login_payload(b"ab", b"secret", &mut bytes),
+            Err(AbiError::InvalidPayload)
+        );
+        assert_eq!(
+            encode_identity_login_payload(b"alice!", b"secret", &mut bytes),
+            Err(AbiError::InvalidPayload)
+        );
+        assert_eq!(
+            encode_identity_login_payload(b"alice", b"", &mut bytes),
+            Err(AbiError::InvalidPayload)
+        );
+        let len = encode_identity_login_payload(b"alice", b"secret", &mut bytes).unwrap();
+        bytes[IDENTITY_LOGIN_HEADER_BYTES] = b'A';
+        assert_eq!(
+            parse_identity_login_payload(&bytes[..len]),
+            Err(AbiError::InvalidPayload)
+        );
     }
 
     #[test]

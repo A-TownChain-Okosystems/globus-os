@@ -23,16 +23,53 @@ const HEADER_LEN: usize = 4 + 1 + 1 + 8 + 8;
 /// Atomarer Einzeldatei-Speicher fuer einen verschluesselten Identity-Blob.
 pub struct FileBlobStore {
     path: PathBuf,
+    lock_path: PathBuf,
 }
 
 impl FileBlobStore {
     /// Bindet den Speicher an einen Pfad, ohne das Dateisystem anzufassen.
     pub fn open(path: impl Into<PathBuf>) -> Self {
-        Self { path: path.into() }
+        let path = path.into();
+        let mut lock_name = path.as_os_str().to_os_string();
+        lock_name.push(".lock");
+        Self {
+            path,
+            lock_path: PathBuf::from(lock_name),
+        }
     }
     /// Pfad der Zustandsdatei.
     pub fn path(&self) -> &Path {
         &self.path
+    }
+
+    fn acquire_lock(&self) -> Result<BlobLock, SecureStoreError> {
+        let parent = self
+            .path
+            .parent()
+            .filter(|path| !path.as_os_str().is_empty())
+            .unwrap_or(Path::new("."));
+        fs::create_dir_all(parent).map_err(|_| SecureStoreError::BackendUnavailable)?;
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&self.lock_path)
+        {
+            Ok(mut file) => {
+                let _ = writeln!(file, "pid={}", std::process::id());
+                if file.sync_all().is_err() {
+                    drop(file);
+                    let _ = fs::remove_file(&self.lock_path);
+                    return Err(SecureStoreError::BackendUnavailable);
+                }
+                Ok(BlobLock {
+                    path: self.lock_path.clone(),
+                })
+            }
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                Err(SecureStoreError::Conflict)
+            }
+            Err(_) => Err(SecureStoreError::BackendUnavailable),
+        }
     }
 
     fn read_state(&self) -> Result<(u8, u64, Vec<u8>), SecureStoreError> {
@@ -112,6 +149,15 @@ impl FileBlobStore {
     }
 }
 
+struct BlobLock {
+    path: PathBuf,
+}
+impl Drop for BlobLock {
+    fn drop(&mut self) {
+        let _ = fs::remove_file(&self.path);
+    }
+}
+
 impl BlobStore for FileBlobStore {
     fn load(&self) -> Result<Option<Vec<u8>>, SecureStoreError> {
         let (state, _, blob) = self.read_state()?;
@@ -119,8 +165,21 @@ impl BlobStore for FileBlobStore {
     }
 
     fn replace(&mut self, blob: &[u8], generation: u64) -> Result<(), SecureStoreError> {
+        let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
-        if generation <= current && current != 0 {
+        let expected = current
+            .checked_add(1)
+            .ok_or(SecureStoreError::GenerationOverflow)?;
+        if current != 0 && generation < expected {
+            return Err(SecureStoreError::RollbackDetected {
+                stored: current,
+                incoming: generation,
+            });
+        }
+        if current != 0 && generation != expected {
+            return Err(SecureStoreError::Conflict);
+        }
+        if generation == 0 {
             return Err(SecureStoreError::RollbackDetected {
                 stored: current,
                 incoming: generation,
@@ -134,6 +193,7 @@ impl BlobStore for FileBlobStore {
     }
 
     fn delete(&mut self) -> Result<(), SecureStoreError> {
+        let _lock = self.acquire_lock()?;
         let (_, current, _) = self.read_state()?;
         let generation = current
             .checked_add(1)
@@ -174,6 +234,27 @@ mod tests {
         assert_eq!(second.generation().unwrap(), 1);
         assert_eq!(second.load().unwrap(), Some(b"encrypted".to_vec()));
         let _ = fs::remove_file(path);
+    }
+
+    #[test]
+    fn concurrent_writer_lock_is_fail_closed() {
+        let path = path();
+        let first = FileBlobStore::open(&path);
+        let mut second = FileBlobStore::open(&path);
+        let _lock = first.acquire_lock().unwrap();
+        assert_eq!(second.replace(b"other", 1), Err(SecureStoreError::Conflict));
+        drop(_lock);
+        let _ = fs::remove_file(&path);
+    }
+
+    #[test]
+    fn generation_must_advance_exactly_once_after_initial_commit() {
+        let path = path();
+        let mut store = FileBlobStore::open(&path);
+        store.replace(b"first", 1).unwrap();
+        assert_eq!(store.replace(b"skip", 3), Err(SecureStoreError::Conflict));
+        assert_eq!(store.generation().unwrap(), 1);
+        let _ = fs::remove_file(&path);
     }
 
     #[test]

@@ -10,8 +10,9 @@
 //! Was hier steht, ist die Maske: Titel, Benutzerfeld, Passwortfeld mit
 //! Maskierung, Feldwechsel mit Tab, Loeschen mit Backspace, Absenden mit Enter.
 //!
-//! Die Pruefung selbst steht NICHT hier: das Fenster schickt die Eingabe an den
-//! Kernel (`IdentityCheck`, `0x0070`) und zeigt, was zurueckkommt. Der
+//! Die Pruefung selbst steht NICHT hier: das Fenster schickt Benutzername
+//! und Passwort als versioniertes LGN1-Payload an den Kernel
+//! (`IdentityCheck`, `0x0070`) und zeigt, was zurueckkommt. Der
 //! Anmeldedatensatz liegt in der Ramdisk im Systemnamensraum und ist fuer
 //! Programme nicht vorhanden; gerechnet wird im Kernel, weil nur er ihn lesen
 //! darf. Das Passwort wird nach dem Aufruf im Programm ueberschrieben, und das
@@ -49,7 +50,9 @@ use core::fmt::{self, Write};
 use core::panic::PanicInfo;
 use libshivacore::{
     ABI_VERSION, CONSOLE_MAX_BYTES, CONSOLE_OP_CLEAR, CONSOLE_OP_WRITE, CapabilityHandle,
-    KERNEL_INPUT_CHANNEL, SYSCALL_BLOCK_MAX_SIZE, Syscall, SyscallBlock,
+    IDENTITY_LOGIN_MAX_BYTES, IDENTITY_SESSION_HANDLE_TAG, KERNEL_INPUT_CHANNEL,
+    SYSCALL_BLOCK_MAX_SIZE, Syscall,
+    SyscallBlock, encode_identity_login_payload,
 };
 
 /// Vorbelegter statischer Wert: liegt im Datensegment, nicht im Codesegment.
@@ -129,6 +132,8 @@ struct Login {
     /// danach ueberschrieben; angezeigt wird nie ein Byte, nur die Laenge.
     password: [u8; MAX_PASSWORD_BYTES],
     password_len: usize,
+    /// Opaque PID-bound session capability returned by the kernel.
+    session_handle: u64,
     active: Active,
     status: &'static str,
 }
@@ -140,6 +145,7 @@ impl Login {
             user_len: 0,
             password: [0u8; MAX_PASSWORD_BYTES],
             password_len: 0,
+            session_handle: 0,
             active: Active::User,
             status: "Bitte Benutzer und Passwort eingeben.",
         }
@@ -188,20 +194,40 @@ impl Login {
     /// der Bildschirm in dieser Zeit nicht steht, wird VOR dem Aufruf
     /// gezeichnet; der Aufruf blockiert das Programm, die Anzeige bleibt.
     fn verify(&mut self, console: u64) {
+        // A failed re-authentication does not silently destroy an already
+        // authenticated session. A successful new login replaces it in-kernel.
+        let mut payload = [0u8; IDENTITY_LOGIN_MAX_BYTES];
+        let payload_len = match encode_identity_login_payload(
+            &self.user[..self.user_len],
+            &self.password[..self.password_len],
+            &mut payload,
+        ) {
+            Ok(length) => length,
+            Err(_) => {
+                self.password.fill(0);
+                self.password_len = 0;
+                self.status = "Benutzername oder Passwortformat ungueltig.";
+                return;
+            }
+        };
         let mut block =
             SyscallBlock::new(Syscall::IdentityCheck, Some(CapabilityHandle(console)));
-        block.buffer_ptr = self.password.as_ptr() as u64;
-        block.buffer_len = self.password_len;
+        block.buffer_ptr = payload.as_ptr() as u64;
+        block.buffer_len = payload_len;
         let (value, error) = call(&block);
-        // Das Passwort bleibt nicht im Programm liegen.
-        self.password = [0u8; MAX_PASSWORD_BYTES];
+        // Klartextpasswort und gesamtes Login-Payload bleiben nicht im Programm liegen.
+        payload.fill(0);
+        self.password.fill(0);
+        self.password_len = 0;
         self.status = if error != 0 {
             "Pruefung nicht moeglich (ABI-Ablehnung)."
+        } else if value & IDENTITY_SESSION_HANDLE_TAG != 0 {
+            self.session_handle = value;
+            "Anmeldung erfolgreich - Sitzung im Kernel angelegt."
         } else {
             match value {
-                0 => "Pruefung bestanden - Sitzung folgt.",
-                1 => "Pruefung fehlgeschlagen.",
-                2 => "Kein Anmeldedatensatz vorhanden - keine Anmeldung.",
+                0 => "Legacy-Zugangsdaten bestaetigt - keine Sitzung angelegt.",
+                1 | 2 => "Benutzername oder Passwort falsch.",
                 4 => "Pruefung nicht rechenbar (Speicher) - keine Anmeldung.",
                 _ => "Pruefung ohne Ergebnis.",
             }
@@ -360,8 +386,9 @@ fn render(console: u64, login: &Login) {
     }
     let _ = write!(
         screen,
-        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {}   ({})\n",
+        "\n\n  [Tab] Feld wechseln   [Enter] anmelden   [Backspace] loeschen   [Esc] neu starten\n\n  {} · {}   ({})\n",
         login.status,
+        if login.session_handle & IDENTITY_SESSION_HANDLE_TAG != 0 { "Sitzung aktiv" } else { "Keine Sitzung" },
         scratch_state(console as u8 | 1)
     );
     // Erst leeren, dann schreiben: die Maske wird als Ganzes gezeichnet, damit

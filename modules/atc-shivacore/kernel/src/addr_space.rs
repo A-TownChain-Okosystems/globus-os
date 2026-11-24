@@ -136,7 +136,16 @@ impl AddressSpace {
         // Untere Haelfte: eigener PDPT, geerbte Geraeteabbildungen.
         let active_low = src[0].clone();
         if active_low.flags().contains(PageTableFlags::PRESENT) {
-            let pdpt = allocator.allocate_frame()?;
+            let pdpt = match allocator.allocate_frame() {
+                Some(frame) => frame,
+                None => {
+                    // Die Wurzel wurde bereits alloziert, aber nie installiert.
+                    // Ohne PID gehoert sie in die Orphan-Warteschlange, nicht
+                    // in eine Prozessregistrierung.
+                    crate::reclaim::RECLAIMER.queue_orphan_frames(tables);
+                    return None;
+                }
+            };
             tables.push(pdpt);
             let pdpt_ptr =
                 (physical_memory_offset + pdpt.start_address().as_u64()).as_mut_ptr::<PageTable>();
@@ -205,15 +214,18 @@ impl AddressSpace {
     ) -> Result<(), crate::userspace::UserspaceError> {
         let mut recorder = RecordingAllocator::new(allocator);
         let mut mapper = self.mapper(physical_memory_offset);
-        crate::userspace::map_user_binary(
+        let result = crate::userspace::map_user_binary(
             &mut mapper,
             &mut recorder,
             physical_memory_offset,
             binary,
             layout,
-        )?;
+        );
+        // Auch bei einem Teilfehler gehoeren bereits angeforderte Daten- und
+        // Seitentabellen-Frames zu diesem Adressraum. Der Aufrufer kann den
+        // unvollstaendigen Raum danach als Ganzes beim Reclaimer anmelden.
         self.owned.extend(recorder.into_frames());
-        Ok(())
+        result
     }
 
     /// Frame der obersten Seitentabelle dieses Adressraums.

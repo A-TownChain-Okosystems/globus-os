@@ -436,31 +436,86 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 if shivacore::ramdisk::is_container(bytes) {
                     match shivacore::ramdisk::parse(bytes) {
                         Ok(entries) => {
-                            // IDENT-002: Der Anmeldedatensatz kommt aus einer
-                            // eigenen Datei im Systemnamensraum, nicht aus dem
-                            // Programm. Fehlt oder passt er nicht, wird das
-                            // gesagt — eine Anmeldung gibt es dann nicht.
-                            match shivacore::identity_file::load(&entries, bytes) {
-                                Ok(record) => {
+                            // M1: Beide kernelgeschuetzten Eintraege sind erforderlich.
+                            // GUA1 ist die Verzeichnisprojektion; GCR1 enthaelt ATID-Verifier
+                            // mit vollstaendiger UserId-Bindung. Keine Einzeldatei pro UserId.
+                            let account_directory = shivacore::ramdisk::lookup(
+                                &entries,
+                                "sys.accounts",
+                                shivacore::ramdisk::Reader::Kernel,
+                            );
+                            let credential_catalog = shivacore::ramdisk::lookup(
+                                &entries,
+                                "sys.credentials",
+                                shivacore::ramdisk::Reader::Kernel,
+                            );
+                            let legacy_identity = shivacore::ramdisk::lookup(
+                                &entries,
+                                "sys.identity",
+                                shivacore::ramdisk::Reader::Kernel,
+                            );
+                            match (account_directory, credential_catalog, legacy_identity) {
+                                (Some(_), Some(_), None) => {
+                                    let directory_bytes =
+                                        account_directory.and_then(|entry| entry.data(bytes));
+                                    let credential_bytes =
+                                        credential_catalog.and_then(|entry| entry.data(bytes));
+                                    match (directory_bytes, credential_bytes) {
+                                        (Some(directory), Some(credentials)) => {
+                                            match shivacore::identity_catalog::publish(
+                                                directory,
+                                                credentials,
+                                            ) {
+                                                Ok(count) => serial_println!(
+                                                    "ShivaCore: IDENT-M1 Mehrkonten-Katalog geladen ({} Konten, GUA1 + GCR1/ATID)",
+                                                    count
+                                                ),
+                                                Err(error) => serial_println!(
+                                                    "ShivaCore: IDENT-M1 Konten-/Credential-Katalog ungueltig: {:?} — gesamter Satz fail-closed",
+                                                    error
+                                                ),
+                                            }
+                                        }
+                                        _ => serial_println!(
+                                            "ShivaCore: IDENT-M1 Konten- oder Credential-Eintrag nicht lesbar — fail-closed"
+                                        ),
+                                    }
+                                }
+                                (Some(_), Some(_), Some(_)) => {
                                     serial_println!(
-                                        "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: gelesen ({} Byte, Argon2id {} KiB t={} p={})",
-                                        globus_identity_core::RECORD_LEN,
-                                        record.params.memory_kib,
-                                        record.params.iterations,
-                                        record.params.parallelism
-                                    );
-                                    // IDENT-003: Der Datensatz geht an das
-                                    // Prueftor; ab hier prueft der Kernel, nicht
-                                    // das Fenster.
-                                    identity_gate::publish(record);
-                                    serial_println!(
-                                        "ShivaCore: IDENT-003 Prueftor bereit (Syscall {:#06X}, nur der Konsolenbesitzer)",
-                                        libshivacore::Syscall::IdentityCheck.id()
+                                        "ShivaCore: IDENT-M1 Mehrkonten-Katalog und Legacy-Einzelkonto gleichzeitig vorhanden — mehrdeutig, fail-closed"
                                     );
                                 }
-                                Err(error) => serial_println!(
-                                    "ShivaCore: IDENT-002 Datensatz aus der Ramdisk: {:?} — fail-closed, keine Anmeldung",
-                                    error
+                                (None, None, Some(_)) => {
+                                    // Zeitlich begrenzter Kompatibilitaetsleser fuer
+                                    // bestehende Einzelkonto-Images. M1-Images verwenden
+                                    // ausschliesslich sys.accounts + sys.credentials.
+                                    match shivacore::identity_file::load(&entries, bytes) {
+                                        Ok(record) => {
+                                            serial_println!(
+                                                "ShivaCore: IDENT-002 Legacy-Einzelkonto-Datensatz gelesen ({} Byte, Argon2id {} KiB t={} p={})",
+                                                globus_identity_core::RECORD_LEN,
+                                                record.params.memory_kib,
+                                                record.params.iterations,
+                                                record.params.parallelism
+                                            );
+                                            identity_gate::publish(record);
+                                            serial_println!(
+                                                "ShivaCore: IDENT-003 Legacy-Prueftor bereit (Syscall {:#06X})",
+                                                libshivacore::Syscall::IdentityCheck.id()
+                                            );
+                                        }
+                                        Err(error) => serial_println!(
+                                            "ShivaCore: IDENT-002 Legacy-Einzelkonto-Datensatz {:?} — fail-closed, keine Anmeldung",
+                                            error
+                                        ),
+                                    }
+                                }
+                                (None, None, None) => serial_println!(
+                                    "ShivaCore: IDENT-M1 Mehrkonten-Verzeichnis und Credential-Katalog fehlen — fail-closed"
+                                ),
+                                _ => serial_println!(
+                                    "ShivaCore: IDENT-M1 unvollstaendiger Mehrkonten-Katalog — beide sys.accounts und sys.credentials sind erforderlich, fail-closed"
                                 ),
                             }
                             // Gezaehlt und gezeigt werden nur Eintraege, die
@@ -1233,6 +1288,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         stack_size: 0x0001_0000,
         heap_base: 0x0160_0000,
         heap_size: 0x0020_0000,
+        memory_layout: None,
     };
     let user_binary_2 = userspace::UserBinary {
         entry_point: 0x0140_0000,
@@ -1367,6 +1423,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         stack_size: 0x0000_8000,
         heap_base: 0x01A0_0000,
         heap_size: 0x0010_0000,
+        memory_layout: None,
     };
     unsafe {
         let mut process_space = shivacore::addr_space::AddressSpace::create(
@@ -1407,6 +1464,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             stack_size: 0x0000_8000,
             heap_base: 0x01E0_0000,
             heap_size: 0x0010_0000,
+            memory_layout: None,
         };
         let name = binary.name.clone();
         let mut process_space = unsafe {
