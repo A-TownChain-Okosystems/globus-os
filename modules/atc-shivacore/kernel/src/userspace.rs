@@ -656,7 +656,15 @@ pub unsafe fn map_user_binary(
     addr_space: &UserAddressSpace,
 ) -> Result<(), UserspaceError> {
     if let Some(layout) = &addr_space.memory_layout {
-        return unsafe { map_user_memory_layout(mapper, frame_allocator, physical_memory_offset, binary, layout) };
+        return unsafe {
+            map_user_memory_layout(
+                mapper,
+                frame_allocator,
+                physical_memory_offset,
+                binary,
+                layout,
+            )
+        };
     }
     if binary.code.is_empty()
         || binary.code.len() as u64 > addr_space.code_size
