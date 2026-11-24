@@ -286,9 +286,14 @@ impl<'a> ElfParser<'a> {
                 const USER_MIN: u64 = 0x1_0000;
                 const USER_MAX: u64 = 0x0000_7FFF_FFFF_FFFF;
                 const PF_MASK: u32 = PF_R | PF_W | PF_X;
+                // Groessen- und Bereichsfehler gehoeren zur Segmentvalidierung;
+                // Alignment/Rechte bleiben davon getrennte Ablehnungsgruende.
                 if phdr.p_filesz > phdr.p_memsz
                     || phdr.p_vaddr.checked_add(phdr.p_memsz).is_none()
-                    || (phdr.p_align > 1 && !phdr.p_align.is_power_of_two())
+                {
+                    return Err(ElfParseError::InvalidSegment);
+                }
+                if (phdr.p_align > 1 && !phdr.p_align.is_power_of_two())
                     || (phdr.p_align > 1
                         && phdr.p_vaddr % phdr.p_align != phdr.p_offset % phdr.p_align)
                     || (phdr.p_flags & !PF_MASK) != 0
