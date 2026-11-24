@@ -1244,6 +1244,29 @@ mod tests {
         );
     }
 
+    #[test]
+    fn elf_layout_drives_address_and_syscall_range_checks() {
+        let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
+        binary.segments = vec![
+            UserLoadSegment { file_offset: 0, virtual_address: 0x01C0_0000, file_size: 0x100, memory_size: 0x1000, flags: 0x5, alignment: 0x1000, bytes: vec![0x90; 0x100] },
+            UserLoadSegment { file_offset: 0x1000, virtual_address: 0x01D0_0000, file_size: 0x80, memory_size: 0x2000, flags: 0x6, alignment: 0x1000, bytes: vec![0; 0x80] },
+        ];
+        let layout = plan_user_memory(&binary).unwrap();
+        let space = UserAddressSpace::from_memory_layout(layout.clone());
+        assert!(space.in_code(0x01C0_0000));
+        assert!(space.in_data(0x01D0_0000));
+        assert!(space.range_readable(0x01C0_0000, 0x100));
+        assert!(!space.range_writable(0x01C0_0000, 0x10));
+        assert!(space.range_writable(0x01D0_0000, 0x80));
+        assert!(!space.range_readable(0x01D0_2FF0, 0x20));
+        assert_eq!(space.initial_rsp(), layout.stack_base);
+        assert!(space.contains(layout.heap_base));
+        let regions = space.mapped_regions();
+        assert_eq!(regions.len(), 4);
+        assert!(regions.contains(&(layout.segments[0].page_start, layout.segments[0].page_end)));
+        assert!(regions.contains(&(layout.segments[1].page_start, layout.segments[1].page_end)));
+    }
+
     // --- UserBinary tests ---
 
     #[test]
