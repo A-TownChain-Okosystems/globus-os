@@ -498,6 +498,10 @@ mod tests {
                 AccountLifecycleError::InvalidConfirmation
             ))
         );
+        assert!(
+            repository.load_state().unwrap().is_none(),
+            "wrong recovery words must not create a durable account"
+        );
         let alice_answers = correct_recovery_answers(&pending_alice);
         pending_alice
             .confirm_recovery([&alice_answers[0], &alice_answers[1], &alice_answers[2]])
