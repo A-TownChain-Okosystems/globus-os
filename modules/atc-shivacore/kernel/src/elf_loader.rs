@@ -1549,7 +1549,11 @@ mod tests {
         let binary = user_binary_from_elf("probe", &elf).expect("Abbild nicht baubar");
         assert_eq!(binary.entry_point, 0x01C0_0000);
         assert_eq!(binary.code, alloc::vec![0x90, 0x90, 0xF4]);
-        assert_eq!(binary.segments.len(), 2, "beide PT_LOAD-Segmente muessen erhalten bleiben");
+        assert_eq!(
+            binary.segments.len(),
+            2,
+            "beide PT_LOAD-Segmente muessen erhalten bleiben"
+        );
         assert_eq!(binary.segments[0].virtual_address, 0x01C0_0000);
         assert_eq!(binary.segments[0].flags, PF_R | PF_X);
         assert_eq!(binary.segments[0].file_size, 3);
