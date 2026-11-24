@@ -288,8 +288,7 @@ impl<'a> ElfParser<'a> {
                 const PF_MASK: u32 = PF_R | PF_W | PF_X;
                 // Groessen- und Bereichsfehler gehoeren zur Segmentvalidierung;
                 // Alignment/Rechte bleiben davon getrennte Ablehnungsgruende.
-                if phdr.p_filesz > phdr.p_memsz
-                    || phdr.p_vaddr.checked_add(phdr.p_memsz).is_none()
+                if phdr.p_filesz > phdr.p_memsz || phdr.p_vaddr.checked_add(phdr.p_memsz).is_none()
                 {
                     return Err(ElfParseError::InvalidSegment);
                 }
