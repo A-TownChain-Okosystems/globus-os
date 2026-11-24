@@ -746,8 +746,10 @@ impl globus_devices::block::BlockDevice for VirtioBlkDevice {
         use globus_devices::block::BlockError;
         globus_devices::block::validate_request(self.geometry(), request)?;
         let block_size = self.config.block_size as usize;
-        let needed = block_size.saturating_mul(request.blocks as usize);
-        if destination.len() < needed {
+        let needed = block_size
+            .checked_mul(request.blocks as usize)
+            .ok_or(BlockError::Overflow)?;
+        if destination.len() != needed {
             return Err(BlockError::InvalidBuffer);
         }
         let storage = self.storage.lock();
@@ -773,8 +775,10 @@ impl globus_devices::block::BlockDevice for VirtioBlkDevice {
             return Err(BlockError::ReadOnly);
         }
         let block_size = self.config.block_size as usize;
-        let needed = block_size.saturating_mul(request.blocks as usize);
-        if source.len() < needed {
+        let needed = block_size
+            .checked_mul(request.blocks as usize)
+            .ok_or(BlockError::Overflow)?;
+        if source.len() != needed {
             return Err(BlockError::InvalidBuffer);
         }
         let mut storage = self.storage.lock();
@@ -1826,6 +1830,31 @@ mod tests {
         let mut dev = VirtioBlkDevice::new(0xFE000000, VirtioBlkConfig::default());
         globus_devices::block::BlockDevice::flush(&mut dev).unwrap();
         assert_eq!(dev.flush_count(), 1);
+    }
+
+    #[test]
+    fn test_virtio_blk_trait_requires_exact_buffer_lengths() {
+        let mut dev = VirtioBlkDevice::new(0xFE000000, VirtioBlkConfig::default());
+        let request = globus_devices::block::BlockRequest {
+            lba: 0,
+            blocks: 1,
+            write: false,
+        };
+        let mut oversized = vec![0u8; dev.config.block_size as usize + 1];
+        assert_eq!(
+            globus_devices::block::BlockDevice::read(&mut dev, request, &mut oversized),
+            Err(globus_devices::block::BlockError::InvalidBuffer)
+        );
+
+        let write_request = globus_devices::block::BlockRequest {
+            write: true,
+            ..request
+        };
+        let oversized_source = vec![0u8; dev.config.block_size as usize + 1];
+        assert_eq!(
+            globus_devices::block::BlockDevice::write(&mut dev, write_request, &oversized_source),
+            Err(globus_devices::block::BlockError::InvalidBuffer)
+        );
     }
 
     #[test]
