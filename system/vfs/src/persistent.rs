@@ -246,6 +246,7 @@ impl<D: BlockDevice> PersistentFs<D> {
             superblock: sb,
             layout,
             bitmap,
+            poisoned: false,
         })
     }
     /// True, wenn ein fehlgeschlagener Metadaten-Write oder Flush weitere Schreibzugriffe sperrt.
@@ -314,21 +315,42 @@ mod tests {
     }
 
     impl BlockDevice for FlushFailDevice {
-        fn geometry(&self) -> BlockGeometry { self.inner.geometry() }
-        fn read(&mut self, request: BlockRequest, destination: &mut [u8]) -> Result<(), globus_devices::block::BlockError> {
+        fn geometry(&self) -> BlockGeometry {
+            self.inner.geometry()
+        }
+
+        fn read(
+            &mut self,
+            request: BlockRequest,
+            destination: &mut [u8],
+        ) -> Result<(), globus_devices::block::BlockError> {
             self.inner.read(request, destination)
         }
-        fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), globus_devices::block::BlockError> {
+
+        fn write(
+            &mut self,
+            request: BlockRequest,
+            source: &[u8],
+        ) -> Result<(), globus_devices::block::BlockError> {
             self.inner.write(request, source)
         }
+
         fn flush(&mut self) -> Result<(), globus_devices::block::BlockError> {
-            if self.fail_flush { Err(globus_devices::block::BlockError::Io) } else { self.inner.flush() }
+            if self.fail_flush {
+                Err(globus_devices::block::BlockError::Io)
+            } else {
+                self.inner.flush()
+            }
         }
     }
 
     #[test]
     fn failed_metadata_flush_poisons_filesystem_until_remount() {
-        let inner = MemoryBlockDevice::new(BlockGeometry { block_size: 512, block_count: 64 }).unwrap();
+        let inner = MemoryBlockDevice::new(BlockGeometry {
+            block_size: 512,
+            block_count: 64,
+        })
+        .unwrap();
         let device = FlushFailDevice { inner, fail_flush: false };
         let mut fs = PersistentFs::format(device, 8).unwrap();
         fs.device.fail_flush = true;
@@ -336,7 +358,8 @@ mod tests {
         assert_eq!(fs.allocate_blocks(1), Err(FsError::Io));
         assert!(fs.is_poisoned());
         assert_eq!(fs.allocate_blocks(1), Err(FsError::Io));
-        assert_eq!(fs.release_blocks(fs.layout.data_start, 1), Err(FsError::Io));
+        let data_start = fs.layout.data_start;
+        assert_eq!(fs.release_blocks(data_start, 1), Err(FsError::Io));
     }
 
     #[test]
