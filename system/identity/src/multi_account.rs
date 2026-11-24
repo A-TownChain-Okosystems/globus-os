@@ -21,6 +21,8 @@ pub enum MultiAccountError {
     DuplicateAccount,
     /// Fuer diesen Benutzer existiert kein Konto.
     AccountNotFound,
+    /// Benutzername oder Zugangsdaten sind ungueltig; keine Kontoexistenz preisgeben.
+    AuthenticationFailed,
     /// Der Identitaetsdienst hat einen Fehler gemeldet.
     Identity(IdentityServiceError),
     /// Das kanonische verschluesselte Account-Repository hat abgelehnt.
@@ -210,16 +212,23 @@ impl MultiAccountIdentityService {
         B: BlobStore,
         K: IdentityKeyProvider,
     {
-        let state = repository
-            .load_state()?
-            .ok_or(MultiAccountError::AccountNotFound)?;
-        let entry = state
-            .by_username(username)
-            .ok_or(MultiAccountError::AccountNotFound)?;
+        let state = repository.load_state()?;
+        let Some(state) = state else {
+            return Err(MultiAccountError::AuthenticationFailed);
+        };
+        let Some(entry) = state.by_username(username) else {
+            return Err(MultiAccountError::AuthenticationFailed);
+        };
         let user_id = entry.identity.profile.user_id.clone();
         let mut account = IdentityService::new();
         account.load_record(entry.identity.clone())?;
-        let result = account.login(credential, now_unix, ttl_seconds)?;
+        let result = account.login(credential, now_unix, ttl_seconds).map_err(|error| {
+            match error {
+                IdentityServiceError::InvalidCredentials
+                | IdentityServiceError::NotRegistered => MultiAccountError::AuthenticationFailed,
+                other => MultiAccountError::Identity(other),
+            }
+        })?;
         self.accounts.insert(user_id.as_str().to_owned(), account);
         Ok(result)
     }
@@ -230,6 +239,7 @@ impl MultiAccountIdentityService {
         &mut self,
         repository: &mut AccountStateRepository<B, K>,
         username: &AccountUsername,
+        current_credential: &[u8],
         new_credential: &[u8],
     ) -> Result<u64, MultiAccountError>
     where
@@ -246,6 +256,13 @@ impl MultiAccountIdentityService {
         let user_id = entry.identity.profile.user_id.clone();
         let mut account = IdentityService::new();
         account.load_record(entry.identity.clone())?;
+        account
+            .verify_current_credential(current_credential)
+            .map_err(|error| match error {
+                IdentityServiceError::InvalidCredentials
+                | IdentityServiceError::NotRegistered => MultiAccountError::AuthenticationFailed,
+                other => MultiAccountError::Identity(other),
+            })?;
         account.change_credential(new_credential)?;
         let replacement = account.snapshot()?;
         let generation = repository.replace_identity(expected_generation, username, replacement)?;
@@ -258,6 +275,7 @@ impl MultiAccountIdentityService {
         &mut self,
         repository: &mut AccountStateRepository<B, K>,
         username: &AccountUsername,
+        current_credential: &[u8],
     ) -> Result<u64, MultiAccountError>
     where
         B: BlobStore,
@@ -266,11 +284,20 @@ impl MultiAccountIdentityService {
         let expected_generation = repository.generation()?;
         let state = repository
             .load_state()?
-            .ok_or(MultiAccountError::AccountNotFound)?;
+            .ok_or(MultiAccountError::AuthenticationFailed)?;
         let entry = state
             .by_username(username)
-            .ok_or(MultiAccountError::AccountNotFound)?;
+            .ok_or(MultiAccountError::AuthenticationFailed)?;
         let user_id = entry.identity.profile.user_id.clone();
+        let mut account = IdentityService::new();
+        account.load_record(entry.identity.clone())?;
+        account
+            .verify_current_credential(current_credential)
+            .map_err(|error| match error {
+                IdentityServiceError::InvalidCredentials
+                | IdentityServiceError::NotRegistered => MultiAccountError::AuthenticationFailed,
+                other => MultiAccountError::Identity(other),
+            })?;
         let generation = repository.remove_account(expected_generation, username)?;
         self.accounts.remove(user_id.as_str());
         Ok(generation)
@@ -392,7 +419,22 @@ mod tests {
 
         let alice = AccountUsername::parse("alice").unwrap();
         after_restart
-            .change_credential_persisted(&mut repository, &alice, b"alice-new-secret")
+        assert_eq!(
+            after_restart.change_credential_persisted(
+                &mut repository,
+                &alice,
+                b"wrong-secret",
+                b"alice-new-secret",
+            ),
+            Err(MultiAccountError::AuthenticationFailed)
+        );
+        after_restart
+            .change_credential_persisted(
+                &mut repository,
+                &alice,
+                b"alice-secret",
+                b"alice-new-secret",
+            )
             .unwrap();
         assert!(
             after_restart
@@ -405,8 +447,12 @@ mod tests {
                 .is_ok()
         );
 
+        assert_eq!(
+            after_restart.remove_persisted(&mut repository, &alice, b"wrong-secret"),
+            Err(MultiAccountError::AuthenticationFailed)
+        );
         after_restart
-            .remove_persisted(&mut repository, &alice)
+            .remove_persisted(&mut repository, &alice, b"alice-new-secret")
             .unwrap();
         assert_eq!(repository.load_state().unwrap().unwrap().len(), 1);
         assert!(
