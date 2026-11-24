@@ -68,6 +68,116 @@ jobs:
           # RUSTFLAGS-Variable wuerde diese Einstellungen ersetzen.
           ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo +nightly build --release --target x86_64-unknown-none )
 
+      - name: Capture init ELF program-header evidence
+        id: init_elf_evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          elf="$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init"
+          mkdir -p target/elf-evidence
+          test -s "$elf"
+          cp "$elf" target/elf-evidence/shivacore-init.elf
+          readelf -lW "$elf" | tee target/elf-evidence/init-elf-program-headers.txt
+          python3 - "$elf" <<'PY'
+          import json
+          import pathlib
+          import re
+          import sys
+
+          elf = pathlib.Path(sys.argv[1])
+          raw = pathlib.Path("target/elf-evidence/init-elf-program-headers.txt").read_text()
+          loads = []
+          for line in raw.splitlines():
+              parts = line.split()
+              if not parts or parts[0] != "LOAD":
+                  continue
+              if len(parts) < 8:
+                  raise SystemExit(f"Unparseable PT_LOAD row: {line}")
+              offset, vaddr, _paddr, filesz, memsz = (
+                  int(value, 16) for value in parts[1:6]
+              )
+              flags = " ".join(parts[6:-1])
+              align = int(parts[-1], 16)
+              loads.append({
+                  "p_offset": offset,
+                  "p_vaddr": vaddr,
+                  "p_filesz": filesz,
+                  "p_memsz": memsz,
+                  "p_align": align,
+                  "p_flags": flags,
+              })
+
+          issues = []
+          if not loads:
+              issues.append("No PT_LOAD program headers found")
+
+          for index, segment in enumerate(loads):
+              if segment["p_filesz"] > segment["p_memsz"]:
+                  issues.append(f"PT_LOAD[{index}]: p_filesz exceeds p_memsz")
+              align = segment["p_align"]
+              if align > 1:
+                  if align & (align - 1):
+                      issues.append(f"PT_LOAD[{index}]: p_align is not a power of two")
+                  if (segment["p_vaddr"] - segment["p_offset"]) % align:
+                      issues.append(f"PT_LOAD[{index}]: p_vaddr/p_offset alignment incongruent")
+              flag_set = set(segment["p_flags"].split())
+              if "W" in flag_set and "E" in flag_set:
+                  issues.append(f"PT_LOAD[{index}]: writable+executable (W^X violation)")
+
+          page_size = 4096
+          for left_index, left in enumerate(loads):
+              if left["p_memsz"] == 0:
+                  continue
+              left_start = left["p_vaddr"]
+              left_end = left_start + left["p_memsz"]
+              for right_index in range(left_index + 1, len(loads)):
+                  right = loads[right_index]
+                  if right["p_memsz"] == 0:
+                      continue
+                  right_start = right["p_vaddr"]
+                  right_end = right_start + right["p_memsz"]
+                  if max(left_start, right_start) < min(left_end, right_end):
+                      issues.append(
+                          f"PT_LOAD[{left_index}] and PT_LOAD[{right_index}]: "
+                          "byte-range overlap"
+                      )
+                  left_pages = set(range(left_start // page_size, (left_end - 1) // page_size + 1))
+                  right_pages = set(range(right_start // page_size, (right_end - 1) // page_size + 1))
+                  if left_pages & right_pages and left["p_flags"] != right["p_flags"]:
+                      issues.append(
+                          f"PT_LOAD[{left_index}] and PT_LOAD[{right_index}]: "
+                          "shared 4-KiB page with differing flags"
+                      )
+
+          report = {
+              "schema": "globusos.init-elf-program-headers.v1",
+              "elf": str(elf),
+              "elf_size": elf.stat().st_size,
+              "page_size": page_size,
+              "pt_load_count": len(loads),
+              "pt_load": loads,
+              "issues": issues,
+              "contract_status": "valid" if not issues else "invalid",
+          }
+          pathlib.Path("target/elf-evidence/init-elf-program-headers.json").write_text(
+              json.dumps(report, indent=2) + "\n"
+          )
+          with pathlib.Path("target/elf-evidence/init-elf-contract-report.txt").open("w") as out:
+              out.write(f"contract_status={report['contract_status']}\n")
+              out.write(f"pt_load_count={len(loads)}\n")
+              for index, segment in enumerate(loads):
+                  out.write(
+                      f"PT_LOAD[{index}] "
+                      + " ".join(f"{key}={value}" for key, value in segment.items())
+                      + "\n"
+                  )
+              for issue in issues:
+                  out.write(f"ISSUE: {issue}\n")
+          with open(pathlib.os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"contract_status={report['contract_status']}\n")
+          print(pathlib.Path("target/elf-evidence/init-elf-contract-report.txt").read_text())
+          PY
+
       - name: Build BIOS and UEFI images
         id: build_images
         run: |
@@ -247,6 +357,7 @@ jobs:
           BIOS_QEMU_EXIT_CODE: ${{ steps.bios_smoke.outputs.qemu_exit_code || 'not-recorded' }}
           UEFI_SMOKE_OUTCOME: ${{ steps.uefi_smoke.outcome || 'unknown' }}
           UEFI_QEMU_EXIT_CODE: ${{ steps.uefi_smoke.outputs.qemu_exit_code || 'not-recorded' }}
+          INIT_ELF_CONTRACT_STATUS: ${{ steps.init_elf_evidence.outputs.contract_status || 'not-recorded' }}
         run: |
           set -u
           mkdir -p target/boot-evidence
@@ -268,11 +379,16 @@ jobs:
             echo "bios_qemu_exit_code=$BIOS_QEMU_EXIT_CODE"
             echo "uefi_smoke_outcome=$UEFI_SMOKE_OUTCOME"
             echo "uefi_qemu_exit_code=$UEFI_QEMU_EXIT_CODE"
+            echo "init_elf_contract_status=$INIT_ELF_CONTRACT_STATUS"
             echo "secure_boot_status=RESIDUAL_NOT_ASSERTED"
             echo "acpi_guest_validation=RESIDUAL_NOT_ASSERTED"
             echo "bare_metal_status=NOT_TESTED_BY_QEMU"
             echo "artifact_sha256_begin"
             for artifact in \
+              target/elf-evidence/shivacore-init.elf \
+              target/elf-evidence/init-elf-program-headers.txt \
+              target/elf-evidence/init-elf-program-headers.json \
+              target/elf-evidence/init-elf-contract-report.txt \
               target/boot-images/shivacore-bios.img \
               target/boot-images/shivacore-uefi.img \
               "target/shivacore-qemu-${{ matrix.cpu }}.log" \
@@ -293,8 +409,31 @@ jobs:
         with:
           name: shivacore-boot-images-${{ matrix.cpu }}
           path: |
+            target/elf-evidence/shivacore-init.elf
+            target/elf-evidence/init-elf-program-headers.txt
+            target/elf-evidence/init-elf-program-headers.json
+            target/elf-evidence/init-elf-contract-report.txt
             target/boot-images/shivacore-bios.img
             target/boot-images/shivacore-uefi.img
             target/shivacore-qemu-${{ matrix.cpu }}.log
             target/shivacore-uefi-${{ matrix.cpu }}.log
             target/boot-evidence/manifest-${{ matrix.cpu }}.txt
+
+      - name: Enforce init ELF segment contract
+        if: always()
+        shell: bash
+        env:
+          CONTRACT_STATUS: ${{ steps.init_elf_evidence.outputs.contract_status || 'not-recorded' }}
+        run: |
+          case "$CONTRACT_STATUS" in
+            valid)
+              echo "Init ELF PT_LOAD contract passed."
+              ;;
+            invalid)
+              echo "Init ELF PT_LOAD contract failed; inspect the uploaded elf-evidence artifact."
+              exit 1
+              ;;
+            *)
+              echo "Init ELF evidence was not produced; preserving the earlier build/evidence failure."
+              ;;
+          esac
