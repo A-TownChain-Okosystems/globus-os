@@ -368,6 +368,7 @@ pub fn layout_for_slot(slot: u64) -> Option<UserAddressSpace> {
         heap_size: 0x0010_0000,
         stack_base: base + 0x003E_0000,
         stack_size: 0x0001_0000,
+        memory_layout: None,
     })
 }
 
