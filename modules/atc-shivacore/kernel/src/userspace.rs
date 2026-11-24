@@ -278,7 +278,8 @@ pub struct UserMemoryLayout {
 
 const USER_PAGE_SIZE: u64 = 0x1000;
 const USER_MIN_ADDRESS: u64 = 0x10000;
-const USER_LAYOUT_CEILING: u64 = 0x0000_0000_8000_0000;
+// AddressSpace rebuilds PML4 entry 0 for user mappings: 0..512 GiB.
+const USER_LAYOUT_CEILING: u64 = 0x0000_0080_0000_0000;
 const USER_DEFAULT_HEAP_SIZE: u64 = 0x20_0000;
 const USER_DEFAULT_STACK_SIZE: u64 = 0x1_0000;
 
@@ -1126,6 +1127,36 @@ mod tests {
         assert!(!asp.contains(0x00000000));
         assert!(!asp.contains(0xFFFFFFFF));
         assert!(!asp.contains(0x003FFFFF));
+    }
+
+    #[test]
+    fn segment_layout_preserves_elf_addresses_and_places_private_regions() {
+        let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
+        binary.segments = vec![
+            UserLoadSegment { file_offset: 0, virtual_address: 0x01C0_0000, file_size: 0x100, memory_size: 0x1000, flags: 0x5, alignment: 0x1000, bytes: vec![0x90; 0x100] },
+            UserLoadSegment { file_offset: 0x1000, virtual_address: 0x01D0_0000, file_size: 0x80, memory_size: 0x2000, flags: 0x6, alignment: 0x1000, bytes: vec![0; 0x80] },
+        ];
+        let layout = plan_user_memory(&binary).unwrap();
+        assert_eq!(layout.segments[0].virtual_start, 0x01C0_0000);
+        assert_eq!(layout.segments[1].virtual_start, 0x01D0_0000);
+        assert!(layout.heap_base + layout.heap_size <= layout.stack_base - layout.stack_size);
+        assert!(layout.segments.iter().all(|segment| {
+            !(layout.heap_base < segment.page_end && segment.page_start < layout.heap_base + layout.heap_size)
+                && !(layout.stack_base - layout.stack_size < segment.page_end && segment.page_start < layout.stack_base)
+        }));
+    }
+
+    #[test]
+    fn segment_layout_rejects_page_overlap_and_wx() {
+        let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
+        binary.segments = vec![
+            UserLoadSegment { file_offset: 0, virtual_address: 0x01C0_0000, file_size: 0x100, memory_size: 0x1000, flags: 0x5, alignment: 1, bytes: vec![0x90; 0x100] },
+            UserLoadSegment { file_offset: 0x100, virtual_address: 0x01C0_0800, file_size: 0x100, memory_size: 0x1000, flags: 0x6, alignment: 1, bytes: vec![0; 0x100] },
+        ];
+        assert_eq!(plan_user_memory(&binary), Err(UserspaceError::InvalidAddress));
+        binary.segments[1].virtual_address = 0x01D0_0000;
+        binary.segments[1].flags = 0x7;
+        assert_eq!(plan_user_memory(&binary), Err(UserspaceError::InvalidBinary));
     }
 
     // --- UserBinary tests ---
