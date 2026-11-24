@@ -103,5 +103,6 @@ mod tests {
         cache.write_block(1, &input).unwrap();
         cache.read_block(1, &mut out).unwrap();
         assert_eq!(out, input);
+        cache.flush().unwrap();
     }
 }
