@@ -136,7 +136,16 @@ impl AddressSpace {
         // Untere Haelfte: eigener PDPT, geerbte Geraeteabbildungen.
         let active_low = src[0].clone();
         if active_low.flags().contains(PageTableFlags::PRESENT) {
-            let pdpt = allocator.allocate_frame()?;
+            let pdpt = match allocator.allocate_frame() {
+                Some(frame) => frame,
+                None => {
+                    // Die Wurzel wurde bereits alloziert, aber nie installiert.
+                    // Ohne PID gehoert sie in die Orphan-Warteschlange, nicht
+                    // in eine Prozessregistrierung.
+                    shivacore::reclaim::RECLAIMER.queue_orphan_frames(tables);
+                    return None;
+                }
+            };
             tables.push(pdpt);
             let pdpt_ptr =
                 (physical_memory_offset + pdpt.start_address().as_u64()).as_mut_ptr::<PageTable>();
