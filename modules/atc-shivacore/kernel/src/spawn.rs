@@ -76,8 +76,12 @@ pub fn plan(entries: &[Entry], image: &[u8], field: &[u8; 16]) -> Result<SpawnPl
     let name = name_from_field(field)?;
     let entry = ramdisk::find(entries, name).ok_or(SpawnError::NotFound)?;
     let bytes = entry.data(image).ok_or(SpawnError::NotFound)?;
+    // ElfParser prueft den Einstieg gegen alle ausfuehrbaren PT_LOAD-
+    // Segmente. Ein zweiter Vergleich mit UserAddressSpace::default() waere
+    // falsch: er bindet ELF-Adressen an das Legacy-4-MiB-Codefenster und
+    // verwirft damit gueltige statische ET_EXEC-Images (z. B. Greeter bei
+    // 0x01C00000). Slot-Identitaet und ELF-VA sind getrennte Dimensionen.
     let elf = ElfParser::parse(bytes).map_err(|_| SpawnError::NotExecutable)?;
-    validate_entry(elf.entry_point(), &UserAddressSpace::default())?;
     Ok(SpawnPlan {
         name_len: name.len(),
         elf_len: bytes.len(),
@@ -202,6 +206,16 @@ mod tests {
             plan(&entries, &image, &field("probe")),
             Err(SpawnError::NotExecutable)
         );
+    }
+
+    #[test]
+    fn plan_akzeptiert_gueltige_elf_adresse_ausserhalb_des_legacy_fensters() {
+        let elf = crate::elf_loader::ElfLoader::create_minimal_elf(0x01C0_0000, &[0xF4]);
+        let image = ramdisk::build(&[("greeter", elf.as_slice())]).expect("Ramdisk");
+        let entries = ramdisk::parse(&image).expect("Verzeichnis");
+        let plan = plan(&entries, &image, &field("greeter"))
+            .expect("gueltiges ELF darf nicht am Legacy-Codefenster scheitern");
+        assert_eq!(plan.entry, 0x01C0_0000);
     }
 
     #[test]
