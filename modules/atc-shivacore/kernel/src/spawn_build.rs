@@ -110,10 +110,18 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
         shivacore::addr_space::restore(previous, flags);
         mapped
     });
-    mapped.map_err(|_| SpawnError::MapFailed)?;
     let frames = space.all_frames();
-    shivacore::reclaim::RECLAIMER
-        .register_tables(shivacore::ats1000::Pid(tag as u32), frames.clone());
+    let pid = shivacore::ats1000::Pid(tag as u32);
+    if mapped.is_err() {
+        // map_binary hat auch bei einem Teilfehler alle bereits allozierten
+        // Frames in space uebernommen. Der unvollstaendige Adressraum darf
+        // nicht unregistriert aus dem Scope fallen: erst registrieren, dann
+        // ueber denselben verzoegerten Reclaimer-Pfad zuruecknehmen.
+        shivacore::reclaim::RECLAIMER.register_tables(pid, frames);
+        shivacore::reclaim::RECLAIMER.queue_process(pid);
+        return Err(SpawnError::MapFailed);
+    }
+    shivacore::reclaim::RECLAIMER.register_tables(pid, frames.clone());
     Ok(BuiltSpace {
         cr3: space.frame().start_address().as_u64(),
         frames: frames.len(),
