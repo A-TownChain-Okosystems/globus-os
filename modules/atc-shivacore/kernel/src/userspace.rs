@@ -301,14 +301,18 @@ pub fn plan_user_memory(binary: &UserBinary) -> Result<UserMemoryLayout, Userspa
         {
             return Err(UserspaceError::InvalidBinary);
         }
-        let end = segment.virtual_address.checked_add(segment.memory_size)
+        let end = segment
+            .virtual_address
+            .checked_add(segment.memory_size)
             .ok_or(UserspaceError::InvalidAddress)?;
         if segment.virtual_address < USER_MIN_ADDRESS || end > USER_LAYOUT_CEILING {
             return Err(UserspaceError::InvalidAddress);
         }
         let page_start = segment.virtual_address & !(USER_PAGE_SIZE - 1);
-        let page_end = end.checked_add(USER_PAGE_SIZE - 1)
-            .ok_or(UserspaceError::InvalidAddress)? & !(USER_PAGE_SIZE - 1);
+        let page_end = end
+            .checked_add(USER_PAGE_SIZE - 1)
+            .ok_or(UserspaceError::InvalidAddress)?
+            & !(USER_PAGE_SIZE - 1);
         segments.push(UserSegmentMapping {
             virtual_start: segment.virtual_address,
             virtual_end: end,
@@ -336,25 +340,32 @@ pub fn plan_user_memory(binary: &UserBinary) -> Result<UserMemoryLayout, Userspa
     let stack_pages = stack_size.div_ceil(USER_PAGE_SIZE) * USER_PAGE_SIZE;
     let mut stack_base = USER_LAYOUT_CEILING - USER_PAGE_SIZE;
     loop {
-        let stack_start = stack_base.checked_sub(stack_pages)
+        let stack_start = stack_base
+            .checked_sub(stack_pages)
             .ok_or(UserspaceError::InvalidAddress)?;
-        let collides = segments.iter().any(|segment| {
-            stack_start < segment.page_end && segment.page_start < stack_base
-        });
-        if !collides { break; }
-        stack_base = stack_start.checked_sub(USER_PAGE_SIZE)
+        let collides = segments
+            .iter()
+            .any(|segment| stack_start < segment.page_end && segment.page_start < stack_base);
+        if !collides {
+            break;
+        }
+        stack_base = stack_start
+            .checked_sub(USER_PAGE_SIZE)
             .ok_or(UserspaceError::InvalidAddress)?;
     }
 
     let heap_size = heap_size.div_ceil(USER_PAGE_SIZE) * USER_PAGE_SIZE;
     let mut heap_base = USER_MIN_ADDRESS;
     loop {
-        let heap_end = heap_base.checked_add(heap_size)
+        let heap_end = heap_base
+            .checked_add(heap_size)
             .ok_or(UserspaceError::InvalidAddress)?;
-        if heap_end >= stack_base - stack_pages { return Err(UserspaceError::InvalidAddress); }
-        let collision = segments.iter().find(|segment| {
-            heap_base < segment.page_end && segment.page_start < heap_end
-        });
+        if heap_end >= stack_base - stack_pages {
+            return Err(UserspaceError::InvalidAddress);
+        }
+        let collision = segments
+            .iter()
+            .find(|segment| heap_base < segment.page_end && segment.page_start < heap_end);
         match collision {
             Some(segment) => heap_base = segment.page_end,
             None => break,
