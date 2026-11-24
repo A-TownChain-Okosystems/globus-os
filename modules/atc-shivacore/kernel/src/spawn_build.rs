@@ -44,8 +44,6 @@ fn kernel_root() -> Option<PhysFrame<Size4KiB>> {
     }
 }
 
-/// Ein gebauter, noch nicht gestarteter Adressraum.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 /// Gibt die Frames eines verworfenen Adressraums an den Reclaimer zurueck.
 ///
 /// Reihenfolge der Starttransaktion und ihrer Ruecknahme:
@@ -65,6 +63,8 @@ pub fn abandon_space(tag: u64) -> usize {
     shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(tag as u32))
 }
 
+/// Ein gebauter, noch nicht gestarteter Adressraum.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct BuiltSpace {
     /// Physische Adresse der Wurzel (der Wert fuer CR3).
     pub cr3: u64,
