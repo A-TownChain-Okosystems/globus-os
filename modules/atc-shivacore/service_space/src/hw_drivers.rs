@@ -788,6 +788,12 @@ impl globus_devices::block::BlockDevice for VirtioBlkDevice {
             .fetch_add(u64::from(request.blocks), Ordering::SeqCst);
         Ok(())
     }
+
+    fn flush(&mut self) -> Result<(), globus_devices::block::BlockError> {
+        // Current VirtioBlkDevice backend is simulated. This only preserves the
+        // API contract and is NOT evidence of a hardware VIRTIO_BLK_T_FLUSH.
+        VirtioBlkDevice::flush(self)
+    }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
