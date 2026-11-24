@@ -72,7 +72,8 @@ pub struct BuiltSpace {
     pub frames: usize,
 }
 
-/// Baut einen Adressraum fuer `binary` im Fenster von `slot`.
+/// Baut einen Adressraum fuer `binary`; `slot` begrenzt nur die Prozesskapazitaet.
+/// ELF-Segmentadressen bleiben unveraendert und sind nicht an den Slot gebunden.
 ///
 /// Reihenfolge wie beim Boot: Wurzel aus der Kernel-Wurzel erben, Programm
 /// abbilden, alle Frames beim Reclaimer anmelden. Der Raum wird **nicht**
