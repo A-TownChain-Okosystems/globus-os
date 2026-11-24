@@ -233,8 +233,9 @@ impl MultiAccountIdentityService {
         Ok(result)
     }
 
-    /// Change a credential and commit it atomically while preserving the account binding.
+    /// Reauthenticate, then change a credential in one atomic commit.
     /// The generation is captured before the read so a concurrent writer cannot be overwritten.
+    /// Invalid current credentials and unknown usernames return the same public error.
     pub fn change_credential_persisted<B, K>(
         &mut self,
         repository: &mut AccountStateRepository<B, K>,
@@ -270,7 +271,8 @@ impl MultiAccountIdentityService {
         Ok(generation)
     }
 
-    /// Remove an account durably first, then drop its in-memory session coordinator entry.
+    /// Reauthenticate, remove an account durably, then drop its in-memory session coordinator entry.
+    /// Invalid current credentials and unknown usernames return the same public error.
     pub fn remove_persisted<B, K>(
         &mut self,
         repository: &mut AccountStateRepository<B, K>,
@@ -405,16 +407,25 @@ mod tests {
                 )
                 .is_ok()
         );
-        assert!(
-            after_restart
-                .login_persisted(
-                    &repository,
-                    &AccountUsername::parse("bob").unwrap(),
-                    b"alice-secret",
-                    100,
-                    300,
-                )
-                .is_err()
+        assert_eq!(
+            after_restart.login_persisted(
+                &repository,
+                &AccountUsername::parse("bob").unwrap(),
+                b"alice-secret",
+                100,
+                300,
+            ),
+            Err(MultiAccountError::AuthenticationFailed)
+        );
+        assert_eq!(
+            after_restart.login_persisted(
+                &repository,
+                &AccountUsername::parse("unknown").unwrap(),
+                b"alice-secret",
+                100,
+                300,
+            ),
+            Err(MultiAccountError::AuthenticationFailed)
         );
 
         let alice = AccountUsername::parse("alice").unwrap();
