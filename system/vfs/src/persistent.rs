@@ -102,6 +102,8 @@ pub struct PersistentFs<D> {
     superblock: Superblock,
     layout: MetadataLayout,
     bitmap: FreeSpaceBitmap,
+    /// Nach fehlgeschlagener Metadatenpersistenz ist der In-Memory-Zustand nicht mehr vertrauenswuerdig.
+    poisoned: bool,
 }
 impl<D: BlockDevice> PersistentFs<D> {
     fn calculate_layout(sb: Superblock) -> Result<MetadataLayout, FsError> {
@@ -214,6 +216,7 @@ impl<D: BlockDevice> PersistentFs<D> {
             superblock: sb,
             layout,
             bitmap,
+            poisoned: false,
         })
     }
     /// Liest Superblock und Bitmap von einem vorhandenen Volume.
@@ -245,6 +248,10 @@ impl<D: BlockDevice> PersistentFs<D> {
             bitmap,
         })
     }
+    /// True, wenn ein fehlgeschlagener Metadaten-Write oder Flush weitere Schreibzugriffe sperrt.
+    pub fn is_poisoned(&self) -> bool {
+        self.poisoned
+    }
     /// Kopie des Superblocks.
     pub fn superblock(&self) -> Superblock {
         self.superblock
@@ -259,21 +266,28 @@ impl<D: BlockDevice> PersistentFs<D> {
     }
     /// Vergibt Bloecke ab dem Datenbereich und schreibt die Bitmap.
     pub fn allocate_blocks(&mut self, count: u64) -> Result<u64, FsError> {
+        if self.poisoned { return Err(FsError::Io); }
         let start = self.bitmap.allocate(count).map_err(|_| FsError::Bitmap)?;
-        self.persist_bitmap()?;
-        self.device.flush().map_err(|_| FsError::Io)?;
+        if self.persist_bitmap().is_err() || self.device.flush().is_err() {
+            // Der Datentraeger kann alte, neue oder teilweise Metadaten enthalten.
+            // Keine weiteren Schreiboperationen zulassen; Remount/Recovery ist erforderlich.
+            self.poisoned = true;
+            return Err(FsError::Io);
+        }
         Ok(start)
     }
     /// Gibt Bloecke frei; Bereiche vor dem Datenbereich werden abgelehnt.
     pub fn release_blocks(&mut self, start: u64, count: u64) -> Result<(), FsError> {
+        if self.poisoned { return Err(FsError::Io); }
         if start < self.layout.data_start {
             return Err(FsError::InvalidSuperblock);
         }
-        self.bitmap
-            .release(start, count)
-            .map_err(|_| FsError::Bitmap)?;
-        self.persist_bitmap()?;
-        self.device.flush().map_err(|_| FsError::Io)
+        self.bitmap.release(start, count).map_err(|_| FsError::Bitmap)?;
+        if self.persist_bitmap().is_err() || self.device.flush().is_err() {
+            self.poisoned = true;
+            return Err(FsError::Io);
+        }
+        Ok(())
     }
 }
 
@@ -294,6 +308,37 @@ mod tests {
         let mut mounted = PersistentFs::mount(d).unwrap();
         assert_eq!(mounted.allocate_blocks(1).unwrap(), start + 2)
     }
+    struct FlushFailDevice {
+        inner: MemoryBlockDevice,
+        fail_flush: bool,
+    }
+
+    impl BlockDevice for FlushFailDevice {
+        fn geometry(&self) -> BlockGeometry { self.inner.geometry() }
+        fn read(&mut self, request: BlockRequest, destination: &mut [u8]) -> Result<(), globus_devices::block::BlockError> {
+            self.inner.read(request, destination)
+        }
+        fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), globus_devices::block::BlockError> {
+            self.inner.write(request, source)
+        }
+        fn flush(&mut self) -> Result<(), globus_devices::block::BlockError> {
+            if self.fail_flush { Err(globus_devices::block::BlockError::Io) } else { self.inner.flush() }
+        }
+    }
+
+    #[test]
+    fn failed_metadata_flush_poisons_filesystem_until_remount() {
+        let inner = MemoryBlockDevice::new(BlockGeometry { block_size: 512, block_count: 64 }).unwrap();
+        let device = FlushFailDevice { inner, fail_flush: false };
+        let mut fs = PersistentFs::format(device, 8).unwrap();
+        fs.device.fail_flush = true;
+
+        assert_eq!(fs.allocate_blocks(1), Err(FsError::Io));
+        assert!(fs.is_poisoned());
+        assert_eq!(fs.allocate_blocks(1), Err(FsError::Io));
+        assert_eq!(fs.release_blocks(fs.layout.data_start, 1), Err(FsError::Io));
+    }
+
     #[test]
     fn root_inode_survives_mount() {
         let d = MemoryBlockDevice::new(BlockGeometry {
