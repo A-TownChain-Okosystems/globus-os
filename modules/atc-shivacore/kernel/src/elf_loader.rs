@@ -1077,6 +1077,74 @@ mod tests {
     }
 
     #[test]
+    fn parser_rejects_write_execute_segment() {
+        let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0xF4]);
+        let flags = PF_R | PF_W | PF_X;
+        elf[68..72].copy_from_slice(&flags.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidSegmentAlignment)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_load_segment_below_user_minimum() {
+        let elf = ElfLoader::create_minimal_elf(0x8000, &[0xF4]);
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::UserAddressOutOfRange)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_alignment_congruence_mismatch() {
+        let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0xF4]);
+        // p_align=4096, p_offset=120, p_vaddr mod 4096=0.
+        elf[112..120].copy_from_slice(&0x1000u64.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::InvalidSegmentAlignment)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_byte_overlapping_load_segments() {
+        let mut elf = two_segment_elf(0x01C0_0000, &[0x90; 16], b"DATA", 0);
+        // Second PT_LOAD begins inside the first code segment.
+        elf[64 + 56 + 16..64 + 56 + 24]
+            .copy_from_slice(&0x01C0_0008u64.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::OverlappingSegments)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_page_permission_conflict() {
+        let mut elf = two_segment_elf(0x01C0_0000, &[0x90; 16], b"DATA", 0);
+        // Distinct byte ranges, but both PT_LOADs would occupy the same page
+        // with RX and RW permissions respectively.
+        elf[64 + 56 + 16..64 + 56 + 24]
+            .copy_from_slice(&0x01C0_0800u64.to_le_bytes());
+        assert!(matches!(
+            ElfParser::parse(&elf),
+            Err(ElfParseError::OverlappingSegments)
+        ));
+    }
+
+    #[test]
+    fn parser_rejects_dynamic_and_interpreter_segments() {
+        for unsupported in [2u32, 3u32] {
+            let mut elf = ElfLoader::create_minimal_elf(0x0040_0000, &[0xF4]);
+            elf[64..68].copy_from_slice(&unsupported.to_le_bytes());
+            assert!(matches!(
+                ElfParser::parse(&elf),
+                Err(ElfParseError::UnsupportedSegmentType)
+            ));
+        }
+    }
+
+    #[test]
     fn test_code_segment_extraction() {
         let code = vec![0x90, 0xF4]; // NOP, HLT
         let elf = ElfLoader::create_minimal_elf(0x400000, &code);
