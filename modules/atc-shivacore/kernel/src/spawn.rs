@@ -95,16 +95,31 @@ pub fn retain(image_ptr: usize, len: usize) {
 
 /// Annahme gegen das gemerkte Verzeichnis. None = kein Verzeichnis im Speicher.
 pub fn plan_retained(field: &[u8; 16]) -> Result<SpawnPlan, SpawnError> {
+    plan_image(field).map(|(plan, _)| plan)
+}
+
+/// Annahme samt Abbild.
+///
+/// Die Prozessstart-Transaktion braucht das ELF-Abbild selbst, nicht nur den
+/// Einstieg: `build_space` erwartet ein `UserBinary`, und `user_binary_from_elf`
+/// braucht die Bytes. Diese Funktion liefert beides aus derselben Lesart, damit
+/// niemand ein zweites Mal parst oder eine zweite Quelle erfindet.
+///
+/// Das Abbild liegt im Boot-Abbild und bleibt gemappt; die zurueckgegebene
+/// Scheibe hat deshalb die Lebensdauer des Kernels.
+pub fn plan_image(field: &[u8; 16]) -> Result<(SpawnPlan, &'static [u8]), SpawnError> {
     let retained = *DIRECTORY.lock();
     let (ptr, len) = retained.ok_or(SpawnError::NoDirectory)?;
     if ptr == 0 || len == 0 || len > 64 * 1024 * 1024 {
         return Err(SpawnError::NoDirectory);
     }
-    // Die Region liegt im Boot-Abbild und bleibt gemappt; dieselbe Lesart wie im
-    // Bootpfad (virtuelle Adresse, kein physical_memory_offset).
-    let image: &[u8] = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
+    // Dieselbe Lesart wie im Bootpfad (virtuelle Adresse, kein
+    // physical_memory_offset). Safety: Zeiger und Laenge stammen aus dem
+    // Bootpfad, die Region bleibt fuer die Lebensdauer des Kernels gemappt.
+    let image: &'static [u8] = unsafe { core::slice::from_raw_parts(ptr as *const u8, len) };
     let entries = ramdisk::parse(image).map_err(|_| SpawnError::NoDirectory)?;
-    plan(&entries, image, field)
+    let plan = plan(&entries, image, field)?;
+    Ok((plan, image))
 }
 
 #[cfg(test)]
@@ -115,6 +130,16 @@ mod tests {
         let mut f = [0u8; 16];
         f[..name.len()].copy_from_slice(name.as_bytes());
         f
+    }
+
+    #[test]
+    fn plan_image_without_directory_fails_closed() {
+        // Ohne retain() gibt es kein Verzeichnis im Speicher. Die Transaktion
+        // darf daraus keinen Spawn ableiten, sondern nur diesen Fehler.
+        assert_eq!(
+            plan_image(&field("shell")).unwrap_err(),
+            SpawnError::NoDirectory
+        );
     }
 
     #[test]
