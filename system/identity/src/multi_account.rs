@@ -418,7 +418,6 @@ mod tests {
         );
 
         let alice = AccountUsername::parse("alice").unwrap();
-        after_restart
         assert_eq!(
             after_restart.change_credential_persisted(
                 &mut repository,
