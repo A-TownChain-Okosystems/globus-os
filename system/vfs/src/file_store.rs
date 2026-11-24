@@ -168,5 +168,6 @@ mod tests {
         let mut out = vec![0u8; data.len()];
         assert_eq!(s.read_at(&m, 3, &mut out).unwrap(), data.len());
         assert_eq!(&out, data);
+        s.flush().unwrap();
     }
 }
