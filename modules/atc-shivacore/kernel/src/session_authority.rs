@@ -211,6 +211,36 @@ pub fn revoke_for_pid(owner_pid: Pid, authority: &CapabilityAuthority) -> usize 
     count
 }
 
+/// Revoke every live session issued for one stable account identity.
+///
+/// This is the kernel-side invalidation primitive required by credential
+/// rotation and account deletion. Callers must invoke it only after the
+/// account operation has committed durably, or as part of a coordinated
+/// fail-closed transaction that cannot report success while sessions remain.
+///
+/// CapabilityAuthority revokes each root capability and all delegated
+/// descendants. Sessions belonging to other UserIds are left untouched.
+pub fn revoke_for_user(user_id: &str, authority: &CapabilityAuthority) -> usize {
+    if user_id.is_empty() {
+        return 0;
+    }
+    let roots = {
+        let mut sessions = SESSIONS.lock();
+        let ids: alloc::vec::Vec<u64> = sessions
+            .iter()
+            .filter_map(|(id, session)| (session.user_id == user_id).then_some(*id))
+            .collect();
+        ids.into_iter()
+            .filter_map(|id| sessions.remove(&id).map(|session| session.root_capability))
+            .collect::<alloc::vec::Vec<_>>()
+    };
+    let count = roots.len();
+    for root in roots {
+        authority.revoke(root);
+    }
+    count
+}
+
 /// Transfer principal ownership after the kernel has created an authorized
 /// target process. The new root capability belongs to the target PID; the
 /// Greeter's prior root is revoked before the transfer completes.
@@ -314,6 +344,33 @@ mod tests {
             resolve(&authority, pid(41), second, 101),
             Err(SessionError::NotFound)
         );
+    }
+
+    #[test]
+    fn account_revocation_removes_all_sessions_for_only_that_user() {
+        let authority = CapabilityAuthority::new();
+        let alice_first =
+            issue(&authority, pid(70), String::from("user-alice"), 100, 500).unwrap();
+        let alice_second =
+            issue(&authority, pid(71), String::from("user-alice"), 100, 500).unwrap();
+        let bob =
+            issue(&authority, pid(72), String::from("user-bob"), 100, 500).unwrap();
+
+        assert_eq!(revoke_for_user("user-alice", &authority), 2);
+        assert_eq!(
+            resolve(&authority, pid(70), alice_first, 101),
+            Err(SessionError::NotFound)
+        );
+        assert_eq!(
+            resolve(&authority, pid(71), alice_second, 101),
+            Err(SessionError::NotFound)
+        );
+        assert_eq!(
+            resolve(&authority, pid(72), bob, 101),
+            Ok(String::from("user-bob"))
+        );
+        assert_eq!(revoke_for_user("user-alice", &authority), 0);
+        assert_eq!(revoke_for_user("", &authority), 0);
     }
 
     #[test]
