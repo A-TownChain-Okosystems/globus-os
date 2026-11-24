@@ -267,7 +267,9 @@ impl<D: BlockDevice> PersistentFs<D> {
     }
     /// Vergibt Bloecke ab dem Datenbereich und schreibt die Bitmap.
     pub fn allocate_blocks(&mut self, count: u64) -> Result<u64, FsError> {
-        if self.poisoned { return Err(FsError::Io); }
+        if self.poisoned {
+            return Err(FsError::Io);
+        }
         let start = self.bitmap.allocate(count).map_err(|_| FsError::Bitmap)?;
         if self.persist_bitmap().is_err() || self.device.flush().is_err() {
             // Der Datentraeger kann alte, neue oder teilweise Metadaten enthalten.
@@ -283,7 +285,9 @@ impl<D: BlockDevice> PersistentFs<D> {
         if start < self.layout.data_start {
             return Err(FsError::InvalidSuperblock);
         }
-        self.bitmap.release(start, count).map_err(|_| FsError::Bitmap)?;
+        self.bitmap
+            .release(start, count)
+            .map_err(|_| FsError::Bitmap)?;
         if self.persist_bitmap().is_err() || self.device.flush().is_err() {
             self.poisoned = true;
             return Err(FsError::Io);
@@ -351,7 +355,10 @@ mod tests {
             block_count: 64,
         })
         .unwrap();
-        let device = FlushFailDevice { inner, fail_flush: false };
+        let device = FlushFailDevice {
+            inner,
+            fail_flush: false,
+        };
         let mut fs = PersistentFs::format(device, 8).unwrap();
         fs.device.fail_flush = true;
 
