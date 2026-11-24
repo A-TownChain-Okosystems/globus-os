@@ -331,7 +331,10 @@ mod tests {
     fn orphan_frames_are_queued_and_drained_without_a_pid() {
         let reclaimer = FrameReclaimer::new();
         assert_eq!(
-            reclaimer.queue_orphan_frames(alloc::vec![frame(0x18_0000), frame(0x18_1000)]),
+            reclaimer.queue_orphan_frames(alloc::vec![
+                frame(0x18_0000),
+                frame(0x18_1000),
+            ]),
             2
         );
         assert_eq!(reclaimer.pending_len(), 1);
@@ -344,7 +347,10 @@ mod tests {
             2
         );
         assert_eq!(freed_now, alloc::vec![0x18_1000, 0x18_0000]);
-        assert_eq!(reclaimer.take_last_report(), alloc::vec![(u64::MAX, 2, 2, 0)]);
+        assert_eq!(
+            reclaimer.take_last_report(),
+            alloc::vec![(u64::MAX, 2, 2, 0)]
+        );
     }
 
     #[test]
