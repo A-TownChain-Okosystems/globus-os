@@ -14,8 +14,8 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 use core::sync::atomic::{AtomicU64, Ordering};
-use shivacore::spawn::{SpawnError, SPAWN_MAX_SLOTS};
-use shivacore::userspace::{plan_user_memory, UserAddressSpace, UserBinary};
+use shivacore::spawn::{SPAWN_MAX_SLOTS, SpawnError};
+use shivacore::userspace::{UserAddressSpace, UserBinary, plan_user_memory};
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -80,7 +80,9 @@ pub struct BuiltSpace {
 /// installiert — das tut der Aufrufer, wenn er den Prozess startet.
 pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpace, SpawnError> {
     // Slot remains a scheduler/resource-capacity index, never a virtual-address selector.
-    if slot >= SPAWN_MAX_SLOTS { return Err(SpawnError::NoFreeSlot); }
+    if slot >= SPAWN_MAX_SLOTS {
+        return Err(SpawnError::NoFreeSlot);
+    }
     let memory_layout = plan_user_memory(binary).map_err(|_| SpawnError::MapFailed)?;
     let layout = UserAddressSpace::from_memory_layout(memory_layout);
     let offset = phys_offset().ok_or(SpawnError::NotReady)?;
