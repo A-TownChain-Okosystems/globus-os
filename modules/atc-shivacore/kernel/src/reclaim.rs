@@ -276,8 +276,8 @@ impl FrameReclaimer {
                 "kernel",
                 "memory.reclaim",
                 &alloc::format!(
-                    "pid={} root={:#x} angemeldet={} freigegeben={} abgewiesen={}",
-                    job.pid.map_or_else(|| "orphan".to_string(), |pid| alloc::format!("{:?}", pid)),
+                    "pid={:?} root={:#x} angemeldet={} freigegeben={} abgewiesen={}",
+                    job.pid,
                     job.root,
                     job.frames.len(),
                     released,
@@ -325,6 +325,26 @@ mod tests {
         // Zweiter Aufruf findet nichts mehr: Reaping ist idempotent.
         assert_eq!(reclaimer.queue_process(pid(7)), 0);
         assert_eq!(reclaimer.pending_len(), 1);
+    }
+
+    #[test]
+    fn orphan_frames_are_queued_and_drained_without_a_pid() {
+        let reclaimer = FrameReclaimer::new();
+        assert_eq!(
+            reclaimer.queue_orphan_frames(alloc::vec![frame(0x18_0000), frame(0x18_1000)]),
+            2
+        );
+        assert_eq!(reclaimer.pending_len(), 1);
+        let mut freed_now = Vec::new();
+        assert_eq!(
+            reclaimer.drain_with(|frame| {
+                freed_now.push(frame.start_address().as_u64());
+                true
+            }),
+            2
+        );
+        assert_eq!(freed_now, alloc::vec![0x18_1000, 0x18_0000]);
+        assert_eq!(reclaimer.take_last_report(), alloc::vec![(u64::MAX, 2, 2, 0)]);
     }
 
     #[test]
