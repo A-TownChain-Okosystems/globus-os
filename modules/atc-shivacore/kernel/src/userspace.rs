@@ -367,6 +367,9 @@ pub fn plan_user_memory(binary: &UserBinary) -> Result<UserMemoryLayout, Userspa
             || segment.file_size > segment.memory_size
             || segment.bytes.len() as u64 != segment.file_size
             || segment.flags & !0x7 != 0
+            // x86-64 PTEs cannot express execute-only or write-only user pages.
+            // Reject ELF segments without PF_R instead of silently granting reads.
+            || segment.flags & 0x4 == 0
             || segment.flags & 0x2 != 0 && segment.flags & 0x1 != 0
         {
             return Err(UserspaceError::InvalidBinary);
@@ -1417,6 +1420,17 @@ mod tests {
         );
         binary.segments[1].virtual_address = 0x01D0_0000;
         binary.segments[1].flags = 0x7;
+        assert_eq!(
+            plan_user_memory(&binary),
+            Err(UserspaceError::InvalidBinary)
+        );
+        // x86 cannot enforce execute-only or write-only user mappings.
+        binary.segments[1].flags = 0x2;
+        assert_eq!(
+            plan_user_memory(&binary),
+            Err(UserspaceError::InvalidBinary)
+        );
+        binary.segments[1].flags = 0x1;
         assert_eq!(
             plan_user_memory(&binary),
             Err(UserspaceError::InvalidBinary)
