@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use super::{
     AccountLifecycleError, AccountStateEntry, AccountStateError, AccountStateRepository,
     AccountUsername, BlobStore, IdentityKeyProvider, IdentityService, IdentityServiceError,
-    IdentitySession, LoginResult, RecoveryConfirmation, RegistrationResult, UserId,
+    IdentitySession, LoginResult, RecoveryConfirmation, RegistrationResult, UserId, WalletCreation,
 };
 use zeroize::Zeroizing;
 
