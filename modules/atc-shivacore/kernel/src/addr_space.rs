@@ -142,7 +142,7 @@ impl AddressSpace {
                     // Die Wurzel wurde bereits alloziert, aber nie installiert.
                     // Ohne PID gehoert sie in die Orphan-Warteschlange, nicht
                     // in eine Prozessregistrierung.
-                    shivacore::reclaim::RECLAIMER.queue_orphan_frames(tables);
+                    crate::reclaim::RECLAIMER.queue_orphan_frames(tables);
                     return None;
                 }
             };
