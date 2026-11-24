@@ -1822,6 +1822,13 @@ mod tests {
     }
 
     #[test]
+    fn test_virtio_blk_trait_flush_is_explicitly_simulated() {
+        let mut dev = VirtioBlkDevice::new(0xFE000000, VirtioBlkConfig::default());
+        globus_devices::block::BlockDevice::flush(&mut dev).unwrap();
+        assert_eq!(dev.flush_count(), 1);
+    }
+
+    #[test]
     fn test_virtio_blk_multiple_writes() {
         let dev = VirtioBlkDevice::new(0xFE000000, VirtioBlkConfig::default());
         for i in 0..10 {
