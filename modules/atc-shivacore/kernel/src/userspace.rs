@@ -97,14 +97,20 @@ impl UserAddressSpace {
     /// True innerhalb eines ausfuehrbaren ELF-Segments oder des Legacy-Codefensters.
     pub fn in_code(&self, addr: u64) -> bool {
         if let Some(layout) = &self.memory_layout {
-            return layout.segments.iter().any(|s| s.flags & 0x1 != 0 && addr >= s.virtual_start && addr < s.virtual_end);
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x1 != 0 && addr >= s.virtual_start && addr < s.virtual_end);
         }
         addr >= self.code_base && addr < self.code_base.saturating_add(self.code_size)
     }
     /// True innerhalb eines nicht ausfuehrbaren ELF-Segments oder des Legacy-Datenfensters.
     pub fn in_data(&self, addr: u64) -> bool {
         if let Some(layout) = &self.memory_layout {
-            return layout.segments.iter().any(|s| s.flags & 0x1 == 0 && addr >= s.virtual_start && addr < s.virtual_end);
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x1 == 0 && addr >= s.virtual_start && addr < s.virtual_end);
         }
         addr >= self.data_base && addr < self.data_base.saturating_add(self.data_size)
     }
@@ -125,17 +131,32 @@ impl UserAddressSpace {
         if let Some(layout) = &self.memory_layout {
             let mut regions = Vec::with_capacity(layout.segments.len() + 2);
             regions.extend(layout.segments.iter().map(|s| (s.page_start, s.page_end)));
-            regions.push((layout.heap_base, layout.heap_base.saturating_add(layout.heap_size)));
-            regions.push((layout.stack_base.saturating_sub(layout.stack_size), layout.stack_base));
+            regions.push((
+                layout.heap_base,
+                layout.heap_base.saturating_add(layout.heap_size),
+            ));
+            regions.push((
+                layout.stack_base.saturating_sub(layout.stack_size),
+                layout.stack_base,
+            ));
             return regions;
         }
         let stack_pages = self.stack_size.div_ceil(0x1000);
         let stack_start = self.stack_base.saturating_sub(stack_pages * 0x1000);
         alloc::vec![
-            (self.code_base, self.code_base.saturating_add(self.code_size)),
-            (self.data_base, self.data_base.saturating_add(self.data_size)),
+            (
+                self.code_base,
+                self.code_base.saturating_add(self.code_size)
+            ),
+            (
+                self.data_base,
+                self.data_base.saturating_add(self.data_size)
+            ),
             (stack_start, self.stack_base),
-            (self.heap_base, self.heap_base.saturating_add(self.heap_size)),
+            (
+                self.heap_base,
+                self.heap_base.saturating_add(self.heap_size)
+            ),
         ]
     }
 
@@ -160,9 +181,15 @@ impl UserAddressSpace {
         };
         let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
         if let Some(layout) = &self.memory_layout {
-            return layout.segments.iter().any(|s| s.flags & 0x2 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x2 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
                 || in_region(layout.heap_base, layout.heap_size)
-                || in_region(layout.stack_base.saturating_sub(layout.stack_size), layout.stack_size);
+                || in_region(
+                    layout.stack_base.saturating_sub(layout.stack_size),
+                    layout.stack_size,
+                );
         }
         in_region(self.data_base, self.data_size)
             || in_region(self.heap_base, self.heap_size)
@@ -185,9 +212,15 @@ impl UserAddressSpace {
         };
         let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
         if let Some(layout) = &self.memory_layout {
-            return layout.segments.iter().any(|s| s.flags & 0x4 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
+            return layout
+                .segments
+                .iter()
+                .any(|s| s.flags & 0x4 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
                 || in_region(layout.heap_base, layout.heap_size)
-                || in_region(layout.stack_base.saturating_sub(layout.stack_size), layout.stack_size);
+                || in_region(
+                    layout.stack_base.saturating_sub(layout.stack_size),
+                    layout.stack_size,
+                );
         }
         in_region(self.code_base, self.code_size)
             || in_region(self.data_base, self.data_size)
@@ -418,7 +451,10 @@ impl UserAddressSpace {
     /// Builds the compatibility view and syscall-validation view from one ELF layout.
     pub fn from_memory_layout(layout: UserMemoryLayout) -> Self {
         let code = layout.segments.iter().find(|s| s.flags & 0x1 != 0);
-        let data = layout.segments.iter().find(|s| s.flags & 0x2 != 0 && s.flags & 0x1 == 0);
+        let data = layout
+            .segments
+            .iter()
+            .find(|s| s.flags & 0x2 != 0 && s.flags & 0x1 == 0);
         Self {
             code_base: code.map_or(0, |s| s.virtual_start),
             code_size: code.map_or(0, |s| s.virtual_end.saturating_sub(s.virtual_start)),
@@ -1248,8 +1284,24 @@ mod tests {
     fn elf_layout_drives_address_and_syscall_range_checks() {
         let mut binary = UserBinary::from_bytes("elf", vec![0x90], 0x01C0_0000);
         binary.segments = vec![
-            UserLoadSegment { file_offset: 0, virtual_address: 0x01C0_0000, file_size: 0x100, memory_size: 0x1000, flags: 0x5, alignment: 0x1000, bytes: vec![0x90; 0x100] },
-            UserLoadSegment { file_offset: 0x1000, virtual_address: 0x01D0_0000, file_size: 0x80, memory_size: 0x2000, flags: 0x6, alignment: 0x1000, bytes: vec![0; 0x80] },
+            UserLoadSegment {
+                file_offset: 0,
+                virtual_address: 0x01C0_0000,
+                file_size: 0x100,
+                memory_size: 0x1000,
+                flags: 0x5,
+                alignment: 0x1000,
+                bytes: vec![0x90; 0x100],
+            },
+            UserLoadSegment {
+                file_offset: 0x1000,
+                virtual_address: 0x01D0_0000,
+                file_size: 0x80,
+                memory_size: 0x2000,
+                flags: 0x6,
+                alignment: 0x1000,
+                bytes: vec![0; 0x80],
+            },
         ];
         let layout = plan_user_memory(&binary).unwrap();
         let space = UserAddressSpace::from_memory_layout(layout.clone());

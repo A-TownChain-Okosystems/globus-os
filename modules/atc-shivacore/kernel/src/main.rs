@@ -1423,7 +1423,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         stack_size: 0x0000_8000,
         heap_base: 0x01A0_0000,
         heap_size: 0x0010_0000,
-            memory_layout: None,
+        memory_layout: None,
     };
     unsafe {
         let mut process_space = shivacore::addr_space::AddressSpace::create(
