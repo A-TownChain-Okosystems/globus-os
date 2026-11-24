@@ -183,15 +183,38 @@ impl UserAddressSpace {
 // User Binary (simplified ELF-like format for ShivaCore)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-/// A loadable user binary (simplified — code + data + entry point)
+/// Ein validiertes PT_LOAD-Abbild. `bytes` enthaelt exakt p_filesz Bytes;
+/// der Mapper muss den Bereich bis p_memsz anschliessend mit Null auffuellen.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct UserLoadSegment {
+    /// Urspruenglicher ELF-Dateiversatz (p_offset).
+    pub file_offset: u64,
+    /// Urspruengliche virtuelle Ladeadresse (p_vaddr).
+    pub virtual_address: u64,
+    /// Dateigroesse (p_filesz).
+    pub file_size: u64,
+    /// Speicherbedarf einschliesslich BSS (p_memsz).
+    pub memory_size: u64,
+    /// ELF PF_R/PF_W/PF_X-Bits; keine bereits abgeleiteten PTE-Flags.
+    pub flags: u32,
+    /// ELF Alignment (p_align).
+    pub alignment: u64,
+    /// Unveraenderte Dateibytes des Segments.
+    pub bytes: Vec<u8>,
+}
+
+/// Loadable user image. `code` and `data` remain compatibility projections
+/// for existing manager/tests; `segments` is the authoritative ELF contract.
 #[derive(Clone, Debug)]
 pub struct UserBinary {
     /// Einsprungadresse.
     pub entry_point: u64,
-    /// Maschinenbefehle.
+    /// Kompatibilitaetsprojektion des ersten ausfuehrbaren Segments.
     pub code: Vec<u8>,
-    /// Vorbelegte Daten.
+    /// Kompatibilitaetsprojektion des ersten beschreibbaren Datensegments inkl. BSS.
     pub data: Vec<u8>,
+    /// Alle PT_LOAD-Segmente mit ihren urspruenglichen Adressen und Rechten.
+    pub segments: Vec<UserLoadSegment>,
     /// Anzeigename.
     pub name: String,
 }
@@ -199,19 +222,25 @@ pub struct UserBinary {
 impl UserBinary {
     /// Create a minimal "hello world" binary (just a HLT instruction)
     pub fn hello_world() -> Self {
-        Self {
-            entry_point: 0x00400000,
-            code: vec![0xF4], // HLT instruction
-            data: vec![],
-            name: "hello".to_string(),
-        }
+        Self::from_bytes("hello", vec![0xF4], 0x00400000)
     }
-    /// Create a binary from raw bytes
+    /// Create a binary from raw bytes. This compatibility constructor models
+    /// one RX segment at the supplied virtual address.
     pub fn from_bytes(name: &str, code: Vec<u8>, entry: u64) -> Self {
+        let segment = UserLoadSegment {
+            file_offset: 0,
+            virtual_address: entry,
+            file_size: code.len() as u64,
+            memory_size: code.len() as u64,
+            flags: 0x5, // PF_R | PF_X
+            alignment: 1,
+            bytes: code.clone(),
+        };
         Self {
             entry_point: entry,
             code,
             data: vec![],
+            segments: vec![segment],
             name: name.to_string(),
         }
     }
