@@ -95,6 +95,14 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
         device.write(request, source).map_err(BlockManagerError::Io)
     }
 
+    /// Wartet auf die dauerhafte Speicherung aller vorherigen Schreibauftraege.
+    pub fn flush(&mut self, id: BlockDeviceId) -> Result<(), BlockManagerError> {
+        let (_, device) = self.devices.iter_mut()
+            .find(|(existing, _)| *existing == id)
+            .ok_or(BlockManagerError::Missing)?;
+        device.flush().map_err(BlockManagerError::Io)
+    }
+
     /// Alle vergebenen Kennungen.
     pub fn ids(&self) -> impl Iterator<Item = BlockDeviceId> + '_ {
         self.devices.iter().map(|(id, _)| *id)
