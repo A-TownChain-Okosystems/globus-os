@@ -205,15 +205,18 @@ impl AddressSpace {
     ) -> Result<(), crate::userspace::UserspaceError> {
         let mut recorder = RecordingAllocator::new(allocator);
         let mut mapper = self.mapper(physical_memory_offset);
-        crate::userspace::map_user_binary(
+        let result = crate::userspace::map_user_binary(
             &mut mapper,
             &mut recorder,
             physical_memory_offset,
             binary,
             layout,
-        )?;
+        );
+        // Auch bei einem Teilfehler gehoeren bereits angeforderte Daten- und
+        // Seitentabellen-Frames zu diesem Adressraum. Der Aufrufer kann den
+        // unvollstaendigen Raum danach als Ganzes beim Reclaimer anmelden.
         self.owned.extend(recorder.into_frames());
-        Ok(())
+        result
     }
 
     /// Frame der obersten Seitentabelle dieses Adressraums.
