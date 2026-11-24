@@ -222,13 +222,16 @@ impl MultiAccountIdentityService {
         let user_id = entry.identity.profile.user_id.clone();
         let mut account = IdentityService::new();
         account.load_record(entry.identity.clone())?;
-        let result = account.login(credential, now_unix, ttl_seconds).map_err(|error| {
-            match error {
-                IdentityServiceError::InvalidCredentials
-                | IdentityServiceError::NotRegistered => MultiAccountError::AuthenticationFailed,
-                other => MultiAccountError::Identity(other),
-            }
-        })?;
+        let result =
+            account
+                .login(credential, now_unix, ttl_seconds)
+                .map_err(|error| match error {
+                    IdentityServiceError::InvalidCredentials
+                    | IdentityServiceError::NotRegistered => {
+                        MultiAccountError::AuthenticationFailed
+                    }
+                    other => MultiAccountError::Identity(other),
+                })?;
         self.accounts.insert(user_id.as_str().to_owned(), account);
         Ok(result)
     }
@@ -260,8 +263,9 @@ impl MultiAccountIdentityService {
         account
             .verify_current_credential(current_credential)
             .map_err(|error| match error {
-                IdentityServiceError::InvalidCredentials
-                | IdentityServiceError::NotRegistered => MultiAccountError::AuthenticationFailed,
+                IdentityServiceError::InvalidCredentials | IdentityServiceError::NotRegistered => {
+                    MultiAccountError::AuthenticationFailed
+                }
                 other => MultiAccountError::Identity(other),
             })?;
         account.change_credential(new_credential)?;
@@ -296,8 +300,9 @@ impl MultiAccountIdentityService {
         account
             .verify_current_credential(current_credential)
             .map_err(|error| match error {
-                IdentityServiceError::InvalidCredentials
-                | IdentityServiceError::NotRegistered => MultiAccountError::AuthenticationFailed,
+                IdentityServiceError::InvalidCredentials | IdentityServiceError::NotRegistered => {
+                    MultiAccountError::AuthenticationFailed
+                }
                 other => MultiAccountError::Identity(other),
             })?;
         let generation = repository.remove_account(expected_generation, username)?;
