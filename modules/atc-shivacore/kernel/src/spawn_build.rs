@@ -46,6 +46,25 @@ fn kernel_root() -> Option<PhysFrame<Size4KiB>> {
 
 /// Ein gebauter, noch nicht gestarteter Adressraum.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// Gibt die Frames eines verworfenen Adressraums an den Reclaimer zurueck.
+///
+/// Reihenfolge der Starttransaktion und ihrer Ruecknahme:
+/// 1. `build_space` baut den Raum und registriert seine Frames unter `tag`.
+/// 2. `register_spawned_process` nimmt den Prozess in den Scheduler auf.
+/// 3. `session_authority::transfer` uebergibt die Sitzung an die neue PID.
+///
+/// Scheitert 2, ist nichts zu entfernen, aber der Raum muss weg: `abandon_space`.
+/// Scheitert 3, muss zuerst der Scheduler-Eintrag zurueckgenommen werden
+/// (`remove_process`), dann `abandon_space`. Umgekehrt bliebe ein Prozess ohne
+/// Frames im Scheduler stehen — ein Eintrag, der nie laufen kann.
+///
+/// Die Frames werden nur eingereiht, nicht freigegeben: das Abraeumen macht der
+/// bestehende Reclaimer-Pfad mit `drain_with`, damit es genau einen Ort gibt,
+/// an dem Frames tatsaechlich zurueckgehen.
+pub fn abandon_space(tag: u64) -> usize {
+    shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(tag as u32))
+}
+
 pub struct BuiltSpace {
     /// Physische Adresse der Wurzel (der Wert fuer CR3).
     pub cr3: u64,
