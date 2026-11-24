@@ -14,8 +14,8 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 use core::sync::atomic::{AtomicU64, Ordering};
-use shivacore::spawn::{SpawnError, layout_for_slot};
-use shivacore::userspace::UserBinary;
+use shivacore::spawn::{SpawnError, SPAWN_MAX_SLOTS};
+use shivacore::userspace::{plan_user_memory, UserAddressSpace, UserBinary};
 use x86_64::structures::paging::{PhysFrame, Size4KiB};
 use x86_64::{PhysAddr, VirtAddr};
 
@@ -78,7 +78,10 @@ pub struct BuiltSpace {
 /// abbilden, alle Frames beim Reclaimer anmelden. Der Raum wird **nicht**
 /// installiert — das tut der Aufrufer, wenn er den Prozess startet.
 pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpace, SpawnError> {
-    let layout = layout_for_slot(slot).ok_or(SpawnError::NoFreeSlot)?;
+    // Slot remains a scheduler/resource-capacity index, never a virtual-address selector.
+    if slot >= SPAWN_MAX_SLOTS { return Err(SpawnError::NoFreeSlot); }
+    let memory_layout = plan_user_memory(binary).map_err(|_| SpawnError::MapFailed)?;
+    let layout = UserAddressSpace::from_memory_layout(memory_layout);
     let offset = phys_offset().ok_or(SpawnError::NotReady)?;
     let root = kernel_root().ok_or(SpawnError::NotReady)?;
     let mut guard = crate::memory::FRAME_ALLOCATOR.lock();
