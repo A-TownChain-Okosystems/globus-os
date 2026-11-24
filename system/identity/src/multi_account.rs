@@ -9,10 +9,11 @@
 use std::collections::HashMap;
 
 use super::{
-    AccountStateEntry, AccountStateError, AccountStateRepository, AccountUsername, BlobStore,
-    IdentityKeyProvider, IdentityService, IdentityServiceError, IdentitySession, LoginResult,
-    RegistrationResult, UserId, WalletCreation,
+    AccountLifecycleError, AccountStateEntry, AccountStateError, AccountStateRepository,
+    AccountUsername, BlobStore, IdentityKeyProvider, IdentityService, IdentityServiceError,
+    IdentitySession, LoginResult, RecoveryConfirmation, RegistrationResult, UserId,
 };
+use zeroize::Zeroizing;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 /// Fehler der Mehrkonten-Koordination.
@@ -23,10 +24,20 @@ pub enum MultiAccountError {
     AccountNotFound,
     /// Benutzername oder Zugangsdaten sind ungueltig; keine Kontoexistenz preisgeben.
     AuthenticationFailed,
+    /// Die Recovery-Phrase wurde noch nicht bestaetigt.
+    RecoveryConfirmationRequired,
+    /// Die Recovery-Phrase oder die ausgewaehlten Bestaetigungswoerter sind ungueltig.
+    RecoveryConfirmation(AccountLifecycleError),
     /// Der Identitaetsdienst hat einen Fehler gemeldet.
     Identity(IdentityServiceError),
     /// Das kanonische verschluesselte Account-Repository hat abgelehnt.
     AccountState(AccountStateError),
+}
+
+impl From<AccountLifecycleError> for MultiAccountError {
+    fn from(value: AccountLifecycleError) -> Self {
+        Self::RecoveryConfirmation(value)
+    }
 }
 
 impl From<IdentityServiceError> for MultiAccountError {
@@ -38,6 +49,38 @@ impl From<IdentityServiceError> for MultiAccountError {
 impl From<AccountStateError> for MultiAccountError {
     fn from(value: AccountStateError) -> Self {
         Self::AccountState(value)
+    }
+}
+
+/// A prepared account registration that is not active or persisted until recovery confirmation.
+pub struct PendingAccountRegistration {
+    username: AccountUsername,
+    user_id: UserId,
+    identity: super::IdentityRecord,
+    account: IdentityService,
+    registration: RegistrationResult,
+    recovery_phrase: Zeroizing<String>,
+    confirmation: RecoveryConfirmation,
+    confirmed: bool,
+}
+
+impl PendingAccountRegistration {
+    /// Recovery phrase that the trusted local UI must display before confirmation.
+    pub fn recovery_phrase(&self) -> &str {
+        self.recovery_phrase.as_str()
+    }
+
+    /// Three zero-based word positions; the UI should display one-based positions.
+    pub fn confirmation_positions(&self) -> [usize; 3] {
+        self.confirmation.positions()
+    }
+
+    /// Verify the selected recovery words. A failed attempt leaves this pending
+    /// registration intact so the user can retry without generating a new wallet.
+    pub fn confirm_recovery(&mut self, answers: [&str; 3]) -> Result<(), MultiAccountError> {
+        self.confirmation.verify(answers)?;
+        self.confirmed = true;
+        Ok(())
     }
 }
 
@@ -122,13 +165,14 @@ impl MultiAccountIdentityService {
         Ok(result)
     }
 
-    /// Register an account and persist its username, profile, and credential in one
-    /// generation-bound encrypted repository commit. The in-memory coordinator is updated
-    /// only after the durable commit succeeds.
+    /// Prepare registration without activating or persisting the account.
+    ///
+    /// The caller must display `pending.recovery_phrase()`, collect the selected words,
+    /// and call `confirm_recovery` before committing. Dropping the pending value aborts
+    /// registration; no durable account record or username mapping is written.
     #[allow(clippy::too_many_arguments)]
-    pub fn register_persisted<B, K>(
-        &mut self,
-        repository: &mut AccountStateRepository<B, K>,
+    pub fn prepare_registration_persisted(
+        &self,
         username: AccountUsername,
         user_id: UserId,
         display_name: impl Into<String>,
@@ -136,12 +180,10 @@ impl MultiAccountIdentityService {
         chain_id: u64,
         network: impl Into<String>,
         key_version: u16,
-    ) -> Result<(RegistrationResult, WalletCreation), MultiAccountError>
-    where
-        B: BlobStore,
-        K: IdentityKeyProvider,
-    {
-        let expected_generation = repository.generation()?;
+    ) -> Result<PendingAccountRegistration, MultiAccountError> {
+        if self.accounts.contains_key(user_id.as_str()) {
+            return Err(MultiAccountError::DuplicateAccount);
+        }
         let mut account = IdentityService::new();
         let (registration, wallet) = account.register(
             user_id.clone(),
@@ -151,20 +193,25 @@ impl MultiAccountIdentityService {
             network,
             key_version,
         )?;
+        let recovery_phrase = Zeroizing::new(wallet.recovery_phrase().to_owned());
+        let confirmation = RecoveryConfirmation::new(&recovery_phrase)?;
         let identity = account.snapshot()?;
-        repository.insert_account(
-            expected_generation,
-            AccountStateEntry { username, identity },
-        )?;
-        self.accounts.insert(user_id.as_str().to_owned(), account);
-        Ok((registration, wallet))
+        Ok(PendingAccountRegistration {
+            username,
+            user_id,
+            identity,
+            account,
+            registration,
+            recovery_phrase,
+            confirmation,
+            confirmed: false,
+        })
     }
 
-    /// Restore and persist an account through the same canonical repository transaction.
+    /// Prepare recovery from an existing 24-word phrase without activating the account.
     #[allow(clippy::too_many_arguments)]
-    pub fn restore_persisted<B, K>(
-        &mut self,
-        repository: &mut AccountStateRepository<B, K>,
+    pub fn prepare_restore_persisted(
+        &self,
         username: AccountUsername,
         user_id: UserId,
         display_name: impl Into<String>,
@@ -173,12 +220,10 @@ impl MultiAccountIdentityService {
         chain_id: u64,
         network: impl Into<String>,
         key_version: u16,
-    ) -> Result<RegistrationResult, MultiAccountError>
-    where
-        B: BlobStore,
-        K: IdentityKeyProvider,
-    {
-        let expected_generation = repository.generation()?;
+    ) -> Result<PendingAccountRegistration, MultiAccountError> {
+        if self.accounts.contains_key(user_id.as_str()) {
+            return Err(MultiAccountError::DuplicateAccount);
+        }
         let mut account = IdentityService::new();
         let registration = account.restore(
             user_id.clone(),
@@ -189,13 +234,50 @@ impl MultiAccountIdentityService {
             network,
             key_version,
         )?;
+        let recovery_phrase = Zeroizing::new(phrase.to_owned());
+        let confirmation = RecoveryConfirmation::new(&recovery_phrase)?;
         let identity = account.snapshot()?;
+        Ok(PendingAccountRegistration {
+            username,
+            user_id,
+            identity,
+            account,
+            registration,
+            recovery_phrase,
+            confirmation,
+            confirmed: false,
+        })
+    }
+
+    /// Commit a prepared account only after the recovery phrase challenge succeeded.
+    /// The complete account record and username mapping enter the canonical encrypted
+    /// repository in one generation-bound transaction.
+    pub fn commit_registration_persisted<B, K>(
+        &mut self,
+        repository: &mut AccountStateRepository<B, K>,
+        pending: PendingAccountRegistration,
+    ) -> Result<RegistrationResult, MultiAccountError>
+    where
+        B: BlobStore,
+        K: IdentityKeyProvider,
+    {
+        if !pending.confirmed {
+            return Err(MultiAccountError::RecoveryConfirmationRequired);
+        }
+        if self.accounts.contains_key(pending.user_id.as_str()) {
+            return Err(MultiAccountError::DuplicateAccount);
+        }
+        let expected_generation = repository.generation()?;
         repository.insert_account(
             expected_generation,
-            AccountStateEntry { username, identity },
+            AccountStateEntry {
+                username: pending.username,
+                identity: pending.identity,
+            },
         )?;
-        self.accounts.insert(user_id.as_str().to_owned(), account);
-        Ok(registration)
+        self.accounts
+            .insert(pending.user_id.as_str().to_owned(), pending.account);
+        Ok(pending.registration)
     }
 
     /// Authenticate by canonical username using the durable account repository.
@@ -364,6 +446,16 @@ mod tests {
         }
     }
 
+    fn correct_recovery_answers(pending: &PendingAccountRegistration) -> [String; 3] {
+        let words: Vec<&str> = pending.recovery_phrase().split_whitespace().collect();
+        let positions = pending.confirmation_positions();
+        [
+            words[positions[0]].to_owned(),
+            words[positions[1]].to_owned(),
+            words[positions[2]].to_owned(),
+        ]
+    }
+
     #[test]
     fn persisted_lifecycle_uses_one_encrypted_repository() {
         let encrypted = super::super::EncryptedBlobStore::new(
@@ -374,9 +466,8 @@ mod tests {
         let mut service = MultiAccountIdentityService::new();
         let alice_id = UserId::new("user-alice").unwrap();
         let bob_id = UserId::new("user-bob").unwrap();
-        service
-            .register_persisted(
-                &mut repository,
+        let mut pending_alice = service
+            .prepare_registration_persisted(
                 AccountUsername::parse("alice").unwrap(),
                 alice_id.clone(),
                 "Alice",
@@ -386,9 +477,39 @@ mod tests {
                 1,
             )
             .unwrap();
+        assert!(repository.load_state().unwrap().is_none());
+        assert_eq!(
+            service.commit_registration_persisted(&mut repository, pending_alice),
+            Err(MultiAccountError::RecoveryConfirmationRequired)
+        );
+        // Failed confirmation must not consume or persist the pending account.
+        pending_alice = service
+            .prepare_registration_persisted(
+                AccountUsername::parse("alice").unwrap(),
+                alice_id.clone(),
+                "Alice",
+                b"alice-secret",
+                658467,
+                "devnet",
+                1,
+            )
+            .unwrap();
+        assert_eq!(
+            pending_alice.confirm_recovery(["wrong", "wrong", "wrong"]),
+            Err(MultiAccountError::RecoveryConfirmation(
+                AccountLifecycleError::InvalidConfirmation
+            ))
+        );
+        let alice_answers = correct_recovery_answers(&pending_alice);
+        pending_alice
+            .confirm_recovery([&alice_answers[0], &alice_answers[1], &alice_answers[2]])
+            .unwrap();
         service
-            .register_persisted(
-                &mut repository,
+            .commit_registration_persisted(&mut repository, pending_alice)
+            .unwrap();
+
+        let mut pending_bob = service
+            .prepare_registration_persisted(
                 AccountUsername::parse("bob").unwrap(),
                 bob_id.clone(),
                 "Bob",
@@ -397,6 +518,13 @@ mod tests {
                 "devnet",
                 1,
             )
+            .unwrap();
+        let bob_answers = correct_recovery_answers(&pending_bob);
+        pending_bob
+            .confirm_recovery([&bob_answers[0], &bob_answers[1], &bob_answers[2]])
+            .unwrap();
+        service
+            .commit_registration_persisted(&mut repository, pending_bob)
             .unwrap();
         assert_eq!(repository.load_state().unwrap().unwrap().len(), 2);
 
