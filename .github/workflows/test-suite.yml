@@ -33,6 +33,14 @@ jobs:
               echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
               continue
             fi
+            if [ "$d" = "./modules/atc-shivacore/greeter" ] || [ "$d" = "./modules/atc-shivacore/init_program" ]; then
+              echo "=== cargo check (bare-metal binary, no Rust test harness) in $d"
+              if ! (cd "$d" && cargo check --release --target x86_64-unknown-none --quiet); then
+                echo "cargo check FAILED in $d"
+                FAIL=1
+              fi
+              continue
+            fi
             echo "=== cargo test in $d"
             if ! (cd "$d" && cargo test --quiet); then
               echo "cargo test FAILED in $d"
