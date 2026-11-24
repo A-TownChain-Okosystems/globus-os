@@ -69,6 +69,8 @@ pub struct UserAddressSpace {
     pub heap_base: u64,
     /// Groesse des Haufens.
     pub heap_size: u64,
+    /// Autoritatives ELF-Speicherlayout; None bedeutet Legacy-Fenster.
+    pub memory_layout: Option<UserMemoryLayout>,
 }
 
 impl Default for UserAddressSpace {
@@ -82,6 +84,7 @@ impl Default for UserAddressSpace {
             stack_size: 0x00010000, // 64 KiB stack
             heap_base: 0x00600000,  // 6 MiB
             heap_size: 0x00200000,  // 2 MiB heap
+            memory_layout: None,
         }
     }
 }
@@ -91,44 +94,48 @@ impl UserAddressSpace {
     pub fn contains(&self, addr: u64) -> bool {
         self.in_code(addr) || self.in_data(addr) || self.in_stack(addr) || self.in_heap(addr)
     }
-    /// True innerhalb des Codesegments; untere Grenze einbegriffen, obere nicht.
+    /// True innerhalb eines ausfuehrbaren ELF-Segments oder des Legacy-Codefensters.
     pub fn in_code(&self, addr: u64) -> bool {
-        addr >= self.code_base && addr < self.code_base + self.code_size
+        if let Some(layout) = &self.memory_layout {
+            return layout.segments.iter().any(|s| s.flags & 0x1 != 0 && addr >= s.virtual_start && addr < s.virtual_end);
+        }
+        addr >= self.code_base && addr < self.code_base.saturating_add(self.code_size)
     }
-    /// True innerhalb des Datensegments; untere Grenze einbegriffen, obere nicht.
+    /// True innerhalb eines nicht ausfuehrbaren ELF-Segments oder des Legacy-Datenfensters.
     pub fn in_data(&self, addr: u64) -> bool {
-        addr >= self.data_base && addr < self.data_base + self.data_size
+        if let Some(layout) = &self.memory_layout {
+            return layout.segments.iter().any(|s| s.flags & 0x1 == 0 && addr >= s.virtual_start && addr < s.virtual_end);
+        }
+        addr >= self.data_base && addr < self.data_base.saturating_add(self.data_size)
     }
-    /// True innerhalb des Stapels; obere Grenze einbegriffen, untere nicht, weil er nach unten waechst.
+    /// True innerhalb des Stapels; obere Grenze einbegriffen, untere nicht.
     pub fn in_stack(&self, addr: u64) -> bool {
-        addr > self.stack_base - self.stack_size && addr <= self.stack_base
+        addr > self.stack_base.saturating_sub(self.stack_size) && addr <= self.stack_base
     }
-    /// True innerhalb des Haufens; untere Grenze einbegriffen, obere nicht.
+    /// True innerhalb des reservierten Haufens.
     pub fn in_heap(&self, addr: u64) -> bool {
-        addr >= self.heap_base && addr < self.heap_base + self.heap_size
+        addr >= self.heap_base && addr < self.heap_base.saturating_add(self.heap_size)
     }
     /// Die tatsaechlich abgebildeten Regionen als [start, ende)-Paare.
     ///
     /// Der Adressraum-Bau braucht sie, um zu entscheiden, welche 1-GiB-Fenster
     /// er NICHT erben darf. Wichtig ist der Stack: er liegt standardmaessig
     /// knapp unter 2 GiB und damit nicht dort, wo man Nutzerseiten vermutet.
-    pub fn mapped_regions(&self) -> [(u64, u64); 4] {
+    pub fn mapped_regions(&self) -> Vec<(u64, u64)> {
+        if let Some(layout) = &self.memory_layout {
+            let mut regions = Vec::with_capacity(layout.segments.len() + 2);
+            regions.extend(layout.segments.iter().map(|s| (s.page_start, s.page_end)));
+            regions.push((layout.heap_base, layout.heap_base.saturating_add(layout.heap_size)));
+            regions.push((layout.stack_base.saturating_sub(layout.stack_size), layout.stack_base));
+            return regions;
+        }
         let stack_pages = self.stack_size.div_ceil(0x1000);
-        let stack_start = self.stack_base - stack_pages * 0x1000;
-        [
-            (
-                self.code_base,
-                self.code_base.saturating_add(self.code_size),
-            ),
-            (
-                self.data_base,
-                self.data_base.saturating_add(self.data_size),
-            ),
+        let stack_start = self.stack_base.saturating_sub(stack_pages * 0x1000);
+        alloc::vec![
+            (self.code_base, self.code_base.saturating_add(self.code_size)),
+            (self.data_base, self.data_base.saturating_add(self.data_size)),
             (stack_start, self.stack_base),
-            (
-                self.heap_base,
-                self.heap_base.saturating_add(self.heap_size),
-            ),
+            (self.heap_base, self.heap_base.saturating_add(self.heap_size)),
         ]
     }
 
@@ -152,6 +159,11 @@ impl UserAddressSpace {
             return false;
         };
         let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
+        if let Some(layout) = &self.memory_layout {
+            return layout.segments.iter().any(|s| s.flags & 0x2 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
+                || in_region(layout.heap_base, layout.heap_size)
+                || in_region(layout.stack_base.saturating_sub(layout.stack_size), layout.stack_size);
+        }
         in_region(self.data_base, self.data_size)
             || in_region(self.heap_base, self.heap_size)
             || (ptr >= self.stack_base.saturating_sub(self.stack_size) && end <= self.stack_base)
@@ -172,6 +184,11 @@ impl UserAddressSpace {
             return false;
         };
         let in_region = |base: u64, size: u64| ptr >= base && end <= base.saturating_add(size);
+        if let Some(layout) = &self.memory_layout {
+            return layout.segments.iter().any(|s| s.flags & 0x4 != 0 && ptr >= s.virtual_start && end <= s.virtual_end)
+                || in_region(layout.heap_base, layout.heap_size)
+                || in_region(layout.stack_base.saturating_sub(layout.stack_size), layout.stack_size);
+        }
         in_region(self.code_base, self.code_size)
             || in_region(self.data_base, self.data_size)
             || in_region(self.heap_base, self.heap_size)
@@ -398,6 +415,23 @@ pub fn plan_user_memory(binary: &UserBinary) -> Result<UserMemoryLayout, Userspa
 // ═══════════════════════════════════════════════════════════════════════════════
 
 impl UserAddressSpace {
+    /// Builds the compatibility view and syscall-validation view from one ELF layout.
+    pub fn from_memory_layout(layout: UserMemoryLayout) -> Self {
+        let code = layout.segments.iter().find(|s| s.flags & 0x1 != 0);
+        let data = layout.segments.iter().find(|s| s.flags & 0x2 != 0 && s.flags & 0x1 == 0);
+        Self {
+            code_base: code.map_or(0, |s| s.virtual_start),
+            code_size: code.map_or(0, |s| s.virtual_end.saturating_sub(s.virtual_start)),
+            data_base: data.map_or(0, |s| s.virtual_start),
+            data_size: data.map_or(0, |s| s.virtual_end.saturating_sub(s.virtual_start)),
+            stack_base: layout.stack_base,
+            stack_size: layout.stack_size,
+            heap_base: layout.heap_base,
+            heap_size: layout.heap_size,
+            memory_layout: Some(layout),
+        }
+    }
+
     /// Passt ein Datenanteil dieser Groesse in das Datenfenster?
     ///
     /// Reine Rechnung, damit die Grenze ohne Paging pruefbar ist: `data_size`
