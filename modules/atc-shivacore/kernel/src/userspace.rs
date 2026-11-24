@@ -92,6 +92,10 @@ impl Default for UserAddressSpace {
 impl UserAddressSpace {
     /// Check if an address falls within any user region
     pub fn contains(&self, addr: u64) -> bool {
+        if let Some(layout) = &self.memory_layout {
+            return layout.segments.iter().any(|s| addr >= s.virtual_start && addr < s.virtual_end)
+                || self.in_stack(addr) || self.in_heap(addr);
+        }
         self.in_code(addr) || self.in_data(addr) || self.in_stack(addr) || self.in_heap(addr)
     }
     /// True innerhalb eines ausfuehrbaren ELF-Segments oder des Legacy-Codefensters.
