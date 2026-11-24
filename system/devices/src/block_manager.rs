@@ -97,7 +97,9 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
 
     /// Leitet die Abschluss- und Persistenzbarriere an das Geraet weiter.
     pub fn flush(&mut self, id: BlockDeviceId) -> Result<(), BlockManagerError> {
-        let (_, device) = self.devices.iter_mut()
+        let (_, device) = self
+            .devices
+            .iter_mut()
             .find(|(existing, _)| *existing == id)
             .ok_or(BlockManagerError::Missing)?;
         device.flush().map_err(BlockManagerError::Io)
