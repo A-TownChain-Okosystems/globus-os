@@ -145,10 +145,7 @@ impl IdentityService {
     /// Verify the current account credential without creating or extending a session.
     ///
     /// Sensitive account mutations must call this before changing durable state.
-    pub fn verify_current_credential(
-        &self,
-        credential: &[u8],
-    ) -> Result<(), IdentityServiceError> {
+    pub fn verify_current_credential(&self, credential: &[u8]) -> Result<(), IdentityServiceError> {
         if self.profile.is_none() {
             return Err(IdentityServiceError::NotRegistered);
         }
