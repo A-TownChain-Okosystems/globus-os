@@ -544,6 +544,10 @@ unsafe fn map_user_memory_layout(
         Ok(())
     }
 
+    // UserMemoryLayout is public data; never trust a caller-constructed or mutated plan.
+    if plan_user_memory(binary)? != *layout {
+        return Err(UserspaceError::InvalidBinary);
+    }
     if layout.segments.is_empty() || !layout.segments.iter().any(|s| {
         s.flags & 0x1 != 0 && binary.entry_point >= s.virtual_start && binary.entry_point < s.virtual_end
     }) { return Err(UserspaceError::InvalidBinary); }
