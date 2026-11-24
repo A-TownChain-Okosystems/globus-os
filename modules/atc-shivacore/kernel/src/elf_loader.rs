@@ -381,9 +381,6 @@ pub fn user_binary_from_elf(name: &str, elf: &[u8]) -> Result<UserBinary, ElfLoa
     if let Some(segment) = parser.data_segment() {
         let bytes = parser.segment_data(segment)?;
         let bss = segment.p_memsz.saturating_sub(segment.p_filesz);
-        // Erst rechnen, dann anlegen: die Grenze gilt fuer die Summe, sonst
-        // fordert eine grosse p_memsz den Puffer, bevor irgendetwas abgebildet
-        // ist. `usize`-Ueberlauf wird dabei als "zu gross" behandelt.
         let total = (bytes.len() as u64)
             .checked_add(bss)
             .and_then(|summe| usize::try_from(summe).ok())
@@ -396,10 +393,32 @@ pub fn user_binary_from_elf(name: &str, elf: &[u8]) -> Result<UserBinary, ElfLoa
             data.resize(total, 0);
         }
     }
+
+    // Einzige ELF-zu-UserBinary-Konvertierung: kein PT_LOAD darf durch die
+    // bisherige Code/Data-Projektion verloren gehen. Die Segmentbytes bleiben
+    // dateigenau; BSS wird ueber memory_size beschrieben und spaeter beim
+    // Mapping genullt.
+    let mut segments = Vec::new();
+    for segment in parser.loadable_segments() {
+        let bytes = parser.segment_data(segment)?.to_vec();
+        if bytes.len() as u64 != segment.p_filesz {
+            return Err(ElfLoadError::Parse(ElfParseError::InvalidSegment));
+        }
+        segments.push(crate::userspace::UserLoadSegment {
+            file_offset: segment.p_offset,
+            virtual_address: segment.p_vaddr,
+            file_size: segment.p_filesz,
+            memory_size: segment.p_memsz,
+            flags: segment.p_flags,
+            alignment: segment.p_align,
+            bytes,
+        });
+    }
     Ok(UserBinary {
         entry_point: parser.entry_point(),
         code,
         data,
+        segments,
         name: name.to_string(),
     })
 }
@@ -410,25 +429,10 @@ pub struct ElfLoader;
 impl ElfLoader {
     /// Load an ELF64 binary into a UserspaceManager, returns PID
     pub fn load_elf(mgr: &mut UserspaceManager, elf_data: &[u8]) -> Result<Pid, ElfLoadError> {
-        let parser = ElfParser::parse(elf_data)?;
-
-        // Extract code segment
-        let code_seg = parser.code_segment().ok_or(ElfLoadError::NoCodeSegment)?;
-        let code_bytes = parser.segment_data(code_seg)?;
-
-        // Extract data segment (optional)
-        let data_bytes = match parser.data_segment() {
-            Some(seg) => parser.segment_data(seg)?.to_vec(),
-            None => vec![],
-        };
-
-        let binary = UserBinary {
-            entry_point: parser.entry_point(),
-            code: code_bytes.to_vec(),
-            data: data_bytes,
-            name: "elf".to_string(),
-        };
-
+        // Der Verwaltungs-Loader und der echte Boot-/Spawn-Ladepfad muessen
+        // denselben PT_LOAD-Vertrag verwenden. Keine zweite Extraktion, die
+        // BSS, Segmentadressen oder Rechte stillschweigend verliert.
+        let binary = user_binary_from_elf("elf", elf_data)?;
         mgr.load_binary(binary).map_err(ElfLoadError::Userspace)
     }
 
@@ -1545,6 +1549,16 @@ mod tests {
         let binary = user_binary_from_elf("probe", &elf).expect("Abbild nicht baubar");
         assert_eq!(binary.entry_point, 0x01C0_0000);
         assert_eq!(binary.code, alloc::vec![0x90, 0x90, 0xF4]);
+        assert_eq!(binary.segments.len(), 2, "beide PT_LOAD-Segmente muessen erhalten bleiben");
+        assert_eq!(binary.segments[0].virtual_address, 0x01C0_0000);
+        assert_eq!(binary.segments[0].flags, PF_R | PF_X);
+        assert_eq!(binary.segments[0].file_size, 3);
+        assert_eq!(binary.segments[0].memory_size, 3);
+        assert_eq!(binary.segments[1].virtual_address, 0x01D0_0000);
+        assert_eq!(binary.segments[1].flags, PF_R | PF_W);
+        assert_eq!(binary.segments[1].file_size, 4);
+        assert_eq!(binary.segments[1].memory_size, 16);
+        assert_eq!(binary.segments[1].bytes, b"ABCD");
         assert_eq!(binary.data.len(), 16, "Daten plus bss-Auffuellung");
         assert_eq!(&binary.data[..4], b"ABCD");
         assert!(
