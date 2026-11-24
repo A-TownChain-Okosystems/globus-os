@@ -79,6 +79,11 @@ impl<D: BlockDevice> BlockCache<D> {
         self.cached_lba = Some(lba);
         Ok(())
     }
+
+    /// Leitet die Persistenzbarriere an das zugrunde liegende Geraet weiter.
+    pub fn flush(&mut self) -> Result<(), CacheError> {
+        self.device.flush().map_err(CacheError::Block)
+    }
 }
 
 #[cfg(test)]
