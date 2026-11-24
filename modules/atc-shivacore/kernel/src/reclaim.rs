@@ -39,7 +39,9 @@ use crate::security::{AuditResult, record};
 
 /// Ein Auftrag: die Frames eines Adressraums, der niemandem mehr gehoert.
 struct PendingRelease {
-    pid: Pid,
+    /// Prozesszuordnung; `None` kennzeichnet Frames aus einer fehlgeschlagenen
+    /// Adressraum-Erzeugung, bevor eine PID existiert.
+    pid: Option<Pid>,
     root: u64,
     frames: Vec<PhysFrame>,
 }
@@ -127,16 +129,47 @@ impl FrameReclaimer {
         let count = frames.len();
         {
             let mut pending = self.pending.lock();
-            if pending.iter().any(|p| p.pid == pid) {
+            if pending.iter().any(|p| p.pid == Some(pid)) {
                 // Schon vorgemerkt: Registry bleibt geleert, kein zweiter Auftrag.
                 return 0;
             }
-            pending.push(PendingRelease { pid, root, frames });
+            pending.push(PendingRelease {
+                pid: Some(pid),
+                root,
+                frames,
+            });
         }
         record(
             "kernel",
             "memory.reclaim_queued",
             &alloc::format!("pid={:?} frames={} root={:#x}", pid, count, root),
+            AuditResult::Allowed,
+        );
+        count
+    }
+
+
+    /// Haengt Frames eines fehlgeschlagenen Adressraum-Aufbaus ohne PID an.
+    ///
+    /// Die Seitentabellenwurzel wurde noch nie installiert; der normale
+    /// Reclaimer prueft trotzdem CR3, CPU-Anzahl und Freigabereihenfolge.
+    /// Orphans besitzen absichtlich keine PID, damit sie keine Prozess-
+    /// Registrierung ueberschreiben oder mit einer echten PID kollidieren.
+    pub fn queue_orphan_frames(&self, frames: Vec<PhysFrame>) -> usize {
+        if frames.is_empty() {
+            return 0;
+        }
+        let root = frames[0].start_address().as_u64();
+        let count = frames.len();
+        self.pending.lock().push(PendingRelease {
+            pid: None,
+            root,
+            frames,
+        });
+        record(
+            "kernel",
+            "memory.reclaim_orphan_queued",
+            &alloc::format!("frames={} root={:#x}", count, root),
             AuditResult::Allowed,
         );
         count
@@ -234,16 +267,17 @@ impl FrameReclaimer {
                 }
             }
             freed += released;
+            let report_pid = job.pid.map_or(u64::MAX, |pid| pid.0 as u64);
             self.last_report
                 .lock()
-                .push((job.pid.0 as u64, job.frames.len(), released, rejected));
+                .push((report_pid, job.frames.len(), released, rejected));
             self.freed_frames.fetch_add(released, Ordering::Relaxed);
             record(
                 "kernel",
                 "memory.reclaim",
                 &alloc::format!(
-                    "pid={:?} root={:#x} angemeldet={} freigegeben={} abgewiesen={}",
-                    job.pid,
+                    "pid={} root={:#x} angemeldet={} freigegeben={} abgewiesen={}",
+                    job.pid.map_or_else(|| "orphan".to_string(), |pid| alloc::format!("{:?}", pid)),
                     job.root,
                     job.frames.len(),
                     released,
