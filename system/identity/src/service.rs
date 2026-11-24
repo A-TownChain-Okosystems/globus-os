@@ -142,6 +142,23 @@ impl IdentityService {
         Ok(())
     }
 
+    /// Verify the current account credential without creating or extending a session.
+    ///
+    /// Sensitive account mutations must call this before changing durable state.
+    pub fn verify_current_credential(
+        &self,
+        credential: &[u8],
+    ) -> Result<(), IdentityServiceError> {
+        if self.profile.is_none() {
+            return Err(IdentityServiceError::NotRegistered);
+        }
+        let stored = self
+            .credential_hash
+            .as_deref()
+            .ok_or(IdentityServiceError::InvalidCredentials)?;
+        verify_credential(stored, credential)
+    }
+
     /// Export only durable identity state. Active sessions are intentionally excluded.
     pub fn snapshot(&self) -> Result<IdentityRecord, IdentityServiceError> {
         let profile = self
