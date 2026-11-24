@@ -208,6 +208,7 @@ impl<D: BlockDevice> PersistentFs<D> {
             .map_err(|_| FsError::Bitmap)?;
         Self::write_block(&mut device, layout.bitmap_start, &bitmap_block)?;
         Self::persist_root_inode(&mut device, layout, g.block_size as usize)?;
+        device.flush().map_err(|_| FsError::Io)?;
         Ok(Self {
             device,
             superblock: sb,
@@ -260,6 +261,7 @@ impl<D: BlockDevice> PersistentFs<D> {
     pub fn allocate_blocks(&mut self, count: u64) -> Result<u64, FsError> {
         let start = self.bitmap.allocate(count).map_err(|_| FsError::Bitmap)?;
         self.persist_bitmap()?;
+        self.device.flush().map_err(|_| FsError::Io)?;
         Ok(start)
     }
     /// Gibt Bloecke frei; Bereiche vor dem Datenbereich werden abgelehnt.
@@ -270,7 +272,8 @@ impl<D: BlockDevice> PersistentFs<D> {
         self.bitmap
             .release(start, count)
             .map_err(|_| FsError::Bitmap)?;
-        self.persist_bitmap()
+        self.persist_bitmap()?;
+        self.device.flush().map_err(|_| FsError::Io)
     }
 }
 
