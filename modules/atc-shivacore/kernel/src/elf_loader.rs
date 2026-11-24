@@ -110,10 +110,16 @@ impl core::fmt::Display for ElfParseError {
             ElfParseError::InvalidProgramHeaderSize => write!(f, "invalid ELF program header size"),
             ElfParseError::InvalidSegment => write!(f, "invalid ELF load segment"),
             ElfParseError::InvalidEntry => write!(f, "entry is outside executable load segments"),
-            ElfParseError::UnsupportedSegmentType => write!(f, "unsupported dynamic or interpreter segment"),
-            ElfParseError::UserAddressOutOfRange => write!(f, "load segment outside user address range"),
+            ElfParseError::UnsupportedSegmentType => {
+                write!(f, "unsupported dynamic or interpreter segment")
+            }
+            ElfParseError::UserAddressOutOfRange => {
+                write!(f, "load segment outside user address range")
+            }
             ElfParseError::OverlappingSegments => write!(f, "overlapping ELF load segments"),
-            ElfParseError::InvalidSegmentAlignment => write!(f, "invalid ELF segment alignment or flags"),
+            ElfParseError::InvalidSegmentAlignment => {
+                write!(f, "invalid ELF segment alignment or flags")
+            }
         }
     }
 }
@@ -290,7 +296,8 @@ impl<'a> ElfParser<'a> {
                 {
                     return Err(ElfParseError::InvalidSegmentAlignment);
                 }
-                let segment_end = phdr.p_vaddr
+                let segment_end = phdr
+                    .p_vaddr
                     .checked_add(phdr.p_memsz)
                     .ok_or(ElfParseError::InvalidSegment)?;
                 if phdr.p_memsz > 0
@@ -319,20 +326,34 @@ impl<'a> ElfParser<'a> {
         // Byteueberlappungen sind immer unzulaessig. Auf derselben 4-KiB-
         // Seite duerfen Segmente nur liegen, wenn ihre effektiven ELF-Rechte
         // identisch sind; andernfalls waere eine sichere PTE-Abbildung unklar.
-        let loads: Vec<&Elf64ProgramHeader> =
-            program_headers.iter().filter(|p| p.is_loadable() && p.p_memsz > 0).collect();
+        let loads: Vec<&Elf64ProgramHeader> = program_headers
+            .iter()
+            .filter(|p| p.is_loadable() && p.p_memsz > 0)
+            .collect();
         for i in 0..loads.len() {
             let a = loads[i];
-            let a_end = a.p_vaddr.checked_add(a.p_memsz).ok_or(ElfParseError::InvalidSegment)?;
+            let a_end = a
+                .p_vaddr
+                .checked_add(a.p_memsz)
+                .ok_or(ElfParseError::InvalidSegment)?;
             let a_page_start = a.p_vaddr & !0xFFF;
-            let a_page_end = a_end.checked_add(0xFFF).ok_or(ElfParseError::InvalidSegment)? & !0xFFF;
+            let a_page_end = a_end
+                .checked_add(0xFFF)
+                .ok_or(ElfParseError::InvalidSegment)?
+                & !0xFFF;
             for b in loads.iter().skip(i + 1) {
-                let b_end = b.p_vaddr.checked_add(b.p_memsz).ok_or(ElfParseError::InvalidSegment)?;
+                let b_end = b
+                    .p_vaddr
+                    .checked_add(b.p_memsz)
+                    .ok_or(ElfParseError::InvalidSegment)?;
                 if a.p_vaddr < b_end && b.p_vaddr < a_end {
                     return Err(ElfParseError::OverlappingSegments);
                 }
                 let b_page_start = b.p_vaddr & !0xFFF;
-                let b_page_end = b_end.checked_add(0xFFF).ok_or(ElfParseError::InvalidSegment)? & !0xFFF;
+                let b_page_end = b_end
+                    .checked_add(0xFFF)
+                    .ok_or(ElfParseError::InvalidSegment)?
+                    & !0xFFF;
                 if a_page_start < b_page_end
                     && b_page_start < a_page_end
                     && (a.p_flags & (PF_R | PF_W | PF_X)) != (b.p_flags & (PF_R | PF_W | PF_X))
