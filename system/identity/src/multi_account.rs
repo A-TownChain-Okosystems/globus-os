@@ -281,7 +281,7 @@ impl MultiAccountIdentityService {
                 identity: pending.identity.clone(),
             },
         )?;
-        let account = core::mem::replace(&mut pending.account, IdentityService::new());
+        let account = core::mem::take(&mut pending.account);
         self.accounts
             .insert(pending.user_id.as_str().to_owned(), account);
         pending.committed = true;
