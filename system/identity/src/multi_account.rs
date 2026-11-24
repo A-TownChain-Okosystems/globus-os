@@ -248,6 +248,7 @@ impl MultiAccountIdentityService {
             recovery_phrase,
             confirmation,
             confirmed: false,
+            committed: false,
         })
     }
 
@@ -490,17 +491,6 @@ mod tests {
         );
         // An unconfirmed pending account cannot be committed; it remains available for retry.
         assert!(repository.load_state().unwrap().is_none());
-        pending_alice = service
-            .prepare_registration_persisted(
-                AccountUsername::parse("alice").unwrap(),
-                alice_id.clone(),
-                "Alice",
-                b"alice-secret",
-                658467,
-                "devnet",
-                1,
-            )
-            .unwrap();
         assert_eq!(
             pending_alice.confirm_recovery(["wrong", "wrong", "wrong"]),
             Err(MultiAccountError::RecoveryConfirmation(
