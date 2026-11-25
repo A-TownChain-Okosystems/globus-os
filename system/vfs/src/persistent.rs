@@ -365,7 +365,10 @@ mod tests {
             inner,
             fail_flush: true,
         };
-        assert!(matches!(PersistentFs::format(device, 8), Err(FsError::Io)));
+        assert!(matches!(
+            PersistentFs::format(device, 8),
+            Err(FsError::Io)
+        ));
     }
 
     #[test]
