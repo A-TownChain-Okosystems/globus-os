@@ -149,20 +149,19 @@ jobs:
             exit 1
           fi
 
-          if ! grep -q "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
+          log=target/shivacore-qemu-${{ matrix.cpu }}.log
+          if ! grep -q "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" "$log"; then
             echo "ACPI RSDP/root/child-table validation did not pass in BIOS guest."
-            cat target/shivacore-qemu-${{ matrix.cpu }}.log
-          if ! grep -q "Programm 'init' aus Ramdisk" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "Das Ramdisk-Programm init wurde nicht aus dem Image geladen."
-            cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            cat "$log"
             exit 1
           fi
-          if ! grep -q "(Quelle: Ramdisk)" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID 1000 startet nicht aus der Ramdisk, sondern aus dem eingebauten Abbild."
-            exit 1
-          fi
-            exit 1
-          fi
+          for expected in "Programm 'init' aus Ramdisk" "(Quelle: Ramdisk)"; do
+            if ! grep -Fq "$expected" "$log"; then
+              echo "BIOS ramdisk acceptance marker missing: $expected"
+              cat "$log"
+              exit 1
+            fi
+          done
           if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "USER-001 did not install the first Ring-3 process."
             exit 1
