@@ -152,14 +152,24 @@ jobs:
             echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
             exit 1
           fi
-          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "Timer IRQ did not complete the round-trip back to PID=1000."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID=1000 register checkpoint was not preserved."
-            exit 1
-          fi
+          # PID 1000 is the short-lived init payload and intentionally exits
+          # after its lifecycle checks. The runnable set then rotates 1001 -> 1002
+          # -> 1003 -> 1001; requiring a return to exited PID 1000 is invalid.
+          log=target/shivacore-qemu-${{ matrix.cpu }}.log
+          for expected in \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1003" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben"; do
+            if ! grep -Fq "$expected" "$log"; then
+              echo "Scheduler/process-lifecycle acceptance marker missing: $expected"
+              cat "$log"
+              exit 1
+            fi
+          done
           if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "PID=1001 register checkpoint was not preserved."
             exit 1
@@ -222,8 +232,13 @@ jobs:
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
             "ShivaCore: USER-001 entering PID=1000" \
             "ShivaCore: scheduler preemption -> context switch to PID=1001" \
-            "ShivaCore: scheduler preemption -> context switch to PID=1000" \
-            "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1003" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben" \
             "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
             if ! grep -Fq "$expected" "$log"; then
               echo "UEFI boot acceptance marker missing: $expected"
