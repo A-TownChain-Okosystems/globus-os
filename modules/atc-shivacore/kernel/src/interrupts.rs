@@ -1070,10 +1070,10 @@ pub struct ExceptionTrapFrame {
     pub cs: u64,
     /// Prozessor-Flags.
     pub rflags: u64,
-    /// Unterbrochener Stapelzeiger.
-    pub rsp: u64,
-    /// Stapelsegment.
-    pub ss: u64,
+    /// User-Stapelzeiger; nur bei CPL3-Ausnahmen vom Prozessor initialisiert.
+    pub rsp: core::mem::MaybeUninit<u64>,
+    /// User-Stacksegment; nur bei CPL3-Ausnahmen vom Prozessor initialisiert.
+    pub ss: core::mem::MaybeUninit<u64>,
 }
 
 /// Gemeinsame Registeroperation fuer Dienst-Neustarts aus unterschiedlichen Trap-Rahmen.
@@ -1100,7 +1100,7 @@ impl ServiceRestartFrame for UserTrapFrame {
         self.r14 = 0;
         self.r15 = 0;
         self.rip = entry_rip;
-        self.rsp = start_rsp;
+        self.rsp.write(start_rsp);
         self.rflags = 0x202;
     }
 }
@@ -1149,8 +1149,8 @@ impl ExceptionTrapFrame {
         self.rip = ctx.iret.rip;
         self.cs = u64::from(ctx.iret.cs);
         self.rflags = ctx.iret.rflags;
-        self.rsp = ctx.iret.rsp;
-        self.ss = u64::from(ctx.iret.ss);
+        self.rsp.write(ctx.iret.rsp);
+        self.ss.write(u64::from(ctx.iret.ss));
     }
 }
 
@@ -1378,20 +1378,10 @@ shivacore_gp_trampoline:
     mov esi, 1
 
 shivacore_fault_common:
-    // Nach 15 Pushes liegt der Fehlercode bei frame+120. Der Frame-Zeiger
-    // bleibt in RDI; R12 ist als callee-saved Register unser Rueckweg zum Frame.
+    // Nach 15 Pushes liegt der Fehlercode bei frame+120. RSP/SS liegen
+    // nur bei einem CPL3->CPL0-Wechsel im Hardware-Frame; die Rust-Struktur
+    // markiert diese Felder deshalb als MaybeUninit. R12 behaelt den Frame.
     lea rdi, [rsp]
-    // Bei CPL0 legt die CPU kein altes RSP/SS ab. Diese beiden Felder werden
-    // aus dem bekannten Hardware-Frame rekonstruiert, damit die Rust-Struktur
-    // vollstaendig initialisiert ist. Bei CPL3 stammen sie aus dem CPU-Frame.
-    test byte ptr [rdi + 136], 3
-    jnz 1f
-    lea rax, [rdi + 152]
-    mov [rdi + 152], rax
-    xor eax, eax
-    mov ax, ss
-    mov [rdi + 160], rax
-1:
     mov r12, rdi
     and rsp, -16
     call {handler}
@@ -1437,14 +1427,6 @@ shivacore_fault_trampoline_nocode:
     push rax
     lea rdi, [rsp]
     mov esi, 2
-    test byte ptr [rdi + 136], 3
-    jnz 2f
-    lea rax, [rdi + 152]
-    mov [rdi + 152], rax
-    xor eax, eax
-    mov ax, ss
-    mov [rdi + 160], rax
-2:
     mov r12, rdi
     and rsp, -16
     call {handler}
@@ -1608,18 +1590,33 @@ fn handle_exception(
                 // RIP und RSP gehoeren in den Bericht: ohne sie sagt die
                 // Adresse nicht, welche Anweisung sie benutzt hat, und die
                 // Fehlersuche beginnt bei Null.
-                shivacore::fault::ExceptionKind::PageFault => serial_println!(
-                    "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus={} RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
-                    kind.name(),
-                    pid,
-                    address,
-                    report.describe(),
-                    report.from_user,
-                    frame.rip,
-                    frame.rsp,
-                    recorded.terminated,
-                    recorded.kernel_faults
-                ),
+                shivacore::fault::ExceptionKind::PageFault => {
+                    if origin == shivacore::fault::Origin::User {
+                        // Nur CPL3 legt den alten RSP/SS-Wert auf dem
+                        // Hardware-Frame ab; CPL0-Felder bleiben uninitialisiert.
+                        let user_rsp = unsafe { frame.rsp.assume_init() };
+                        serial_println!(
+                            "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus=true RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
+                            kind.name(),
+                            pid,
+                            address,
+                            report.describe(),
+                            frame.rip,
+                            user_rsp,
+                            recorded.terminated,
+                            recorded.kernel_faults
+                        );
+                    } else {
+                        serial_println!(
+                            "ShivaCore: {} Adresse={:#x} ({}) Usermodus=false RIP={:#x} [Kernel-Fault: {}]",
+                            kind.name(),
+                            address,
+                            report.describe(),
+                            frame.rip,
+                            recorded.kernel_faults
+                        );
+                    }
+                },
                 shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
                     // Bei der Schutzverletzung ist der Fehlercode eine
                     // Segmentauswahl oder 0 — Bit 2 sagt hier NICHT, ob der
@@ -2486,15 +2483,21 @@ mod exception_frame_tests {
         let mut frame = ExceptionTrapFrame {
             rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rdi: 0, rbp: 0,
             r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
-            error_code: 0x5, rip: 0, cs: 0, rflags: 0, rsp: 0, ss: 0,
+            error_code: 0x5, rip: 0, cs: 0, rflags: 0,
+            rsp: core::mem::MaybeUninit::uninit(),
+            ss: core::mem::MaybeUninit::uninit(),
         };
         frame.apply_saved_context(&saved);
         assert_eq!((frame.rax, frame.rbx, frame.rcx, frame.rdx), (1, 2, 3, 4));
         assert_eq!((frame.rsi, frame.rdi, frame.rbp), (5, 6, 7));
         assert_eq!((frame.r8, frame.r9, frame.r10, frame.r11), (8, 9, 10, 11));
         assert_eq!((frame.r12, frame.r13, frame.r14, frame.r15), (12, 13, 14, 15));
-        assert_eq!((frame.rip, frame.cs, frame.rflags, frame.rsp, frame.ss),
-            (0x400000, 0x1B, 0x202, 0x8000, 0x23));
+        assert_eq!(
+            (frame.rip, frame.cs, frame.rflags, unsafe { frame.rsp.assume_init() }, unsafe {
+                frame.ss.assume_init()
+            }),
+            (0x400000, 0x1B, 0x202, 0x8000, 0x23)
+        );
         assert_eq!(frame.error_code, 0x5, "error code remains diagnostic data");
     }
 }
