@@ -428,11 +428,19 @@ impl UserScheduler {
         Ok(())
     }
 
-    /// Test-only Komforthelfer. Produktionscode muss register_process verwenden.
-    #[cfg(test)]
+    /// Traegt einen Kontext ohne Hardware-Seitentabellenwurzel ein.
+    ///
+    /// Dieser Kompatibilitaetspfad ist absichtlich NICHT lauffaehig: im
+    /// Produktionsbuild bleibt CR3=0 und pick_next() schliesst den Eintrag aus.
+    /// Hardwareprozesse muessen register_process() mit ihrer echten CR3-Wurzel
+    /// verwenden. Unit-Tests erhalten eine synthetische, seitenorientierte Wurzel.
     pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
-        self.register_process(pid, ctx, priority, 0x1000)
-            .expect("test process registration must have a valid synthetic CR3");
+        let mut entry = SchedEntry::new(pid, ctx, priority);
+        #[cfg(test)]
+        {
+            entry.cr3 = 0x1000;
+        }
+        self.entries.push(entry);
     }
 
     /// Seitentabelle eines Prozesses, falls eine hinterlegt ist.
