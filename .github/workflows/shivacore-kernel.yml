@@ -49,6 +49,13 @@ jobs:
           rustc -Vv
           cargo -V
 
+      # The repository rust-toolchain.toml pins ordinary cargo commands to
+      # 1.100.0. The nightly target installed by dtolnay above is therefore
+      # not visible to the kernel build below; install the target for the
+      # actual compiler explicitly instead of relying on the nightly target.
+      - name: Install pinned kernel target
+        run: rustup target add x86_64-unknown-none --toolchain 1.100.0
+
       - name: Build kernel ELF
         id: build_kernel
         env:
