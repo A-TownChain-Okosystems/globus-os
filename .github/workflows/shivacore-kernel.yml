@@ -318,10 +318,10 @@ jobs:
                 grep -Eq "ShivaCore: Seitenfehler PID=Pid\\(1000\\).*Usermodus=true.*\\[beendet: 1, Kernel: 0\\]" "$log"
                 ;;
               general-protection)
-                grep -Fq "ShivaCore: Schutzverletzung PID=Pid(1000) Fehlercode=0x0 Usermodus=true [beendet: 1, Kernel: 0]" "$log"
+                grep -Fq "ShivaCore: Schutzverletzung PID=Some(Pid(1000)) Fehlercode=0x0 Usermodus=true [beendet: 1, Kernel: 0]" "$log"
                 ;;
               invalid-opcode)
-                grep -Fq "ShivaCore: Ungueltiger Opcode PID=Pid(1000) ohne Fehlercode, Usermodus=true [beendet: 1, Kernel: 0]" "$log"
+                grep -Fq "ShivaCore: Ungueltiger Opcode PID=Some(Pid(1000)) ohne Fehlercode, Usermodus=true [beendet: 1, Kernel: 0]" "$log"
                 ;;
             esac
             grep -Fq "ShivaCore: weiter mit PID=1001 statt den Fehler zu wiederholen" "$log"
