@@ -20,10 +20,8 @@ jobs:
           rustc -vV | grep -qx 'release: 1.100.0'
           rustc -Vv
           cargo -V
-      # Greeter und init_program verwenden x86_64-unknown-none als Target;
-      # Cargo folgt hier rust-toolchain.toml (1.100.0), nicht Nightly.
-      - name: Install pinned no-OS target
-        run: rustup target add x86_64-unknown-none --toolchain 1.100.0
+      # Bare-metal no_std binaries have no host test harness. They are
+      # compiled and exercised by the dedicated ShivaCore boot/QEMU workflow.
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
@@ -31,10 +29,16 @@ jobs:
           FAIL=0
           while IFS= read -r f; do
             d="$(dirname "$f")"
-            if [ "$d" = "./modules/atc-shivacore/boot" ]; then
-              echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
-              continue
-            fi
+            case "$d" in
+              "./modules/atc-shivacore/boot")
+                echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
+                continue
+                ;;
+              "./modules/atc-shivacore/greeter"|"./modules/atc-shivacore/init_program")
+                echo "SKIP $d: bare-metal no_std binary has no host test harness; build/boot validation belongs to the dedicated ShivaCore boot workflow."
+                continue
+                ;;
+            esac
             echo "=== cargo test in $d"
             if ! (cd "$d" && cargo test --quiet); then
               echo "cargo test FAILED in $d"
