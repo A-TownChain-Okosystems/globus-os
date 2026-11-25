@@ -1100,7 +1100,7 @@ impl ServiceRestartFrame for UserTrapFrame {
         self.r14 = 0;
         self.r15 = 0;
         self.rip = entry_rip;
-        self.rsp.write(start_rsp);
+        self.rsp = start_rsp;
         self.rflags = 0x202;
     }
 }
@@ -1123,7 +1123,7 @@ impl ServiceRestartFrame for ExceptionTrapFrame {
         self.r14 = 0;
         self.r15 = 0;
         self.rip = entry_rip;
-        self.rsp = start_rsp;
+        self.rsp.write(start_rsp);
         self.rflags = 0x202;
     }
 }
