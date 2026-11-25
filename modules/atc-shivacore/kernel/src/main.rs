@@ -57,6 +57,11 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: Kernel-Einstiegspunkt erreicht.");
+    serial_println!(
+        "ShivaCore: bootloader kernel_stack_bottom=0x{:X} kernel_stack_len=0x{:X}",
+        boot_info.kernel_stack_bottom,
+        boot_info.kernel_stack_len
+    );
 
     let cpu = hal::CpuInfo::detect();
     serial_println!(
@@ -1698,6 +1703,21 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         }
         #[cfg(feature = "ring0-test-gp")]
         unsafe {
+            // Capture the active CPL0 stack pointer immediately before the
+            // intentional #GP probe. The serial call returns with the caller's
+            // RSP restored, so the recorded value is the probe's stack level.
+            let probe_rsp: u64;
+            core::arch::asm!(
+                "mov {rsp_out}, rsp",
+                rsp_out = out(reg) probe_rsp,
+                options(nomem, nostack, preserves_flags)
+            );
+            serial_println!(
+                "ShivaCore: R0-CPL0-GP pre-injection RSP=0x{:X} stack_bottom=0x{:X} stack_len=0x{:X}",
+                probe_rsp,
+                boot_info.kernel_stack_bottom,
+                boot_info.kernel_stack_len
+            );
             core::arch::asm!(
                 "mov ds, {selector:x}",
                 selector = in(reg) 0xffffu16,
