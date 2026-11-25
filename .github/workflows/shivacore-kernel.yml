@@ -315,7 +315,7 @@ jobs:
 
             case "$kind" in
               page-fault)
-                grep -Eq "ShivaCore: Seitenfehler PID=Pid\\(1000\\).*Usermodus=true.*\\[beendet: 1, Kernel: 0\\]" "$log"
+                grep -Eq "ShivaCore: Seitenfehler PID=Some\\(Pid\\(1000\\)\\).*Usermodus=true.*\\[beendet: 1, Kernel: 0\\]" "$log"
                 ;;
               general-protection)
                 grep -Fq "ShivaCore: Schutzverletzung PID=Some(Pid(1000)) Fehlercode=0x0 Usermodus=true [beendet: 1, Kernel: 0]" "$log"
