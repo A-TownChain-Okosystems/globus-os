@@ -350,8 +350,7 @@ jobs:
           {
             echo "source_sha=$(git rev-parse HEAD)"
             echo "matrix_cpu=${{ matrix.cpu }}"
-            find target/exception-tests -type f \\
-              \( -name '*.img' -o -name '*.log' \) -print0 | sort -z | xargs -0 -r sha256sum
+            find target/exception-tests -type f \( -name '*.img' -o -name '*.log' \) -print0 | sort -z | xargs -0 -r sha256sum
           } > "$manifest"
           cat "$manifest"
 
@@ -417,3 +416,4 @@ jobs:
             target/shivacore-qemu-${{ matrix.cpu }}.log
             target/shivacore-uefi-${{ matrix.cpu }}.log
             target/boot-evidence/manifest-${{ matrix.cpu }}.txt
+            target/exception-tests/**
