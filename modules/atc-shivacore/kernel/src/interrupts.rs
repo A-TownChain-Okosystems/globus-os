@@ -1700,6 +1700,11 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
             }
         }
         shivacore::fault::FaultAction::PanicKernel => {
+            serial_println!(
+                "ShivaCore: CPL0 fault accounting: kind={} kernel_faults={} action=PanicKernel",
+                kind.name(),
+                recorded.kernel_faults
+            );
             panic!(
                 "Kernelausnahme {}: Adresse={:#x} ({}), Ring 0",
                 kind.name(),
