@@ -355,6 +355,19 @@ mod tests {
     }
 
     #[test]
+    fn format_fails_when_initial_metadata_flush_fails() {
+        let inner = MemoryBlockDevice::new(BlockGeometry {
+            block_size: 512,
+            block_count: 64,
+        }).unwrap();
+        let device = FlushFailDevice {
+            inner,
+            fail_flush: true,
+        };
+        assert!(matches!(PersistentFs::format(device, 8), Err(FsError::Io)));
+    }
+
+    #[test]
     fn failed_metadata_flush_poisons_filesystem_until_remount() {
         let inner = MemoryBlockDevice::new(BlockGeometry {
             block_size: 512,
