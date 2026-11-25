@@ -381,7 +381,10 @@ pub fn online_cpus() -> usize {
 /// 14.11.2026 — das Datensegment aus dem hinterlegten Startabbild. Nicht
 /// angefasst wird der Haufen; die Capabilities bleiben, sonst waere der Dienst
 /// nach dem Neustart rechtlos.
-fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::Service) {
+fn reset_service_process(
+    frame: &mut impl ServiceRestartFrame,
+    service: &crate::services::Service,
+) {
     let start = service.start_rsp;
     let end = start.saturating_add(16);
     if start >= service.stack_low && end <= service.stack_low.saturating_add(0x0000_8000) {
@@ -411,26 +414,9 @@ fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::S
         ),
     }
 
-    frame.rax = 0;
-    frame.rbx = 0;
-    frame.rcx = 0;
-    frame.rdx = 0;
-    frame.rsi = 0;
-    frame.rdi = 0;
-    frame.rbp = start;
-    frame.r8 = 0;
-    frame.r9 = 0;
-    frame.r10 = 0;
-    frame.r11 = 0;
-    frame.r12 = 0;
-    frame.r13 = 0;
-    frame.r14 = 0;
-    frame.r15 = 0;
-    frame.rip = service.entry_rip;
-    frame.rsp = start;
     // Nur die Pflichtbits: Bit 1 ist immer gesetzt, IF (Bit 9) muss stehen,
     // sonst bekaeme der Dienst keine Ticks mehr und das Fenster bliebe stumm.
-    frame.rflags = 0x202;
+    frame.set_service_start(service.entry_rip, start);
 }
 
 /// Beendet den aufrufenden Prozess aus einem Syscall heraus (P1-3B, echter
@@ -1088,6 +1074,58 @@ pub struct ExceptionTrapFrame {
     pub rsp: u64,
     /// Stapelsegment.
     pub ss: u64,
+}
+
+/// Gemeinsame Registeroperation fuer Dienst-Neustarts aus unterschiedlichen Trap-Rahmen.
+trait ServiceRestartFrame {
+    /// Setzt Register und IRET-Ziel auf den Dienst-Einstieg.
+    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64);
+}
+
+impl ServiceRestartFrame for UserTrapFrame {
+    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+        self.rax = 0;
+        self.rbx = 0;
+        self.rcx = 0;
+        self.rdx = 0;
+        self.rsi = 0;
+        self.rdi = 0;
+        self.rbp = start_rsp;
+        self.r8 = 0;
+        self.r9 = 0;
+        self.r10 = 0;
+        self.r11 = 0;
+        self.r12 = 0;
+        self.r13 = 0;
+        self.r14 = 0;
+        self.r15 = 0;
+        self.rip = entry_rip;
+        self.rsp = start_rsp;
+        self.rflags = 0x202;
+    }
+}
+
+impl ServiceRestartFrame for ExceptionTrapFrame {
+    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+        self.rax = 0;
+        self.rbx = 0;
+        self.rcx = 0;
+        self.rdx = 0;
+        self.rsi = 0;
+        self.rdi = 0;
+        self.rbp = start_rsp;
+        self.r8 = 0;
+        self.r9 = 0;
+        self.r10 = 0;
+        self.r11 = 0;
+        self.r12 = 0;
+        self.r13 = 0;
+        self.r14 = 0;
+        self.r15 = 0;
+        self.rip = entry_rip;
+        self.rsp = start_rsp;
+        self.rflags = 0x202;
+    }
 }
 
 impl ExceptionTrapFrame {
