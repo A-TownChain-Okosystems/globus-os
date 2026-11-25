@@ -251,6 +251,110 @@ jobs:
             exit "$status"
           fi
 
+      - name: Ring-3 exception injection matrix (BIOS + UEFI)
+        id: exception_matrix
+        env:
+          OVMF_CODE: ${{ steps.ovmf.outputs.firmware }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/exception-tests
+
+          # Reuse the three existing no_std crash payloads. They are separate
+          # ELFs so each QEMU guest injects exactly one exception in PID 1000.
+          for binary in crash crash_gp crash_ud; do
+            ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo +nightly build --release --bin "$binary" )
+          done
+
+          build_exception_image() {
+            local kind="$1"
+            local binary="$2"
+            local out="target/exception-tests/$kind"
+            mkdir -p "$out"
+            ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
+              "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
+              "$GITHUB_WORKSPACE/$out" \
+              "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/$binary" \
+              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
+          }
+
+          build_exception_image page-fault crash
+          build_exception_image general-protection crash_gp
+          build_exception_image invalid-opcode crash_ud
+
+          run_guest() {
+            local kind="$1"
+            local firmware="$2"
+            local image="target/exception-tests/$kind/shivacore-$firmware.img"
+            local log="target/exception-tests/$kind-$firmware-${{ matrix.cpu }}.log"
+            local status
+            if [ "$firmware" = "bios" ]; then
+              set +e
+              timeout 20s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            else
+              set +e
+              timeout 20s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            fi
+
+            if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+              echo "$kind/$firmware QEMU exited unexpectedly: $status"
+              cat "$log"
+              return 1
+            fi
+
+            case "$kind" in
+              page-fault)
+                grep -Fq "ShivaCore: Seitenfehler PID=Pid(1000)" "$log"
+                grep -Fq "Usermodus=true" "$log"
+                grep -Fq "[beendet: 1, Kernel: 0]" "$log"
+                ;;
+              general-protection)
+                grep -Fq "ShivaCore: Schutzverletzung PID=Pid(1000) Fehlercode=0x0 Usermodus=true [beendet: 1, Kernel: 0]" "$log"
+                ;;
+              invalid-opcode)
+                grep -Fq "ShivaCore: Ungueltiger Opcode PID=Pid(1000) ohne Fehlercode, Usermodus=true [beendet: 1, Kernel: 0]" "$log"
+                ;;
+            esac
+            grep -Fq "ShivaCore: weiter mit PID=1001 statt den Fehler zu wiederholen" "$log"
+            if grep -Fq "Kernelausnahme" "$log"; then
+              echo "$kind/$firmware unexpectedly panicked in Ring 0"
+              cat "$log"
+              return 1
+            fi
+            echo "PASS $kind/$firmware ${{ matrix.cpu }} (QEMU exit $status)"
+          }
+
+          for kind in page-fault general-protection invalid-opcode; do
+            run_guest "$kind" bios
+            run_guest "$kind" uefi
+          done
+
+      - name: Create exception injection SHA-256 manifest
+        id: exception_evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p target/exception-tests
+          manifest="target/exception-tests/manifest-${{ matrix.cpu }}.sha256"
+          {
+            echo "source_sha=$(git rev-parse HEAD)"
+            echo "matrix_cpu=${{ matrix.cpu }}"
+            find target/exception-tests -type f \\
+              \( -name '*.img' -o -name '*.log' \) -print0 | sort -z | xargs -0 -r sha256sum
+          } > "$manifest"
+          cat "$manifest"
+
       - name: Create SHA-bound boot evidence manifest
         id: boot_evidence
         if: always()
