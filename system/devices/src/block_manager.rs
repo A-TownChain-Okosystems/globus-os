@@ -155,11 +155,7 @@ mod tests {
         ) -> Result<(), BlockError> {
             self.0.read(request, destination)
         }
-        fn write(
-            &mut self,
-            request: BlockRequest,
-            source: &[u8],
-        ) -> Result<(), BlockError> {
+        fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError> {
             self.0.write(request, source)
         }
         fn flush(&mut self) -> Result<(), BlockError> {
