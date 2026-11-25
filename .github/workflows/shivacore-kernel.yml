@@ -62,13 +62,13 @@ jobs:
             --target x86_64-unknown-none \
             --features x86-boot
 
-      - name: Build init program (ramdisk payload)
+      - name: Build Ring-3 programs (ramdisk payload)
         id: build_init
         run: |
-          # Ohne RUSTFLAGS: die Crate-Konfiguration setzt -Tlinker.ld (feste
-          # Ladeadresse 0x400000) und relocation-model=static. Eine
-          # RUSTFLAGS-Variable wuerde diese Einstellungen ersetzen.
+          # Ohne RUSTFLAGS: die Crates setzen eigene Linkerskripte und
+          # relocation-model=static; globale RUSTFLAGS wuerden das ueberschreiben.
           ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo +nightly build --release )
+          ( cd modules/atc-shivacore/greeter && env -u RUSTFLAGS cargo +nightly build --release )
 
       - name: Build BIOS and UEFI images
         id: build_images
@@ -77,9 +77,10 @@ jobs:
           # Der Boot-Builder ist kein Workspace-Mitglied mehr (Nightly-Zwang
           # des bootloader-Crates). Er wird in seinem Verzeichnis gebaut.
           ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
-            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/release/shivacore" \
+            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
             "$GITHUB_WORKSPACE/target/boot-images" \
-            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" )
+            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+            "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
 
       - name: Install QEMU
         run: |
