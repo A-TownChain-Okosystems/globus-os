@@ -253,10 +253,15 @@ static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
 /// Veroeffentlichung gesetzt); er bleibt fuer spaetere Umschaltungen etwa nach
 /// einem Programmwechsel.
 #[allow(dead_code)]
-pub fn set_process_cr3(pid: crate::ats1000::Pid, cr3: u64) {
-    if let Some(scheduler) = USER_SCHEDULER.lock().as_mut() {
-        scheduler.set_cr3(pid, cr3);
-    }
+pub fn set_process_cr3(
+    pid: crate::ats1000::Pid,
+    cr3: u64,
+) -> Result<(), crate::user_sched::SchedulerError> {
+    let mut guard = USER_SCHEDULER.lock();
+    let scheduler = guard
+        .as_mut()
+        .ok_or(crate::user_sched::SchedulerError::UnknownProcess)?;
+    scheduler.set_cr3(pid, cr3)
 }
 
 /// Setzt den Userspace-Planer mit bis zu vier Kontexten und ihren Seitentabellen auf.
@@ -271,24 +276,42 @@ pub fn init_user_scheduler(
     cr3_fourth: (crate::ats1000::Pid, u64),
 ) {
     let mut scheduler = UserScheduler::new();
-    scheduler.add_process(first.pid, first, 0);
-    scheduler.add_process(second.pid, second, 0);
-    scheduler.add_process(third.pid, third, 0);
+    // Kontext und CR3 werden pro Prozess in EINEM Schritt registriert.
+    // Ein Fehler bricht die Initialisierung ab; ein unvollstaendiger Scheduler
+    // wird niemals global sichtbar und kann daher keinen Prozess ohne eigene
+    // Seitentabelle starten.
+    for (pid, ctx, cr3) in [
+        (cr3_first.0, first, cr3_first.1),
+        (cr3_second.0, second, cr3_second.1),
+        (cr3_third.0, third, cr3_third.1),
+    ] {
+        if let Err(error) = scheduler.register_process(pid, ctx, 0, cr3) {
+            serial_println!(
+                "ShivaCore: FATAL — Ring-3-Scheduler-Registrierung PID {} abgelehnt: {:?}",
+                pid.0,
+                error
+            );
+            return;
+        }
+    }
     // Der vierte Platz ist der zweite Programmplatz aus der Ramdisk. Er ist
     // optional: ein Image ohne Verzeichnis hat nur drei Prozesse.
     if let Some(fourth) = fourth {
-        scheduler.add_process(fourth.pid, fourth, 0);
+        if let Err(error) =
+            scheduler.register_process(cr3_fourth.0, fourth, 0, cr3_fourth.1)
+        {
+            serial_println!(
+                "ShivaCore: FATAL — Ring-3-Scheduler-Registrierung PID {} abgelehnt: {:?}",
+                cr3_fourth.0 .0,
+                error
+            );
+            return;
+        }
     }
-    // Jede eigene Tabelle eintragen, BEVOR der Scheduler sichtbar wird. Ein
-    // Tick, der zwischen Eintragung und CR3-Wert plant, wuerde einen Prozess
-    // ohne Tabelle auswaehlen; deshalb gibt es dieses Fenster nicht mehr.
-    for (pid, cr3) in [cr3_first, cr3_second, cr3_third] {
-        scheduler.set_cr3(pid, cr3);
+    if scheduler.schedule(None).is_none() {
+        serial_println!("ShivaCore: FATAL — kein startfaehiger Ring-3-Prozess mit gueltigem CR3");
+        return;
     }
-    if fourth.is_some() {
-        scheduler.set_cr3(cr3_fourth.0, cr3_fourth.1);
-    }
-    let _ = scheduler.schedule(None);
     *USER_SCHEDULER.lock() = Some(scheduler);
     {
         let mut gate = SYSCALL_GATE.lock();
