@@ -423,7 +423,7 @@ fn reset_service_process(frame: &mut impl ServiceRestartFrame, service: &crate::
 /// Zombie setzen, erst dann auf den naechsten umschalten. Das Reaping und die
 /// Frame-Freigabe passieren im Timer-Tick — der Syscall-Pfad schaltet keinen
 /// Speicher frei.
-fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
+fn exit_current_process(frame: &mut impl ServiceRestartFrame, pid: Pid, exit_code: i32) {
     // Ein Dienst verschwindet nicht, er kehrt an seinen Startzustand zurueck.
     // Das passiert VOR dem Widerruf der Capabilities: danach haette der neue
     // Lauf keine Rechte mehr, und ein Neustart ohne Rechte waere ein Dienst,
@@ -1077,6 +1077,8 @@ pub struct ExceptionTrapFrame {
 trait ServiceRestartFrame {
     /// Setzt Register und IRET-Ziel auf den Dienst-Einstieg.
     fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64);
+    /// Uebertraegt einen gespeicherten Prozesskontext in den Trap-Rahmen.
+    fn apply_saved_context(&mut self, ctx: &SavedContext);
 }
 
 impl ServiceRestartFrame for UserTrapFrame {
@@ -1100,6 +1102,10 @@ impl ServiceRestartFrame for UserTrapFrame {
         self.rsp = start_rsp;
         self.rflags = 0x202;
     }
+
+    fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        UserTrapFrame::apply_saved_context(self, ctx);
+    }
 }
 
 impl ServiceRestartFrame for ExceptionTrapFrame {
@@ -1122,6 +1128,10 @@ impl ServiceRestartFrame for ExceptionTrapFrame {
         self.rip = entry_rip;
         self.rsp.write(start_rsp);
         self.rflags = 0x202;
+    }
+
+    fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        ExceptionTrapFrame::apply_saved_context(self, ctx);
     }
 }
 
