@@ -1038,6 +1038,63 @@ pub struct UserTrapFrame {
     pub ss: u64,
 }
 
+/// CPU-Rahmen fuer Ausnahmen mit einheitlichem Fehlercode-Slot.
+///
+/// Anders als Timer-/Syscall-Rahmen enthaelt dieser Frame nach den 15
+/// gesicherten GP-Registern immer einen Fehlercode. Bei #UD fuegt das
+/// Trampolin einen synthetischen Nullcode ein. Damit liegen RIP/CS/RFLAGS/RSP/SS
+/// fuer Page Fault, General Protection und Invalid Opcode an identischen Offsets.
+#[repr(C)]
+pub struct ExceptionTrapFrame {
+    pub rax: u64,
+    pub rbx: u64,
+    pub rcx: u64,
+    pub rdx: u64,
+    pub rsi: u64,
+    pub rdi: u64,
+    pub rbp: u64,
+    pub r8: u64,
+    pub r9: u64,
+    pub r10: u64,
+    pub r11: u64,
+    pub r12: u64,
+    pub r13: u64,
+    pub r14: u64,
+    pub r15: u64,
+    pub error_code: u64,
+    pub rip: u64,
+    pub cs: u64,
+    pub rflags: u64,
+    pub rsp: u64,
+    pub ss: u64,
+}
+
+impl ExceptionTrapFrame {
+    /// Ersetzt den fehlerhaften Kontext durch den naechsten Ring-3-Kontext.
+    pub fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        self.rax = ctx.regs.rax;
+        self.rbx = ctx.regs.rbx;
+        self.rcx = ctx.regs.rcx;
+        self.rdx = ctx.regs.rdx;
+        self.rsi = ctx.regs.rsi;
+        self.rdi = ctx.regs.rdi;
+        self.rbp = ctx.regs.rbp;
+        self.r8 = ctx.regs.r8;
+        self.r9 = ctx.regs.r9;
+        self.r10 = ctx.regs.r10;
+        self.r11 = ctx.regs.r11;
+        self.r12 = ctx.regs.r12;
+        self.r13 = ctx.regs.r13;
+        self.r14 = ctx.regs.r14;
+        self.r15 = ctx.regs.r15;
+        self.rip = ctx.iret.rip;
+        self.cs = u64::from(ctx.iret.cs);
+        self.rflags = ctx.iret.rflags;
+        self.rsp = ctx.iret.rsp;
+        self.ss = u64::from(ctx.iret.ss);
+    }
+}
+
 impl UserTrapFrame {
     /// Schreibt einen gespeicherten Kontext in diesen Rahmen.
     ///
@@ -1218,25 +1275,12 @@ shivacore_timer_trampoline:
 
 global_asm!(
     r#"
-    // Drei Einsprünge, ein Rumpf. Der Unterschied zwischen den Ausnahmen ist
-    // nur, ob die CPU einen Fehlercode auf den Stapel legt und welche Art im
-    // Bericht steht — nicht, wie der Rahmen aussieht. Zwei fast gleiche
-    // Rümpfe wären die nächste Stelle, an der eine Korrektur nur an einer
-    // Hälfte ankommt.
-    //
-    // Art-IDs: 0 = Seitenfehler, 1 = Schutzverletzung, 2 = Ungueltiger Opcode.
+    // Alle Ausnahme-Rahmen haben dieselbe Form:
+    // 15 GP-Register, Fehlercode, RIP, CS, RFLAGS, RSP, SS.
+    // Der Fehlercode bleibt auf dem Stack; kein GP-Register wird vor seiner
+    // Sicherung als Scratch-Register missbraucht.
     .global shivacore_fault_trampoline
 shivacore_fault_trampoline:
-    pop r11
-    mov edx, 0
-    jmp shivacore_fault_common
-    .global shivacore_gp_trampoline
-shivacore_gp_trampoline:
-    pop r11
-    mov edx, 1
-    jmp shivacore_fault_common
-
-shivacore_fault_common:
     push r15
     push r14
     push r13
@@ -1252,11 +1296,46 @@ shivacore_fault_common:
     push rcx
     push rbx
     push rax
-    mov rdi, rsp
-    // Fehlercode: 15 Pushes (120 Byte), r11 war der fuenfte Push von oben,
-    // also 15-5 = 10 Felder ueber dem Stapelzeiger -> rsp + 80.
-    mov rsi, [rsp + 80]
+    mov esi, 0
+    jmp shivacore_fault_common
+
+    .global shivacore_gp_trampoline
+shivacore_gp_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov esi, 1
+
+shivacore_fault_common:
+    // Nach 15 Pushes liegt der Fehlercode bei frame+120. Vor dem call
+    // richten wir den Stack auf 16 Byte aus; RDI bleibt auf dem Frame-Anfang.
+    sub rsp, 8
+    lea rdi, [rsp + 8]
+    // Bei CPL0 legt die CPU kein altes RSP/SS ab. Diese beiden Felder werden
+    // aus dem bekannten Hardware-Frame rekonstruiert, damit die Rust-Struktur
+    // vollstaendig initialisiert ist. Bei CPL3 stammen sie aus dem CPU-Frame.
+    test byte ptr [rdi + 136], 3
+    jnz 1f
+    lea rax, [rdi + 152]
+    mov [rdi + 152], rax
+    xor eax, eax
+    mov ax, ss
+    mov [rdi + 160], rax
+1:
     call {handler}
+    add rsp, 8
     pop rax
     pop rbx
     pop rcx
@@ -1272,12 +1351,15 @@ shivacore_fault_common:
     pop r13
     pop r14
     pop r15
+    // Den echten bzw. synthetischen Fehlercode vor IRETQ entfernen.
+    add rsp, 8
     iretq
 
     .global shivacore_fault_trampoline_nocode
 shivacore_fault_trampoline_nocode:
-    // Ungueltiger Opcode legt keinen Fehlercode ab: der Rahmen beginnt direkt
-    // mit RIP, deshalb hier kein pop.
+    // #UD hat keinen Hardware-Fehlercode. Einen Nullcode einfuegen, damit
+    // ExceptionTrapFrame fuer alle drei Ausnahmearten dasselbe Layout hat.
+    push 0
     push r15
     push r14
     push r13
@@ -1293,10 +1375,19 @@ shivacore_fault_trampoline_nocode:
     push rcx
     push rbx
     push rax
-    mov rdi, rsp
-    xor esi, esi
-    mov edx, 2
+    sub rsp, 8
+    lea rdi, [rsp + 8]
+    mov esi, 2
+    test byte ptr [rdi + 136], 3
+    jnz 2f
+    lea rax, [rdi + 152]
+    mov [rdi + 152], rax
+    xor eax, eax
+    mov ax, ss
+    mov [rdi + 160], rax
+2:
     call {handler}
+    add rsp, 8
     pop rax
     pop rbx
     pop rcx
@@ -1312,6 +1403,7 @@ shivacore_fault_trampoline_nocode:
     pop r13
     pop r14
     pop r15
+    add rsp, 8
     iretq
 "#,
     handler = sym exception_trap_rust
@@ -1328,20 +1420,20 @@ shivacore_fault_trampoline_nocode:
 /// kein Schoenheitsfehler: die drei Einsprünge teilen sich einen Rumpf, damit
 /// eine Korrektur nicht nur an einer Haelfte ankommt.
 #[unsafe(no_mangle)]
-extern "C" fn exception_trap_rust(frame: &mut UserTrapFrame, error_code: u64, kind: u32) {
+extern "C" fn exception_trap_rust(frame: &mut ExceptionTrapFrame, kind: u32) {
     handle_exception(
         frame,
-        error_code,
         shivacore::fault::ExceptionKind::from_id(kind),
     );
 }
 
 fn handle_exception(
-    frame: &mut UserTrapFrame,
-    error_code: u64,
+    frame: &mut ExceptionTrapFrame,
     kind: shivacore::fault::ExceptionKind,
 ) {
     use x86_64::registers::control::Cr2;
+
+    let error_code = frame.error_code;
 
     let origin = shivacore::fault::Origin::from_cs(frame.cs);
     let pid = USER_SCHEDULER
@@ -2299,5 +2391,49 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         unsafe {
             PICS.lock().notify_end_of_interrupt(KEYBOARD_VECTOR);
         }
+    }
+}
+
+#[cfg(test)]
+mod exception_frame_tests {
+    use super::ExceptionTrapFrame;
+    use shivacore::user_sched::{IretFrame, SavedContext, SavedRegisters};
+
+    #[test]
+    fn exception_frame_matches_hardware_error_code_layout() {
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, error_code), 120);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rip), 128);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, cs), 136);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rflags), 144);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rsp), 152);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, ss), 160);
+        assert_eq!(core::mem::size_of::<ExceptionTrapFrame>(), 168);
+    }
+
+    #[test]
+    fn exception_frame_restores_every_general_register_and_iret_field() {
+        let saved = SavedContext {
+            regs: SavedRegisters {
+                rax: 1, rbx: 2, rcx: 3, rdx: 4, rsi: 5, rdi: 6, rbp: 7,
+                rsp: 0x8000, r8: 8, r9: 9, r10: 10, r11: 11, r12: 12,
+                r13: 13, r14: 14, r15: 15,
+            },
+            iret: IretFrame {
+                rip: 0x400000, cs: 0x1B, rflags: 0x202, rsp: 0x8000, ss: 0x23,
+            },
+        };
+        let mut frame = ExceptionTrapFrame {
+            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rdi: 0, rbp: 0,
+            r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
+            error_code: 0x5, rip: 0, cs: 0, rflags: 0, rsp: 0, ss: 0,
+        };
+        frame.apply_saved_context(&saved);
+        assert_eq!((frame.rax, frame.rbx, frame.rcx, frame.rdx), (1, 2, 3, 4));
+        assert_eq!((frame.rsi, frame.rdi, frame.rbp), (5, 6, 7));
+        assert_eq!((frame.r8, frame.r9, frame.r10, frame.r11), (8, 9, 10, 11));
+        assert_eq!((frame.r12, frame.r13, frame.r14, frame.r15), (12, 13, 14, 15));
+        assert_eq!((frame.rip, frame.cs, frame.rflags, frame.rsp, frame.ss),
+            (0x400000, 0x1B, 0x202, 0x8000, 0x23));
+        assert_eq!(frame.error_code, 0x5, "error code remains diagnostic data");
     }
 }
