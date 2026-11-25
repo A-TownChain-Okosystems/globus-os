@@ -363,6 +363,19 @@ impl Default for UserScheduler {
     }
 }
 
+/// Fehler bei der Registrierung eines Ring-3-Prozesses.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SchedulerError {
+    /// CR3 ist null oder nicht auf eine 4-KiB-Seite ausgerichtet.
+    InvalidCr3,
+    /// PID ist bereits registriert.
+    DuplicatePid,
+    /// PID und PID im UserContext stimmen nicht ueberein.
+    PidMismatch,
+    /// Fuer die PID existiert kein Scheduler-Eintrag.
+    UnknownProcess,
+}
+
 impl UserScheduler {
     /// Leerer Ablaufplan ohne laufenden Prozess und ohne Zaehler.
     pub fn new() -> Self {
@@ -376,12 +389,50 @@ impl UserScheduler {
         }
     }
 
-    /// Add a user process to the scheduler
-    /// Hinterlegt die Seitentabelle eines Prozesses.
-    pub fn set_cr3(&mut self, pid: Pid, cr3: u64) {
-        if let Some(entry) = self.entries.iter_mut().find(|e| e.pid == pid) {
-            entry.cr3 = cr3;
+    /// Aktualisiert die Seitentabelle eines bereits registrierten Prozesses.
+    /// Ungueltige oder unbekannte Zuordnungen werden ohne Zustandsaenderung abgelehnt.
+    pub fn set_cr3(&mut self, pid: Pid, cr3: u64) -> Result<(), SchedulerError> {
+        if cr3 == 0 || cr3 & 0xFFF != 0 {
+            return Err(SchedulerError::InvalidCr3);
         }
+        let entry = self
+            .entries
+            .iter_mut()
+            .find(|entry| entry.pid == pid)
+            .ok_or(SchedulerError::UnknownProcess)?;
+        entry.cr3 = cr3;
+        Ok(())
+    }
+
+    /// Registriert Prozesskontext und Seitentabellenwurzel atomar.
+    /// Ein Prozess ohne gueltiges CR3 wird niemals in den Scheduler aufgenommen.
+    pub fn register_process(
+        &mut self,
+        pid: Pid,
+        ctx: &UserContext,
+        priority: u8,
+        cr3: u64,
+    ) -> Result<(), SchedulerError> {
+        if pid != ctx.pid {
+            return Err(SchedulerError::PidMismatch);
+        }
+        if cr3 == 0 || cr3 & 0xFFF != 0 {
+            return Err(SchedulerError::InvalidCr3);
+        }
+        if self.entries.iter().any(|entry| entry.pid == pid) {
+            return Err(SchedulerError::DuplicatePid);
+        }
+        let mut entry = SchedEntry::new(pid, ctx, priority);
+        entry.cr3 = cr3;
+        self.entries.push(entry);
+        Ok(())
+    }
+
+    /// Test-only Komforthelfer. Produktionscode muss register_process verwenden.
+    #[cfg(test)]
+    pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
+        self.register_process(pid, ctx, priority, 0x1000)
+            .expect("test process registration must have a valid synthetic CR3");
     }
 
     /// Seitentabelle eines Prozesses, falls eine hinterlegt ist.
@@ -450,7 +501,9 @@ impl UserScheduler {
         for step in 0..n {
             let i = (start + step) % n;
             let entry = &self.entries[i];
-            if !entry.is_runnable() {
+            // Fail closed: kein Prozesswechsel auf eine fehlende oder
+            // ungueltige Seitentabellenwurzel.
+            if !entry.is_runnable() || entry.cr3 == 0 || entry.cr3 & 0xFFF != 0 {
                 continue;
             }
             if Some(entry.pid) == self.current {
@@ -469,6 +522,8 @@ impl UserScheduler {
         if best.is_none()
             && let Some(idx) = current_idx
             && self.entries[idx].is_runnable()
+            && self.entries[idx].cr3 != 0
+            && self.entries[idx].cr3 & 0xFFF == 0
         {
             return Some(idx);
         }
@@ -1152,6 +1207,59 @@ mod tests {
         assert_eq!(sched.entry_count(), 0);
         assert_eq!(sched.current_pid(), None);
         assert_eq!(sched.timer_ticks(), 0);
+    }
+
+    #[test]
+    fn register_process_rejects_missing_or_unaligned_cr3_without_mutation() {
+        let mut sched = UserScheduler::new();
+        let ctx = make_context(1000);
+        assert_eq!(
+            sched.register_process(Pid(1000), &ctx, 0, 0),
+            Err(SchedulerError::InvalidCr3)
+        );
+        assert_eq!(
+            sched.register_process(Pid(1000), &ctx, 0, 0x1001),
+            Err(SchedulerError::InvalidCr3)
+        );
+        assert_eq!(sched.entry_count(), 0);
+    }
+
+    #[test]
+    fn register_process_rejects_pid_mismatch_and_duplicate() {
+        let mut sched = UserScheduler::new();
+        let ctx = make_context(1000);
+        assert_eq!(
+            sched.register_process(Pid(1001), &ctx, 0, 0x1000),
+            Err(SchedulerError::PidMismatch)
+        );
+        assert_eq!(sched.register_process(Pid(1000), &ctx, 0, 0x1000), Ok(()));
+        assert_eq!(
+            sched.register_process(Pid(1000), &ctx, 0, 0x2000),
+            Err(SchedulerError::DuplicatePid)
+        );
+        assert_eq!(sched.entry_count(), 1);
+    }
+
+    #[test]
+    fn scheduler_never_selects_entry_without_valid_cr3() {
+        let mut sched = UserScheduler::new();
+        let ctx1 = make_context(1000);
+        let ctx2 = make_context(1001);
+        sched.add_process(Pid(1000), &ctx1, 0);
+        sched.add_process(Pid(1001), &ctx2, 0);
+        sched.get_entry_mut(Pid(1000)).unwrap().cr3 = 0;
+        let (pid, _) = sched.schedule(None).expect("second process has valid CR3");
+        assert_eq!(pid, Pid(1001));
+    }
+
+    #[test]
+    fn scheduler_does_not_start_when_all_cr3_roots_are_invalid() {
+        let mut sched = UserScheduler::new();
+        let ctx = make_context(1000);
+        sched.add_process(Pid(1000), &ctx, 0);
+        sched.get_entry_mut(Pid(1000)).unwrap().cr3 = 0x1001;
+        assert_eq!(sched.schedule(None), None);
+        assert_eq!(sched.current_pid(), None);
     }
 
     #[test]
