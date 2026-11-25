@@ -141,5 +141,4 @@ mod tests {
         let mut cache = BlockCache::new(device);
         assert_eq!(cache.flush(), Err(CacheError::Block(BlockError::Io)));
     }
-
 }
