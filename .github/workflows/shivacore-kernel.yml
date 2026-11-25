@@ -70,6 +70,32 @@ jobs:
           ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo +nightly build --release )
           ( cd modules/atc-shivacore/greeter && env -u RUSTFLAGS cargo +nightly build --release )
 
+      - name: Create CI-only identity record fixture
+        id: identity_fixture
+        run: |
+          # IDENT-002 is intentionally fail-closed when sys.identity is absent.
+          # This synthetic, parse-valid record is only boot-test data; its
+          # placeholder hash is not a usable owner credential.
+          mkdir -p target/boot-fixtures
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+
+          record = bytearray(64)
+          record[0:4] = b"ATID"
+          record[4] = 1
+          record[5] = 1
+          struct.pack_into("<H", record, 6, 19 * 1024)
+          struct.pack_into("<I", record, 8, 2)
+          record[12] = 1
+          record[16:32] = bytes([0x77]) * 16
+          record[32:64] = bytes([0x33]) * 32
+          Path("target/boot-fixtures/sys.identity").write_bytes(record)
+          assert len(record) == 64
+          print("CI-only IDENT-002 fixture created (64 bytes)")
+          PY
+          sha256sum target/boot-fixtures/sys.identity
+
       - name: Build BIOS and UEFI images
         id: build_images
         run: |
@@ -80,7 +106,8 @@ jobs:
             "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
             "$GITHUB_WORKSPACE/target/boot-images" \
             "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
-            "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
+            "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
+            "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
 
       - name: Install QEMU
         run: |
@@ -275,7 +302,8 @@ jobs:
               "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
               "$GITHUB_WORKSPACE/$out" \
               "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/$binary" \
-              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
+              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
+            "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
           }
 
           build_exception_image page-fault crash
@@ -355,7 +383,8 @@ jobs:
               "$target_dir/x86_64-unknown-none/kernel/shivacore" \
               "$out" \
               "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
-              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
+              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
+            "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
           }
 
           run_cpl0_guest() {
