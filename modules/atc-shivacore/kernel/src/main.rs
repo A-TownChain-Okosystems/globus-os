@@ -1528,24 +1528,30 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     // Kernel-Arbeit wieder in der Boot-Tabelle erledigen, damit spaetere
     // Abbildungen (Geraete) nicht versehentlich in einer Prozesstabelle landen.
+    serial_println!("ShivaCore: R0-DIAG-BOOT-01 before boot CR3 restore");
     shivacore::addr_space::restore(boot_cr3_frame, boot_cr3_flags);
+    serial_println!("ShivaCore: R0-DIAG-BOOT-02 after boot CR3 restore");
 
     // P1-3B: Der Frame-Allocator geht an die Laufzeit. Ab hier gibt es genau
     // eine Instanz fuer physischen Speicher, die auch die verzoegerte Freigabe
     // benutzt (try_lock im Tick, kein Blockieren).
     {
+        serial_println!("ShivaCore: R0-DIAG-BOOT-03 before runtime FRAME_ALLOCATOR lock");
         let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
         *slot = Some(frame_allocator);
+        serial_println!("ShivaCore: R0-DIAG-BOOT-04 after runtime FRAME_ALLOCATOR install");
     }
 
     // Aufbauender Weg: den Bootbezug veroeffentlichen (Speicherabstand und
     // Kernel-Wurzel), damit ein spaeterer Prozessstart denselben Weg benutzen
     // kann wie der Bootpfad. Danach baut der Selbsttest einen Adressraum ueber
     // genau diese Funktion und gibt ihn wieder frei — ein Bau ohne Start.
+    serial_println!("ShivaCore: R0-DIAG-BOOT-05 before publish boot reference");
     spawn_build::publish_boot_reference(
         phys_mem_offset_raw,
         boot_cr3_frame.start_address().as_u64(),
     );
+    serial_println!("ShivaCore: R0-DIAG-BOOT-06 after publish boot reference");
     {
         let probe_slot = 0u64;
         let layout = shivacore::spawn::layout_for_slot(probe_slot).expect("Platz 0 muss es geben");
@@ -1554,6 +1560,10 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             alloc::vec![0xF4],
             layout.code_base,
         );
+        serial_println!("ShivaCore: R0-DIAG-BOOT-07 before spawn_build::build_space");
+        match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
+            _ => serial_println!("ShivaCore: R0-DIAG-BOOT-08 spawn_build::build_space returned"),
+        }
         match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
