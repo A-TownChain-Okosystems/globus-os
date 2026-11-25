@@ -717,6 +717,11 @@ mod tests {
     fn capability_without_registry_channel_is_refused() {
         // P1-3D: Ein Recht allein oeffnet keinen Kanal. Die Registry ist die
         // Autoritaet; ohne Kanal dort endet der Aufruf fail-closed.
+        // Der globale Kanalbestand muss wie in den uebrigen IPC-Tests
+        // serialisiert und zurueckgesetzt werden, damit kein anderer Test
+        // einen Kanal mit derselben ID hinterlaesst.
+        let _serial = KANAL_EINS.lock();
+        crate::ipc_lifecycle::reset_channels_for_tests();
         let mut d = SyscallDispatcher::new();
         let mut table = CapabilityTable::new();
         let cap = table.create(pid(1), ResourceType::IpcChannel, 42, Rights::READ);
