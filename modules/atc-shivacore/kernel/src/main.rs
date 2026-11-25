@@ -1676,6 +1676,34 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     // Der erste Sprung nach Ring 3 passiert ohne Kontextwechsel davor: die
     // Tabelle von PID 1000 muss hier ausdruecklich gesetzt werden.
+    // Isolated CPL0 exception probes. These features are enabled only by the
+    // dedicated CI matrix; normal kernel builds retain the standard boot path.
+    #[cfg(any(
+        feature = "ring0-test-pf",
+        feature = "ring0-test-gp",
+        feature = "ring0-test-ud"
+    ))]
+    {
+        serial_println!("ShivaCore: R0-CPL0-TEST armed; injecting before Ring-3 handoff");
+        #[cfg(feature = "ring0-test-pf")]
+        unsafe {
+            core::ptr::read_volatile(0x0DEAD000usize as *const u64);
+        }
+        #[cfg(feature = "ring0-test-gp")]
+        unsafe {
+            core::arch::asm!(
+                "mov ds, {selector:x}",
+                selector = in(reg) 0xffffu16,
+                options(nostack, preserves_flags)
+            );
+        }
+        #[cfg(feature = "ring0-test-ud")]
+        unsafe {
+            core::arch::asm!("ud2", options(noreturn));
+        }
+        panic!("R0-CPL0-TEST injection returned without fault");
+    }
+
     shivacore::addr_space::install_raw(cr3_first);
     unsafe { userspace::enter_ring3(&user_ctx) }
 
