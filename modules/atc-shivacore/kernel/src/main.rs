@@ -1578,15 +1578,27 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         match build_result {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
+                serial_println!("ShivaCore: R0-DIAG-RECLAIM-01 before queue_process");
                 shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(0x0C21));
+                serial_println!("ShivaCore: R0-DIAG-RECLAIM-02 after queue_process; before FRAME_ALLOCATOR lock");
                 let freed = {
                     let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
+                    serial_println!("ShivaCore: R0-DIAG-RECLAIM-03 FRAME_ALLOCATOR lock acquired");
                     match slot.as_mut() {
-                        Some(allocator) => shivacore::reclaim::RECLAIMER
-                            .drain_with(|frame| allocator.deallocate_frame(frame)),
-                        None => 0,
+                        Some(allocator) => {
+                            serial_println!("ShivaCore: R0-DIAG-RECLAIM-04 before drain_with");
+                            let count = shivacore::reclaim::RECLAIMER
+                                .drain_with(|frame| allocator.deallocate_frame(frame));
+                            serial_println!("ShivaCore: R0-DIAG-RECLAIM-05 after drain_with freed={}", count);
+                            count
+                        }
+                        None => {
+                            serial_println!("ShivaCore: R0-DIAG-RECLAIM-06 FRAME_ALLOCATOR empty");
+                            0
+                        },
                     }
                 };
+                serial_println!("ShivaCore: R0-DIAG-RECLAIM-07 after allocator guard drop");
                 serial_println!(
                     "ShivaCore: Aufbauender Weg: Adressraum gebaut (Platz={}, Wurzel={:#x}, {} Frames), {} Frames wieder freigegeben",
                     probe_slot,
