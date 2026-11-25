@@ -1319,10 +1319,9 @@ shivacore_gp_trampoline:
     mov esi, 1
 
 shivacore_fault_common:
-    // Nach 15 Pushes liegt der Fehlercode bei frame+120. Vor dem call
-    // richten wir den Stack auf 16 Byte aus; RDI bleibt auf dem Frame-Anfang.
-    sub rsp, 8
-    lea rdi, [rsp + 8]
+    // Nach 15 Pushes liegt der Fehlercode bei frame+120. Der Frame-Zeiger
+    // bleibt in RDI; R12 ist als callee-saved Register unser Rueckweg zum Frame.
+    lea rdi, [rsp]
     // Bei CPL0 legt die CPU kein altes RSP/SS ab. Diese beiden Felder werden
     // aus dem bekannten Hardware-Frame rekonstruiert, damit die Rust-Struktur
     // vollstaendig initialisiert ist. Bei CPL3 stammen sie aus dem CPU-Frame.
@@ -1334,8 +1333,10 @@ shivacore_fault_common:
     mov ax, ss
     mov [rdi + 160], rax
 1:
+    mov r12, rdi
+    and rsp, -16
     call {handler}
-    add rsp, 8
+    mov rsp, r12
     pop rax
     pop rbx
     pop rcx
@@ -1375,8 +1376,7 @@ shivacore_fault_trampoline_nocode:
     push rcx
     push rbx
     push rax
-    sub rsp, 8
-    lea rdi, [rsp + 8]
+    lea rdi, [rsp]
     mov esi, 2
     test byte ptr [rdi + 136], 3
     jnz 2f
@@ -1386,8 +1386,10 @@ shivacore_fault_trampoline_nocode:
     mov ax, ss
     mov [rdi + 160], rax
 2:
+    mov r12, rdi
+    and rsp, -16
     call {handler}
-    add rsp, 8
+    mov rsp, r12
     pop rax
     pop rbx
     pop rcx
