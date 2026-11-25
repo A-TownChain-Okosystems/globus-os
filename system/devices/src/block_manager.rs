@@ -183,5 +183,4 @@ mod tests {
             Err(BlockManagerError::Io(BlockError::Io))
         );
     }
-
 }
