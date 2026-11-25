@@ -17,7 +17,7 @@ jobs:
       # Nightly bleibt allein dem Kernel-Boot-Image vorbehalten (build-std).
       - name: Toolchain aus rust-toolchain.toml (verbindlich 1.100.0)
         run: |
-          rustup target add x86_64-unknown-uefi
+          rustup target add x86_64-unknown-uefi x86_64-unknown-none
           rustup show active-toolchain
           rustc -vV | grep -qx 'release: 1.100.0'
           rustc -Vv
