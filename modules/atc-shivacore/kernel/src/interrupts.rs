@@ -297,9 +297,7 @@ pub fn init_user_scheduler(
     // Der vierte Platz ist der zweite Programmplatz aus der Ramdisk. Er ist
     // optional: ein Image ohne Verzeichnis hat nur drei Prozesse.
     if let Some(fourth) = fourth {
-        if let Err(error) =
-            scheduler.register_process(cr3_fourth.0, fourth, 0, cr3_fourth.1)
-        {
+        if let Err(error) = scheduler.register_process(cr3_fourth.0, fourth, 0, cr3_fourth.1) {
             serial_println!(
                 "ShivaCore: FATAL — Ring-3-Scheduler-Registrierung PID {} abgelehnt: {:?}",
                 cr3_fourth.0.0,
