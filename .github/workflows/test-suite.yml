@@ -20,6 +20,8 @@ jobs:
           rustc -vV | grep -qx 'release: 1.100.0'
           rustc -Vv
           cargo -V
+      - name: Install Bare-Metal-Testtarget
+        run: rustup target add x86_64-unknown-none
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
@@ -29,6 +31,14 @@ jobs:
             d="$(dirname "$f")"
             if [ "$d" = "./modules/atc-shivacore/boot" ]; then
               echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
+              continue
+            fi
+            if [ "$d" = "./modules/atc-shivacore/greeter" ] || [ "$d" = "./modules/atc-shivacore/init_program" ]; then
+              echo "=== cargo check (bare-metal binary, no Rust test harness) in $d"
+              if ! (cd "$d" && cargo check --release --target x86_64-unknown-none --quiet); then
+                echo "cargo check FAILED in $d"
+                FAIL=1
+              fi
               continue
             fi
             echo "=== cargo test in $d"

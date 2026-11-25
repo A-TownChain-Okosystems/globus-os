@@ -95,6 +95,16 @@ impl<D: BlockDevice> BlockDeviceRegistry<D> {
         device.write(request, source).map_err(BlockManagerError::Io)
     }
 
+    /// Leitet die Abschluss- und Persistenzbarriere an das Geraet weiter.
+    pub fn flush(&mut self, id: BlockDeviceId) -> Result<(), BlockManagerError> {
+        let (_, device) = self
+            .devices
+            .iter_mut()
+            .find(|(existing, _)| *existing == id)
+            .ok_or(BlockManagerError::Missing)?;
+        device.flush().map_err(BlockManagerError::Io)
+    }
+
     /// Alle vergebenen Kennungen.
     pub fn ids(&self) -> impl Iterator<Item = BlockDeviceId> + '_ {
         self.devices.iter().map(|(id, _)| *id)
@@ -130,6 +140,43 @@ mod tests {
         assert_eq!(
             r.ids().collect::<Vec<_>>(),
             vec![BlockDeviceId(1), BlockDeviceId(2)]
+        );
+        r.flush(BlockDeviceId(1)).unwrap();
+    }
+    struct FlushFailDevice(MemoryBlockDevice);
+    impl BlockDevice for FlushFailDevice {
+        fn geometry(&self) -> BlockGeometry {
+            self.0.geometry()
+        }
+        fn read(
+            &mut self,
+            request: BlockRequest,
+            destination: &mut [u8],
+        ) -> Result<(), BlockError> {
+            self.0.read(request, destination)
+        }
+        fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError> {
+            self.0.write(request, source)
+        }
+        fn flush(&mut self) -> Result<(), BlockError> {
+            Err(BlockError::Io)
+        }
+    }
+
+    #[test]
+    fn registry_propagates_flush_error() {
+        let device = FlushFailDevice(
+            MemoryBlockDevice::new(BlockGeometry {
+                block_size: 512,
+                block_count: 2,
+            })
+            .unwrap(),
+        );
+        let mut registry = BlockDeviceRegistry::new();
+        registry.register(BlockDeviceId(7), device).unwrap();
+        assert_eq!(
+            registry.flush(BlockDeviceId(7)),
+            Err(BlockManagerError::Io(BlockError::Io))
         );
     }
 }

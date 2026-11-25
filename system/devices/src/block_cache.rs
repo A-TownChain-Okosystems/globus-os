@@ -79,6 +79,11 @@ impl<D: BlockDevice> BlockCache<D> {
         self.cached_lba = Some(lba);
         Ok(())
     }
+
+    /// Leitet die Persistenzbarriere an das zugrunde liegende Geraet weiter.
+    pub fn flush(&mut self) -> Result<(), CacheError> {
+        self.device.flush().map_err(CacheError::Block)
+    }
 }
 
 #[cfg(test)]
@@ -98,5 +103,38 @@ mod tests {
         cache.write_block(1, &input).unwrap();
         cache.read_block(1, &mut out).unwrap();
         assert_eq!(out, input);
+        cache.flush().unwrap();
+    }
+    struct FlushFailDevice(MemoryBlockDevice);
+    impl BlockDevice for FlushFailDevice {
+        fn geometry(&self) -> BlockGeometry {
+            self.0.geometry()
+        }
+        fn read(
+            &mut self,
+            request: BlockRequest,
+            destination: &mut [u8],
+        ) -> Result<(), BlockError> {
+            self.0.read(request, destination)
+        }
+        fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError> {
+            self.0.write(request, source)
+        }
+        fn flush(&mut self) -> Result<(), BlockError> {
+            Err(BlockError::Io)
+        }
+    }
+
+    #[test]
+    fn block_cache_propagates_flush_error() {
+        let device = FlushFailDevice(
+            MemoryBlockDevice::new(BlockGeometry {
+                block_size: 512,
+                block_count: 2,
+            })
+            .unwrap(),
+        );
+        let mut cache = BlockCache::new(device);
+        assert_eq!(cache.flush(), Err(CacheError::Block(BlockError::Io)));
     }
 }

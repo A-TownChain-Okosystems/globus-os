@@ -45,6 +45,10 @@ impl<D: BlockDevice> FileStore<D> {
     pub fn block_size(&self) -> u64 {
         self.block_size
     }
+    /// Wartet, bis alle vorherigen Dateidaten-Schreibvorgaenge dauerhaft sind.
+    pub fn flush(&mut self) -> Result<(), FileStoreError> {
+        self.device.flush().map_err(|_| FileStoreError::Io)
+    }
     /// Gibt das Geraet zurueck.
     pub fn into_device(self) -> D {
         self.device
@@ -164,5 +168,6 @@ mod tests {
         let mut out = vec![0u8; data.len()];
         assert_eq!(s.read_at(&m, 3, &mut out).unwrap(), data.len());
         assert_eq!(&out, data);
+        s.flush().unwrap();
     }
 }
