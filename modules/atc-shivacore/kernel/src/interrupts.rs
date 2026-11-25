@@ -381,10 +381,7 @@ pub fn online_cpus() -> usize {
 /// 14.11.2026 — das Datensegment aus dem hinterlegten Startabbild. Nicht
 /// angefasst wird der Haufen; die Capabilities bleiben, sonst waere der Dienst
 /// nach dem Neustart rechtlos.
-fn reset_service_process(
-    frame: &mut impl ServiceRestartFrame,
-    service: &crate::services::Service,
-) {
+fn reset_service_process(frame: &mut impl ServiceRestartFrame, service: &crate::services::Service) {
     let start = service.start_rsp;
     let end = start.saturating_add(16);
     if start >= service.stack_low && end <= service.stack_low.saturating_add(0x0000_8000) {
@@ -1464,16 +1461,10 @@ shivacore_fault_trampoline_nocode:
 /// eine Korrektur nicht nur an einer Haelfte ankommt.
 #[unsafe(no_mangle)]
 extern "C" fn exception_trap_rust(frame: &mut ExceptionTrapFrame, kind: u32) {
-    handle_exception(
-        frame,
-        shivacore::fault::ExceptionKind::from_id(kind),
-    );
+    handle_exception(frame, shivacore::fault::ExceptionKind::from_id(kind));
 }
 
-fn handle_exception(
-    frame: &mut ExceptionTrapFrame,
-    kind: shivacore::fault::ExceptionKind,
-) {
+fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::ExceptionKind) {
     use x86_64::registers::control::Cr2;
 
     let error_code = frame.error_code;
@@ -1616,7 +1607,7 @@ fn handle_exception(
                             recorded.kernel_faults
                         );
                     }
-                },
+                }
                 shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
                     // Bei der Schutzverletzung ist der Fehlercode eine
                     // Segmentauswahl oder 0 — Bit 2 sagt hier NICHT, ob der
@@ -2472,18 +2463,51 @@ mod exception_frame_tests {
     fn exception_frame_restores_every_general_register_and_iret_field() {
         let saved = SavedContext {
             regs: SavedRegisters {
-                rax: 1, rbx: 2, rcx: 3, rdx: 4, rsi: 5, rdi: 6, rbp: 7,
-                rsp: 0x8000, r8: 8, r9: 9, r10: 10, r11: 11, r12: 12,
-                r13: 13, r14: 14, r15: 15,
+                rax: 1,
+                rbx: 2,
+                rcx: 3,
+                rdx: 4,
+                rsi: 5,
+                rdi: 6,
+                rbp: 7,
+                rsp: 0x8000,
+                r8: 8,
+                r9: 9,
+                r10: 10,
+                r11: 11,
+                r12: 12,
+                r13: 13,
+                r14: 14,
+                r15: 15,
             },
             iret: IretFrame {
-                rip: 0x400000, cs: 0x1B, rflags: 0x202, rsp: 0x8000, ss: 0x23,
+                rip: 0x400000,
+                cs: 0x1B,
+                rflags: 0x202,
+                rsp: 0x8000,
+                ss: 0x23,
             },
         };
         let mut frame = ExceptionTrapFrame {
-            rax: 0, rbx: 0, rcx: 0, rdx: 0, rsi: 0, rdi: 0, rbp: 0,
-            r8: 0, r9: 0, r10: 0, r11: 0, r12: 0, r13: 0, r14: 0, r15: 0,
-            error_code: 0x5, rip: 0, cs: 0, rflags: 0,
+            rax: 0,
+            rbx: 0,
+            rcx: 0,
+            rdx: 0,
+            rsi: 0,
+            rdi: 0,
+            rbp: 0,
+            r8: 0,
+            r9: 0,
+            r10: 0,
+            r11: 0,
+            r12: 0,
+            r13: 0,
+            r14: 0,
+            r15: 0,
+            error_code: 0x5,
+            rip: 0,
+            cs: 0,
+            rflags: 0,
             rsp: core::mem::MaybeUninit::uninit(),
             ss: core::mem::MaybeUninit::uninit(),
         };
@@ -2491,11 +2515,18 @@ mod exception_frame_tests {
         assert_eq!((frame.rax, frame.rbx, frame.rcx, frame.rdx), (1, 2, 3, 4));
         assert_eq!((frame.rsi, frame.rdi, frame.rbp), (5, 6, 7));
         assert_eq!((frame.r8, frame.r9, frame.r10, frame.r11), (8, 9, 10, 11));
-        assert_eq!((frame.r12, frame.r13, frame.r14, frame.r15), (12, 13, 14, 15));
         assert_eq!(
-            (frame.rip, frame.cs, frame.rflags, unsafe { frame.rsp.assume_init() }, unsafe {
-                frame.ss.assume_init()
-            }),
+            (frame.r12, frame.r13, frame.r14, frame.r15),
+            (12, 13, 14, 15)
+        );
+        assert_eq!(
+            (
+                frame.rip,
+                frame.cs,
+                frame.rflags,
+                unsafe { frame.rsp.assume_init() },
+                unsafe { frame.ss.assume_init() }
+            ),
             (0x400000, 0x1B, 0x202, 0x8000, 0x23)
         );
         assert_eq!(frame.error_code, 0x5, "error code remains diagnostic data");
