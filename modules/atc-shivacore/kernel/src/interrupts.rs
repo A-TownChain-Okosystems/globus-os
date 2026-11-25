@@ -302,7 +302,7 @@ pub fn init_user_scheduler(
         {
             serial_println!(
                 "ShivaCore: FATAL — Ring-3-Scheduler-Registrierung PID {} abgelehnt: {:?}",
-                cr3_fourth.0 .0,
+                cr3_fourth.0.0,
                 error
             );
             return;
