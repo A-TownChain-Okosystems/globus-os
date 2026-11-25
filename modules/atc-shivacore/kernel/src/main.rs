@@ -1561,10 +1561,9 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             layout.code_base,
         );
         serial_println!("ShivaCore: R0-DIAG-BOOT-07 before spawn_build::build_space");
-        match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
-            _ => serial_println!("ShivaCore: R0-DIAG-BOOT-08 spawn_build::build_space returned"),
-        }
-        match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
+        let build_result = spawn_build::build_space(probe_slot, &binary, 0x0C21);
+        serial_println!("ShivaCore: R0-DIAG-BOOT-08 spawn_build::build_space returned");
+        match build_result {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
                 shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(0x0C21));
