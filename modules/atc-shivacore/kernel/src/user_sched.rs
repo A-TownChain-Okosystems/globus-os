@@ -441,12 +441,7 @@ impl UserScheduler {
             .iter()
             .find(|e| e.pid == pid)
             .map(|e| e.cr3)
-            .filter(|cr3| *cr3 != 0)
-    }
-
-    /// Traegt einen Prozess als bereit ein.
-    pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
-        self.entries.push(SchedEntry::new(pid, ctx, priority));
+            .filter(|cr3| *cr3 != 0 && *cr3 & 0xFFF == 0)
     }
 
     /// Remove a process from the scheduler
