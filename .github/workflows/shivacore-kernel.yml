@@ -338,6 +338,88 @@ jobs:
             run_guest "$kind" uefi
           done
 
+          # CPL0 tests use separately compiled kernel images. The standard
+          # kernel binary and normal Ring-3 matrix remain untouched.
+          build_cpl0_image() {
+            local kind="$1"
+            local feature="$2"
+            local target_dir="$GITHUB_WORKSPACE/target/cpl0-kernel-$kind"
+            local out="$GITHUB_WORKSPACE/target/exception-tests/cpl0/$kind"
+            mkdir -p "$out"
+            CARGO_TARGET_DIR="$target_dir" \
+              RUSTFLAGS='-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"' \
+              cargo +nightly build -p shivacore --profile kernel \
+                --target x86_64-unknown-none --no-default-features \
+                --features "x86-boot,$feature"
+            ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
+              "$target_dir/x86_64-unknown-none/kernel/shivacore" \
+              "$out" \
+              "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
+          }
+
+          run_cpl0_guest() {
+            local kind="$1"
+            local firmware="$2"
+            local image="target/exception-tests/cpl0/$kind/shivacore-$firmware.img"
+            local log="target/exception-tests/cpl0-$kind-$firmware-${{ matrix.cpu }}.log"
+            local status
+            if [ "$firmware" = "bios" ]; then
+              set +e
+              timeout 12s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            else
+              set +e
+              timeout 12s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            fi
+
+            if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+              echo "CPL0 $kind/$firmware QEMU exited unexpectedly: $status"
+              cat "$log"
+              return 1
+            fi
+            grep -Fq "ShivaCore: R0-CPL0-TEST armed; injecting before Ring-3 handoff" "$log"
+            case "$kind" in
+              page-fault)
+                grep -Fq "ShivaCore: CPL0 fault accounting: kind=Seitenfehler kernel_faults=1 action=PanicKernel" "$log"
+                grep -Fq "Kernelausnahme Seitenfehler:" "$log"
+                ;;
+              general-protection)
+                grep -Fq "ShivaCore: CPL0 fault accounting: kind=Schutzverletzung kernel_faults=1 action=PanicKernel" "$log"
+                grep -Fq "Kernelausnahme Schutzverletzung:" "$log"
+                ;;
+              invalid-opcode)
+                grep -Fq "ShivaCore: CPL0 fault accounting: kind=Ungueltiger Opcode kernel_faults=1 action=PanicKernel" "$log"
+                grep -Fq "Kernelausnahme Ungueltiger Opcode:" "$log"
+                ;;
+            esac
+            grep -Fq "Ring 0" "$log"
+            if grep -Eq "Usermodus=true|Exit-Cleanup PID=|weiter mit PID=.*statt den Fehler zu wiederholen" "$log"; then
+              echo "CPL0 $kind/$firmware entered a user-process recovery path unexpectedly"
+              cat "$log"
+              return 1
+            fi
+            echo "PASS CPL0 $kind/$firmware ${{ matrix.cpu }} (QEMU exit $status)"
+          }
+
+          build_cpl0_image page-fault ring0-test-pf
+          build_cpl0_image general-protection ring0-test-gp
+          build_cpl0_image invalid-opcode ring0-test-ud
+          for kind in page-fault general-protection invalid-opcode; do
+            run_cpl0_guest "$kind" bios
+            run_cpl0_guest "$kind" uefi
+          done
+
       - name: Create exception injection SHA-256 manifest
         id: exception_evidence
         if: always()
