@@ -21,6 +21,9 @@ crate-type = ["lib"]
 [features]
 default = []
 x86-boot = ["dep:bootloader_api", "dep:x86_64", "dep:uart_16550", "dep:pic8259", "dep:noto-sans-mono-bitmap", "dep:lazy_static"]
+ring0-test-pf = ["x86-boot"]
+ring0-test-gp = ["x86-boot"]
+ring0-test-ud = ["x86-boot"]
 
 [dependencies]
 bootloader_api = { version = "0.11", optional = true }
