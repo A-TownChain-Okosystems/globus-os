@@ -145,22 +145,37 @@ mod tests {
     }
     struct FlushFailDevice(MemoryBlockDevice);
     impl BlockDevice for FlushFailDevice {
-        fn geometry(&self) -> BlockGeometry { self.0.geometry() }
-        fn read(&mut self, request: BlockRequest, destination: &mut [u8]) -> Result<(), BlockError> {
+        fn geometry(&self) -> BlockGeometry {
+            self.0.geometry()
+        }
+        fn read(
+            &mut self,
+            request: BlockRequest,
+            destination: &mut [u8],
+        ) -> Result<(), BlockError> {
             self.0.read(request, destination)
         }
-        fn write(&mut self, request: BlockRequest, source: &[u8]) -> Result<(), BlockError> {
+        fn write(
+            &mut self,
+            request: BlockRequest,
+            source: &[u8],
+        ) -> Result<(), BlockError> {
             self.0.write(request, source)
         }
-        fn flush(&mut self) -> Result<(), BlockError> { Err(BlockError::Io) }
+        fn flush(&mut self) -> Result<(), BlockError> {
+            Err(BlockError::Io)
+        }
     }
 
     #[test]
     fn registry_propagates_flush_error() {
-        let device = FlushFailDevice(MemoryBlockDevice::new(BlockGeometry {
-            block_size: 512,
-            block_count: 2,
-        }).unwrap());
+        let device = FlushFailDevice(
+            MemoryBlockDevice::new(BlockGeometry {
+                block_size: 512,
+                block_count: 2,
+            })
+            .unwrap(),
+        );
         let mut registry = BlockDeviceRegistry::new();
         registry.register(BlockDeviceId(7), device).unwrap();
         assert_eq!(
