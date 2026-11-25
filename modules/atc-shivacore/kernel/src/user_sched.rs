@@ -435,11 +435,13 @@ impl UserScheduler {
     /// Hardwareprozesse muessen register_process() mit ihrer echten CR3-Wurzel
     /// verwenden. Unit-Tests erhalten eine synthetische, seitenorientierte Wurzel.
     pub fn add_process(&mut self, pid: Pid, ctx: &UserContext, priority: u8) {
-        let mut entry = SchedEntry::new(pid, ctx, priority);
+        let entry = SchedEntry::new(pid, ctx, priority);
         #[cfg(test)]
-        {
-            entry.cr3 = 0x1000;
-        }
+        let entry = {
+            let mut test_entry = entry;
+            test_entry.cr3 = 0x1000;
+            test_entry
+        };
         self.entries.push(entry);
     }
 
