@@ -12,6 +12,13 @@
 #![feature(alloc_error_handler)]
 #![no_main]
 
+#[cfg(any(
+    all(feature = "ring0-test-pf", feature = "ring0-test-gp"),
+    all(feature = "ring0-test-pf", feature = "ring0-test-ud"),
+    all(feature = "ring0-test-gp", feature = "ring0-test-ud")
+))]
+compile_error!("CPL0 exception test features are mutually exclusive");
+
 extern crate alloc;
 
 mod allocator;
