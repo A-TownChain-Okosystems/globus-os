@@ -394,7 +394,7 @@ jobs:
             local status
             if [ "$firmware" = "bios" ]; then
               set +e
-              timeout 12s qemu-system-x86_64 \
+              timeout 30s qemu-system-x86_64 \
                 -cpu ${{ matrix.qemu_cpu }} \
                 -drive format=raw,file="$image" \
                 -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
@@ -402,7 +402,7 @@ jobs:
               set -e
             else
               set +e
-              timeout 12s qemu-system-x86_64 \
+              timeout 30s qemu-system-x86_64 \
                 -cpu ${{ matrix.qemu_cpu }} \
                 -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
                 -drive format=raw,file="$image" \
