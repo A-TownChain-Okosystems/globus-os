@@ -359,7 +359,8 @@ mod tests {
         let inner = MemoryBlockDevice::new(BlockGeometry {
             block_size: 512,
             block_count: 64,
-        }).unwrap();
+        })
+        .unwrap();
         let device = FlushFailDevice {
             inner,
             fail_flush: true,
