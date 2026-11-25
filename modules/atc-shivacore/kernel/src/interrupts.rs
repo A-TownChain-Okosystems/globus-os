@@ -1046,26 +1046,47 @@ pub struct UserTrapFrame {
 /// fuer Page Fault, General Protection und Invalid Opcode an identischen Offsets.
 #[repr(C)]
 pub struct ExceptionTrapFrame {
+    /// Akkumulator.
     pub rax: u64,
+    /// Basisregister.
     pub rbx: u64,
+    /// Zaehlerregister.
     pub rcx: u64,
+    /// Datenregister.
     pub rdx: u64,
+    /// Quellindex.
     pub rsi: u64,
+    /// Zielindex.
     pub rdi: u64,
+    /// Rahmenzeiger.
     pub rbp: u64,
+    /// Erweitertes Register 8.
     pub r8: u64,
+    /// Erweitertes Register 9.
     pub r9: u64,
+    /// Erweitertes Register 10.
     pub r10: u64,
+    /// Erweitertes Register 11.
     pub r11: u64,
+    /// Erweitertes Register 12.
     pub r12: u64,
+    /// Erweitertes Register 13.
     pub r13: u64,
+    /// Erweitertes Register 14.
     pub r14: u64,
+    /// Erweitertes Register 15.
     pub r15: u64,
+    /// Von der CPU gelieferter oder fuer #UD synthetischer Fehlercode.
     pub error_code: u64,
+    /// Befehlszeiger zum Ausnahmezeitpunkt.
     pub rip: u64,
+    /// Code-Segment inklusive Privilegstufe.
     pub cs: u64,
+    /// Prozessor-Flags.
     pub rflags: u64,
+    /// Unterbrochener Stapelzeiger.
     pub rsp: u64,
+    /// Stapelsegment.
     pub ss: u64,
 }
 
