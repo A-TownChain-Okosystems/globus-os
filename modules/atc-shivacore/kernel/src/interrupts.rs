@@ -256,11 +256,11 @@ static SYSCALL_GATE: Mutex<Option<SyscallGate>> = Mutex::new(None);
 pub fn set_process_cr3(
     pid: crate::ats1000::Pid,
     cr3: u64,
-) -> Result<(), crate::user_sched::SchedulerError> {
+) -> Result<(), shivacore::user_sched::SchedulerError> {
     let mut guard = USER_SCHEDULER.lock();
     let scheduler = guard
         .as_mut()
-        .ok_or(crate::user_sched::SchedulerError::UnknownProcess)?;
+        .ok_or(shivacore::user_sched::SchedulerError::UnknownProcess)?;
     scheduler.set_cr3(pid, cr3)
 }
 
