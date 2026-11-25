@@ -20,6 +20,10 @@ jobs:
           rustc -vV | grep -qx 'release: 1.100.0'
           rustc -Vv
           cargo -V
+      # Greeter und init_program verwenden x86_64-unknown-none als Target;
+      # Cargo folgt hier rust-toolchain.toml (1.100.0), nicht Nightly.
+      - name: Install pinned no-OS target
+        run: rustup target add x86_64-unknown-none --toolchain 1.100.0
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
