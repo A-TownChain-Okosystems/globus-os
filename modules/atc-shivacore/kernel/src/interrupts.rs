@@ -1716,10 +1716,26 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
             }
         }
         shivacore::fault::FaultAction::PanicKernel => {
+            // CPL0-Hardwareframes enthalten kein gespeichertes RSP/SS-Paar.
+            // Bei 15 zuvor gesicherten GP-Registern plus Error-Code/RIP/CS/RFLAGS
+            // liegt der unterbrochene RSP deshalb 152 Byte oberhalb des Frame-Anfangs.
+            let frame_address = frame as *const ExceptionTrapFrame as u64;
+            let interrupted_rsp = frame_address.wrapping_add(152);
             serial_println!(
                 "ShivaCore: CPL0 fault accounting: kind={} kernel_faults={} action=PanicKernel",
                 kind.name(),
                 recorded.kernel_faults
+            );
+            serial_println!(
+                "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x} CR2={:#x}",
+                kind.name(),
+                frame_address,
+                error_code,
+                frame.rip,
+                frame.cs,
+                frame.rflags,
+                interrupted_rsp,
+                address
             );
             panic!(
                 "Kernelausnahme {}: Adresse={:#x} ({}), Ring 0",
