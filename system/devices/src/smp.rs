@@ -160,6 +160,14 @@ mod tests {
     }
 
     #[test]
+    fn online_transition_is_rejected_before_startup_begins() {
+        let mut t = CpuTopology::new();
+        t.register(CpuId(4)).unwrap();
+        assert_eq!(t.mark_online(CpuId(4)), Err(SmpError::InvalidTransition));
+        assert_eq!(t.get(CpuId(4)).unwrap().state, CpuState::Offline);
+    }
+
+    #[test]
     fn startup_cannot_be_started_twice() {
         let mut t = CpuTopology::new();
         t.register(CpuId(3)).unwrap();
