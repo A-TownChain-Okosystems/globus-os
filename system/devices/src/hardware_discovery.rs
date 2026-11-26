@@ -34,7 +34,11 @@ pub fn parse_mcfg_windows(bytes: &[u8]) -> Result<Vec<McfgWindow>, DiscoveryErro
     const ENTRY: usize = 16;
     let length = u32::from_le_bytes([bytes[4], bytes[5], bytes[6], bytes[7]]) as usize;
     let mut windows = Vec::new();
-    for raw in bytes[FIXED..length].chunks_exact(ENTRY) {
+    let (entries, remainder) = bytes[FIXED..length].as_chunks::<ENTRY>();
+    if !remainder.is_empty() {
+        return Err(DiscoveryError::InvalidMcfg(AcpiError::InvalidLength));
+    }
+    for raw in entries {
         let window = McfgWindow {
             base_address: u64::from_le_bytes(
                 raw[0..8]
