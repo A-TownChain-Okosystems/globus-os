@@ -1654,18 +1654,22 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_pid.0,
         user_pid_2.0
     );
-    x86_64::instructions::interrupts::without_interrupts(|| {
-        interrupts::init_user_scheduler(
-            &user_ctx,
-            &user_ctx_2,
-            &user_ctx_3,
-            user_ctx_4.as_ref(),
-            (user_pid, cr3_first),
-            (user_pid_2, cr3_second),
-            (user_pid_3, cr3_third),
-            (ats1000::Pid(1003), cr3_fourth),
-        );
-    });
+    // IF bleibt bis zum IRETQ deaktiviert: `without_interrupts` wuerde
+    // beim Verlassen der Closure IF wiederherstellen und damit ein Timer-IRQ
+    // nach Scheduler-Publikation, aber vor CR3-Installation/Ring-3-Einstieg
+    // erlauben. Das User-RFLAGS (0x202, IF=1) aktiviert Interrupts atomar
+    // durch den anschliessenden IRETQ-Frame.
+    x86_64::instructions::interrupts::disable();
+    interrupts::init_user_scheduler(
+        &user_ctx,
+        &user_ctx_2,
+        &user_ctx_3,
+        user_ctx_4.as_ref(),
+        (user_pid, cr3_first),
+        (user_pid_2, cr3_second),
+        (user_pid_3, cr3_third),
+        (ats1000::Pid(1003), cr3_fourth),
+    );
     // Der erste Sprung nach Ring 3 passiert ohne Kontextwechsel davor: die
     // Tabelle von PID 1000 muss hier ausdruecklich gesetzt werden.
     shivacore::addr_space::install_raw(cr3_first);
