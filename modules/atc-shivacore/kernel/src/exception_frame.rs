@@ -1,16 +1,17 @@
 // Copyright (c) 2026 Michael Wroblewski / ShivaCore / A-TownChain-Okosystems. All Rights Reserved.
 //! Fixed x86-64 exception frame shared by the kernel trampoline and host-side tests.
 
-use core::mem::MaybeUninit;
+use core::mem::{MaybeUninit, size_of};
 
 use crate::user_sched::SavedContext;
 
-/// CPU frame for exceptions with one normalized error-code slot.
+/// CPU frame present for every normalized x86-64 exception.
 ///
 /// The frame contains 15 saved general-purpose registers, an error-code slot,
-/// and the CPU return frame. For CPL0-origin exceptions the CPU does not push
-/// RSP/SS; those fields therefore remain uninitialized and must only be read
-/// after verifying a CPL3 origin.
+/// and the CPU return frame through RFLAGS. This is exactly 152 bytes. The
+/// privilege-dependent RSP/SS extension is deliberately a separate type:
+/// CPL0 exceptions do not push those words, so a reference to this base frame
+/// must not extend into memory above the interrupted kernel RSP.
 #[repr(C)]
 pub struct ExceptionTrapFrame {
     /// Accumulator.
@@ -51,6 +52,11 @@ pub struct ExceptionTrapFrame {
     pub cs: u64,
     /// Processor flags.
     pub rflags: u64,
+}
+
+/// Additional CPU frame words pushed only on a CPL3-to-CPL0 transition.
+#[repr(C)]
+pub struct ExceptionUserStackFrame {
     /// User stack pointer; initialized by the CPU only for CPL3-origin exceptions.
     pub rsp: MaybeUninit<u64>,
     /// User stack segment; initialized by the CPU only for CPL3-origin exceptions.
@@ -58,8 +64,48 @@ pub struct ExceptionTrapFrame {
 }
 
 impl ExceptionTrapFrame {
-    /// Replaces the faulting context with the next Ring-3 context.
-    pub fn apply_saved_context(&mut self, ctx: &SavedContext) {
+    /// Returns the privilege-transition extension following this base frame.
+    ///
+    /// # Safety
+    ///
+    /// The interrupted context must have originated in CPL3. The CPU only
+    /// pushes the RSP/SS words in that case; for CPL0 they are not part of the
+    /// hardware frame and the memory may not be mapped or initialized.
+    pub unsafe fn user_stack_frame(&self) -> &ExceptionUserStackFrame {
+        let extension = unsafe {
+            (self as *const Self)
+                .cast::<u8>()
+                .add(size_of::<Self>())
+                .cast::<ExceptionUserStackFrame>()
+        };
+        // SAFETY: guaranteed by the caller's CPL3-origin precondition.
+        unsafe { &*extension }
+    }
+
+    /// Returns the mutable privilege-transition extension following this frame.
+    ///
+    /// # Safety
+    ///
+    /// The interrupted context must have originated in CPL3. The CPU only
+    /// pushes the RSP/SS words in that case.
+    pub unsafe fn user_stack_frame_mut(&mut self) -> &mut ExceptionUserStackFrame {
+        let extension = unsafe {
+            (self as *mut Self)
+                .cast::<u8>()
+                .add(size_of::<Self>())
+                .cast::<ExceptionUserStackFrame>()
+        };
+        // SAFETY: guaranteed by the caller's CPL3-origin precondition.
+        unsafe { &mut *extension }
+    }
+
+    /// Replaces the faulting Ring-3 context with the next saved context.
+    ///
+    /// # Safety
+    ///
+    /// The frame must originate from CPL3 so the CPU-pushed RSP/SS extension
+    /// exists immediately after the base exception frame.
+    pub unsafe fn apply_saved_context(&mut self, ctx: &SavedContext) {
         self.rax = ctx.regs.rax;
         self.rbx = ctx.regs.rbx;
         self.rcx = ctx.regs.rcx;
@@ -78,25 +124,37 @@ impl ExceptionTrapFrame {
         self.rip = ctx.iret.rip;
         self.cs = u64::from(ctx.iret.cs);
         self.rflags = ctx.iret.rflags;
-        self.rsp.write(ctx.iret.rsp);
-        self.ss.write(u64::from(ctx.iret.ss));
+        // SAFETY: this method's caller guarantees a CPL3-origin frame.
+        let user_stack = unsafe { self.user_stack_frame_mut() };
+        user_stack.rsp.write(ctx.iret.rsp);
+        user_stack.ss.write(u64::from(ctx.iret.ss));
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use super::ExceptionTrapFrame;
+    use super::{ExceptionTrapFrame, ExceptionUserStackFrame};
     use crate::user_sched::{IretFrame, SavedContext, SavedRegisters};
+    use core::mem::MaybeUninit;
+
+    #[repr(C)]
+    struct CompleteUserExceptionFrame {
+        base: ExceptionTrapFrame,
+        user_stack: ExceptionUserStackFrame,
+    }
 
     #[test]
-    fn exception_frame_matches_hardware_error_code_layout() {
+    fn exception_frame_matches_hardware_privilege_layout() {
         assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, error_code), 120);
         assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rip), 128);
         assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, cs), 136);
         assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rflags), 144);
-        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rsp), 152);
-        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, ss), 160);
-        assert_eq!(core::mem::size_of::<ExceptionTrapFrame>(), 168);
+        assert_eq!(core::mem::size_of::<ExceptionTrapFrame>(), 152);
+        assert_eq!(core::mem::offset_of!(CompleteUserExceptionFrame, user_stack), 152);
+        assert_eq!(core::mem::offset_of!(ExceptionUserStackFrame, rsp), 0);
+        assert_eq!(core::mem::offset_of!(ExceptionUserStackFrame, ss), 8);
+        assert_eq!(core::mem::size_of::<ExceptionUserStackFrame>(), 16);
+        assert_eq!(core::mem::size_of::<CompleteUserExceptionFrame>(), 168);
     }
 
     #[test]
@@ -128,47 +186,63 @@ mod tests {
                 ss: 0x23,
             },
         };
-        let mut frame = ExceptionTrapFrame {
-            rax: 0,
-            rbx: 0,
-            rcx: 0,
-            rdx: 0,
-            rsi: 0,
-            rdi: 0,
-            rbp: 0,
-            r8: 0,
-            r9: 0,
-            r10: 0,
-            r11: 0,
-            r12: 0,
-            r13: 0,
-            r14: 0,
-            r15: 0,
-            error_code: 0x5,
-            rip: 0,
-            cs: 0,
-            rflags: 0,
-            rsp: core::mem::MaybeUninit::uninit(),
-            ss: core::mem::MaybeUninit::uninit(),
+        let mut frame = CompleteUserExceptionFrame {
+            base: ExceptionTrapFrame {
+                rax: 0,
+                rbx: 0,
+                rcx: 0,
+                rdx: 0,
+                rsi: 0,
+                rdi: 0,
+                rbp: 0,
+                r8: 0,
+                r9: 0,
+                r10: 0,
+                r11: 0,
+                r12: 0,
+                r13: 0,
+                r14: 0,
+                r15: 0,
+                error_code: 0x5,
+                rip: 0,
+                cs: 0,
+                rflags: 0,
+            },
+            user_stack: ExceptionUserStackFrame {
+                rsp: MaybeUninit::uninit(),
+                ss: MaybeUninit::uninit(),
+            },
         };
-        frame.apply_saved_context(&saved);
-        assert_eq!((frame.rax, frame.rbx, frame.rcx, frame.rdx), (1, 2, 3, 4));
-        assert_eq!((frame.rsi, frame.rdi, frame.rbp), (5, 6, 7));
-        assert_eq!((frame.r8, frame.r9, frame.r10, frame.r11), (8, 9, 10, 11));
+        // SAFETY: the wrapper provides the CPU-pushed CPL3 extension immediately
+        // after the base frame, exactly as the hardware does on a privilege change.
+        unsafe { frame.base.apply_saved_context(&saved) };
         assert_eq!(
-            (frame.r12, frame.r13, frame.r14, frame.r15),
+            (frame.base.rax, frame.base.rbx, frame.base.rcx, frame.base.rdx),
+            (1, 2, 3, 4)
+        );
+        assert_eq!((frame.base.rsi, frame.base.rdi, frame.base.rbp), (5, 6, 7));
+        assert_eq!(
+            (frame.base.r8, frame.base.r9, frame.base.r10, frame.base.r11),
+            (8, 9, 10, 11)
+        );
+        assert_eq!(
+            (frame.base.r12, frame.base.r13, frame.base.r14, frame.base.r15),
             (12, 13, 14, 15)
         );
         assert_eq!(
             (
-                frame.rip,
-                frame.cs,
-                frame.rflags,
-                unsafe { frame.rsp.assume_init() },
-                unsafe { frame.ss.assume_init() }
+                frame.base.rip,
+                frame.base.cs,
+                frame.base.rflags,
+                unsafe { frame.user_stack.rsp.assume_init() },
+                unsafe { frame.user_stack.ss.assume_init() }
             ),
             (0x400000, 0x1B, 0x202, 0x8000, 0x23)
         );
-        assert_eq!(frame.error_code, 0x5, "error code remains diagnostic data");
+        assert_eq!(
+            frame.base.error_code,
+            0x5,
+            "error code remains diagnostic data"
+        );
     }
 }
