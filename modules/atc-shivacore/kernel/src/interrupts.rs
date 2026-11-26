@@ -1272,8 +1272,8 @@ shivacore_timer_trampoline:
 
 global_asm!(
     r#"
-    // Alle Ausnahme-Rahmen haben dieselbe Form:
-    // 15 GP-Register, Fehlercode, RIP, CS, RFLAGS, RSP, SS.
+    // Jeder Ausnahme-Basisrahmen enthaelt 15 GP-Register, Fehlercode, RIP,
+    // CS und RFLAGS. Nur bei CPL3 folgt danach das CPU-gesicherte RSP/SS-Paar.
     // Der Fehlercode bleibt auf dem Stack; kein GP-Register wird vor seiner
     // Sicherung als Scratch-Register missbraucht.
     .global shivacore_fault_trampoline
@@ -1316,9 +1316,9 @@ shivacore_gp_trampoline:
     mov esi, 1
 
 shivacore_fault_common:
-    // Nach 15 Pushes liegt der Fehlercode bei frame+120. RSP/SS liegen
-    // nur bei einem CPL3->CPL0-Wechsel im Hardware-Frame; die Rust-Struktur
-    // markiert diese Felder deshalb als MaybeUninit. R12 behaelt den Frame.
+    // Nach 15 Pushes liegt der Fehlercode bei frame+120. Das CPL3-RSP/SS-Paar
+    // folgt nur bei einem CPL3->CPL0-Wechsel auf den Basisrahmen. R12 behaelt
+    // den Frame-Zeiger fuer die Rueckkehr nach dem ausgerichteten Handler-Call.
     lea rdi, [rsp]
     mov r12, rdi
     and rsp, -16
@@ -1524,8 +1524,7 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                 // Fehlersuche beginnt bei Null.
                 shivacore::fault::ExceptionKind::PageFault => {
                     if origin == shivacore::fault::Origin::User {
-                        // Nur CPL3 legt den alten RSP/SS-Wert auf dem
-                        // Hardware-Frame ab; CPL0-Felder bleiben uninitialisiert.
+                        // Nur CPL3 legt das alte RSP/SS-Paar auf dem Hardware-Frame ab.
                         let user_rsp = unsafe { frame.user_stack_frame().rsp.assume_init() };
                         serial_println!(
                             "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus=true RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
