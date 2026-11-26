@@ -414,7 +414,8 @@ fn reset_service_process(frame: &mut impl ServiceRestartFrame, service: &crate::
 
     // Nur die Pflichtbits: Bit 1 ist immer gesetzt, IF (Bit 9) muss stehen,
     // sonst bekaeme der Dienst keine Ticks mehr und das Fenster bliebe stumm.
-    frame.set_service_start(service.entry_rip, start);
+    // SAFETY: this reset path is reached only for a CPL3-origin service fault.
+    unsafe { frame.set_service_start(service.entry_rip, start) };
 }
 
 /// Beendet den aufrufenden Prozess aus einem Syscall heraus (P1-3B, echter
@@ -478,7 +479,8 @@ fn exit_current_process(frame: &mut impl ServiceRestartFrame, pid: Pid, exit_cod
             if let Some(cr3) = cr3 {
                 shivacore::addr_space::install_raw(cr3);
             }
-            ServiceRestartFrame::apply_saved_context(frame, &next);
+            // SAFETY: the fault policy selects TerminateProcess only for CPL3.
+            unsafe { ServiceRestartFrame::apply_saved_context(frame, &next) };
             serial_println!(
                 "ShivaCore: nach Exit von PID={:?} laeuft PID={} weiter",
                 pid,
@@ -1025,13 +1027,17 @@ pub struct UserTrapFrame {
 /// Gemeinsame Registeroperation fuer Dienst-Neustarts aus unterschiedlichen Trap-Rahmen.
 trait ServiceRestartFrame {
     /// Setzt Register und IRET-Ziel auf den Dienst-Einstieg.
-    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64);
+    /// # Safety
+    /// The frame must contain a CPU-pushed CPL3 RSP/SS extension when required.
+    unsafe fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64);
     /// Uebertraegt einen gespeicherten Prozesskontext in den Trap-Rahmen.
-    fn apply_saved_context(&mut self, ctx: &SavedContext);
+    /// # Safety
+    /// The frame must originate from CPL3 so its user stack extension exists.
+    unsafe fn apply_saved_context(&mut self, ctx: &SavedContext);
 }
 
 impl ServiceRestartFrame for UserTrapFrame {
-    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+    unsafe fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
         self.rax = 0;
         self.rbx = 0;
         self.rcx = 0;
@@ -1052,13 +1058,13 @@ impl ServiceRestartFrame for UserTrapFrame {
         self.rflags = 0x202;
     }
 
-    fn apply_saved_context(&mut self, ctx: &SavedContext) {
+    unsafe fn apply_saved_context(&mut self, ctx: &SavedContext) {
         UserTrapFrame::apply_saved_context(self, ctx);
     }
 }
 
 impl ServiceRestartFrame for ExceptionTrapFrame {
-    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+    unsafe fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
         self.rax = 0;
         self.rbx = 0;
         self.rcx = 0;
@@ -1080,7 +1086,7 @@ impl ServiceRestartFrame for ExceptionTrapFrame {
         self.rflags = 0x202;
     }
 
-    fn apply_saved_context(&mut self, ctx: &SavedContext) {
+    unsafe fn apply_saved_context(&mut self, ctx: &SavedContext) {
         // SAFETY: saved-context replacement is only used for a CPL3 process fault.
         unsafe { ExceptionTrapFrame::apply_saved_context(self, ctx) };
     }
@@ -1601,7 +1607,8 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                     if let Some(cr3) = cr3 {
                         shivacore::addr_space::install_raw(cr3);
                     }
-                    frame.apply_saved_context(&next);
+                    // SAFETY: process termination is selected only for CPL3-origin faults.
+            unsafe { frame.apply_saved_context(&next) };
                     serial_println!(
                         "ShivaCore: weiter mit PID={} statt den Fehler zu wiederholen",
                         next_pid.0
