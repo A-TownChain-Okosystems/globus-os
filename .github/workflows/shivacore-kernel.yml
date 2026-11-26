@@ -70,26 +70,26 @@ jobs:
           set -euo pipefail
           elf=target/x86_64-unknown-none/kernel/shivacore
           test -s "$elf"
-          host="$(rustc +nightly -vV | sed -n 's/^host: //p')"
-          llvm_bin="$(rustc +nightly --print sysroot)/lib/rustlib/$host/bin"
-          addr2line="$llvm_bin/llvm-addr2line"
-          objdump="$llvm_bin/llvm-objdump"
-          readobj="$llvm_bin/llvm-readobj"
-          for tool in "$addr2line" "$objdump" "$readobj"; do
-            test -x "$tool" || { echo "Missing Rust LLVM tool: $tool"; exit 1; }
+          # Ubuntu runner binutils provides these tools; Rust's
+          # llvm-tools-preview does not ship llvm-addr2line.
+          addr2line="$(command -v addr2line)"
+          objdump="$(command -v objdump)"
+          readelf="$(command -v readelf)"
+          for tool in "$addr2line" "$objdump" "$readelf"; do
+            test -x "$tool" || { echo "Missing binutils tool: $tool"; exit 1; }
           done
           mkdir -p target/exception-symbols
           {
-            echo "schema=globusos.exception-rip-symbolization.v1"
+            echo "schema=globusos.exception-rip-symbolization.v2"
             echo "source_sha=$(git rev-parse HEAD)"
             echo "kernel_elf=$elf"
             echo "kernel_elf_sha256=$(sha256sum "$elf" | cut -d' ' -f1)"
             echo "kernel_build_id_begin"
-            "$readobj" --notes "$elf"
+            "$readelf" -n "$elf"
             echo "kernel_build_id_end"
             echo "addr2line_begin"
-            # Intel runtime base is 0x8000000000; AMD logs show a
-            # 0x10000000000 base. The instruction-relative offsets match.
+            # Runtime bases differ between CPU profiles; both use the same
+            # linked kernel-relative offsets. Resolve against the ELF VMA.
             "$addr2line" -e "$elf" -f -C \
               0x80000268dc 0x8000026942
             echo "addr2line_end"
