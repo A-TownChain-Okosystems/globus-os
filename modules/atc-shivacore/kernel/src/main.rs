@@ -1547,15 +1547,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
 
     shivacore::addr_space::restore(boot_cr3_frame, boot_cr3_flags);
 
-
     // P1-3B: Der Frame-Allocator geht an die Laufzeit. Ab hier gibt es genau
     // eine Instanz fuer physischen Speicher, die auch die verzoegerte Freigabe
     // benutzt (try_lock im Tick, kein Blockieren).
     {
-
         let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
         *slot = Some(frame_allocator);
-
     }
 
     // Aufbauender Weg: den Bootbezug veroeffentlichen (Speicherabstand und
@@ -1582,24 +1579,16 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         match build_result {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
-
                 shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(0x0C21));
-
                 let freed = {
                     let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
-
                     match slot.as_mut() {
                         Some(allocator) => {
-
                             let count = shivacore::reclaim::RECLAIMER
                                 .drain_with(|frame| allocator.deallocate_frame(frame));
-
                             count
                         }
-                        None => {
-
-                            0
-                        }
+                        None => 0,
                     }
                 };
 
