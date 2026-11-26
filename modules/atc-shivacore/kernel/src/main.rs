@@ -57,6 +57,11 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: Kernel-Einstiegspunkt erreicht.");
+    #[cfg(any(
+        feature = "ring0-test-pf",
+        feature = "ring0-test-gp",
+        feature = "ring0-test-ud"
+    ))]
     serial_println!(
         "ShivaCore: bootloader kernel_stack_bottom=0x{:X} kernel_stack_len=0x{:X}",
         boot_info.kernel_stack_bottom,
