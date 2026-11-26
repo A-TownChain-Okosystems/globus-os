@@ -1571,31 +1571,31 @@ mod tests {
             .collect();
 
         assert!(
-            subsystems.contains(&"BlockChain".to_string()),
+            subsystems.iter().any(|item| item == "BlockChain"),
             "Missing BlockChain checks"
         );
         assert!(
-            subsystems.contains(&"Genesis".to_string()),
+            subsystems.iter().any(|item| item == "Genesis"),
             "Missing Genesis checks"
         );
         assert!(
-            subsystems.contains(&"Validators".to_string()),
+            subsystems.iter().any(|item| item == "Validators"),
             "Missing Validators checks"
         );
         assert!(
-            subsystems.contains(&"PoH".to_string()),
+            subsystems.iter().any(|item| item == "PoH"),
             "Missing PoH checks"
         );
         assert!(
-            subsystems.contains(&"Capability".to_string()),
+            subsystems.iter().any(|item| item == "Capability"),
             "Missing Capability checks"
         );
         assert!(
-            subsystems.contains(&"Network".to_string()),
+            subsystems.iter().any(|item| item == "Network"),
             "Missing Network checks"
         );
         assert!(
-            subsystems.contains(&"BlockValidation".to_string()),
+            subsystems.iter().any(|item| item == "BlockValidation"),
             "Missing BlockValidation checks"
         );
     }
