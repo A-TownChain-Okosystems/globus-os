@@ -74,6 +74,23 @@ jobs:
             --target x86_64-unknown-none \
             --features x86-boot
 
+      - name: Record baseline kernel ELF metadata
+        if: steps.build_kernel.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          elf=target/x86_64-unknown-none/kernel/shivacore
+          test -s "$elf"
+          mkdir -p target/exception-symbols
+          {
+            echo "schema=globusos.kernel-elf-metadata.v1"
+            echo "source_sha=$(git rev-parse HEAD)"
+            echo "kernel_elf=$elf"
+            echo "kernel_elf_sha256=$(sha256sum "$elf" | cut -d' ' -f1)"
+            readelf -h -l -S -s "$elf"
+          } | tee target/exception-symbols/baseline-kernel-elf.txt
+          sha256sum "$elf" target/exception-symbols/baseline-kernel-elf.txt
+
       - name: Install stable bare-metal target for init program
         run: |
           rustup target add --toolchain 1.100.0 x86_64-unknown-none
@@ -122,7 +139,7 @@ jobs:
           ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
             "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
             "$GITHUB_WORKSPACE/target/boot-images" \
-                        "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
             "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
             "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
 
