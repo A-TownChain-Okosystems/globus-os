@@ -62,47 +62,26 @@ jobs:
             --target x86_64-unknown-none \
             --features x86-boot
 
-      - name: Symbolize CPL0 exception RIPs
-        id: symbolize_exception_rips
+      - name: Record baseline kernel ELF metadata
+        id: baseline_kernel_metadata
         if: steps.build_kernel.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
           elf=target/x86_64-unknown-none/kernel/shivacore
           test -s "$elf"
-          # Ubuntu runner binutils provides these tools; Rust's
-          # llvm-tools-preview does not ship llvm-addr2line.
-          addr2line="$(command -v addr2line)"
-          objdump="$(command -v objdump)"
           readelf="$(command -v readelf)"
-          for tool in "$addr2line" "$objdump" "$readelf"; do
-            test -x "$tool" || { echo "Missing binutils tool: $tool"; exit 1; }
-          done
           mkdir -p target/exception-symbols
           {
-            echo "schema=globusos.exception-rip-symbolization.v2"
+            echo "schema=globusos.kernel-elf-metadata.v1"
             echo "source_sha=$(git rev-parse HEAD)"
             echo "kernel_elf=$elf"
             echo "kernel_elf_sha256=$(sha256sum "$elf" | cut -d' ' -f1)"
-            echo "kernel_build_id_begin"
-            "$readelf" -n "$elf"
-            echo "kernel_build_id_end"
-            echo "addr2line_begin"
-            # Runtime bases differ between CPU profiles; both use the same
-            # linked kernel-relative offsets. Resolve against the ELF VMA.
-            "$addr2line" -e "$elf" -f -C \
-              0x80000268dc 0x8000026942
-            echo "addr2line_end"
-            echo "objdump_gp_window_begin"
-            "$objdump" -d --no-show-raw-insn \
-              --start-address=0x80000268bc --stop-address=0x80000268fc "$elf"
-            echo "objdump_gp_window_end"
-            echo "objdump_pf_window_begin"
-            "$objdump" -d --no-show-raw-insn \
-              --start-address=0x8000026922 --stop-address=0x8000026962 "$elf"
-            echo "objdump_pf_window_end"
-          } | tee target/exception-symbols/kernel-rip-symbolization.txt
-          sha256sum "$elf" target/exception-symbols/kernel-rip-symbolization.txt
+            # This is the ordinary boot kernel, not one of the feature-specific
+            # CPL0 test kernels. Do not symbolize exception RIPs against it.
+            "$readelf" -h -l -S -s "$elf"
+          } | tee target/exception-symbols/baseline-kernel-elf.txt
+          sha256sum "$elf" target/exception-symbols/baseline-kernel-elf.txt
 
       - name: Build Ring-3 programs (ramdisk payload)
         id: build_init
@@ -420,6 +399,17 @@ jobs:
               cargo +nightly build -p shivacore --profile kernel \
                 --target x86_64-unknown-none --no-default-features \
                 --features "x86-boot,$feature"
+            local kernel_elf="$target_dir/x86_64-unknown-none/kernel/shivacore"
+            test -s "$kernel_elf"
+            # Preserve the exact feature-specific ELF used to make this test image.
+            cp "$kernel_elf" "$out/shivacore-kernel.elf"
+            {
+              echo "schema=globusos.cpl0-kernel-elf.v1"
+              echo "source_sha=$(git rev-parse HEAD)"
+              echo "feature=$feature"
+              echo "kernel_elf_sha256=$(sha256sum "$kernel_elf" | cut -d' ' -f1)"
+              readelf -h -l -S -s "$kernel_elf"
+            } > "$out/kernel-elf-metadata.txt"
             ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
               "$target_dir/x86_64-unknown-none/kernel/shivacore" \
               "$out" \
@@ -458,6 +448,54 @@ jobs:
               cat "$log"
               return 1
             fi
+
+            # Symbolize against the exact feature-specific ELF that produced
+            # this guest. The kernel is PIE (lowest VMA 0); runtime RIP therefore
+            # needs the CPU-profile load base removed before addr2line/objdump.
+            local kernel_elf="$GITHUB_WORKSPACE/target/cpl0-kernel-$kind/x86_64-unknown-none/kernel/shivacore"
+            local runtime_base
+            case "${{ matrix.cpu }}" in
+              amd-epyc) runtime_base=0x10000000000 ;;
+              intel-skylake) runtime_base=0x8000000000 ;;
+              *) echo "Unknown runtime base for CPU profile: ${{ matrix.cpu }}"; return 1 ;;
+            esac
+            local rip
+            rip="$(sed -nE 's/.*CPL0 exception frame:.* RIP=(0x[0-9a-fA-F]+).*/\1/p' "$log" | head -n 1)"
+            if [ -n "$rip" ]; then
+              local offset
+              offset=$((rip - runtime_base))
+              if [ "$offset" -lt 0 ]; then
+                echo "Runtime RIP $rip is below expected kernel base $runtime_base"
+                return 1
+              fi
+              local address
+              printf -v address '0x%x' "$offset"
+              local report="$GITHUB_WORKSPACE/target/exception-tests/cpl0/$kind/rip-symbolization-$firmware.txt"
+              {
+                echo "schema=globusos.cpl0-rip-symbolization.v1"
+                echo "source_sha=$(git rev-parse HEAD)"
+                echo "cpu_profile=${{ matrix.cpu }}"
+                echo "exception_kind=$kind"
+                echo "firmware=$firmware"
+                echo "runtime_rip=$rip"
+                echo "runtime_load_base=$runtime_base"
+                echo "elf_vma=$address"
+                echo "kernel_elf=$kernel_elf"
+                echo "kernel_elf_sha256=$(sha256sum "$kernel_elf" | cut -d' ' -f1)"
+                echo "addr2line_begin"
+                addr2line -e "$kernel_elf" -f -C "$address"
+                echo "addr2line_end"
+                echo "objdump_window_begin"
+                start=$((offset > 32 ? offset - 32 : 0))
+                stop=$((offset + 32))
+                objdump -d --no-show-raw-insn --start-address="$start" --stop-address="$stop" "$kernel_elf"
+                echo "objdump_window_end"
+              } | tee "$report"
+              sha256sum "$kernel_elf" "$report"
+            else
+              echo "No CPL0 exception-frame RIP found in $log; no symbolization report generated."
+            fi
+
             grep -Fq "ShivaCore: R0-CPL0-TEST armed; injecting before Ring-3 handoff" "$log"
             case "$kind" in
               page-fault)
@@ -500,7 +538,7 @@ jobs:
           {
             echo "source_sha=$(git rev-parse HEAD)"
             echo "matrix_cpu=${{ matrix.cpu }}"
-            find target/exception-tests -type f \( -name '*.img' -o -name '*.log' \) -print0 | sort -z | xargs -0 -r sha256sum
+            find target/exception-tests -type f ! -name "manifest-${{ matrix.cpu }}.sha256" -print0 | sort -z | xargs -0 -r sha256sum
           } > "$manifest"
           cat "$manifest"
 
