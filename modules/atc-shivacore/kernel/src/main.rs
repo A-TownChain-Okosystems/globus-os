@@ -1735,9 +1735,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
                 boot_info.kernel_stack_bottom,
                 boot_info.kernel_stack_len
             );
+            // Use an out-of-limit GDT selector (TI=0). The previous 0xffff
+            // selected the LDT (TI=1); with no mapped LDT, descriptor lookup
+            // faulted at linear address 0xfff8 with #PF instead of raising #GP.
             core::arch::asm!(
                 "mov ds, {selector:x}",
-                selector = in(reg) 0xffffu16,
+                selector = in(reg) 0xfff8u16,
                 options(nostack, preserves_flags)
             );
         }
