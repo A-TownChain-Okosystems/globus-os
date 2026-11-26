@@ -64,7 +64,7 @@ jobs:
 
       - name: Symbolize CPL0 exception RIPs
         id: symbolize_exception_rips
-        if: always()
+        if: steps.build_kernel.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -74,8 +74,8 @@ jobs:
           llvm_bin="$(rustc +nightly --print sysroot)/lib/rustlib/$host/bin"
           addr2line="$llvm_bin/llvm-addr2line"
           objdump="$llvm_bin/llvm-objdump"
-          readelf="$llvm_bin/llvm-readelf"
-          for tool in "$addr2line" "$objdump" "$readelf"; do
+          readobj="$llvm_bin/llvm-readobj"
+          for tool in "$addr2line" "$objdump" "$readobj"; do
             test -x "$tool" || { echo "Missing Rust LLVM tool: $tool"; exit 1; }
           done
           mkdir -p target/exception-symbols
@@ -85,7 +85,7 @@ jobs:
             echo "kernel_elf=$elf"
             echo "kernel_elf_sha256=$(sha256sum "$elf" | cut -d' ' -f1)"
             echo "kernel_build_id_begin"
-            "$readelf" -n "$elf"
+            "$readobj" --notes "$elf"
             echo "kernel_build_id_end"
             echo "addr2line_begin"
             # Intel runtime base is 0x8000000000; AMD logs show a
