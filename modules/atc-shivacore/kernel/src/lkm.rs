@@ -2339,8 +2339,8 @@ mod tests {
 
         let deps_a = g.get_dependencies("a");
         assert_eq!(deps_a.len(), 2);
-        assert!(deps_a.contains(&"b".to_string()));
-        assert!(deps_a.contains(&"c".to_string()));
+        assert!(deps_a.iter().any(|item| item == "b"));
+        assert!(deps_a.iter().any(|item| item == "c"));
 
         let deps_b = g.get_dependencies("b");
         assert_eq!(deps_b, vec!["c"]);
@@ -2354,8 +2354,8 @@ mod tests {
 
         let dependents_b = g.get_dependents("b");
         assert_eq!(dependents_b.len(), 2);
-        assert!(dependents_b.contains(&"a".to_string()));
-        assert!(dependents_b.contains(&"c".to_string()));
+        assert!(dependents_b.iter().any(|item| item == "a"));
+        assert!(dependents_b.iter().any(|item| item == "c"));
     }
 
     #[test]
@@ -2376,8 +2376,8 @@ mod tests {
         assert!(cycle.is_some());
         let cycle = cycle.unwrap();
         assert!(cycle.len() >= 2);
-        assert!(cycle.contains(&"a".to_string()));
-        assert!(cycle.contains(&"b".to_string()));
+        assert!(cycle.iter().any(|item| item == "a"));
+        assert!(cycle.iter().any(|item| item == "b"));
     }
 
     #[test]
@@ -2438,8 +2438,8 @@ mod tests {
         g.add_edge("c", "b");
         g.remove_node("b");
         assert!(!g.has_node("b"));
-        assert!(!g.get_dependencies("a").contains(&"b".to_string()));
-        assert!(!g.get_dependencies("c").contains(&"b".to_string()));
+        assert!(!g.get_dependencies("a").iter().any(|item| item == "b"));
+        assert!(!g.get_dependencies("c").iter().any(|item| item == "b"));
     }
 
     #[test]
@@ -2553,8 +2553,8 @@ mod tests {
 
         let mod1_syms = st.module_symbols(1);
         assert_eq!(mod1_syms.len(), 2);
-        assert!(mod1_syms.contains(&"fn1".to_string()));
-        assert!(mod1_syms.contains(&"fn2".to_string()));
+        assert!(mod1_syms.iter().any(|item| item == "fn1"));
+        assert!(mod1_syms.iter().any(|item| item == "fn2"));
     }
 
     // ── ModuleRegistry Registration Tests ──
@@ -3205,8 +3205,8 @@ mod tests {
         // atcfs — filesystem, depends on kalloc + blkdev
         let atcfs = modules.iter().find(|m| m.name == "atcfs").unwrap();
         assert_eq!(atcfs.priority, ModulePriority::FileSystem);
-        assert!(atcfs.dependencies.contains(&"blkdev".to_string()));
-        assert!(atcfs.dependencies.contains(&"kalloc".to_string()));
+        assert!(atcfs.dependencies.iter().any(|item| item == "blkdev"));
+        assert!(atcfs.dependencies.iter().any(|item| item == "kalloc"));
     }
 
     #[test]
