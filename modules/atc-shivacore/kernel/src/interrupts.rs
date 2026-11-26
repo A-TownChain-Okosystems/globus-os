@@ -1607,7 +1607,7 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                         shivacore::addr_space::install_raw(cr3);
                     }
                     // SAFETY: process termination is selected only for CPL3-origin faults.
-            unsafe { frame.apply_saved_context(&next) };
+                    unsafe { frame.apply_saved_context(&next) };
                     serial_println!(
                         "ShivaCore: weiter mit PID={} statt den Fehler zu wiederholen",
                         next_pid.0
