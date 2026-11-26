@@ -90,7 +90,32 @@ jobs:
           sudo apt-get install -y qemu-system-x86 ovmf
 
       - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu }}([[:space:]]|$)'
+        env:
+          QEMU_CPU: ${{ matrix.qemu_cpu }}
+        run: |
+          # Validate the model by asking QEMU to instantiate it, rather than
+          # parsing the human-readable and version-dependent `-cpu help` output.
+          # With -S and no display/devices QEMU must remain alive until timeout;
+          # an unknown/unsupported model exits immediately with an error.
+          set +e
+          timeout 3s qemu-system-x86_64 \
+            -machine q35,accel=tcg \
+            -cpu "$QEMU_CPU" \
+            -S \
+            -display none \
+            -nodefaults \
+            -no-user-config \
+            -monitor none \
+            -serial none \
+            > target/qemu-cpu-model-check.log 2>&1
+          status=$?
+          set -e
+          cat target/qemu-cpu-model-check.log
+          if [ "$status" -ne 124 ]; then
+            echo "QEMU failed to instantiate requested CPU model '$QEMU_CPU' (exit=$status)."
+            exit 1
+          fi
+          echo "QEMU successfully instantiated CPU model: $QEMU_CPU"
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         id: bios_smoke
