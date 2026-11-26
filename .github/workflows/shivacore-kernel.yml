@@ -504,6 +504,9 @@ jobs:
                 ;;
               general-protection)
                 grep -Fq "ShivaCore: CPL0 fault accounting: kind=Schutzverletzung kernel_faults=1 action=PanicKernel" "$log"
+                # The injected selector is out of the GDT limit (TI=0), so
+                # the CPU must report the selector error code, not a page fault.
+                grep -Fq "error_code=0xfff8" "$log"
                 grep -Fq "Kernelausnahme Schutzverletzung:" "$log"
                 ;;
               invalid-opcode)
