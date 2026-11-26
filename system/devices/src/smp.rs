@@ -96,7 +96,7 @@ impl CpuTopology {
         Ok(())
     }
 
-    /// Zeichnet einen fehlgeschlagenen Startup auf; fehlgeschlagene CPUs bleiben offline.
+    /// Zeichnet einen fehlgeschlagenen Startup auf; fehlgeschlagene CPUs bleiben nicht online.
     pub fn mark_failed(&mut self, id: CpuId) -> Result<(), SmpError> {
         let cpu = self
             .cpus
