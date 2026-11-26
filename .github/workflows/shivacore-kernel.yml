@@ -62,6 +62,48 @@ jobs:
             --target x86_64-unknown-none \
             --features x86-boot
 
+      - name: Symbolize CPL0 exception RIPs
+        id: symbolize_exception_rips
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          elf=target/x86_64-unknown-none/kernel/shivacore
+          test -s "$elf"
+          host="$(rustc +nightly -vV | sed -n 's/^host: //p')"
+          llvm_bin="$(rustc +nightly --print sysroot)/lib/rustlib/$host/bin"
+          addr2line="$llvm_bin/llvm-addr2line"
+          objdump="$llvm_bin/llvm-objdump"
+          readelf="$llvm_bin/llvm-readelf"
+          for tool in "$addr2line" "$objdump" "$readelf"; do
+            test -x "$tool" || { echo "Missing Rust LLVM tool: $tool"; exit 1; }
+          done
+          mkdir -p target/exception-symbols
+          {
+            echo "schema=globusos.exception-rip-symbolization.v1"
+            echo "source_sha=$(git rev-parse HEAD)"
+            echo "kernel_elf=$elf"
+            echo "kernel_elf_sha256=$(sha256sum "$elf" | cut -d' ' -f1)"
+            echo "kernel_build_id_begin"
+            "$readelf" -n "$elf"
+            echo "kernel_build_id_end"
+            echo "addr2line_begin"
+            # Intel runtime base is 0x8000000000; AMD logs show a
+            # 0x10000000000 base. The instruction-relative offsets match.
+            "$addr2line" -e "$elf" -f -C \
+              0x80000268dc 0x8000026942
+            echo "addr2line_end"
+            echo "objdump_gp_window_begin"
+            "$objdump" -d --no-show-raw-insn \
+              --start-address=0x80000268bc --stop-address=0x80000268fc "$elf"
+            echo "objdump_gp_window_end"
+            echo "objdump_pf_window_begin"
+            "$objdump" -d --no-show-raw-insn \
+              --start-address=0x8000026922 --stop-address=0x8000026962 "$elf"
+            echo "objdump_pf_window_end"
+          } | tee target/exception-symbols/kernel-rip-symbolization.txt
+          sha256sum "$elf" target/exception-symbols/kernel-rip-symbolization.txt
+
       - name: Build Ring-3 programs (ramdisk payload)
         id: build_init
         run: |
@@ -524,4 +566,6 @@ jobs:
             target/shivacore-qemu-${{ matrix.cpu }}.log
             target/shivacore-uefi-${{ matrix.cpu }}.log
             target/boot-evidence/manifest-${{ matrix.cpu }}.txt
+            target/x86_64-unknown-none/kernel/shivacore
+            target/exception-symbols/**
             target/exception-tests/**
