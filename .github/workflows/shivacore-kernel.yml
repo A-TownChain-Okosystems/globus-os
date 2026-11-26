@@ -54,9 +54,16 @@ jobs:
         env:
           RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
         run: |
-          cargo build -p shivacore --release \
+          cargo +nightly build -p shivacore --release \
             --target x86_64-unknown-none \
             --features x86-boot
+
+      - name: Install stable bare-metal target for init program
+        run: |
+          rustup target add --toolchain 1.100.0 x86_64-unknown-none
+          target_libdir="$(rustc +1.100.0 --print target-libdir --target x86_64-unknown-none)"
+          test -d "$target_libdir"
+          echo "Rust 1.100.0 target installed: $target_libdir"
 
       - name: Build init program (ramdisk payload)
         id: build_init
@@ -83,7 +90,32 @@ jobs:
           sudo apt-get install -y qemu-system-x86 ovmf
 
       - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu }}([[:space:]]|$)'
+        env:
+          QEMU_CPU: ${{ matrix.qemu_cpu }}
+        run: |
+          # Validate the model by asking QEMU to instantiate it, rather than
+          # parsing the human-readable and version-dependent `-cpu help` output.
+          # With -S and no display/devices QEMU must remain alive until timeout;
+          # an unknown/unsupported model exits immediately with an error.
+          set +e
+          timeout 3s qemu-system-x86_64 \
+            -machine q35,accel=tcg \
+            -cpu "$QEMU_CPU" \
+            -S \
+            -display none \
+            -nodefaults \
+            -no-user-config \
+            -monitor none \
+            -serial none \
+            > target/qemu-cpu-model-check.log 2>&1
+          status=$?
+          set -e
+          cat target/qemu-cpu-model-check.log
+          if [ "$status" -ne 124 ]; then
+            echo "QEMU failed to instantiate requested CPU model '$QEMU_CPU' (exit=$status)."
+            exit 1
+          fi
+          echo "QEMU successfully instantiated CPU model: $QEMU_CPU"
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         id: bios_smoke
@@ -98,7 +130,27 @@ jobs:
             -no-shutdown 2>&1 | tee target/shivacore-qemu-${{ matrix.cpu }}.log
           status=${PIPESTATUS[0]}
           echo "qemu_exit_code=$status" >> "$GITHUB_OUTPUT"
-          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+          log="target/shivacore-qemu-${{ matrix.cpu }}.log"
+          # QEMU must remain alive until the bounded timeout after all gates pass.
+          # With -no-reboot, a guest reset exits QEMU and is therefore rejected.
+          # Serial panic markers and repeated kernel entry are independently fatal.
+          if grep -Eiq 'KERNEL PANIC|Panic-Audit:|triple fault|guest reset|CPU Reset|unexpected reset' "$log"; then
+            echo "BIOS guest emitted a panic/fault/reset marker."
+            cat "$log"
+            exit 1
+          fi
+          entry_count=$(grep -Fc "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log" || true)
+          if [ "$entry_count" -ne 1 ]; then
+            echo "BIOS kernel entry count must be exactly one; got $entry_count."
+            cat "$log"
+            exit 1
+          fi
+          if [ "$status" -ne 124 ]; then
+            echo "BIOS QEMU did not reach the expected timeout; exit=$status."
+            cat "$log"
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log"; then
             echo "ShivaCore did not reach kernel_main."
             exit 1
           fi
@@ -115,6 +167,8 @@ jobs:
           if ! grep -q "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "ACPI RSDP/root/child-table validation did not pass in BIOS guest."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
           if ! grep -q "Programm 'init' aus Ramdisk" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Das Ramdisk-Programm init wurde nicht aus dem Image geladen."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
@@ -122,8 +176,7 @@ jobs:
           fi
           if ! grep -q "(Quelle: Ramdisk)" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "PID 1000 startet nicht aus der Ramdisk, sondern aus dem eingebauten Abbild."
-            exit 1
-          fi
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
             exit 1
           fi
           if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
@@ -142,18 +195,28 @@ jobs:
             echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
             exit 1
           fi
-          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "Timer IRQ did not complete the round-trip back to PID=1000."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID=1000 register checkpoint was not preserved."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID=1001 register checkpoint was not preserved."
-            exit 1
-          fi
+          # The real Ramdisk init payload intentionally exits after 40 Yield
+          # calls to exercise capability/IPC/handle cleanup and deferred reclaim.
+          # PID 1000 is therefore not a persistent scheduler peer and must not be
+          # required to receive a later timer round-trip or a synthetic register
+          # pattern (the kernel explicitly disables that pattern for Ramdisk).
+          for expected in \
+            "ShivaCore: Syscall aus Ring 3: Nr=1 PID=1000 Opcode=0x0001 Ergebnis=None" \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0 — 1 Capabilities widerrufen, TLB geleert" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Frame-Freigabe: 40 Frames zurueckgegeben" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben, 0 abgewiesen" \
+            "ShivaCore: Audit nach Exit+Reclamation:" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
+            if ! grep -Fq "$expected" "target/shivacore-qemu-${{ matrix.cpu }}.log"; then
+              echo "BIOS boot acceptance marker missing: $expected"
+              cat "target/shivacore-qemu-${{ matrix.cpu }}.log"
+              exit 1
+            fi
+          done
           if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Canonical KernelState::boot() was not reached from kernel_main."
             exit 1
@@ -194,6 +257,24 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "qemu_exit_code=$status" >> "$GITHUB_OUTPUT"
           log=target/shivacore-uefi-${{ matrix.cpu }}.log
+          # Reject panic/fault/reset evidence and any second kernel entry.
+          # -no-reboot makes a guest reset terminate QEMU instead of restarting.
+          if grep -Eiq 'KERNEL PANIC|Panic-Audit:|triple fault|guest reset|CPU Reset|unexpected reset' "$log"; then
+            echo "UEFI guest emitted a panic/fault/reset marker."
+            cat "$log"
+            exit 1
+          fi
+          entry_count=$(grep -Fc "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log" || true)
+          if [ "$entry_count" -ne 1 ]; then
+            echo "UEFI kernel entry count must be exactly one; got $entry_count."
+            cat "$log"
+            exit 1
+          fi
+          if [ "$status" -ne 124 ]; then
+            echo "UEFI QEMU did not reach the expected timeout; exit=$status."
+            cat "$log"
+            exit 1
+          fi
           if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log"; then
             echo "UEFI boot did not reach kernel_main."
             cat "$log"
@@ -211,9 +292,15 @@ jobs:
             "ShivaCore: USER-001 mapped PID=1000" \
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
             "ShivaCore: USER-001 entering PID=1000" \
+            "ShivaCore: Syscall aus Ring 3: Nr=1 PID=1000 Opcode=0x0001 Ergebnis=None" \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0 — 1 Capabilities widerrufen, TLB geleert" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Frame-Freigabe: 40 Frames zurueckgegeben" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben, 0 abgewiesen" \
+            "ShivaCore: Audit nach Exit+Reclamation:" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
             "ShivaCore: scheduler preemption -> context switch to PID=1001" \
-            "ShivaCore: scheduler preemption -> context switch to PID=1000" \
-            "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
             "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
             if ! grep -Fq "$expected" "$log"; then
               echo "UEFI boot acceptance marker missing: $expected"
@@ -237,13 +324,22 @@ jobs:
           BIOS_QEMU_EXIT_CODE: ${{ steps.bios_smoke.outputs.qemu_exit_code || 'not-recorded' }}
           UEFI_SMOKE_OUTCOME: ${{ steps.uefi_smoke.outcome || 'unknown' }}
           UEFI_QEMU_EXIT_CODE: ${{ steps.uefi_smoke.outputs.qemu_exit_code || 'not-recorded' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || 'unknown' }}
         run: |
           set -u
           mkdir -p target/boot-evidence
+          ACPI_GUEST_VALIDATION=RESIDUAL_NOT_ASSERTED
+          if [[ "$BIOS_SMOKE_OUTCOME" == "success" && "$UEFI_SMOKE_OUTCOME" == "success" ]]; then
+            # Both boot smoke gates require the ACPI table-validation marker.
+            ACPI_GUEST_VALIDATION=PASS
+          fi
           manifest="target/boot-evidence/manifest-${{ matrix.cpu }}.txt"
           {
             echo "schema=globusos.boot-evidence.v1"
             echo "source_sha=$(git rev-parse HEAD)"
+            echo "pr_head_sha=$PR_HEAD_SHA"
+            echo "pr_base_sha=$PR_BASE_SHA"
             echo "github_sha=${GITHUB_SHA:-unknown}"
             echo "workflow_ref=${GITHUB_WORKFLOW_REF:-unknown}"
             echo "workflow_sha=${GITHUB_WORKFLOW_SHA:-unknown}"
@@ -259,7 +355,7 @@ jobs:
             echo "uefi_smoke_outcome=$UEFI_SMOKE_OUTCOME"
             echo "uefi_qemu_exit_code=$UEFI_QEMU_EXIT_CODE"
             echo "secure_boot_status=RESIDUAL_NOT_ASSERTED"
-            echo "acpi_guest_validation=RESIDUAL_NOT_ASSERTED"
+            echo "acpi_guest_validation=$ACPI_GUEST_VALIDATION"
             echo "bare_metal_status=NOT_TESTED_BY_QEMU"
             echo "artifact_sha256_begin"
             for artifact in \

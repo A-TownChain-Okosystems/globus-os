@@ -20,6 +20,8 @@ jobs:
           rustc -vV | grep -qx 'release: 1.100.0'
           rustc -Vv
           cargo -V
+          rustup target add x86_64-unknown-none --toolchain 1.100.0
+          rustup target list --installed --toolchain 1.100.0 | grep -qx x86_64-unknown-none
       - uses: Swatinem/rust-cache@v2
       - name: cargo test ueber alle Manifeste (SCR-0078, F-093)
         run: |
@@ -27,10 +29,16 @@ jobs:
           FAIL=0
           while IFS= read -r f; do
             d="$(dirname "$f")"
-            if [ "$d" = "./modules/atc-shivacore/boot" ]; then
-              echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
-              continue
-            fi
+            case "$d" in
+              "./modules/atc-shivacore/boot")
+                echo "SKIP $d: boot-image builder has no unit tests; exercised by the dedicated ShivaCore boot workflow."
+                continue
+                ;;
+              "./modules/atc-shivacore/greeter"|"./modules/atc-shivacore/init_program")
+                echo "SKIP $d: freestanding no_std Ring-3 binaries have no host test harness; compiled separately for x86_64-unknown-none below."
+                continue
+                ;;
+            esac
             echo "=== cargo test in $d"
             if ! (cd "$d" && cargo test --quiet); then
               echo "cargo test FAILED in $d"
@@ -38,6 +46,14 @@ jobs:
             fi
           done < <(find . -name Cargo.toml -not -path "*/archive/*" -not -path "*/node_modules/*")
           exit "$FAIL"
+
+      - name: Build freestanding Ring-3 binaries
+        run: |
+          set -euo pipefail
+          for d in modules/atc-shivacore/init_program modules/atc-shivacore/greeter; do
+            echo "=== cargo build --release --bins --target x86_64-unknown-none in $d"
+            (cd "$d" && cargo build --release --bins --target x86_64-unknown-none)
+          done
 
   npm-tests:
     runs-on: ubuntu-latest
