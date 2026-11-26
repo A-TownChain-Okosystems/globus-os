@@ -62,10 +62,13 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
     let layout = layout_for_slot(slot).ok_or(SpawnError::NoFreeSlot)?;
     let offset = phys_offset().ok_or(SpawnError::NotReady)?;
     let root = kernel_root().ok_or(SpawnError::NotReady)?;
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-01 before FRAME_ALLOCATOR lock");
     let mut guard = crate::memory::FRAME_ALLOCATOR.lock();
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-02 after FRAME_ALLOCATOR lock");
     let allocator = guard.as_mut().ok_or(SpawnError::NotReady)?;
     // Safety: Quelle ist die Kernel-Wurzel, die selbst keine Nutzerseiten
     // enthaelt; der Speicherabstand ist beim Boot veroeffentlicht.
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-03 before AddressSpace::create");
     let mut space = unsafe {
         shivacore::addr_space::AddressSpace::create(
             offset,
@@ -75,6 +78,7 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
         )
     }
     .ok_or(SpawnError::ResourcesUnavailable)?;
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-04 after AddressSpace::create");
     // `map_binary` schreibt ueber die **virtuellen** Adressen des neuen Raums
     // (wie der Bootpfad, der vorher `install()` ruft). Ein Raum, der nicht
     // aktiv ist, hat diese Adressen nicht — der Schreibzugriff landet dann in
@@ -83,18 +87,25 @@ pub fn build_space(slot: u64, binary: &UserBinary, tag: u64) -> Result<BuiltSpac
     // gleich, laufender Code und Stapel bleiben also gueltig. Unterbrechungen
     // sind fuer die Dauer des Wechsels aus.
     let (previous, flags) = shivacore::addr_space::active();
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-05 before CR3 install/map closure");
     let mapped = x86_64::instructions::interrupts::without_interrupts(|| {
         space.install();
+        crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-06 after CR3 install");
         // Safety: `space` ist genau der Raum, dessen Wurzel oben angefordert
         // wurde; abgebildet wird ausschliesslich in dessen Fenster.
+        crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-07 before map_binary");
         let mapped = unsafe { space.map_binary(allocator, offset, binary, &layout) };
+        crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-08 after map_binary");
         shivacore::addr_space::restore(previous, flags);
+        crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-09 after CR3 restore");
         mapped
     });
     mapped.map_err(|_| SpawnError::MapFailed)?;
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-10 after map result validation");
     let frames = space.all_frames();
     shivacore::reclaim::RECLAIMER
         .register_tables(shivacore::ats1000::Pid(tag as u32), frames.clone());
+    crate::serial_println!("ShivaCore: R0-DIAG-SPAWN-11 after frame registration");
     Ok(BuiltSpace {
         cr3: space.frame().start_address().as_u64(),
         frames: frames.len(),
