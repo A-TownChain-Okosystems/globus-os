@@ -33,6 +33,18 @@ jobs:
           - cpu: amd-epyc
             qemu_cpu: EPYC
             expected_vendor: AMD
+          - cpu: intel-haswell
+            qemu_cpu: Haswell
+            expected_vendor: Intel
+          - cpu: amd-zen2
+            qemu_cpu: EPYC-Rome
+            expected_vendor: AMD
+          - cpu: qemu-x86-64-baseline
+            qemu_cpu: qemu64
+            expected_vendor: any
+          - cpu: qemu-x86-64-avx2
+            qemu_cpu: Haswell,+avx2
+            expected_vendor: Intel
     steps:
       - uses: actions/checkout@v4
 
@@ -154,7 +166,7 @@ jobs:
             echo "ShivaCore did not reach kernel_main."
             exit 1
           fi
-          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log; then
+          if [ "${{ matrix.expected_vendor }}" != "any" ] && ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
             exit 1
@@ -280,7 +292,7 @@ jobs:
             cat "$log"
             exit 1
           fi
-          if ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " "$log"; then
+          if [ "${{ matrix.expected_vendor }}" != "any" ] && ! grep -q "ShivaCore: CPU vendor=${{ matrix.expected_vendor }} " "$log"; then
             echo "UEFI CPU vendor detection did not match expected ${{ matrix.expected_vendor }}."
             cat "$log"
             exit 1
@@ -347,6 +359,8 @@ jobs:
             echo "run_attempt=${GITHUB_RUN_ATTEMPT:-unknown}"
             echo "job=${GITHUB_JOB:-unknown}"
             echo "matrix_cpu=${{ matrix.cpu }}"
+            echo "requested_qemu_cpu_model=${{ matrix.qemu_cpu }}"
+            echo "qemu_version=$(qemu-system-x86_64 --version | head -n 1)"
             echo "runner_os=${RUNNER_OS:-unknown}"
             echo "build_kernel_outcome=$BUILD_KERNEL_OUTCOME"
             echo "build_images_outcome=$BUILD_IMAGES_OUTCOME"
