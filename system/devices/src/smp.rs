@@ -74,7 +74,9 @@ impl CpuTopology {
             .iter_mut()
             .find(|c| c.id == id)
             .ok_or(SmpError::InvalidCpu)?;
-        if cpu.state != CpuState::Offline {
+        // Preserve the prior lifecycle contract: an intentionally halted AP
+        // may be restarted, but a failed startup remains terminal.
+        if cpu.state != CpuState::Offline && cpu.state != CpuState::Halted {
             return Err(SmpError::InvalidTransition);
         }
         cpu.state = CpuState::Starting;
@@ -165,6 +167,18 @@ mod tests {
         t.register(CpuId(4)).unwrap();
         assert_eq!(t.mark_online(CpuId(4)), Err(SmpError::InvalidTransition));
         assert_eq!(t.get(CpuId(4)).unwrap().state, CpuState::Offline);
+    }
+
+    #[test]
+    fn halted_cpu_can_begin_a_new_startup_cycle() {
+        let mut t = CpuTopology::new();
+        t.register(CpuId(5)).unwrap();
+        t.begin_startup(CpuId(5)).unwrap();
+        t.mark_online(CpuId(5)).unwrap();
+        t.halt(CpuId(5)).unwrap();
+        assert_eq!(t.get(CpuId(5)).unwrap().state, CpuState::Halted);
+        t.begin_startup(CpuId(5)).unwrap();
+        assert_eq!(t.get(CpuId(5)).unwrap().state, CpuState::Starting);
     }
 
     #[test]
