@@ -37,14 +37,14 @@ pub mod console_owner;
 pub mod cross_subsystem;
 /// Grenze zwischen Fehlerbehandlung und Ereignismeldung.
 pub mod diagnostics;
-/// ABI-layout and context restoration for x86-64 exception frames.
-pub mod exception_frame;
 /// Beurteilung von DMA-Bereichen, bevor ein Geraet darauf zugreift.
 pub mod dma_auth;
 /// Laden von ELF64-Dateien und die Signalverwaltung.
 pub mod elf_loader;
 /// Lebensdauer von Kanaelen und Handles: oeffnen, teilen, schliessen, widerrufen.
 pub mod entropy_gate;
+/// ABI layout and context restoration for x86-64 exception frames.
+pub mod exception_frame;
 /// Ausnahmen und Fehlerwege aus dem Userspace in den Kernel.
 pub mod fault;
 /// Hardware-Abstraktion; derzeit die Prozessorinformation.
