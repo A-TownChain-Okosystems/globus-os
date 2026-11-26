@@ -115,6 +115,8 @@ jobs:
           if ! grep -q "ShivaCore: ACPI RSDP/root/table checksums validated; tables=" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "ACPI RSDP/root/child-table validation did not pass in BIOS guest."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
+            exit 1
+          fi
           if ! grep -q "Programm 'init' aus Ramdisk" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Das Ramdisk-Programm init wurde nicht aus dem Image geladen."
             cat target/shivacore-qemu-${{ matrix.cpu }}.log
@@ -122,8 +124,7 @@ jobs:
           fi
           if ! grep -q "(Quelle: Ramdisk)" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "PID 1000 startet nicht aus der Ramdisk, sondern aus dem eingebauten Abbild."
-            exit 1
-          fi
+            cat target/shivacore-qemu-${{ matrix.cpu }}.log
             exit 1
           fi
           if ! grep -q "ShivaCore: USER-001 mapped PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
