@@ -270,8 +270,6 @@ pub fn init_user_scheduler(
     cr3_third: (crate::ats1000::Pid, u64),
     cr3_fourth: (crate::ats1000::Pid, u64),
 ) {
-    #[cfg(feature = "ring0-test-gp")]
-
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
@@ -281,8 +279,6 @@ pub fn init_user_scheduler(
     if let Some(fourth) = fourth {
         scheduler.add_process(fourth.pid, fourth, 0);
     }
-    #[cfg(feature = "ring0-test-gp")]
-
     // Jede eigene Tabelle eintragen, BEVOR der Scheduler sichtbar wird. Ein
     // Tick, der zwischen Eintragung und CR3-Wert plant, wuerde einen Prozess
     // ohne Tabelle auswaehlen; deshalb gibt es dieses Fenster nicht mehr.
@@ -292,26 +288,14 @@ pub fn init_user_scheduler(
     if fourth.is_some() {
         scheduler.set_cr3(cr3_fourth.0, cr3_fourth.1);
     }
-    #[cfg(feature = "ring0-test-gp")]
-
     let _ = scheduler.schedule(None);
-    #[cfg(feature = "ring0-test-gp")]
-
-    #[cfg(feature = "ring0-test-gp")]
-
     *USER_SCHEDULER.lock() = Some(scheduler);
-    #[cfg(feature = "ring0-test-gp")]
-
     {
-        #[cfg(feature = "ring0-test-gp")]
-
         let mut gate = SYSCALL_GATE.lock();
         if gate.is_none() {
             *gate = Some(SyscallGate::new());
         }
     }
-    #[cfg(feature = "ring0-test-gp")]
-
     // Klammern um die Arme: `serial_println!` endet intern mit einem Semikolon
     // und ist damit kein Ausdruck, den ein Match-Arm direkt zurueckgeben kann.
     match fourth {
