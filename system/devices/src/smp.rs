@@ -12,8 +12,10 @@ pub enum CpuState {
     Offline,
     /// Startet gerade.
     Starting,
-    /// Laeuft und nimmt Arbeit an.
+    /// Laeuft und nimmt Arbeit an; nur nach bestaetigter AP-Initialisierung.
     Online,
+    /// Startup ist fehlgeschlagen; die CPU darf keine Arbeit erhalten.
+    Failed,
     /// Angehalten.
     Halted,
 }
@@ -64,8 +66,9 @@ impl CpuTopology {
         self.cpus.sort_by_key(|c| c.id.0);
         Ok(())
     }
-    /// Startet eine CPU; nur aus Offline oder Halted.
-    pub fn start(&mut self, id: CpuId) -> Result<(), SmpError> {
+    /// Beginnt den Startup-Zustand. Dies sendet selbst keine Hardware-IPI.
+    /// `Online` darf erst nach AP-eigener Initialisierung und Ready-Ack folgen.
+    pub fn begin_startup(&mut self, id: CpuId) -> Result<(), SmpError> {
         let cpu = self
             .cpus
             .iter_mut()
@@ -75,7 +78,35 @@ impl CpuTopology {
             return Err(SmpError::InvalidTransition);
         }
         cpu.state = CpuState::Starting;
+        Ok(())
+    }
+
+    /// Markiert eine CPU erst nach bestaetigter AP-Initialisierung als online.
+    /// Der Aufrufer muss zuvor den Hardware-Startup und das AP-Ready-Ack pruefen.
+    pub fn mark_online(&mut self, id: CpuId) -> Result<(), SmpError> {
+        let cpu = self
+            .cpus
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or(SmpError::InvalidCpu)?;
+        if cpu.state != CpuState::Starting {
+            return Err(SmpError::InvalidTransition);
+        }
         cpu.state = CpuState::Online;
+        Ok(())
+    }
+
+    /// Zeichnet einen fehlgeschlagenen Startup auf; fehlgeschlagene CPUs bleiben nicht online.
+    pub fn mark_failed(&mut self, id: CpuId) -> Result<(), SmpError> {
+        let cpu = self
+            .cpus
+            .iter_mut()
+            .find(|c| c.id == id)
+            .ok_or(SmpError::InvalidCpu)?;
+        if cpu.state != CpuState::Starting {
+            return Err(SmpError::InvalidTransition);
+        }
+        cpu.state = CpuState::Failed;
         Ok(())
     }
     /// Haelt eine laufende CPU an.
@@ -105,12 +136,42 @@ impl CpuTopology {
 mod tests {
     use super::*;
     #[test]
-    fn cpu_lifecycle_is_explicit() {
+    fn cpu_is_not_online_until_startup_is_confirmed() {
         let mut t = CpuTopology::new();
         t.register(CpuId(1)).unwrap();
-        t.start(CpuId(1)).unwrap();
+        assert_eq!(t.get(CpuId(1)).unwrap().state, CpuState::Offline);
+        t.begin_startup(CpuId(1)).unwrap();
+        assert_eq!(t.get(CpuId(1)).unwrap().state, CpuState::Starting);
+        t.mark_online(CpuId(1)).unwrap();
         assert_eq!(t.get(CpuId(1)).unwrap().state, CpuState::Online);
         t.halt(CpuId(1)).unwrap();
         assert_eq!(t.get(CpuId(1)).unwrap().state, CpuState::Halted);
+    }
+
+    #[test]
+    fn failed_startup_cannot_be_marked_online_or_halted() {
+        let mut t = CpuTopology::new();
+        t.register(CpuId(2)).unwrap();
+        t.begin_startup(CpuId(2)).unwrap();
+        t.mark_failed(CpuId(2)).unwrap();
+        assert_eq!(t.get(CpuId(2)).unwrap().state, CpuState::Failed);
+        assert_eq!(t.mark_online(CpuId(2)), Err(SmpError::InvalidTransition));
+        assert_eq!(t.halt(CpuId(2)), Err(SmpError::InvalidTransition));
+    }
+
+    #[test]
+    fn online_transition_is_rejected_before_startup_begins() {
+        let mut t = CpuTopology::new();
+        t.register(CpuId(4)).unwrap();
+        assert_eq!(t.mark_online(CpuId(4)), Err(SmpError::InvalidTransition));
+        assert_eq!(t.get(CpuId(4)).unwrap().state, CpuState::Offline);
+    }
+
+    #[test]
+    fn startup_cannot_be_started_twice() {
+        let mut t = CpuTopology::new();
+        t.register(CpuId(3)).unwrap();
+        t.begin_startup(CpuId(3)).unwrap();
+        assert_eq!(t.begin_startup(CpuId(3)), Err(SmpError::InvalidTransition));
     }
 }
