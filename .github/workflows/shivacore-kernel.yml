@@ -36,13 +36,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # The workspace rust-toolchain.toml pins 1.100.0; install the bare-metal target
-      # for that exact toolchain because the nightly action target is not inherited.
-      - name: Install pinned bare-metal target
-        run: |
-          rustup target add x86_64-unknown-none --toolchain 1.100.0
-          rustup target list --installed --toolchain 1.100.0 | grep -qx x86_64-unknown-none
-
       # Nightly ist hier technisch noetig (bootloader/build-std) und laesst sich
       # nicht auf eine Versionsnummer fixieren; die Zeilen unten halten die
       # tatsaechlich benutzte Version fest, damit ein Wechsel auffaellt.
@@ -55,6 +48,11 @@ jobs:
           rustup show active-toolchain
           rustc -Vv
           cargo -V
+
+      - name: Install pinned bare-metal target
+        run: |
+          rustup target add x86_64-unknown-none --toolchain 1.100.0
+          rustup target list --installed --toolchain 1.100.0 | grep -qx x86_64-unknown-none
 
       - name: Build kernel ELF
         id: build_kernel
