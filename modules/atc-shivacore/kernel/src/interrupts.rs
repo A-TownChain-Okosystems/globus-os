@@ -291,7 +291,9 @@ pub fn init_user_scheduler(
                 pid.0,
                 error
             );
-            return;
+            // Never continue into Ring 3 with a partially registered scheduler.
+            // The caller cannot safely recover from a missing process/CR3 entry.
+            panic!("Ring-3-Scheduler konnte nicht vollstaendig initialisiert werden");
         }
     }
     // Der vierte Platz ist der zweite Programmplatz aus der Ramdisk. Er ist
