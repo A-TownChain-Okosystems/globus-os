@@ -148,8 +148,8 @@ mod tests {
             rip: 0,
             cs: 0,
             rflags: 0,
-            rsp: MaybeUninit::uninit(),
-            ss: MaybeUninit::uninit(),
+            rsp: core::mem::MaybeUninit::uninit(),
+            ss: core::mem::MaybeUninit::uninit(),
         };
         frame.apply_saved_context(&saved);
         assert_eq!((frame.rax, frame.rbx, frame.rcx, frame.rdx), (1, 2, 3, 4));
