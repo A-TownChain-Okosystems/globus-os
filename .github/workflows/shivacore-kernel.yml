@@ -130,7 +130,27 @@ jobs:
             -no-shutdown 2>&1 | tee target/shivacore-qemu-${{ matrix.cpu }}.log
           status=${PIPESTATUS[0]}
           echo "qemu_exit_code=$status" >> "$GITHUB_OUTPUT"
-          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." target/shivacore-qemu-${{ matrix.cpu }}.log; then
+          log="target/shivacore-qemu-${{ matrix.cpu }}.log"
+          # QEMU must remain alive until the bounded timeout after all gates pass.
+          # With -no-reboot, a guest reset exits QEMU and is therefore rejected.
+          # Serial panic markers and repeated kernel entry are independently fatal.
+          if grep -Eiq 'KERNEL PANIC|Panic-Audit:|triple fault|guest reset|CPU Reset|unexpected reset' "$log"; then
+            echo "BIOS guest emitted a panic/fault/reset marker."
+            cat "$log"
+            exit 1
+          fi
+          entry_count=$(grep -Fc "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log" || true)
+          if [ "$entry_count" -ne 1 ]; then
+            echo "BIOS kernel entry count must be exactly one; got $entry_count."
+            cat "$log"
+            exit 1
+          fi
+          if [ "$status" -ne 124 ]; then
+            echo "BIOS QEMU did not reach the expected timeout; exit=$status."
+            cat "$log"
+            exit 1
+          fi
+          if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log"; then
             echo "ShivaCore did not reach kernel_main."
             exit 1
           fi
@@ -237,6 +257,24 @@ jobs:
           status=${PIPESTATUS[0]}
           echo "qemu_exit_code=$status" >> "$GITHUB_OUTPUT"
           log=target/shivacore-uefi-${{ matrix.cpu }}.log
+          # Reject panic/fault/reset evidence and any second kernel entry.
+          # -no-reboot makes a guest reset terminate QEMU instead of restarting.
+          if grep -Eiq 'KERNEL PANIC|Panic-Audit:|triple fault|guest reset|CPU Reset|unexpected reset' "$log"; then
+            echo "UEFI guest emitted a panic/fault/reset marker."
+            cat "$log"
+            exit 1
+          fi
+          entry_count=$(grep -Fc "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log" || true)
+          if [ "$entry_count" -ne 1 ]; then
+            echo "UEFI kernel entry count must be exactly one; got $entry_count."
+            cat "$log"
+            exit 1
+          fi
+          if [ "$status" -ne 124 ]; then
+            echo "UEFI QEMU did not reach the expected timeout; exit=$status."
+            cat "$log"
+            exit 1
+          fi
           if ! grep -q "ShivaCore: Kernel-Einstiegspunkt erreicht." "$log"; then
             echo "UEFI boot did not reach kernel_main."
             cat "$log"
