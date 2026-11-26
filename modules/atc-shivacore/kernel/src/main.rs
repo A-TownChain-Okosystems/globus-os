@@ -1499,23 +1499,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_ctx_3.rip
     );
 
-    // P1-3D-H1: Der Scheduler wird zusammen mit den Seitentabellen
-    // veroeffentlicht, nicht vorher. Vorher lag zwischen dem Eintragen in
-    // `USER_SCHEDULER` und dem Setzen der CR3-Werte ein Fenster, in dem ein
-    // Tick einen Prozess ohne Tabelle auswaehlen konnte — genau der
-    // Bootstillstand kurz nach "scheduler armed". Kein Interrupt-Aus, sondern
-    // eine Veroeffentlichung erst am Ende: der Tick sieht entweder nichts
-    // oder einen vollstaendig aufgezogenen Scheduler.
-    interrupts::init_user_scheduler(
-        &user_ctx,
-        &user_ctx_2,
-        &user_ctx_3,
-        user_ctx_4.as_ref(),
-        (user_pid, cr3_first),
-        (user_pid_2, cr3_second),
-        (user_pid_3, cr3_third),
-        (ats1000::Pid(1003), cr3_fourth),
-    );
+    // Der Scheduler wird erst unmittelbar vor dem IRETQ global sichtbar.
+    // Bis hier koennen Bootdiagnostik, Frame-Reclaim und Audit-Operationen
+    // ungestoert laufen. Ein frueh publizierter Scheduler laesst den Timer-IRQ
+    // waehrend dieser Kernelarbeit in dieselben globalen Locks/Seriellogik
+    // eintreten. Die kurze Publikationsphase bleibt interruptfrei, damit der
+    // IRQ nicht waehrend des "scheduler armed"-Logs reentrant wird.
     serial_println!(
         "ShivaCore: Adressraeume je Prozess: PID={} -> {:#x}, PID={} -> {:#x}, PID={} -> {:#x}, PID=1003 -> {:#x}",
         user_pid.0,
@@ -1665,6 +1654,18 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         user_pid.0,
         user_pid_2.0
     );
+    x86_64::instructions::interrupts::without_interrupts(|| {
+        interrupts::init_user_scheduler(
+            &user_ctx,
+            &user_ctx_2,
+            &user_ctx_3,
+            user_ctx_4.as_ref(),
+            (user_pid, cr3_first),
+            (user_pid_2, cr3_second),
+            (user_pid_3, cr3_third),
+            (ats1000::Pid(1003), cr3_fourth),
+        );
+    });
     // Der erste Sprung nach Ring 3 passiert ohne Kontextwechsel davor: die
     // Tabelle von PID 1000 muss hier ausdruecklich gesetzt werden.
     shivacore::addr_space::install_raw(cr3_first);
