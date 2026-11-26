@@ -1544,30 +1544,30 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     // Kernel-Arbeit wieder in der Boot-Tabelle erledigen, damit spaetere
     // Abbildungen (Geraete) nicht versehentlich in einer Prozesstabelle landen.
-    
+
     shivacore::addr_space::restore(boot_cr3_frame, boot_cr3_flags);
-    
+
 
     // P1-3B: Der Frame-Allocator geht an die Laufzeit. Ab hier gibt es genau
     // eine Instanz fuer physischen Speicher, die auch die verzoegerte Freigabe
     // benutzt (try_lock im Tick, kein Blockieren).
     {
-        
+
         let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
         *slot = Some(frame_allocator);
-        
+
     }
 
     // Aufbauender Weg: den Bootbezug veroeffentlichen (Speicherabstand und
     // Kernel-Wurzel), damit ein spaeterer Prozessstart denselben Weg benutzen
     // kann wie der Bootpfad. Danach baut der Selbsttest einen Adressraum ueber
     // genau diese Funktion und gibt ihn wieder frei — ein Bau ohne Start.
-    
+
     spawn_build::publish_boot_reference(
         phys_mem_offset_raw,
         boot_cr3_frame.start_address().as_u64(),
     );
-    
+
     {
         let probe_slot = 0u64;
         let layout = shivacore::spawn::layout_for_slot(probe_slot).expect("Platz 0 muss es geben");
@@ -1576,33 +1576,33 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             alloc::vec![0xF4],
             layout.code_base,
         );
-        
+
         let build_result = spawn_build::build_space(probe_slot, &binary, 0x0C21);
-        
+
         match build_result {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
-                
+
                 shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(0x0C21));
-                
+
                 let freed = {
                     let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
-                    
+
                     match slot.as_mut() {
                         Some(allocator) => {
-                            
+
                             let count = shivacore::reclaim::RECLAIMER
                                 .drain_with(|frame| allocator.deallocate_frame(frame));
-                            
+
                             count
                         }
                         None => {
-                            
+
                             0
                         }
                     }
                 };
-                
+
                 serial_println!(
                     "ShivaCore: Aufbauender Weg: Adressraum gebaut (Platz={}, Wurzel={:#x}, {} Frames), {} Frames wieder freigegeben",
                     probe_slot,
