@@ -37,7 +37,7 @@ mod tests {
     fn test_complete() {
         let ac = AutoComplete::new();
         let matches = ac.complete("e");
-        assert!(matches.contains(&"echo".to_string()));
+        assert!(matches.iter().any(|item| item == "echo"));
         let no_match = ac.complete("zzz");
         assert!(no_match.is_empty());
     }
