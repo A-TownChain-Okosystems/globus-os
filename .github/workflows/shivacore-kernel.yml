@@ -49,17 +49,12 @@ jobs:
           rustc -Vv
           cargo -V
 
-      - name: Install pinned bare-metal target
-        run: |
-          rustup target add x86_64-unknown-none --toolchain 1.100.0
-          rustup target list --installed --toolchain 1.100.0 | grep -qx x86_64-unknown-none
-
       - name: Build kernel ELF
         id: build_kernel
         env:
           RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
         run: |
-          cargo build -p shivacore --release \
+          cargo +nightly build -p shivacore --release \
             --target x86_64-unknown-none \
             --features x86-boot
 
