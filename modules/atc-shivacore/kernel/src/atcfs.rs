@@ -249,7 +249,7 @@ impl AtcFileSystem {
 
         // Parent children aktualisieren
         if let Some(p) = self.nodes.get_mut(&parent) {
-            if !p.children.contains(&path.to_string()) {
+            if !p.children.iter().any(|i: &String| i == path) {
                 p.children.push(path.to_string());
             }
         }
