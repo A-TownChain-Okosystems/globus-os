@@ -478,7 +478,7 @@ fn exit_current_process(frame: &mut impl ServiceRestartFrame, pid: Pid, exit_cod
             if let Some(cr3) = cr3 {
                 shivacore::addr_space::install_raw(cr3);
             }
-            frame.apply_saved_context(&next);
+            ServiceRestartFrame::apply_saved_context(frame, &next);
             serial_println!(
                 "ShivaCore: nach Exit von PID={:?} laeuft PID={} weiter",
                 pid,
