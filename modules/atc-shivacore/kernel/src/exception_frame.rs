@@ -150,7 +150,10 @@ mod tests {
         assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, cs), 136);
         assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rflags), 144);
         assert_eq!(core::mem::size_of::<ExceptionTrapFrame>(), 152);
-        assert_eq!(core::mem::offset_of!(CompleteUserExceptionFrame, user_stack), 152);
+        assert_eq!(
+            core::mem::offset_of!(CompleteUserExceptionFrame, user_stack),
+            152
+        );
         assert_eq!(core::mem::offset_of!(ExceptionUserStackFrame, rsp), 0);
         assert_eq!(core::mem::offset_of!(ExceptionUserStackFrame, ss), 8);
         assert_eq!(core::mem::size_of::<ExceptionUserStackFrame>(), 16);
@@ -217,7 +220,12 @@ mod tests {
         // after the base frame, exactly as the hardware does on a privilege change.
         unsafe { frame.base.apply_saved_context(&saved) };
         assert_eq!(
-            (frame.base.rax, frame.base.rbx, frame.base.rcx, frame.base.rdx),
+            (
+                frame.base.rax,
+                frame.base.rbx,
+                frame.base.rcx,
+                frame.base.rdx
+            ),
             (1, 2, 3, 4)
         );
         assert_eq!((frame.base.rsi, frame.base.rdi, frame.base.rbp), (5, 6, 7));
@@ -226,7 +234,12 @@ mod tests {
             (8, 9, 10, 11)
         );
         assert_eq!(
-            (frame.base.r12, frame.base.r13, frame.base.r14, frame.base.r15),
+            (
+                frame.base.r12,
+                frame.base.r13,
+                frame.base.r14,
+                frame.base.r15
+            ),
             (12, 13, 14, 15)
         );
         assert_eq!(
@@ -240,8 +253,7 @@ mod tests {
             (0x400000, 0x1B, 0x202, 0x8000, 0x23)
         );
         assert_eq!(
-            frame.base.error_code,
-            0x5,
+            frame.base.error_code, 0x5,
             "error code remains diagnostic data"
         );
     }
