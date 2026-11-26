@@ -175,18 +175,28 @@ jobs:
             echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
             exit 1
           fi
-          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "Timer IRQ did not complete the round-trip back to PID=1000."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID=1000 register checkpoint was not preserved."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID=1001 register checkpoint was not preserved."
-            exit 1
-          fi
+          # The real Ramdisk init payload intentionally exits after 40 Yield
+          # calls to exercise capability/IPC/handle cleanup and deferred reclaim.
+          # PID 1000 is therefore not a persistent scheduler peer and must not be
+          # required to receive a later timer round-trip or a synthetic register
+          # pattern (the kernel explicitly disables that pattern for Ramdisk).
+          for expected in \
+            "ShivaCore: Syscall aus Ring 3: Nr=1 PID=1000 Opcode=0x0001 Ergebnis=None" \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0 — 1 Capabilities widerrufen, TLB geleert" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Frame-Freigabe: 40 Frames zurueckgegeben" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben, 0 abgewiesen" \
+            "ShivaCore: Audit nach Exit+Reclamation:" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
+            if ! grep -Fq "$expected" "target/shivacore-qemu-${{ matrix.cpu }}.log"; then
+              echo "BIOS boot acceptance marker missing: $expected"
+              cat "target/shivacore-qemu-${{ matrix.cpu }}.log"
+              exit 1
+            fi
+          done
           if ! grep -q "ShivaCore: KernelState::boot() -> Done." target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "Canonical KernelState::boot() was not reached from kernel_main."
             exit 1
@@ -244,9 +254,15 @@ jobs:
             "ShivaCore: USER-001 mapped PID=1000" \
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
             "ShivaCore: USER-001 entering PID=1000" \
+            "ShivaCore: Syscall aus Ring 3: Nr=1 PID=1000 Opcode=0x0001 Ergebnis=None" \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0 — 1 Capabilities widerrufen, TLB geleert" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Frame-Freigabe: 40 Frames zurueckgegeben" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben, 0 abgewiesen" \
+            "ShivaCore: Audit nach Exit+Reclamation:" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
             "ShivaCore: scheduler preemption -> context switch to PID=1001" \
-            "ShivaCore: scheduler preemption -> context switch to PID=1000" \
-            "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
             "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
             if ! grep -Fq "$expected" "$log"; then
               echo "UEFI boot acceptance marker missing: $expected"
