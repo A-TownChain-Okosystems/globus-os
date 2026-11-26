@@ -1075,12 +1075,14 @@ impl ServiceRestartFrame for ExceptionTrapFrame {
         self.r14 = 0;
         self.r15 = 0;
         self.rip = entry_rip;
-        self.rsp.write(start_rsp);
+        // SAFETY: service restart is reached only for a CPL3-origin exception.
+        unsafe { self.user_stack_frame_mut().rsp.write(start_rsp) };
         self.rflags = 0x202;
     }
 
     fn apply_saved_context(&mut self, ctx: &SavedContext) {
-        ExceptionTrapFrame::apply_saved_context(self, ctx);
+        // SAFETY: saved-context replacement is only used for a CPL3 process fault.
+        unsafe { ExceptionTrapFrame::apply_saved_context(self, ctx) };
     }
 }
 
@@ -1518,7 +1520,7 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                     if origin == shivacore::fault::Origin::User {
                         // Nur CPL3 legt den alten RSP/SS-Wert auf dem
                         // Hardware-Frame ab; CPL0-Felder bleiben uninitialisiert.
-                        let user_rsp = unsafe { frame.rsp.assume_init() };
+                        let user_rsp = unsafe { frame.user_stack_frame().rsp.assume_init() };
                         serial_println!(
                             "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus=true RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
                             kind.name(),
