@@ -2405,4 +2405,3 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         }
     }
 }
-
