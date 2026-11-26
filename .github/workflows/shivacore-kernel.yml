@@ -49,22 +49,26 @@ jobs:
           rustc -Vv
           cargo -V
 
+      # Bare-metal kernel builds use the same Nightly/build-std toolchain
+      # as scripts/qemu_boot.sh. Do not let the workspace's stable pin
+      # (rust-toolchain.toml) silently select Rust 1.100.0 here.
+
       - name: Build kernel ELF
         id: build_kernel
         env:
           RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
         run: |
-          cargo build -p shivacore --release \
+          cargo +nightly build -p shivacore --profile kernel \
             --target x86_64-unknown-none \
             --features x86-boot
 
-      - name: Build init program (ramdisk payload)
+      - name: Build Ring-3 programs (ramdisk payload)
         id: build_init
         run: |
-          # Ohne RUSTFLAGS: die Crate-Konfiguration setzt -Tlinker.ld (feste
-          # Ladeadresse 0x400000) und relocation-model=static. Eine
-          # RUSTFLAGS-Variable wuerde diese Einstellungen ersetzen.
-          ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo build --release )
+          # Ohne RUSTFLAGS: die Crates setzen eigene Linkerskripte und
+          # relocation-model=static; globale RUSTFLAGS wuerden das ueberschreiben.
+          ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo +nightly build --release )
+          ( cd modules/atc-shivacore/greeter && env -u RUSTFLAGS cargo +nightly build --release )
 
       - name: Build BIOS and UEFI images
         id: build_images
@@ -73,9 +77,10 @@ jobs:
           # Der Boot-Builder ist kein Workspace-Mitglied mehr (Nightly-Zwang
           # des bootloader-Crates). Er wird in seinem Verzeichnis gebaut.
           ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
-            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/release/shivacore" \
+            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
             "$GITHUB_WORKSPACE/target/boot-images" \
-            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" )
+            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+            "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" )
 
       - name: Install QEMU
         run: |
@@ -83,7 +88,12 @@ jobs:
           sudo apt-get install -y qemu-system-x86 ovmf
 
       - name: Verify QEMU CPU model
-        run: qemu-system-x86_64 -cpu help | grep -E '^[[:space:]]*x86[[:space:]]+${{ matrix.qemu_cpu }}([[:space:]]|$)'
+        run: |
+          qemu-system-x86_64 -cpu help 2>&1 | tee target/qemu-cpu-models.txt
+          if ! grep -Fq '${{ matrix.qemu_cpu }}' target/qemu-cpu-models.txt; then
+            echo "Configured QEMU CPU model not found: ${{ matrix.qemu_cpu }}"
+            exit 1
+          fi
 
       - name: BIOS boot smoke test (${{ matrix.cpu }})
         id: bios_smoke
@@ -142,14 +152,24 @@ jobs:
             echo "Timer IRQ did not drive a real scheduler preemption to PID=1001."
             exit 1
           fi
-          if ! grep -q "ShivaCore: scheduler preemption -> context switch to PID=1000" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "Timer IRQ did not complete the round-trip back to PID=1000."
-            exit 1
-          fi
-          if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
-            echo "PID=1000 register checkpoint was not preserved."
-            exit 1
-          fi
+          # PID 1000 is the short-lived init payload and intentionally exits
+          # after its lifecycle checks. The runnable set then rotates 1001 -> 1002
+          # -> 1003 -> 1001; requiring a return to exited PID 1000 is invalid.
+          log=target/shivacore-qemu-${{ matrix.cpu }}.log
+          for expected in \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1003" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben"; do
+            if ! grep -Fq "$expected" "$log"; then
+              echo "Scheduler/process-lifecycle acceptance marker missing: $expected"
+              cat "$log"
+              exit 1
+            fi
+          done
           if ! grep -q "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012" target/shivacore-qemu-${{ matrix.cpu }}.log; then
             echo "PID=1001 register checkpoint was not preserved."
             exit 1
@@ -212,8 +232,13 @@ jobs:
             "ShivaCore: SCHED-001 scheduler armed: PID=1000 + PID=1001" \
             "ShivaCore: USER-001 entering PID=1000" \
             "ShivaCore: scheduler preemption -> context switch to PID=1001" \
-            "ShivaCore: scheduler preemption -> context switch to PID=1000" \
-            "ShivaCore: SCHED-001 register checkpoint PID=1000 RAX=0x1000 RBX=0x1001 R12=0x1012" \
+            "ShivaCore: Exit-Syscall PID=Pid(1000) Code=0" \
+            "ShivaCore: nach Exit von PID=Pid(1000) laeuft PID=1001 weiter" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1002" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1003" \
+            "ShivaCore: scheduler preemption -> context switch to PID=1001" \
+            "ShivaCore: Zombie-Reaping: PID=Pid(1000) exit=0" \
+            "ShivaCore: Ressourcenbilanz PID=1000: Frames 40/40 freigegeben" \
             "ShivaCore: SCHED-001 register checkpoint PID=1001 RAX=0x2000 RBX=0x2001 R12=0x2012"; do
             if ! grep -Fq "$expected" "$log"; then
               echo "UEFI boot acceptance marker missing: $expected"
