@@ -286,13 +286,22 @@ jobs:
           BIOS_QEMU_EXIT_CODE: ${{ steps.bios_smoke.outputs.qemu_exit_code || 'not-recorded' }}
           UEFI_SMOKE_OUTCOME: ${{ steps.uefi_smoke.outcome || 'unknown' }}
           UEFI_QEMU_EXIT_CODE: ${{ steps.uefi_smoke.outputs.qemu_exit_code || 'not-recorded' }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha || 'unknown' }}
         run: |
           set -u
           mkdir -p target/boot-evidence
+          ACPI_GUEST_VALIDATION=RESIDUAL_NOT_ASSERTED
+          if [[ "$BIOS_SMOKE_OUTCOME" == "success" && "$UEFI_SMOKE_OUTCOME" == "success" ]]; then
+            # Both boot smoke gates require the ACPI table-validation marker.
+            ACPI_GUEST_VALIDATION=PASS
+          fi
           manifest="target/boot-evidence/manifest-${{ matrix.cpu }}.txt"
           {
             echo "schema=globusos.boot-evidence.v1"
             echo "source_sha=$(git rev-parse HEAD)"
+            echo "pr_head_sha=$PR_HEAD_SHA"
+            echo "pr_base_sha=$PR_BASE_SHA"
             echo "github_sha=${GITHUB_SHA:-unknown}"
             echo "workflow_ref=${GITHUB_WORKFLOW_REF:-unknown}"
             echo "workflow_sha=${GITHUB_WORKFLOW_SHA:-unknown}"
@@ -308,7 +317,7 @@ jobs:
             echo "uefi_smoke_outcome=$UEFI_SMOKE_OUTCOME"
             echo "uefi_qemu_exit_code=$UEFI_QEMU_EXIT_CODE"
             echo "secure_boot_status=RESIDUAL_NOT_ASSERTED"
-            echo "acpi_guest_validation=RESIDUAL_NOT_ASSERTED"
+            echo "acpi_guest_validation=$ACPI_GUEST_VALIDATION"
             echo "bare_metal_status=NOT_TESTED_BY_QEMU"
             echo "artifact_sha256_begin"
             for artifact in \
