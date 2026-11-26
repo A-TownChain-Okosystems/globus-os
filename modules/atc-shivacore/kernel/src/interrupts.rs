@@ -270,6 +270,8 @@ pub fn init_user_scheduler(
     cr3_third: (crate::ats1000::Pid, u64),
     cr3_fourth: (crate::ats1000::Pid, u64),
 ) {
+    #[cfg(feature = "ring0-test-gp")]
+    
     let mut scheduler = UserScheduler::new();
     scheduler.add_process(first.pid, first, 0);
     scheduler.add_process(second.pid, second, 0);
@@ -279,6 +281,8 @@ pub fn init_user_scheduler(
     if let Some(fourth) = fourth {
         scheduler.add_process(fourth.pid, fourth, 0);
     }
+    #[cfg(feature = "ring0-test-gp")]
+    
     // Jede eigene Tabelle eintragen, BEVOR der Scheduler sichtbar wird. Ein
     // Tick, der zwischen Eintragung und CR3-Wert plant, wuerde einen Prozess
     // ohne Tabelle auswaehlen; deshalb gibt es dieses Fenster nicht mehr.
@@ -288,14 +292,26 @@ pub fn init_user_scheduler(
     if fourth.is_some() {
         scheduler.set_cr3(cr3_fourth.0, cr3_fourth.1);
     }
+    #[cfg(feature = "ring0-test-gp")]
+    
     let _ = scheduler.schedule(None);
+    #[cfg(feature = "ring0-test-gp")]
+    
+    #[cfg(feature = "ring0-test-gp")]
+    
     *USER_SCHEDULER.lock() = Some(scheduler);
+    #[cfg(feature = "ring0-test-gp")]
+    
     {
+        #[cfg(feature = "ring0-test-gp")]
+        
         let mut gate = SYSCALL_GATE.lock();
         if gate.is_none() {
             *gate = Some(SyscallGate::new());
         }
     }
+    #[cfg(feature = "ring0-test-gp")]
+    
     // Klammern um die Arme: `serial_println!` endet intern mit einem Semikolon
     // und ist damit kein Ausdruck, den ein Match-Arm direkt zurueckgeben kann.
     match fourth {
@@ -381,7 +397,7 @@ pub fn online_cpus() -> usize {
 /// 14.11.2026 — das Datensegment aus dem hinterlegten Startabbild. Nicht
 /// angefasst wird der Haufen; die Capabilities bleiben, sonst waere der Dienst
 /// nach dem Neustart rechtlos.
-fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::Service) {
+fn reset_service_process(frame: &mut impl ServiceRestartFrame, service: &crate::services::Service) {
     let start = service.start_rsp;
     let end = start.saturating_add(16);
     if start >= service.stack_low && end <= service.stack_low.saturating_add(0x0000_8000) {
@@ -411,26 +427,9 @@ fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::S
         ),
     }
 
-    frame.rax = 0;
-    frame.rbx = 0;
-    frame.rcx = 0;
-    frame.rdx = 0;
-    frame.rsi = 0;
-    frame.rdi = 0;
-    frame.rbp = start;
-    frame.r8 = 0;
-    frame.r9 = 0;
-    frame.r10 = 0;
-    frame.r11 = 0;
-    frame.r12 = 0;
-    frame.r13 = 0;
-    frame.r14 = 0;
-    frame.r15 = 0;
-    frame.rip = service.entry_rip;
-    frame.rsp = start;
     // Nur die Pflichtbits: Bit 1 ist immer gesetzt, IF (Bit 9) muss stehen,
     // sonst bekaeme der Dienst keine Ticks mehr und das Fenster bliebe stumm.
-    frame.rflags = 0x202;
+    frame.set_service_start(service.entry_rip, start);
 }
 
 /// Beendet den aufrufenden Prozess aus einem Syscall heraus (P1-3B, echter
@@ -440,7 +439,7 @@ fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::S
 /// Zombie setzen, erst dann auf den naechsten umschalten. Das Reaping und die
 /// Frame-Freigabe passieren im Timer-Tick — der Syscall-Pfad schaltet keinen
 /// Speicher frei.
-fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
+fn exit_current_process(frame: &mut impl ServiceRestartFrame, pid: Pid, exit_code: i32) {
     // Ein Dienst verschwindet nicht, er kehrt an seinen Startzustand zurueck.
     // Das passiert VOR dem Widerruf der Capabilities: danach haette der neue
     // Lauf keine Rechte mehr, und ein Neustart ohne Rechte waere ein Dienst,
@@ -1038,6 +1037,146 @@ pub struct UserTrapFrame {
     pub ss: u64,
 }
 
+/// CPU-Rahmen fuer Ausnahmen mit einheitlichem Fehlercode-Slot.
+///
+/// Anders als Timer-/Syscall-Rahmen enthaelt dieser Frame nach den 15
+/// gesicherten GP-Registern immer einen Fehlercode. Bei #UD fuegt das
+/// Trampolin einen synthetischen Nullcode ein. Damit liegen RIP/CS/RFLAGS/RSP/SS
+/// fuer Page Fault, General Protection und Invalid Opcode an identischen Offsets.
+#[repr(C)]
+pub struct ExceptionTrapFrame {
+    /// Akkumulator.
+    pub rax: u64,
+    /// Basisregister.
+    pub rbx: u64,
+    /// Zaehlerregister.
+    pub rcx: u64,
+    /// Datenregister.
+    pub rdx: u64,
+    /// Quellindex.
+    pub rsi: u64,
+    /// Zielindex.
+    pub rdi: u64,
+    /// Rahmenzeiger.
+    pub rbp: u64,
+    /// Erweitertes Register 8.
+    pub r8: u64,
+    /// Erweitertes Register 9.
+    pub r9: u64,
+    /// Erweitertes Register 10.
+    pub r10: u64,
+    /// Erweitertes Register 11.
+    pub r11: u64,
+    /// Erweitertes Register 12.
+    pub r12: u64,
+    /// Erweitertes Register 13.
+    pub r13: u64,
+    /// Erweitertes Register 14.
+    pub r14: u64,
+    /// Erweitertes Register 15.
+    pub r15: u64,
+    /// Von der CPU gelieferter oder fuer #UD synthetischer Fehlercode.
+    pub error_code: u64,
+    /// Befehlszeiger zum Ausnahmezeitpunkt.
+    pub rip: u64,
+    /// Code-Segment inklusive Privilegstufe.
+    pub cs: u64,
+    /// Prozessor-Flags.
+    pub rflags: u64,
+    /// User-Stapelzeiger; nur bei CPL3-Ausnahmen vom Prozessor initialisiert.
+    pub rsp: core::mem::MaybeUninit<u64>,
+    /// User-Stacksegment; nur bei CPL3-Ausnahmen vom Prozessor initialisiert.
+    pub ss: core::mem::MaybeUninit<u64>,
+}
+
+/// Gemeinsame Registeroperation fuer Dienst-Neustarts aus unterschiedlichen Trap-Rahmen.
+trait ServiceRestartFrame {
+    /// Setzt Register und IRET-Ziel auf den Dienst-Einstieg.
+    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64);
+    /// Uebertraegt einen gespeicherten Prozesskontext in den Trap-Rahmen.
+    fn apply_saved_context(&mut self, ctx: &SavedContext);
+}
+
+impl ServiceRestartFrame for UserTrapFrame {
+    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+        self.rax = 0;
+        self.rbx = 0;
+        self.rcx = 0;
+        self.rdx = 0;
+        self.rsi = 0;
+        self.rdi = 0;
+        self.rbp = start_rsp;
+        self.r8 = 0;
+        self.r9 = 0;
+        self.r10 = 0;
+        self.r11 = 0;
+        self.r12 = 0;
+        self.r13 = 0;
+        self.r14 = 0;
+        self.r15 = 0;
+        self.rip = entry_rip;
+        self.rsp = start_rsp;
+        self.rflags = 0x202;
+    }
+
+    fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        UserTrapFrame::apply_saved_context(self, ctx);
+    }
+}
+
+impl ServiceRestartFrame for ExceptionTrapFrame {
+    fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+        self.rax = 0;
+        self.rbx = 0;
+        self.rcx = 0;
+        self.rdx = 0;
+        self.rsi = 0;
+        self.rdi = 0;
+        self.rbp = start_rsp;
+        self.r8 = 0;
+        self.r9 = 0;
+        self.r10 = 0;
+        self.r11 = 0;
+        self.r12 = 0;
+        self.r13 = 0;
+        self.r14 = 0;
+        self.r15 = 0;
+        self.rip = entry_rip;
+        self.rsp.write(start_rsp);
+        self.rflags = 0x202;
+    }
+
+    fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        ExceptionTrapFrame::apply_saved_context(self, ctx);
+    }
+}
+
+impl ExceptionTrapFrame {
+    /// Ersetzt den fehlerhaften Kontext durch den naechsten Ring-3-Kontext.
+    pub fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        self.rax = ctx.regs.rax;
+        self.rbx = ctx.regs.rbx;
+        self.rcx = ctx.regs.rcx;
+        self.rdx = ctx.regs.rdx;
+        self.rsi = ctx.regs.rsi;
+        self.rdi = ctx.regs.rdi;
+        self.rbp = ctx.regs.rbp;
+        self.r8 = ctx.regs.r8;
+        self.r9 = ctx.regs.r9;
+        self.r10 = ctx.regs.r10;
+        self.r11 = ctx.regs.r11;
+        self.r12 = ctx.regs.r12;
+        self.r13 = ctx.regs.r13;
+        self.r14 = ctx.regs.r14;
+        self.r15 = ctx.regs.r15;
+        self.rip = ctx.iret.rip;
+        self.cs = u64::from(ctx.iret.cs);
+        self.rflags = ctx.iret.rflags;
+        self.rsp.write(ctx.iret.rsp);
+        self.ss.write(u64::from(ctx.iret.ss));
+    }
+}
+
 impl UserTrapFrame {
     /// Schreibt einen gespeicherten Kontext in diesen Rahmen.
     ///
@@ -1218,25 +1357,12 @@ shivacore_timer_trampoline:
 
 global_asm!(
     r#"
-    // Drei Einsprünge, ein Rumpf. Der Unterschied zwischen den Ausnahmen ist
-    // nur, ob die CPU einen Fehlercode auf den Stapel legt und welche Art im
-    // Bericht steht — nicht, wie der Rahmen aussieht. Zwei fast gleiche
-    // Rümpfe wären die nächste Stelle, an der eine Korrektur nur an einer
-    // Hälfte ankommt.
-    //
-    // Art-IDs: 0 = Seitenfehler, 1 = Schutzverletzung, 2 = Ungueltiger Opcode.
+    // Alle Ausnahme-Rahmen haben dieselbe Form:
+    // 15 GP-Register, Fehlercode, RIP, CS, RFLAGS, RSP, SS.
+    // Der Fehlercode bleibt auf dem Stack; kein GP-Register wird vor seiner
+    // Sicherung als Scratch-Register missbraucht.
     .global shivacore_fault_trampoline
 shivacore_fault_trampoline:
-    pop r11
-    mov edx, 0
-    jmp shivacore_fault_common
-    .global shivacore_gp_trampoline
-shivacore_gp_trampoline:
-    pop r11
-    mov edx, 1
-    jmp shivacore_fault_common
-
-shivacore_fault_common:
     push r15
     push r14
     push r13
@@ -1252,11 +1378,37 @@ shivacore_fault_common:
     push rcx
     push rbx
     push rax
-    mov rdi, rsp
-    // Fehlercode: 15 Pushes (120 Byte), r11 war der fuenfte Push von oben,
-    // also 15-5 = 10 Felder ueber dem Stapelzeiger -> rsp + 80.
-    mov rsi, [rsp + 80]
+    mov esi, 0
+    jmp shivacore_fault_common
+
+    .global shivacore_gp_trampoline
+shivacore_gp_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov esi, 1
+
+shivacore_fault_common:
+    // Nach 15 Pushes liegt der Fehlercode bei frame+120. RSP/SS liegen
+    // nur bei einem CPL3->CPL0-Wechsel im Hardware-Frame; die Rust-Struktur
+    // markiert diese Felder deshalb als MaybeUninit. R12 behaelt den Frame.
+    lea rdi, [rsp]
+    mov r12, rdi
+    and rsp, -16
     call {handler}
+    mov rsp, r12
     pop rax
     pop rbx
     pop rcx
@@ -1272,12 +1424,15 @@ shivacore_fault_common:
     pop r13
     pop r14
     pop r15
+    // Den echten bzw. synthetischen Fehlercode vor IRETQ entfernen.
+    add rsp, 8
     iretq
 
     .global shivacore_fault_trampoline_nocode
 shivacore_fault_trampoline_nocode:
-    // Ungueltiger Opcode legt keinen Fehlercode ab: der Rahmen beginnt direkt
-    // mit RIP, deshalb hier kein pop.
+    // #UD hat keinen Hardware-Fehlercode. Einen Nullcode einfuegen, damit
+    // ExceptionTrapFrame fuer alle drei Ausnahmearten dasselbe Layout hat.
+    push 0
     push r15
     push r14
     push r13
@@ -1293,10 +1448,12 @@ shivacore_fault_trampoline_nocode:
     push rcx
     push rbx
     push rax
-    mov rdi, rsp
-    xor esi, esi
-    mov edx, 2
+    lea rdi, [rsp]
+    mov esi, 2
+    mov r12, rdi
+    and rsp, -16
     call {handler}
+    mov rsp, r12
     pop rax
     pop rbx
     pop rcx
@@ -1312,6 +1469,7 @@ shivacore_fault_trampoline_nocode:
     pop r13
     pop r14
     pop r15
+    add rsp, 8
     iretq
 "#,
     handler = sym exception_trap_rust
@@ -1328,20 +1486,14 @@ shivacore_fault_trampoline_nocode:
 /// kein Schoenheitsfehler: die drei Einsprünge teilen sich einen Rumpf, damit
 /// eine Korrektur nicht nur an einer Haelfte ankommt.
 #[unsafe(no_mangle)]
-extern "C" fn exception_trap_rust(frame: &mut UserTrapFrame, error_code: u64, kind: u32) {
-    handle_exception(
-        frame,
-        error_code,
-        shivacore::fault::ExceptionKind::from_id(kind),
-    );
+extern "C" fn exception_trap_rust(frame: &mut ExceptionTrapFrame, kind: u32) {
+    handle_exception(frame, shivacore::fault::ExceptionKind::from_id(kind));
 }
 
-fn handle_exception(
-    frame: &mut UserTrapFrame,
-    error_code: u64,
-    kind: shivacore::fault::ExceptionKind,
-) {
+fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::ExceptionKind) {
     use x86_64::registers::control::Cr2;
+
+    let error_code = frame.error_code;
 
     let origin = shivacore::fault::Origin::from_cs(frame.cs);
     let pid = USER_SCHEDULER
@@ -1455,18 +1607,33 @@ fn handle_exception(
                 // RIP und RSP gehoeren in den Bericht: ohne sie sagt die
                 // Adresse nicht, welche Anweisung sie benutzt hat, und die
                 // Fehlersuche beginnt bei Null.
-                shivacore::fault::ExceptionKind::PageFault => serial_println!(
-                    "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus={} RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
-                    kind.name(),
-                    pid,
-                    address,
-                    report.describe(),
-                    report.from_user,
-                    frame.rip,
-                    frame.rsp,
-                    recorded.terminated,
-                    recorded.kernel_faults
-                ),
+                shivacore::fault::ExceptionKind::PageFault => {
+                    if origin == shivacore::fault::Origin::User {
+                        // Nur CPL3 legt den alten RSP/SS-Wert auf dem
+                        // Hardware-Frame ab; CPL0-Felder bleiben uninitialisiert.
+                        let user_rsp = unsafe { frame.rsp.assume_init() };
+                        serial_println!(
+                            "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus=true RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
+                            kind.name(),
+                            pid,
+                            address,
+                            report.describe(),
+                            frame.rip,
+                            user_rsp,
+                            recorded.terminated,
+                            recorded.kernel_faults
+                        );
+                    } else {
+                        serial_println!(
+                            "ShivaCore: {} Adresse={:#x} ({}) Usermodus=false RIP={:#x} [Kernel-Fault: {}]",
+                            kind.name(),
+                            address,
+                            report.describe(),
+                            frame.rip,
+                            recorded.kernel_faults
+                        );
+                    }
+                }
                 shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
                     // Bei der Schutzverletzung ist der Fehlercode eine
                     // Segmentauswahl oder 0 — Bit 2 sagt hier NICHT, ob der
@@ -1549,6 +1716,27 @@ fn handle_exception(
             }
         }
         shivacore::fault::FaultAction::PanicKernel => {
+            // CPL0-Hardwareframes enthalten kein gespeichertes RSP/SS-Paar.
+            // Bei 15 zuvor gesicherten GP-Registern plus Error-Code/RIP/CS/RFLAGS
+            // liegt der unterbrochene RSP deshalb 152 Byte oberhalb des Frame-Anfangs.
+            let frame_address = frame as *const ExceptionTrapFrame as u64;
+            let interrupted_rsp = frame_address.wrapping_add(152);
+            serial_println!(
+                "ShivaCore: CPL0 fault accounting: kind={} kernel_faults={} action=PanicKernel",
+                kind.name(),
+                recorded.kernel_faults
+            );
+            serial_println!(
+                "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x} CR2={:#x}",
+                kind.name(),
+                frame_address,
+                error_code,
+                frame.rip,
+                frame.cs,
+                frame.rflags,
+                interrupted_rsp,
+                address
+            );
             panic!(
                 "Kernelausnahme {}: Adresse={:#x} ({}), Ring 0",
                 kind.name(),
@@ -2299,5 +2487,95 @@ extern "x86-interrupt" fn keyboard_interrupt_handler_at_device_vector(
         unsafe {
             PICS.lock().notify_end_of_interrupt(KEYBOARD_VECTOR);
         }
+    }
+}
+
+#[cfg(test)]
+mod exception_frame_tests {
+    use super::ExceptionTrapFrame;
+    use shivacore::user_sched::{IretFrame, SavedContext, SavedRegisters};
+
+    #[test]
+    fn exception_frame_matches_hardware_error_code_layout() {
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, error_code), 120);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rip), 128);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, cs), 136);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rflags), 144);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, rsp), 152);
+        assert_eq!(core::mem::offset_of!(ExceptionTrapFrame, ss), 160);
+        assert_eq!(core::mem::size_of::<ExceptionTrapFrame>(), 168);
+    }
+
+    #[test]
+    fn exception_frame_restores_every_general_register_and_iret_field() {
+        let saved = SavedContext {
+            regs: SavedRegisters {
+                rax: 1,
+                rbx: 2,
+                rcx: 3,
+                rdx: 4,
+                rsi: 5,
+                rdi: 6,
+                rbp: 7,
+                rsp: 0x8000,
+                r8: 8,
+                r9: 9,
+                r10: 10,
+                r11: 11,
+                r12: 12,
+                r13: 13,
+                r14: 14,
+                r15: 15,
+            },
+            iret: IretFrame {
+                rip: 0x400000,
+                cs: 0x1B,
+                rflags: 0x202,
+                rsp: 0x8000,
+                ss: 0x23,
+            },
+        };
+        let mut frame = ExceptionTrapFrame {
+            rax: 0,
+            rbx: 0,
+            rcx: 0,
+            rdx: 0,
+            rsi: 0,
+            rdi: 0,
+            rbp: 0,
+            r8: 0,
+            r9: 0,
+            r10: 0,
+            r11: 0,
+            r12: 0,
+            r13: 0,
+            r14: 0,
+            r15: 0,
+            error_code: 0x5,
+            rip: 0,
+            cs: 0,
+            rflags: 0,
+            rsp: core::mem::MaybeUninit::uninit(),
+            ss: core::mem::MaybeUninit::uninit(),
+        };
+        frame.apply_saved_context(&saved);
+        assert_eq!((frame.rax, frame.rbx, frame.rcx, frame.rdx), (1, 2, 3, 4));
+        assert_eq!((frame.rsi, frame.rdi, frame.rbp), (5, 6, 7));
+        assert_eq!((frame.r8, frame.r9, frame.r10, frame.r11), (8, 9, 10, 11));
+        assert_eq!(
+            (frame.r12, frame.r13, frame.r14, frame.r15),
+            (12, 13, 14, 15)
+        );
+        assert_eq!(
+            (
+                frame.rip,
+                frame.cs,
+                frame.rflags,
+                unsafe { frame.rsp.assume_init() },
+                unsafe { frame.ss.assume_init() }
+            ),
+            (0x400000, 0x1B, 0x202, 0x8000, 0x23)
+        );
+        assert_eq!(frame.error_code, 0x5, "error code remains diagnostic data");
     }
 }
