@@ -1685,8 +1685,7 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                     );
                     panic!(
                         "Kernelausnahme Schutzverletzung: Fehlercode={:#x}, RIP={:#x}, Ring 0",
-                        error_code,
-                        frame.rip
+                        error_code, frame.rip
                     );
                 }
                 shivacore::fault::ExceptionKind::InvalidOpcode => {
