@@ -576,18 +576,30 @@ jobs:
             case "$kind" in
               page-fault)
                 grep -Fq "ShivaCore: CPL0 fault accounting: kind=Seitenfehler kernel_faults=1 action=PanicKernel" "$log"
-                grep -Fq "Kernelausnahme Seitenfehler:" "$log"
+                grep -Fq "CR2=0xdead000" "$log"
+                grep -Fq "Kernelausnahme Seitenfehler: CR2=0xdead000" "$log"
                 ;;
               general-protection)
                 grep -Fq "ShivaCore: CPL0 fault accounting: kind=Schutzverletzung kernel_faults=1 action=PanicKernel" "$log"
                 # The injected selector is out of the GDT limit (TI=0), so
                 # the CPU must report the selector error code, not a page fault.
                 grep -Fq "error_code=0xfff8" "$log"
-                grep -Fq "Kernelausnahme Schutzverletzung:" "$log"
+                grep -Fq "Kernelausnahme Schutzverletzung: Fehlercode=0xfff8" "$log"
+                if grep -Eq "CR2=|Seite nicht vorhanden|Schutzverletzung, Lesen" "$log"; then
+                  echo "General-protection diagnostics incorrectly decoded CR2/page-fault bits."
+                  cat "$log"
+                  return 1
+                fi
                 ;;
               invalid-opcode)
                 grep -Fq "ShivaCore: CPL0 fault accounting: kind=Ungueltiger Opcode kernel_faults=1 action=PanicKernel" "$log"
-                grep -Fq "Kernelausnahme Ungueltiger Opcode:" "$log"
+                grep -Fq "synthetic_error_code=0x0" "$log"
+                grep -Fq "Kernelausnahme Ungueltiger Opcode: RIP=" "$log"
+                if grep -Eq "CR2=|Seite nicht vorhanden|Schutzverletzung, Lesen" "$log"; then
+                  echo "Invalid-opcode diagnostics incorrectly decoded CR2/page-fault bits."
+                  cat "$log"
+                  return 1
+                fi
                 ;;
             esac
             grep -Fq "Ring 0" "$log"
