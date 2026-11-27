@@ -1511,7 +1511,9 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
             "kind={} addr={:#x} user={} terminated={} restarts={} kernel_faults={}",
             kind.name(),
             address,
-            report.from_user,
+            // CS.RPL is authoritative for origin; #GP selector bits and
+            // the synthetic #UD error slot are not user/kernel indicators.
+            origin == shivacore::fault::Origin::User,
             recorded.terminated,
             recorded.service_restarts,
             recorded.kernel_faults
