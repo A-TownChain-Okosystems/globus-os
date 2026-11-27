@@ -1424,9 +1424,15 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
     let report = shivacore::fault::FaultReport::from_error_code(error_code);
     // Cr2::read liefert in dieser Fassung ein Result; die Zahl ist das, was im
     // Log steht, nicht die Debug-Form.
-    let address = match Cr2::read() {
-        Ok(addr) => addr.as_u64(),
-        Err(_) => 0,
+    // CR2 is architecturally meaningful only for #PF; for #GP/#UD it
+    // contains an unrelated stale value and must not be presented as a fault address.
+    let address = if kind == shivacore::fault::ExceptionKind::PageFault {
+        match Cr2::read() {
+            Ok(addr) => addr.as_u64(),
+            Err(_) => 0,
+        }
+    } else {
+        0
     };
     // Ein Dienst kehrt an seinen Startzustand zurueck, BEVOR Capabilities
     // widerrufen werden — wie beim Exit-Syscall. Danach haette der neue Lauf
@@ -1437,12 +1443,9 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
         match restarted {
             Some(service) => {
                 reset_service_process(frame, &service);
-                // Der Fehlercode bedeutet je Vektor etwas anderes; beim
-                // ungueltigen Opcode gibt es keinen, und CR2 steht dann auf dem
-                // letzten Wert. Eine Adresse waere dort eine falsche Aussage.
-                if kind.has_error_code() {
-                    serial_println!(
-                        "ShivaCore: Dienst '{}' PID={} nach {} bei Adresse {:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                match kind {
+                    shivacore::fault::ExceptionKind::PageFault => serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} bei CR2={:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
                         service.name,
                         pid.map(|pid| pid.0).unwrap_or_default(),
                         kind.name(),
@@ -1450,16 +1453,24 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                         report.describe(),
                         service.attempts,
                         service.limit
-                    );
-                } else {
-                    serial_println!(
-                        "ShivaCore: Dienst '{}' PID={} nach {} (ohne Fehlercode) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                    ),
+                    shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} mit Fehlercode={:#x} neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                        service.name,
+                        pid.map(|pid| pid.0).unwrap_or_default(),
+                        kind.name(),
+                        error_code,
+                        service.attempts,
+                        service.limit
+                    ),
+                    shivacore::fault::ExceptionKind::InvalidOpcode => serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} ohne Fehlercode neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
                         service.name,
                         pid.map(|pid| pid.0).unwrap_or_default(),
                         kind.name(),
                         service.attempts,
                         service.limit
-                    );
+                    ),
                 }
                 let recorded = FAULT_COUNTERS
                     .lock()
@@ -1641,23 +1652,60 @@ fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::Exce
                 kind.name(),
                 recorded.kernel_faults
             );
-            serial_println!(
-                "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x} CR2={:#x}",
-                kind.name(),
-                frame_address,
-                error_code,
-                frame.rip,
-                frame.cs,
-                frame.rflags,
-                interrupted_rsp,
-                address
-            );
-            panic!(
-                "Kernelausnahme {}: Adresse={:#x} ({}), Ring 0",
-                kind.name(),
-                address,
-                report.describe()
-            );
+            match kind {
+                shivacore::fault::ExceptionKind::PageFault => {
+                    serial_println!(
+                        "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x} CR2={:#x}",
+                        kind.name(),
+                        frame_address,
+                        error_code,
+                        frame.rip,
+                        frame.cs,
+                        frame.rflags,
+                        interrupted_rsp,
+                        address
+                    );
+                    panic!(
+                        "Kernelausnahme Seitenfehler: CR2={:#x} ({}), RIP={:#x}, Ring 0",
+                        address,
+                        report.describe(),
+                        frame.rip
+                    );
+                }
+                shivacore::fault::ExceptionKind::GeneralProtection => {
+                    serial_println!(
+                        "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x}",
+                        kind.name(),
+                        frame_address,
+                        error_code,
+                        frame.rip,
+                        frame.cs,
+                        frame.rflags,
+                        interrupted_rsp
+                    );
+                    panic!(
+                        "Kernelausnahme Schutzverletzung: Fehlercode={:#x}, RIP={:#x}, Ring 0",
+                        error_code,
+                        frame.rip
+                    );
+                }
+                shivacore::fault::ExceptionKind::InvalidOpcode => {
+                    serial_println!(
+                        "ShivaCore: CPL0 exception frame: kind={} frame={:#x} synthetic_error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x}",
+                        kind.name(),
+                        frame_address,
+                        error_code,
+                        frame.rip,
+                        frame.cs,
+                        frame.rflags,
+                        interrupted_rsp
+                    );
+                    panic!(
+                        "Kernelausnahme Ungueltiger Opcode: RIP={:#x}, kein Fehlercode, Ring 0",
+                        frame.rip
+                    );
+                }
+            }
         }
     }
 }
