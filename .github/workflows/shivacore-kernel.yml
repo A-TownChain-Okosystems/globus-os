@@ -6,12 +6,16 @@ on:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
+      - "modules/atc-shivacore/init_program/**"
+      - "modules/atc-shivacore/greeter/**"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
   pull_request:
     paths:
       - "modules/atc-shivacore/kernel/**"
       - "modules/atc-shivacore/boot/**"
+      - "modules/atc-shivacore/init_program/**"
+      - "modules/atc-shivacore/greeter/**"
       - "Cargo.toml"
       - ".github/workflows/shivacore-kernel.yml"
   workflow_dispatch:
@@ -66,9 +70,26 @@ jobs:
         env:
           RUSTFLAGS: '-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"'
         run: |
-          cargo +nightly build -p shivacore --release \
+          cargo +nightly build -p shivacore --profile kernel \
             --target x86_64-unknown-none \
             --features x86-boot
+
+      - name: Record baseline kernel ELF metadata
+        if: steps.build_kernel.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          elf=target/x86_64-unknown-none/kernel/shivacore
+          test -s "$elf"
+          mkdir -p target/exception-symbols
+          {
+            echo "schema=globusos.kernel-elf-metadata.v1"
+            echo "source_sha=$(git rev-parse HEAD)"
+            echo "kernel_elf=$elf"
+            echo "kernel_elf_sha256=$(sha256sum "$elf" | cut -d' ' -f1)"
+            readelf -h -l -S -s "$elf"
+          } | tee target/exception-symbols/baseline-kernel-elf.txt
+          sha256sum "$elf" target/exception-symbols/baseline-kernel-elf.txt
 
       - name: Install stable bare-metal target for init program
         run: |
@@ -84,6 +105,30 @@ jobs:
           # Ladeadresse 0x400000) und relocation-model=static. Eine
           # RUSTFLAGS-Variable wuerde diese Einstellungen ersetzen.
           ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo build --release )
+          ( cd modules/atc-shivacore/greeter && env -u RUSTFLAGS cargo build --release )
+
+      - name: Create CI-only identity record fixture
+        id: identity_fixture
+        run: |
+          # Synthetic parse-valid test record only; the placeholder hash is not an owner credential.
+          mkdir -p target/boot-fixtures
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          record = bytearray(64)
+          record[0:4] = b"ATID"
+          record[4] = 1
+          record[5] = 1
+          struct.pack_into("<H", record, 6, 19 * 1024)
+          struct.pack_into("<I", record, 8, 2)
+          record[12] = 1
+          record[16:32] = bytes([0x77]) * 16
+          record[32:64] = bytes([0x33]) * 32
+          Path("target/boot-fixtures/sys.identity").write_bytes(record)
+          assert len(record) == 64
+          print("CI-only IDENT-002 fixture created (64 bytes)")
+          PY
+          sha256sum target/boot-fixtures/sys.identity
 
       - name: Build BIOS and UEFI images
         id: build_images
@@ -92,9 +137,11 @@ jobs:
           # Der Boot-Builder ist kein Workspace-Mitglied mehr (Nightly-Zwang
           # des bootloader-Crates). Er wird in seinem Verzeichnis gebaut.
           ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
-            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/release/shivacore" \
+            "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
             "$GITHUB_WORKSPACE/target/boot-images" \
-            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" )
+            "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+            "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
+            "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
 
       - name: Install QEMU
         run: |
@@ -325,6 +372,267 @@ jobs:
             exit "$status"
           fi
 
+      - name: Ring-3 exception injection matrix (BIOS + UEFI)
+        id: exception_matrix
+        env:
+          OVMF_CODE: ${{ steps.ovmf.outputs.firmware }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p target/exception-tests
+
+          # Reuse the three existing no_std crash payloads. They are separate
+          # ELFs so each QEMU guest injects exactly one exception in PID 1000.
+          for binary in crash crash_gp crash_ud; do
+            ( cd modules/atc-shivacore/init_program && env -u RUSTFLAGS cargo +nightly build --release --bin "$binary" )
+          done
+
+          build_exception_image() {
+            local kind="$1"
+            local binary="$2"
+            local out="target/exception-tests/$kind"
+            mkdir -p "$out"
+            ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
+              "$GITHUB_WORKSPACE/target/x86_64-unknown-none/kernel/shivacore" \
+              "$GITHUB_WORKSPACE/$out" \
+              "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/$binary" \
+              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
+            "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
+          }
+
+          build_exception_image page-fault crash
+          build_exception_image general-protection crash_gp
+          build_exception_image invalid-opcode crash_ud
+
+          run_guest() {
+            local kind="$1"
+            local firmware="$2"
+            local image="target/exception-tests/$kind/shivacore-$firmware.img"
+            local log="target/exception-tests/$kind-$firmware-${{ matrix.cpu }}.log"
+            local status
+            if [ "$firmware" = "bios" ]; then
+              set +e
+              timeout 20s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            else
+              set +e
+              timeout 20s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            fi
+
+            if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+              echo "$kind/$firmware QEMU exited unexpectedly: $status"
+              cat "$log"
+              return 1
+            fi
+
+            case "$kind" in
+              page-fault)
+                grep -Eq "ShivaCore: Seitenfehler PID=Some\\(Pid\\(1000\\)\\).*Usermodus=true.*\\[beendet: 1, Kernel: 0\\]" "$log"
+                ;;
+              general-protection)
+                grep -Fq "ShivaCore: Schutzverletzung PID=Some(Pid(1000)) Fehlercode=0x0 Usermodus=true [beendet: 1, Kernel: 0]" "$log"
+                ;;
+              invalid-opcode)
+                grep -Fq "ShivaCore: Ungueltiger Opcode PID=Some(Pid(1000)) ohne Fehlercode, Usermodus=true [beendet: 1, Kernel: 0]" "$log"
+                ;;
+            esac
+            grep -Fq "ShivaCore: weiter mit PID=1001 statt den Fehler zu wiederholen" "$log"
+            if grep -Fq "Kernelausnahme" "$log"; then
+              echo "$kind/$firmware unexpectedly panicked in Ring 0"
+              cat "$log"
+              return 1
+            fi
+            echo "PASS $kind/$firmware ${{ matrix.cpu }} (QEMU exit $status)"
+          }
+
+          for kind in page-fault general-protection invalid-opcode; do
+            run_guest "$kind" bios
+            run_guest "$kind" uefi
+          done
+
+          # CPL0 tests use separately compiled kernel images. The standard
+          # kernel binary and normal Ring-3 matrix remain untouched.
+          build_cpl0_image() {
+            local kind="$1"
+            local feature="$2"
+            local target_dir="$GITHUB_WORKSPACE/target/cpl0-kernel-$kind"
+            local out="$GITHUB_WORKSPACE/target/exception-tests/cpl0/$kind"
+            mkdir -p "$out"
+            CARGO_TARGET_DIR="$target_dir" \
+              RUSTFLAGS='-C target-cpu=x86-64 --cfg curve25519_dalek_backend="serial"' \
+              cargo +nightly build -p shivacore --profile kernel \
+                --target x86_64-unknown-none --no-default-features \
+                --features "x86-boot,$feature"
+            local kernel_elf="$target_dir/x86_64-unknown-none/kernel/shivacore"
+            test -s "$kernel_elf"
+            # Preserve the exact feature-specific ELF used to make this test image.
+            cp "$kernel_elf" "$out/shivacore-kernel.elf"
+            {
+              echo "schema=globusos.cpl0-kernel-elf.v1"
+              echo "source_sha=$(git rev-parse HEAD)"
+              echo "feature=$feature"
+              echo "kernel_elf_sha256=$(sha256sum "$kernel_elf" | cut -d' ' -f1)"
+              readelf -h -l -S -s "$kernel_elf"
+            } > "$out/kernel-elf-metadata.txt"
+            ( cd modules/atc-shivacore/boot && cargo +nightly run --release -- \
+              "$target_dir/x86_64-unknown-none/kernel/shivacore" \
+              "$out" \
+              "init=$GITHUB_WORKSPACE/modules/atc-shivacore/init_program/target/x86_64-unknown-none/release/shivacore-init" \
+              "greeter=$GITHUB_WORKSPACE/modules/atc-shivacore/greeter/target/x86_64-unknown-none/release/shivacore-greeter" \
+            "sys.identity=$GITHUB_WORKSPACE/target/boot-fixtures/sys.identity" )
+          }
+
+          run_cpl0_guest() {
+            local kind="$1"
+            local firmware="$2"
+            local image="target/exception-tests/cpl0/$kind/shivacore-$firmware.img"
+            local log="target/exception-tests/cpl0-$kind-$firmware-${{ matrix.cpu }}.log"
+            local status
+            if [ "$firmware" = "bios" ]; then
+              set +e
+              timeout 30s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            else
+              set +e
+              timeout 30s qemu-system-x86_64 \
+                -cpu ${{ matrix.qemu_cpu }} \
+                -drive if=pflash,format=raw,readonly=on,file="$OVMF_CODE" \
+                -drive format=raw,file="$image" \
+                -serial stdio -display none -no-reboot -no-shutdown 2>&1 | tee "$log"
+              status=${PIPESTATUS[0]}
+              set -e
+            fi
+
+            if [ "$status" -ne 0 ] && [ "$status" -ne 124 ]; then
+              echo "CPL0 $kind/$firmware QEMU exited unexpectedly: $status"
+              cat "$log"
+              return 1
+            fi
+
+            # Symbolize against the exact feature-specific ELF that produced
+            # this guest. The kernel is PIE (lowest VMA 0); runtime RIP therefore
+            # needs the CPU-profile load base removed before addr2line/objdump.
+            local kernel_elf="$GITHUB_WORKSPACE/target/cpl0-kernel-$kind/x86_64-unknown-none/kernel/shivacore"
+            local runtime_base
+            case "${{ matrix.cpu }}" in
+              amd-epyc) runtime_base=0x10000000000 ;;
+              intel-skylake) runtime_base=0x8000000000 ;;
+              *) runtime_base="" ;;
+            esac
+            local rip
+            rip="$(sed -nE 's/.*CPL0 exception frame:.* RIP=(0x[0-9a-fA-F]+).*/\1/p' "$log" | head -n 1)"
+            if [ -n "$rip" ] && [ -n "$runtime_base" ]; then
+              local offset
+              offset=$((rip - runtime_base))
+              if [ "$offset" -lt 0 ]; then
+                echo "Runtime RIP $rip is below expected kernel base $runtime_base"
+                return 1
+              fi
+              local address
+              printf -v address '0x%x' "$offset"
+              local report="$GITHUB_WORKSPACE/target/exception-tests/cpl0/$kind/rip-symbolization-$firmware.txt"
+              {
+                echo "schema=globusos.cpl0-rip-symbolization.v1"
+                echo "source_sha=$(git rev-parse HEAD)"
+                echo "cpu_profile=${{ matrix.cpu }}"
+                echo "exception_kind=$kind"
+                echo "firmware=$firmware"
+                echo "runtime_rip=$rip"
+                echo "runtime_load_base=$runtime_base"
+                echo "elf_vma=$address"
+                echo "kernel_elf=$kernel_elf"
+                echo "kernel_elf_sha256=$(sha256sum "$kernel_elf" | cut -d' ' -f1)"
+                echo "addr2line_begin"
+                addr2line -e "$kernel_elf" -f -C "$address"
+                echo "addr2line_end"
+                echo "objdump_window_begin"
+                start=$((offset > 32 ? offset - 32 : 0))
+                stop=$((offset + 32))
+                objdump -d --no-show-raw-insn --start-address="$start" --stop-address="$stop" "$kernel_elf"
+                echo "objdump_window_end"
+              } | tee "$report"
+              sha256sum "$kernel_elf" "$report"
+            elif [ -n "$rip" ]; then
+              echo "RIP symbolization RESIDUAL: no validated runtime load-base mapping for CPU profile ${{ matrix.cpu }}."
+            else
+              echo "No CPL0 exception-frame RIP found in $log; no symbolization report generated."
+            fi
+
+            grep -Fq "ShivaCore: R0-CPL0-TEST armed; injecting before Ring-3 handoff" "$log"
+            case "$kind" in
+              page-fault)
+                grep -Fq "ShivaCore: CPL0 fault accounting: kind=Seitenfehler kernel_faults=1 action=PanicKernel" "$log"
+                grep -Fq "CR2=0xdead000" "$log"
+                grep -Fq "Kernelausnahme Seitenfehler: CR2=0xdead000" "$log"
+                ;;
+              general-protection)
+                grep -Fq "ShivaCore: CPL0 fault accounting: kind=Schutzverletzung kernel_faults=1 action=PanicKernel" "$log"
+                # The injected selector is out of the GDT limit (TI=0), so
+                # the CPU must report the selector error code, not a page fault.
+                grep -Fq "error_code=0xfff8" "$log"
+                grep -Fq "Kernelausnahme Schutzverletzung: Fehlercode=0xfff8" "$log"
+                if grep -Eq "CR2=|Seite nicht vorhanden|Schutzverletzung, Lesen" "$log"; then
+                  echo "General-protection diagnostics incorrectly decoded CR2/page-fault bits."
+                  cat "$log"
+                  return 1
+                fi
+                ;;
+              invalid-opcode)
+                grep -Fq "ShivaCore: CPL0 fault accounting: kind=Ungueltiger Opcode kernel_faults=1 action=PanicKernel" "$log"
+                grep -Fq "synthetic_error_code=0x0" "$log"
+                grep -Fq "Kernelausnahme Ungueltiger Opcode: RIP=" "$log"
+                if grep -Eq "CR2=|Seite nicht vorhanden|Schutzverletzung, Lesen" "$log"; then
+                  echo "Invalid-opcode diagnostics incorrectly decoded CR2/page-fault bits."
+                  cat "$log"
+                  return 1
+                fi
+                ;;
+            esac
+            grep -Fq "Ring 0" "$log"
+            if grep -Eq "Usermodus=true|Exit-Cleanup PID=|weiter mit PID=.*statt den Fehler zu wiederholen" "$log"; then
+              echo "CPL0 $kind/$firmware entered a user-process recovery path unexpectedly"
+              cat "$log"
+              return 1
+            fi
+            echo "PASS CPL0 $kind/$firmware ${{ matrix.cpu }} (QEMU exit $status)"
+          }
+
+          build_cpl0_image page-fault ring0-test-pf
+          build_cpl0_image general-protection ring0-test-gp
+          build_cpl0_image invalid-opcode ring0-test-ud
+          for kind in page-fault general-protection invalid-opcode; do
+            run_cpl0_guest "$kind" bios
+            run_cpl0_guest "$kind" uefi
+          done
+
+      - name: Create exception injection SHA-256 manifest
+        id: exception_evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p target/exception-tests
+          manifest="target/exception-tests/manifest-${{ matrix.cpu }}.sha256"
+          {
+            echo "source_sha=$(git rev-parse HEAD)"
+            echo "matrix_cpu=${{ matrix.cpu }}"
+            find target/exception-tests -type f ! -name "manifest-${{ matrix.cpu }}.sha256" -print0 | sort -z | xargs -0 -r sha256sum
+          } > "$manifest"
+          cat "$manifest"
+
       - name: Create SHA-bound boot evidence manifest
         id: boot_evidence
         if: always()
@@ -398,3 +706,6 @@ jobs:
             target/shivacore-qemu-${{ matrix.cpu }}.log
             target/shivacore-uefi-${{ matrix.cpu }}.log
             target/boot-evidence/manifest-${{ matrix.cpu }}.txt
+            target/exception-tests/**
+            target/exception-symbols/**
+            target/x86_64-unknown-none/kernel/shivacore

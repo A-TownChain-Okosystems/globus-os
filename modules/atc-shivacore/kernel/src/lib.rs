@@ -43,6 +43,8 @@ pub mod dma_auth;
 pub mod elf_loader;
 /// Lebensdauer von Kanaelen und Handles: oeffnen, teilen, schliessen, widerrufen.
 pub mod entropy_gate;
+/// ABI layout and context restoration for x86-64 exception frames.
+pub mod exception_frame;
 /// Ausnahmen und Fehlerwege aus dem Userspace in den Kernel.
 pub mod fault;
 /// Hardware-Abstraktion; derzeit die Prozessorinformation.

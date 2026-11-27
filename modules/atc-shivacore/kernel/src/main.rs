@@ -12,6 +12,13 @@
 #![feature(alloc_error_handler)]
 #![no_main]
 
+#[cfg(any(
+    all(feature = "ring0-test-pf", feature = "ring0-test-gp"),
+    all(feature = "ring0-test-pf", feature = "ring0-test-ud"),
+    all(feature = "ring0-test-gp", feature = "ring0-test-ud")
+))]
+compile_error!("CPL0 exception test features are mutually exclusive");
+
 extern crate alloc;
 
 mod allocator;
@@ -50,6 +57,16 @@ entry_point!(kernel_main, config = &BOOTLOADER_CONFIG);
 
 fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     serial_println!("ShivaCore: Kernel-Einstiegspunkt erreicht.");
+    #[cfg(any(
+        feature = "ring0-test-pf",
+        feature = "ring0-test-gp",
+        feature = "ring0-test-ud"
+    ))]
+    serial_println!(
+        "ShivaCore: bootloader kernel_stack_bottom=0x{:X} kernel_stack_len=0x{:X}",
+        boot_info.kernel_stack_bottom,
+        boot_info.kernel_stack_len
+    );
 
     let cpu = hal::CpuInfo::detect();
     serial_println!(
@@ -1532,6 +1549,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     // Kernel-Arbeit wieder in der Boot-Tabelle erledigen, damit spaetere
     // Abbildungen (Geraete) nicht versehentlich in einer Prozesstabelle landen.
+
     shivacore::addr_space::restore(boot_cr3_frame, boot_cr3_flags);
 
     // P1-3B: Der Frame-Allocator geht an die Laufzeit. Ab hier gibt es genau
@@ -1546,10 +1564,12 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     // Kernel-Wurzel), damit ein spaeterer Prozessstart denselben Weg benutzen
     // kann wie der Bootpfad. Danach baut der Selbsttest einen Adressraum ueber
     // genau diese Funktion und gibt ihn wieder frei — ein Bau ohne Start.
+
     spawn_build::publish_boot_reference(
         phys_mem_offset_raw,
         boot_cr3_frame.start_address().as_u64(),
     );
+
     {
         let probe_slot = 0u64;
         let layout = shivacore::spawn::layout_for_slot(probe_slot).expect("Platz 0 muss es geben");
@@ -1558,18 +1578,25 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             alloc::vec![0xF4],
             layout.code_base,
         );
-        match spawn_build::build_space(probe_slot, &binary, 0x0C21) {
+
+        let build_result = spawn_build::build_space(probe_slot, &binary, 0x0C21);
+
+        match build_result {
             Ok(built) => {
                 // Der Raum wird nicht gestartet: seine Frames gehen zurueck.
                 shivacore::reclaim::RECLAIMER.queue_process(shivacore::ats1000::Pid(0x0C21));
                 let freed = {
                     let mut slot = crate::memory::FRAME_ALLOCATOR.lock();
                     match slot.as_mut() {
-                        Some(allocator) => shivacore::reclaim::RECLAIMER
-                            .drain_with(|frame| allocator.deallocate_frame(frame)),
+                        Some(allocator) => {
+                            let count = shivacore::reclaim::RECLAIMER
+                                .drain_with(|frame| allocator.deallocate_frame(frame));
+                            count
+                        }
                         None => 0,
                     }
                 };
+
                 serial_println!(
                     "ShivaCore: Aufbauender Weg: Adressraum gebaut (Platz={}, Wurzel={:#x}, {} Frames), {} Frames wieder freigegeben",
                     probe_slot,
@@ -1687,6 +1714,55 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
     );
     // Der erste Sprung nach Ring 3 passiert ohne Kontextwechsel davor: die
     // Tabelle von PID 1000 muss hier ausdruecklich gesetzt werden.
+    // Isolated CPL0 exception probes. These features are enabled only by the
+    // dedicated CI matrix; normal kernel builds retain the standard boot path.
+    #[cfg(any(
+        feature = "ring0-test-pf",
+        feature = "ring0-test-gp",
+        feature = "ring0-test-ud"
+    ))]
+    {
+        serial_println!("ShivaCore: R0-CPL0-TEST armed; injecting before Ring-3 handoff");
+        #[cfg(feature = "ring0-test-pf")]
+        unsafe {
+            // Exercise the ABI boundary with DF set. The exception trampoline
+            // must clear DF before entering Rust; IRETQ would restore saved flags.
+            core::arch::asm!("std", "mov rax, qword ptr [0x0dead000]", options(noreturn));
+        }
+        #[cfg(feature = "ring0-test-gp")]
+        unsafe {
+            // Capture the active CPL0 stack pointer immediately before the
+            // intentional #GP probe. The serial call returns with the caller's
+            // RSP restored, so the recorded value is the probe's stack level.
+            let probe_rsp: u64;
+            core::arch::asm!(
+                "mov {rsp_out}, rsp",
+                rsp_out = out(reg) probe_rsp,
+                options(nomem, nostack, preserves_flags)
+            );
+            serial_println!(
+                "ShivaCore: R0-CPL0-GP pre-injection RSP=0x{:X} stack_bottom=0x{:X} stack_len=0x{:X}",
+                probe_rsp,
+                boot_info.kernel_stack_bottom,
+                boot_info.kernel_stack_len
+            );
+            // Use an out-of-limit GDT selector (TI=0). The previous 0xffff
+            // selected the LDT (TI=1); with no mapped LDT, descriptor lookup
+            // faulted at linear address 0xfff8 with #PF instead of raising #GP.
+            core::arch::asm!(
+                "std",
+                "mov ds, {selector:x}",
+                selector = in(reg) 0xfff8u16,
+                options(nostack)
+            );
+        }
+        #[cfg(feature = "ring0-test-ud")]
+        unsafe {
+            core::arch::asm!("std", "ud2", options(noreturn));
+        }
+        panic!("R0-CPL0-TEST injection returned without fault");
+    }
+
     shivacore::addr_space::install_raw(cr3_first);
     unsafe { userspace::enter_ring3(&user_ctx) }
 

@@ -12,6 +12,7 @@ use lazy_static::lazy_static;
 use libshivacore::CapabilityHandle;
 use pic8259::ChainedPics;
 use shivacore::ats1000::Pid;
+use shivacore::exception_frame::ExceptionTrapFrame;
 use shivacore::syscall::SyscallRequest;
 use shivacore::syscall_gate::SyscallGate;
 use shivacore::user_sched::{SavedContext, UserScheduler};
@@ -381,7 +382,7 @@ pub fn online_cpus() -> usize {
 /// 14.11.2026 — das Datensegment aus dem hinterlegten Startabbild. Nicht
 /// angefasst wird der Haufen; die Capabilities bleiben, sonst waere der Dienst
 /// nach dem Neustart rechtlos.
-fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::Service) {
+fn reset_service_process(frame: &mut impl ServiceRestartFrame, service: &crate::services::Service) {
     let start = service.start_rsp;
     let end = start.saturating_add(16);
     if start >= service.stack_low && end <= service.stack_low.saturating_add(0x0000_8000) {
@@ -411,26 +412,10 @@ fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::S
         ),
     }
 
-    frame.rax = 0;
-    frame.rbx = 0;
-    frame.rcx = 0;
-    frame.rdx = 0;
-    frame.rsi = 0;
-    frame.rdi = 0;
-    frame.rbp = start;
-    frame.r8 = 0;
-    frame.r9 = 0;
-    frame.r10 = 0;
-    frame.r11 = 0;
-    frame.r12 = 0;
-    frame.r13 = 0;
-    frame.r14 = 0;
-    frame.r15 = 0;
-    frame.rip = service.entry_rip;
-    frame.rsp = start;
     // Nur die Pflichtbits: Bit 1 ist immer gesetzt, IF (Bit 9) muss stehen,
     // sonst bekaeme der Dienst keine Ticks mehr und das Fenster bliebe stumm.
-    frame.rflags = 0x202;
+    // SAFETY: this reset path is reached only for a CPL3-origin service fault.
+    unsafe { frame.set_service_start(service.entry_rip, start) };
 }
 
 /// Beendet den aufrufenden Prozess aus einem Syscall heraus (P1-3B, echter
@@ -440,7 +425,7 @@ fn reset_service_process(frame: &mut UserTrapFrame, service: &crate::services::S
 /// Zombie setzen, erst dann auf den naechsten umschalten. Das Reaping und die
 /// Frame-Freigabe passieren im Timer-Tick — der Syscall-Pfad schaltet keinen
 /// Speicher frei.
-fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
+fn exit_current_process(frame: &mut impl ServiceRestartFrame, pid: Pid, exit_code: i32) {
     // Ein Dienst verschwindet nicht, er kehrt an seinen Startzustand zurueck.
     // Das passiert VOR dem Widerruf der Capabilities: danach haette der neue
     // Lauf keine Rechte mehr, und ein Neustart ohne Rechte waere ein Dienst,
@@ -494,7 +479,8 @@ fn exit_current_process(frame: &mut UserTrapFrame, pid: Pid, exit_code: i32) {
             if let Some(cr3) = cr3 {
                 shivacore::addr_space::install_raw(cr3);
             }
-            frame.apply_saved_context(&next);
+            // SAFETY: the fault policy selects TerminateProcess only for CPL3.
+            unsafe { ServiceRestartFrame::apply_saved_context(frame, &next) };
             serial_println!(
                 "ShivaCore: nach Exit von PID={:?} laeuft PID={} weiter",
                 pid,
@@ -1038,6 +1024,74 @@ pub struct UserTrapFrame {
     pub ss: u64,
 }
 
+/// Gemeinsame Registeroperation fuer Dienst-Neustarts aus unterschiedlichen Trap-Rahmen.
+trait ServiceRestartFrame {
+    /// Setzt Register und IRET-Ziel auf den Dienst-Einstieg.
+    /// # Safety
+    /// The frame must contain a CPU-pushed CPL3 RSP/SS extension when required.
+    unsafe fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64);
+    /// Uebertraegt einen gespeicherten Prozesskontext in den Trap-Rahmen.
+    /// # Safety
+    /// The frame must originate from CPL3 so its user stack extension exists.
+    unsafe fn apply_saved_context(&mut self, ctx: &SavedContext);
+}
+
+impl ServiceRestartFrame for UserTrapFrame {
+    unsafe fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+        self.rax = 0;
+        self.rbx = 0;
+        self.rcx = 0;
+        self.rdx = 0;
+        self.rsi = 0;
+        self.rdi = 0;
+        self.rbp = start_rsp;
+        self.r8 = 0;
+        self.r9 = 0;
+        self.r10 = 0;
+        self.r11 = 0;
+        self.r12 = 0;
+        self.r13 = 0;
+        self.r14 = 0;
+        self.r15 = 0;
+        self.rip = entry_rip;
+        self.rsp = start_rsp;
+        self.rflags = 0x202;
+    }
+
+    unsafe fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        UserTrapFrame::apply_saved_context(self, ctx);
+    }
+}
+
+impl ServiceRestartFrame for ExceptionTrapFrame {
+    unsafe fn set_service_start(&mut self, entry_rip: u64, start_rsp: u64) {
+        self.rax = 0;
+        self.rbx = 0;
+        self.rcx = 0;
+        self.rdx = 0;
+        self.rsi = 0;
+        self.rdi = 0;
+        self.rbp = start_rsp;
+        self.r8 = 0;
+        self.r9 = 0;
+        self.r10 = 0;
+        self.r11 = 0;
+        self.r12 = 0;
+        self.r13 = 0;
+        self.r14 = 0;
+        self.r15 = 0;
+        self.rip = entry_rip;
+        // SAFETY: service restart is reached only for a CPL3-origin exception.
+        unsafe { self.user_stack_frame_mut().rsp.write(start_rsp) };
+        self.rflags = 0x202;
+    }
+
+    unsafe fn apply_saved_context(&mut self, ctx: &SavedContext) {
+        // SAFETY: saved-context replacement is only used for a CPL3 process fault.
+        unsafe { ExceptionTrapFrame::apply_saved_context(self, ctx) };
+    }
+}
+
 impl UserTrapFrame {
     /// Schreibt einen gespeicherten Kontext in diesen Rahmen.
     ///
@@ -1218,25 +1272,12 @@ shivacore_timer_trampoline:
 
 global_asm!(
     r#"
-    // Drei Einsprünge, ein Rumpf. Der Unterschied zwischen den Ausnahmen ist
-    // nur, ob die CPU einen Fehlercode auf den Stapel legt und welche Art im
-    // Bericht steht — nicht, wie der Rahmen aussieht. Zwei fast gleiche
-    // Rümpfe wären die nächste Stelle, an der eine Korrektur nur an einer
-    // Hälfte ankommt.
-    //
-    // Art-IDs: 0 = Seitenfehler, 1 = Schutzverletzung, 2 = Ungueltiger Opcode.
+    // Jeder Ausnahme-Basisrahmen enthaelt 15 GP-Register, Fehlercode, RIP,
+    // CS und RFLAGS. Nur bei CPL3 folgt danach das CPU-gesicherte RSP/SS-Paar.
+    // Der Fehlercode bleibt auf dem Stack; kein GP-Register wird vor seiner
+    // Sicherung als Scratch-Register missbraucht.
     .global shivacore_fault_trampoline
 shivacore_fault_trampoline:
-    pop r11
-    mov edx, 0
-    jmp shivacore_fault_common
-    .global shivacore_gp_trampoline
-shivacore_gp_trampoline:
-    pop r11
-    mov edx, 1
-    jmp shivacore_fault_common
-
-shivacore_fault_common:
     push r15
     push r14
     push r13
@@ -1252,11 +1293,38 @@ shivacore_fault_common:
     push rcx
     push rbx
     push rax
-    mov rdi, rsp
-    // Fehlercode: 15 Pushes (120 Byte), r11 war der fuenfte Push von oben,
-    // also 15-5 = 10 Felder ueber dem Stapelzeiger -> rsp + 80.
-    mov rsi, [rsp + 80]
+    mov esi, 0
+    jmp shivacore_fault_common
+
+    .global shivacore_gp_trampoline
+shivacore_gp_trampoline:
+    push r15
+    push r14
+    push r13
+    push r12
+    push r11
+    push r10
+    push r9
+    push r8
+    push rbp
+    push rdi
+    push rsi
+    push rdx
+    push rcx
+    push rbx
+    push rax
+    mov esi, 1
+
+shivacore_fault_common:
+    // Nach 15 Pushes liegt der Fehlercode bei frame+120. Das CPL3-RSP/SS-Paar
+    // folgt nur bei einem CPL3->CPL0-Wechsel auf den Basisrahmen. R12 behaelt
+    // den Frame-Zeiger fuer die Rueckkehr nach dem ausgerichteten Handler-Call.
+    lea rdi, [rsp]
+    mov r12, rdi
+    and rsp, -16
+    cld
     call {handler}
+    mov rsp, r12
     pop rax
     pop rbx
     pop rcx
@@ -1272,12 +1340,15 @@ shivacore_fault_common:
     pop r13
     pop r14
     pop r15
+    // Den echten bzw. synthetischen Fehlercode vor IRETQ entfernen.
+    add rsp, 8
     iretq
 
     .global shivacore_fault_trampoline_nocode
 shivacore_fault_trampoline_nocode:
-    // Ungueltiger Opcode legt keinen Fehlercode ab: der Rahmen beginnt direkt
-    // mit RIP, deshalb hier kein pop.
+    // #UD hat keinen Hardware-Fehlercode. Einen Nullcode einfuegen, damit
+    // ExceptionTrapFrame fuer alle drei Ausnahmearten dasselbe Layout hat.
+    push 0
     push r15
     push r14
     push r13
@@ -1293,10 +1364,13 @@ shivacore_fault_trampoline_nocode:
     push rcx
     push rbx
     push rax
-    mov rdi, rsp
-    xor esi, esi
-    mov edx, 2
+    lea rdi, [rsp]
+    mov esi, 2
+    mov r12, rdi
+    and rsp, -16
+    cld
     call {handler}
+    mov rsp, r12
     pop rax
     pop rbx
     pop rcx
@@ -1312,6 +1386,7 @@ shivacore_fault_trampoline_nocode:
     pop r13
     pop r14
     pop r15
+    add rsp, 8
     iretq
 "#,
     handler = sym exception_trap_rust
@@ -1328,20 +1403,37 @@ shivacore_fault_trampoline_nocode:
 /// kein Schoenheitsfehler: die drei Einsprünge teilen sich einen Rumpf, damit
 /// eine Korrektur nicht nur an einer Haelfte ankommt.
 #[unsafe(no_mangle)]
-extern "C" fn exception_trap_rust(frame: &mut UserTrapFrame, error_code: u64, kind: u32) {
-    handle_exception(
-        frame,
-        error_code,
-        shivacore::fault::ExceptionKind::from_id(kind),
-    );
+extern "C" fn exception_trap_rust(frame: &mut ExceptionTrapFrame, kind: u32) {
+    #[cfg(any(
+        feature = "ring0-test-pf",
+        feature = "ring0-test-gp",
+        feature = "ring0-test-ud"
+    ))]
+    {
+        // The CPL0 probes deliberately enter with DF=1. The assembly trampoline
+        // must clear it before crossing the SysV ABI boundary into Rust.
+        let entry_rflags: u64;
+        unsafe {
+            core::arch::asm!(
+                "pushfq",
+                "pop {}",
+                out(reg) entry_rflags,
+                options(preserves_flags)
+            );
+        }
+        assert_eq!(
+            entry_rflags & (1 << 10),
+            0,
+            "exception trampoline entered Rust with DF set"
+        );
+    }
+    handle_exception(frame, shivacore::fault::ExceptionKind::from_id(kind));
 }
 
-fn handle_exception(
-    frame: &mut UserTrapFrame,
-    error_code: u64,
-    kind: shivacore::fault::ExceptionKind,
-) {
+fn handle_exception(frame: &mut ExceptionTrapFrame, kind: shivacore::fault::ExceptionKind) {
     use x86_64::registers::control::Cr2;
+
+    let error_code = frame.error_code;
 
     let origin = shivacore::fault::Origin::from_cs(frame.cs);
     let pid = USER_SCHEDULER
@@ -1357,9 +1449,15 @@ fn handle_exception(
     let report = shivacore::fault::FaultReport::from_error_code(error_code);
     // Cr2::read liefert in dieser Fassung ein Result; die Zahl ist das, was im
     // Log steht, nicht die Debug-Form.
-    let address = match Cr2::read() {
-        Ok(addr) => addr.as_u64(),
-        Err(_) => 0,
+    // CR2 is architecturally meaningful only for #PF; for #GP/#UD it
+    // contains an unrelated stale value and must not be presented as a fault address.
+    let address = if kind == shivacore::fault::ExceptionKind::PageFault {
+        match Cr2::read() {
+            Ok(addr) => addr.as_u64(),
+            Err(_) => 0,
+        }
+    } else {
+        0
     };
     // Ein Dienst kehrt an seinen Startzustand zurueck, BEVOR Capabilities
     // widerrufen werden — wie beim Exit-Syscall. Danach haette der neue Lauf
@@ -1370,12 +1468,9 @@ fn handle_exception(
         match restarted {
             Some(service) => {
                 reset_service_process(frame, &service);
-                // Der Fehlercode bedeutet je Vektor etwas anderes; beim
-                // ungueltigen Opcode gibt es keinen, und CR2 steht dann auf dem
-                // letzten Wert. Eine Adresse waere dort eine falsche Aussage.
-                if kind.has_error_code() {
-                    serial_println!(
-                        "ShivaCore: Dienst '{}' PID={} nach {} bei Adresse {:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                match kind {
+                    shivacore::fault::ExceptionKind::PageFault => serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} bei CR2={:#x} ({}) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
                         service.name,
                         pid.map(|pid| pid.0).unwrap_or_default(),
                         kind.name(),
@@ -1383,16 +1478,24 @@ fn handle_exception(
                         report.describe(),
                         service.attempts,
                         service.limit
-                    );
-                } else {
-                    serial_println!(
-                        "ShivaCore: Dienst '{}' PID={} nach {} (ohne Fehlercode) neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                    ),
+                    shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} mit Fehlercode={:#x} neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
+                        service.name,
+                        pid.map(|pid| pid.0).unwrap_or_default(),
+                        kind.name(),
+                        error_code,
+                        service.attempts,
+                        service.limit
+                    ),
+                    shivacore::fault::ExceptionKind::InvalidOpcode => serial_println!(
+                        "ShivaCore: Dienst '{}' PID={} nach {} ohne Fehlercode neu gestartet (Versuch {}/{}) — Fehler wird nicht wiederholt",
                         service.name,
                         pid.map(|pid| pid.0).unwrap_or_default(),
                         kind.name(),
                         service.attempts,
                         service.limit
-                    );
+                    ),
                 }
                 let recorded = FAULT_COUNTERS
                     .lock()
@@ -1433,7 +1536,9 @@ fn handle_exception(
             "kind={} addr={:#x} user={} terminated={} restarts={} kernel_faults={}",
             kind.name(),
             address,
-            report.from_user,
+            // CS.RPL is authoritative for origin; #GP selector bits and
+            // the synthetic #UD error slot are not user/kernel indicators.
+            origin == shivacore::fault::Origin::User,
             recorded.terminated,
             recorded.service_restarts,
             recorded.kernel_faults
@@ -1455,18 +1560,32 @@ fn handle_exception(
                 // RIP und RSP gehoeren in den Bericht: ohne sie sagt die
                 // Adresse nicht, welche Anweisung sie benutzt hat, und die
                 // Fehlersuche beginnt bei Null.
-                shivacore::fault::ExceptionKind::PageFault => serial_println!(
-                    "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus={} RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
-                    kind.name(),
-                    pid,
-                    address,
-                    report.describe(),
-                    report.from_user,
-                    frame.rip,
-                    frame.rsp,
-                    recorded.terminated,
-                    recorded.kernel_faults
-                ),
+                shivacore::fault::ExceptionKind::PageFault => {
+                    if origin == shivacore::fault::Origin::User {
+                        // Nur CPL3 legt das alte RSP/SS-Paar auf dem Hardware-Frame ab.
+                        let user_rsp = unsafe { frame.user_stack_frame().rsp.assume_init() };
+                        serial_println!(
+                            "ShivaCore: {} PID={:?} Adresse={:#x} ({}) Usermodus=true RIP={:#x} RSP={:#x} [beendet: {}, Kernel: {}]",
+                            kind.name(),
+                            pid,
+                            address,
+                            report.describe(),
+                            frame.rip,
+                            user_rsp,
+                            recorded.terminated,
+                            recorded.kernel_faults
+                        );
+                    } else {
+                        serial_println!(
+                            "ShivaCore: {} Adresse={:#x} ({}) Usermodus=false RIP={:#x} [Kernel-Fault: {}]",
+                            kind.name(),
+                            address,
+                            report.describe(),
+                            frame.rip,
+                            recorded.kernel_faults
+                        );
+                    }
+                }
                 shivacore::fault::ExceptionKind::GeneralProtection => serial_println!(
                     // Bei der Schutzverletzung ist der Fehlercode eine
                     // Segmentauswahl oder 0 — Bit 2 sagt hier NICHT, ob der
@@ -1525,7 +1644,8 @@ fn handle_exception(
                     if let Some(cr3) = cr3 {
                         shivacore::addr_space::install_raw(cr3);
                     }
-                    frame.apply_saved_context(&next);
+                    // SAFETY: process termination is selected only for CPL3-origin faults.
+                    unsafe { frame.apply_saved_context(&next) };
                     serial_println!(
                         "ShivaCore: weiter mit PID={} statt den Fehler zu wiederholen",
                         next_pid.0
@@ -1549,12 +1669,69 @@ fn handle_exception(
             }
         }
         shivacore::fault::FaultAction::PanicKernel => {
-            panic!(
-                "Kernelausnahme {}: Adresse={:#x} ({}), Ring 0",
+            // CPL0-Hardwareframes enthalten kein gespeichertes RSP/SS-Paar.
+            // Bei 15 zuvor gesicherten GP-Registern plus Error-Code/RIP/CS/RFLAGS
+            // liegt der unterbrochene RSP deshalb 152 Byte oberhalb des Frame-Anfangs.
+            let frame_address = frame as *const ExceptionTrapFrame as u64;
+            let interrupted_rsp = frame_address.wrapping_add(152);
+            serial_println!(
+                "ShivaCore: CPL0 fault accounting: kind={} kernel_faults={} action=PanicKernel",
                 kind.name(),
-                address,
-                report.describe()
+                recorded.kernel_faults
             );
+            match kind {
+                shivacore::fault::ExceptionKind::PageFault => {
+                    serial_println!(
+                        "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x} CR2={:#x}",
+                        kind.name(),
+                        frame_address,
+                        error_code,
+                        frame.rip,
+                        frame.cs,
+                        frame.rflags,
+                        interrupted_rsp,
+                        address
+                    );
+                    panic!(
+                        "Kernelausnahme Seitenfehler: CR2={:#x} ({}), RIP={:#x}, Ring 0",
+                        address,
+                        report.describe(),
+                        frame.rip
+                    );
+                }
+                shivacore::fault::ExceptionKind::GeneralProtection => {
+                    serial_println!(
+                        "ShivaCore: CPL0 exception frame: kind={} frame={:#x} error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x}",
+                        kind.name(),
+                        frame_address,
+                        error_code,
+                        frame.rip,
+                        frame.cs,
+                        frame.rflags,
+                        interrupted_rsp
+                    );
+                    panic!(
+                        "Kernelausnahme Schutzverletzung: Fehlercode={:#x}, RIP={:#x}, Ring 0",
+                        error_code, frame.rip
+                    );
+                }
+                shivacore::fault::ExceptionKind::InvalidOpcode => {
+                    serial_println!(
+                        "ShivaCore: CPL0 exception frame: kind={} frame={:#x} synthetic_error_code={:#x} RIP={:#x} CS={:#x} RFLAGS={:#x} interrupted_RSP={:#x}",
+                        kind.name(),
+                        frame_address,
+                        error_code,
+                        frame.rip,
+                        frame.cs,
+                        frame.rflags,
+                        interrupted_rsp
+                    );
+                    panic!(
+                        "Kernelausnahme Ungueltiger Opcode: RIP={:#x}, kein Fehlercode, Ring 0",
+                        frame.rip
+                    );
+                }
+            }
         }
     }
 }
