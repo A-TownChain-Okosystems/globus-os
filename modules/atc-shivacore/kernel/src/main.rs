@@ -1725,7 +1725,13 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         serial_println!("ShivaCore: R0-CPL0-TEST armed; injecting before Ring-3 handoff");
         #[cfg(feature = "ring0-test-pf")]
         unsafe {
-            core::ptr::read_volatile(0x0DEAD000usize as *const u64);
+            // Exercise the ABI boundary with DF set. The exception trampoline
+            // must clear DF before entering Rust; IRETQ would restore saved flags.
+            core::arch::asm!(
+                "std",
+                "mov rax, qword ptr [0x0dead000]",
+                options(noreturn)
+            );
         }
         #[cfg(feature = "ring0-test-gp")]
         unsafe {
@@ -1748,14 +1754,15 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
             // selected the LDT (TI=1); with no mapped LDT, descriptor lookup
             // faulted at linear address 0xfff8 with #PF instead of raising #GP.
             core::arch::asm!(
+                "std",
                 "mov ds, {selector:x}",
                 selector = in(reg) 0xfff8u16,
-                options(nostack, preserves_flags)
+                options(nostack)
             );
         }
         #[cfg(feature = "ring0-test-ud")]
         unsafe {
-            core::arch::asm!("ud2", options(noreturn));
+            core::arch::asm!("std", "ud2", options(noreturn));
         }
         panic!("R0-CPL0-TEST injection returned without fault");
     }
