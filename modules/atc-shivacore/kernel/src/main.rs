@@ -1727,11 +1727,7 @@ fn kernel_main(boot_info: &'static mut BootInfo) -> ! {
         unsafe {
             // Exercise the ABI boundary with DF set. The exception trampoline
             // must clear DF before entering Rust; IRETQ would restore saved flags.
-            core::arch::asm!(
-                "std",
-                "mov rax, qword ptr [0x0dead000]",
-                options(noreturn)
-            );
+            core::arch::asm!("std", "mov rax, qword ptr [0x0dead000]", options(noreturn));
         }
         #[cfg(feature = "ring0-test-gp")]
         unsafe {
