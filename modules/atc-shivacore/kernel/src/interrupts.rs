@@ -1404,6 +1404,29 @@ shivacore_fault_trampoline_nocode:
 /// eine Korrektur nicht nur an einer Haelfte ankommt.
 #[unsafe(no_mangle)]
 extern "C" fn exception_trap_rust(frame: &mut ExceptionTrapFrame, kind: u32) {
+    #[cfg(any(
+        feature = "ring0-test-pf",
+        feature = "ring0-test-gp",
+        feature = "ring0-test-ud"
+    ))]
+    {
+        // The CPL0 probes deliberately enter with DF=1. The assembly trampoline
+        // must clear it before crossing the SysV ABI boundary into Rust.
+        let entry_rflags: u64;
+        unsafe {
+            core::arch::asm!(
+                "pushfq",
+                "pop {}",
+                out(reg) entry_rflags,
+                options(preserves_flags)
+            );
+        }
+        assert_eq!(
+            entry_rflags & (1 << 10),
+            0,
+            "exception trampoline entered Rust with DF set"
+        );
+    }
     handle_exception(frame, shivacore::fault::ExceptionKind::from_id(kind));
 }
 
