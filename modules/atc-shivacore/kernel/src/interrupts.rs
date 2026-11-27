@@ -1322,6 +1322,7 @@ shivacore_fault_common:
     lea rdi, [rsp]
     mov r12, rdi
     and rsp, -16
+    cld
     call {handler}
     mov rsp, r12
     pop rax
@@ -1367,6 +1368,7 @@ shivacore_fault_trampoline_nocode:
     mov esi, 2
     mov r12, rdi
     and rsp, -16
+    cld
     call {handler}
     mov rsp, r12
     pop rax
